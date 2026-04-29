@@ -12,6 +12,23 @@ import {
   handleRegistrationCallbacks,
   tryBeginRegistrationFromDeepLink,
 } from "./saasRegistration.js";
+import {
+  getDynamicOwnerBot,
+  getDynamicTokenForBusiness,
+} from "./dynamicBots.js";
+
+export {
+  activeDynamicBotsByToken,
+  activeBots,
+  activeBotsByToken,
+  loadDynamicBotsFromDatabase,
+  getDynamicOwnerBot,
+  getDynamicTokenForBusiness,
+  registerDynamicUserBot,
+  initDynamicUserBotsFromDatabase,
+  shutdownDynamicUserBots,
+} from "./dynamicBots.js";
+export type { RegisterDynamicBotResult } from "./dynamicBots.js";
 
 function parseBotTokensFromEnv(): string[] {
   const fromMulti = process.env.BOT_TOKENS?.split(/[,;\s]+/)
@@ -68,10 +85,6 @@ function normalizeChatId(
 const notifyFallbackByIndex = new Map<number, string | number>();
 /** Клиентский бот (User.botToken): chat id владельца с `/start`. */
 const notifyFallbackByOwnerId = new Map<number, string | number>();
-/** Боты, зарегистрированные по `User.botToken` (вебхук `/telegram-webhook/owner/:id`). */
-const dynamicOwnerBots = new Map<number, Telegraf>();
-const dynamicTokenByOwnerId = new Map<number, string>();
-
 export function getBotIndexForOwner(ownerId: number): number {
   if (botOwnerIds.length === 0) return 0;
   const i = botOwnerIds.indexOf(ownerId);
@@ -79,22 +92,17 @@ export function getBotIndexForOwner(ownerId: number): number {
 }
 
 export function getBotForOwner(ownerId: number): Telegraf | undefined {
-  const dyn = dynamicOwnerBots.get(ownerId);
+  const dyn = getDynamicOwnerBot(ownerId);
   if (dyn) return dyn;
   if (bots.length === 0) return undefined;
   return bots[getBotIndexForOwner(ownerId)] ?? bots[0];
 }
 
 export function getBotTokenForOwner(ownerId: number): string | undefined {
-  const t = dynamicTokenByOwnerId.get(ownerId);
+  const t = getDynamicTokenForBusiness(ownerId);
   if (t) return t;
   if (botTokens.length === 0) return undefined;
   return botTokens[getBotIndexForOwner(ownerId)] ?? botTokens[0];
-}
-
-/** Вебхук динамического бота: `businessId` = `Business.id` (магазин). */
-export function getDynamicOwnerBot(businessId: number): Telegraf | undefined {
-  return dynamicOwnerBots.get(businessId);
 }
 
 /**
@@ -361,7 +369,7 @@ type BotHandlerRole =
   | { type: "env"; botIndex: number }
   | { type: "dynamic"; businessId: number };
 
-function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
+export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
   attachSaasRegistration(tgBot, role);
 
   void tgBot.telegram
@@ -697,91 +705,3 @@ function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
 bots.forEach((tgBot, botIndex) => {
   attachBotHandlers(tgBot, { type: "env", botIndex });
 });
-
-function trimApiBase(): string {
-  return (process.env.API_URL || "").trim().replace(/\/$/, "");
-}
-
-export type RegisterDynamicBotResult = {
-  username: string;
-  id: number;
-};
-
-/**
- * Подключение бота магазина по токену + вебхук
- * `POST {API}/telegram-webhook/owner/{businessId}`.
- */
-export async function registerDynamicUserBot(user: {
-  businessId: number;
-  botToken: string;
-}): Promise<RegisterDynamicBotResult> {
-  const token = String(user.botToken).trim();
-  if (!token) {
-    throw new Error("empty bot token");
-  }
-  const meRes = await fetch(
-    `https://api.telegram.org/bot${encodeURIComponent(token)}/getMe`
-  );
-  const meJson = (await meRes.json().catch(() => ({}))) as {
-    ok?: boolean;
-    result?: { username?: string; id?: number };
-  };
-  if (!meRes.ok || !meJson.ok || !meJson.result) {
-    throw new Error("Invalid bot token (getMe failed)");
-  }
-
-  const existing = dynamicOwnerBots.get(user.businessId);
-  if (existing) {
-    try {
-      await existing.telegram.deleteWebhook();
-    } catch {
-      /* ignore */
-    }
-    try {
-      await existing.stop();
-    } catch {
-      /* ignore */
-    }
-  }
-
-  const tg = new Telegraf(token);
-  attachBotHandlers(tg, { type: "dynamic", businessId: user.businessId });
-  dynamicOwnerBots.set(user.businessId, tg);
-  dynamicTokenByOwnerId.set(user.businessId, token);
-
-  const publicApiBase = trimApiBase();
-  if (publicApiBase) {
-    const url = `${publicApiBase}/telegram-webhook/owner/${user.businessId}`;
-    try {
-      await tg.telegram.setWebhook(url);
-      console.log("Dynamic webhook set:", url);
-    } catch (e) {
-      console.error("Dynamic setWebhook error:", user.businessId, e);
-    }
-  } else {
-    console.warn(
-      "API_URL not set — dynamic bot registered without webhook; set API_URL for production"
-    );
-  }
-
-  return {
-    username: String(meJson.result.username ?? ""),
-    id: Number(meJson.result.id),
-  };
-}
-
-export async function initDynamicUserBotsFromDatabase(): Promise<void> {
-  const stores = await prisma.business.findMany({
-    select: { id: true, botToken: true },
-  });
-  for (const s of stores) {
-    try {
-      await registerDynamicUserBot({
-        businessId: s.id,
-        botToken: s.botToken,
-      });
-    } catch (e) {
-      console.error("initDynamicUserBots: fail business", s.id, e);
-    }
-  }
-}

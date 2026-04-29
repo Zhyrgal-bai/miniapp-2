@@ -1,4 +1,5 @@
 import type { Context } from "telegraf";
+import { session } from "telegraf";
 import type { Telegraf } from "telegraf";
 import {
   BillingPlan,
@@ -7,18 +8,28 @@ import {
   UserRole,
 } from "@prisma/client";
 import { prisma } from "../server/db.js";
-import { validateKgPhone } from "../server/orderInputSanitize.js";
+import {
+  isValidBotTokenShape,
+  isValidStoreName,
+  validateKgPhone,
+} from "./saasRegistrationValidation.js";
 
 type BotRole =
   | { type: "env"; botIndex: number }
   | { type: "dynamic"; businessId: number };
 
-type WizardKind =
-  | { kind: "want_name" }
-  | { kind: "want_token"; name: string }
-  | { kind: "want_phone"; name: string; botToken: string };
+/** Состояние мастера регистрации (изолировано по session key = user id). */
+export type SaasRegistrationSession = {
+  step: "want_name" | "want_token" | "want_phone";
+  data: {
+    name?: string;
+    botToken?: string;
+  };
+};
 
-const wizardSessions = new Map<number, WizardKind>();
+export type SaasSessionState = {
+  registration?: SaasRegistrationSession;
+};
 
 function readStartParam(ctx: Context): string | undefined {
   const msg = ctx.message;
@@ -64,6 +75,7 @@ function parseCallbackId(prefix: string, data: string): number | null {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
+/** Токен занят в Business или в ожидающей заявке. */
 async function tokenIsUnavailable(token: string): Promise<boolean> {
   const trimmed = token.trim();
   const inBusiness = await prisma.business.findUnique({
@@ -82,10 +94,9 @@ async function tokenIsUnavailable(token: string): Promise<boolean> {
   return pending != null;
 }
 
-async function validateBotToken(remoteToken: string): Promise<
-  | { ok: true; username: string }
-  | { ok: false }
-> {
+async function verifyTokenWithTelegram(
+  remoteToken: string
+): Promise<{ ok: true; username: string } | { ok: false }> {
   const meRes = await fetch(
     `https://api.telegram.org/bot${encodeURIComponent(remoteToken.trim())}/getMe`
   );
@@ -110,14 +121,30 @@ function registrationMarkup(requestId: number) {
   };
 }
 
+function getSession(ctx: Context): SaasSessionState | undefined {
+  if (!("session" in ctx)) return undefined;
+  const s = (ctx as { session?: SaasSessionState }).session;
+  return s;
+}
+
 export function attachSaasRegistration(bot: Telegraf, role: BotRole): void {
   if (role.type !== "env" || role.botIndex !== 0) {
     return;
   }
 
+  bot.use(
+    session({
+      defaultSession: (): SaasSessionState => ({}),
+      getSessionKey: (ctx) =>
+        ctx.chat?.type === "private" && ctx.from != null
+          ? `saas_reg:${ctx.from.id}`
+          : undefined,
+    })
+  );
+
   bot.use(async (ctx, next) => {
     try {
-      if (handledWizardText(bot, ctx)) {
+      if (await processRegistrationWizard(bot, ctx)) {
         return;
       }
       await next();
@@ -128,11 +155,17 @@ export function attachSaasRegistration(bot: Telegraf, role: BotRole): void {
   });
 }
 
-function handledWizardText(_bot: Telegraf, ctx: Context): boolean {
+async function processRegistrationWizard(
+  _bot: Telegraf,
+  ctx: Context
+): Promise<boolean> {
   const uid = ctx.from?.id;
   if (uid === undefined || ctx.chat?.type !== "private") return false;
 
-  const st = wizardSessions.get(uid);
+  const sess = getSession(ctx);
+  if (!sess) return false;
+
+  const reg = sess.registration;
   const text =
     ctx.message !== undefined &&
     "text" in ctx.message &&
@@ -140,117 +173,136 @@ function handledWizardText(_bot: Telegraf, ctx: Context): boolean {
       ? ctx.message.text
       : null;
   if (text == null) return false;
-  const clean = normalizeStoreName(text);
-  if (!st) return false;
+  if (!reg) return false;
 
-  if (st.kind === "want_name") {
-    if (clean === "") {
-      void ctx.reply("Название не может быть пустым.");
+  const clean = normalizeStoreName(text);
+
+  if (reg.step === "want_name") {
+    if (!isValidStoreName(clean)) {
+      await ctx.reply(
+        "Введите название магазина (от 2 до 160 символов, не только пробелы)."
+      );
       return true;
     }
-    wizardSessions.set(uid, {
-      kind: "want_token",
-      name: clean.slice(0, 160),
-    });
-    void ctx.reply(
+    reg.data.name = clean.slice(0, 160);
+    reg.step = "want_token";
+    await ctx.reply(
       "Введите токен бота от @BotFather (выглядит как `123456:ABC...`):"
     );
     return true;
   }
 
-  if (st.kind === "want_token") {
-    void (async () => {
-      const trimmed = clean.replace(/\s/g, "");
-      if (trimmed.length < 30) {
-        await ctx.reply("Токен слишком короткий. Вставьте полный токен бота.");
-        return;
-      }
-      const v = await validateBotToken(trimmed);
-      if (!v.ok) {
-        await ctx.reply("Не удалось проверить токен через Telegram API. Вставьте корректный токен.");
-        return;
-      }
-      const taken = await tokenIsUnavailable(trimmed);
-      if (taken) {
-        await ctx.reply("Этот токен уже используется другой заявкой или активным магазином.");
-        return;
-      }
-      wizardSessions.set(uid, {
-        kind: "want_phone",
-        name: st.name,
-        botToken: trimmed,
-      });
+  if (reg.step === "want_token") {
+    const trimmed = clean.replace(/\s/g, "");
+    if (!isValidBotTokenShape(trimmed)) {
       await ctx.reply(
-        "Введите номер телефона (формат KG: +996XXXXXXXXX или 0XXXXXXXXX)."
+        "Неверный формат токена. Вставьте полный токен от @BotFather (без пробелов)."
       );
-    })();
+      return true;
+    }
+    const v = await verifyTokenWithTelegram(trimmed);
+    if (!v.ok) {
+      await ctx.reply(
+        "Не удалось проверить токен через Telegram API. Вставьте корректный токен."
+      );
+      return true;
+    }
+    const taken = await tokenIsUnavailable(trimmed);
+    if (taken) {
+      await ctx.reply(
+        "Этот токен уже используется другой заявкой или активным магазином."
+      );
+      return true;
+    }
+    reg.data.botToken = trimmed;
+    reg.step = "want_phone";
+    await ctx.reply(
+      "Введите номер телефона (формат KG: +996XXXXXXXXX или 0XXXXXXXXX)."
+    );
     return true;
   }
 
-  if (st.kind === "want_phone") {
-    void (async () => {
-      const phone = clean.trim();
-      if (!validateKgPhone(phone)) {
-        await ctx.reply("Неверный формат номера. Пример: +996501234567");
-        return;
-      }
-      try {
-        const duplicate = await prisma.registrationRequest.findFirst({
-          where: {
-            telegramId: telegramIdString(ctx),
-            status: RegistrationStatus.PENDING,
-          },
-        });
-        if (duplicate) {
-          await ctx.reply("У вас уже есть активная заявка на модерацию. Ожидайте решения администратора.");
-          wizardSessions.delete(uid);
-          return;
-        }
-
-        const row = await prisma.registrationRequest.create({
-          data: {
-            name: st.name,
-            botToken: st.botToken,
-            phone,
-            telegramId: telegramIdString(ctx),
-          },
-        });
-
-        wizardSessions.delete(uid);
+  if (reg.step === "want_phone") {
+    const phone = clean.trim();
+    if (!validateKgPhone(phone)) {
+      await ctx.reply(
+        "Неверный формат номера. Пример: +996501234567 или 0700123456"
+      );
+      return true;
+    }
+    try {
+      const duplicate = await prisma.registrationRequest.findFirst({
+        where: {
+          telegramId: telegramIdString(ctx),
+          status: RegistrationStatus.PENDING,
+        },
+        select: { id: true },
+      });
+      if (duplicate) {
         await ctx.reply(
-          "Спасибо. Заявка отправлена администратору. После одобрения вы получите сообщение здесь же."
+          "У вас уже есть активная заявка на модерацию. Ожидайте решения администратора."
         );
-
-        const admins = adminTelegramNumericIds();
-        if (admins.length === 0) {
-          console.error(
-            "ADMIN_IDS не задан — некому отправить заявку на модерацию (saasRegistration)."
-          );
-          return;
-        }
-
-        const lines = [
-          "📩 Новая заявка на магазин",
-          `ID заявки: #${row.id}`,
-          `Название: ${row.name}`,
-          `Телефон: ${row.phone}`,
-          `Telegram пользователя (id): ${row.telegramId}`,
-        ];
-
-        for (const aid of admins) {
-          await _bot.telegram
-            .sendMessage(aid, lines.join("\n"), {
-              reply_markup: registrationMarkup(row.id),
-            })
-            .catch((e: unknown) => {
-              console.error("notify admin:", aid, e);
-            });
-        }
-      } catch (e: unknown) {
-        console.error("registration save:", e);
-        await ctx.reply("Не удалось сохранить заявку. Попробуйте позже.");
+        delete sess.registration;
+        return true;
       }
-    })();
+
+      const name = reg.data.name;
+      const botToken = reg.data.botToken;
+      if (
+        typeof name !== "string" ||
+        name.length === 0 ||
+        typeof botToken !== "string" ||
+        botToken.length === 0
+      ) {
+        delete sess.registration;
+        await ctx.reply("Сессия устарела. Начните снова: /start register");
+        return true;
+      }
+
+      const row = await prisma.registrationRequest.create({
+        data: {
+          name,
+          botToken,
+          phone,
+          telegramId: telegramIdString(ctx),
+        },
+      });
+
+      delete sess.registration;
+
+      await ctx.reply(
+        "Спасибо. Заявка отправлена администратору. После одобрения вы получите сообщение здесь же."
+      );
+
+      const admins = adminTelegramNumericIds();
+      if (admins.length === 0) {
+        console.error(
+          "ADMIN_IDS не задан — некому отправить заявку на модерацию (saasRegistration)."
+        );
+        return true;
+      }
+
+      const lines = [
+        "📩 Новая заявка на магазин",
+        `ID заявки: #${row.id}`,
+        `Название: ${row.name}`,
+        `Телефон: ${row.phone}`,
+        `Telegram пользователя (id): ${row.telegramId}`,
+      ];
+
+      for (const aid of admins) {
+        await _bot.telegram
+          .sendMessage(aid, lines.join("\n"), {
+            reply_markup: registrationMarkup(row.id),
+          })
+          .catch((e: unknown) => {
+            console.error("notify admin:", aid, e);
+          });
+      }
+    } catch (e: unknown) {
+      console.error("registration save:", e);
+      await ctx.reply("Не удалось сохранить заявку. Попробуйте позже.");
+    }
     return true;
   }
 
@@ -260,16 +312,19 @@ function handledWizardText(_bot: Telegraf, ctx: Context): boolean {
 /**
  * Вызывается первым из `tgBot.start`: глубокая ссылка `…/start register`.
  */
-export function tryBeginRegistrationFromDeepLink(role: BotRole, ctx: Context): boolean {
+export function tryBeginRegistrationFromDeepLink(
+  role: BotRole,
+  ctx: Context
+): boolean {
   if (role.type !== "env" || role.botIndex !== 0) return false;
   if (ctx.chat?.type !== "private") return false;
   const p = readStartParam(ctx)?.toLowerCase();
   if (p !== "register" && p !== "onboarding") return false;
 
-  const uid = ctx.from?.id;
-  if (uid === undefined) return false;
+  const sess = getSession(ctx);
+  if (!sess) return false;
 
-  wizardSessions.set(uid, { kind: "want_name" });
+  sess.registration = { step: "want_name", data: {} };
   void ctx.reply("Введите название магазина:");
   return true;
 }
@@ -277,7 +332,13 @@ export function tryBeginRegistrationFromDeepLink(role: BotRole, ctx: Context): b
 export async function handleRegistrationCallbacks(
   ctx: Context
 ): Promise<boolean> {
-  if (!("callbackQuery" in ctx) || typeof ctx.callbackQuery !== "object" || ctx.callbackQuery === null || !("data" in ctx.callbackQuery)) return false;
+  if (
+    !("callbackQuery" in ctx) ||
+    typeof ctx.callbackQuery !== "object" ||
+    ctx.callbackQuery === null ||
+    !("data" in ctx.callbackQuery)
+  )
+    return false;
 
   const data = ctx.callbackQuery.data;
   if (typeof data !== "string") return false;
@@ -359,7 +420,9 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
       where: { botToken: row.botToken.trim() },
     });
     if (bizInUse) {
-      await ctx.editMessageText("⚠️ Этот токен уже привязан к активному Business.");
+      await ctx.editMessageText(
+        "⚠️ Этот токен уже привязан к активному Business."
+      );
       await prisma.registrationRequest.update({
         where: { id: row.id },
         data: { status: "REJECTED" },
@@ -405,7 +468,7 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
       businessId = business.id;
     });
 
-    const { registerDynamicUserBot } = await import("./bot.js");
+    const { registerDynamicUserBot } = await import("./dynamicBots.js");
     let botUsername = "";
     try {
       const r = await registerDynamicUserBot({
@@ -414,7 +477,7 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
       });
       botUsername = r.username;
     } catch (e) {
-      console.error("approve: registerDynamicUserBot:", e);
+      console.error("approve: registerDynamicUserBot failed:", e);
     }
 
     await ctx.editMessageText(
@@ -433,13 +496,15 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
         : undefined;
 
     if (tgUrl) {
-      await ctx.telegram.sendMessage(row.telegramId, "Ваш магазин активирован ✅", {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: "Открыть магазин", web_app: { url: tgUrl } }],
-          ],
-        },
-      }).catch((e: unknown) => console.error("approved user ping:", e));
+      await ctx.telegram
+        .sendMessage(row.telegramId, "Ваш магазин активирован ✅", {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "Открыть магазин", web_app: { url: tgUrl } }],
+            ],
+          },
+        })
+        .catch((e: unknown) => console.error("approved user ping:", e));
     } else {
       await ctx.telegram
         .sendMessage(
