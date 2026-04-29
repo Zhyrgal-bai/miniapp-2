@@ -22,9 +22,9 @@ import {
   getBotForOwner,
   getDynamicOwnerBot,
   getNotifyTargetChatId,
-  initDynamicUserBotsFromDatabase,
   registerDynamicUserBot,
 } from "../bot/bot.js";
+import { startAllBots } from "../bot/botManager.js";
 import { prisma } from "./db.js";
 import {
   clearPaymentFieldByRowId,
@@ -1846,9 +1846,10 @@ void (async () => {
       );
     }
     try {
-      await initDynamicUserBotsFromDatabase();
+      await startAllBots();
+      console.log("[botManager] Dynamic store bots registered from database");
     } catch (e) {
-      console.error("initDynamicUserBotsFromDatabase:", e);
+      console.error("startAllBots:", e);
     }
     try {
       startSubscriptionMaintenanceScheduler();

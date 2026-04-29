@@ -183,6 +183,7 @@ export async function shutdownDynamicUserBots(): Promise<void> {
 /** Загрузить все клиентские боты из БД при старте сервера. */
 export async function loadDynamicBotsFromDatabase(): Promise<void> {
   const businesses = await prisma.business.findMany({
+    where: { isActive: true },
     select: { id: true, botToken: true },
   });
 
