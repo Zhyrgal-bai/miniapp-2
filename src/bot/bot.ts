@@ -396,7 +396,7 @@ export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
     });
 
   tgBot.start(async (ctx) => {
-    if (tryBeginRegistrationFromDeepLink(role, ctx)) {
+    if (await tryBeginRegistrationFromDeepLink(role, ctx)) {
       return;
     }
     const chatId = ctx.chat?.id;
