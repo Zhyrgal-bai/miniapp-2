@@ -1,0 +1,397 @@
+.my-orders {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 16px 16px 32px;
+}
+
+.my-orders__head {
+  margin-bottom: 20px;
+}
+
+.my-orders__title {
+  margin: 0 0 6px;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.my-orders__subtitle {
+  margin: 0;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.my-orders__muted,
+.my-orders__error {
+  font-size: 0.95rem;
+}
+
+.my-orders__muted {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.my-orders__error {
+  color: #f87171;
+}
+
+.my-orders__list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.my-orders__card {
+  background: linear-gradient(
+    155deg,
+    rgba(22, 28, 45, 0.96) 0%,
+    rgba(15, 23, 42, 0.88) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 18px 18px 16px;
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  transition: all 0.3s ease;
+}
+
+.my-orders__card:active {
+  transform: scale(0.995);
+}
+
+.my-orders__card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.my-orders__card-title {
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #fff;
+}
+
+.my-orders__date {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: lowercase;
+}
+
+.my-orders__status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+  letter-spacing: 0.01em;
+}
+
+.my-orders__status-icon {
+  font-size: 1.15rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.my-orders__status-label {
+  line-height: 1.25;
+}
+
+.my-orders__empty {
+  margin: 28px 0 20px;
+  padding: 28px 20px;
+  border-radius: 20px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.my-orders__empty-title {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.my-orders__empty-hint {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.48);
+  line-height: 1.45;
+}
+
+.my-orders__finik-wait {
+  margin: 12px 0 4px;
+  padding: 14px 14px;
+  border-radius: 14px;
+  text-align: center;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  transition: all 0.3s ease;
+}
+
+.my-orders__finik-wait-lead {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  font-weight: 800;
+  color: rgba(250, 250, 250, 0.98);
+}
+
+.my-orders__finik-wait-sub {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.45;
+}
+
+.my-orders__progress-wrap {
+  margin: 0 0 14px;
+}
+
+.my-orders__progress-track {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(55, 65, 81, 0.85);
+  overflow: hidden;
+}
+
+.my-orders__progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #ef4444;
+  transition: width 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.45);
+}
+
+.my-orders__total-line {
+  margin: 0 0 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.92rem;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.my-orders__total-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.my-orders__row {
+  margin: 0 0 8px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.92rem;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.my-orders__label {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.my-orders__tracking {
+  margin: 0 0 8px;
+  font-size: 0.92rem;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.my-orders__pay-block {
+  margin: 12px 0 4px;
+  padding: 14px 12px 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.my-orders__pay-ux {
+  margin: 0 0 10px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.72);
+  line-height: 1.35;
+}
+
+.my-orders__pay-qr-img {
+  display: block;
+  margin: 0 auto;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.my-orders__pay-qr-img--lg {
+  width: 250px;
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+}
+
+.my-orders__pay-info {
+  margin-top: 12px;
+}
+
+.my-orders__pay-info-title {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.my-orders__pay-info-sum {
+  margin: 0 0 6px;
+  font-size: 1.35rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #ef4444;
+}
+
+.my-orders__pay-info-phone {
+  margin: 0;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.my-orders__pay-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 280px;
+  margin: 12px auto 0;
+  min-height: 48px;
+  padding: 12px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 14px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.92);
+  transition: all 0.3s ease;
+}
+
+.my-orders__pay-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.28);
+  transform: translateY(-1px);
+}
+
+.my-orders__receipt {
+  margin: 12px 0 4px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.3s ease;
+}
+
+.my-orders__receipt-timer {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+  color: rgba(254, 240, 138, 0.95);
+  background: rgba(234, 179, 8, 0.12);
+  border: 1px solid rgba(234, 179, 8, 0.28);
+}
+
+.my-orders__receipt-label {
+  display: block;
+  margin: 0 0 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.my-orders__receipt-input {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.my-orders__receipt-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 14px 16px;
+  border: none;
+  border-radius: 14px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  cursor: pointer;
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(220, 38, 38, 0.35);
+  transition: all 0.3s ease;
+}
+
+.my-orders__receipt-btn:hover:not(:disabled) {
+  opacity: 0.96;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 28px rgba(220, 38, 38, 0.42);
+}
+
+.my-orders__receipt-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.my-orders__receipt-pending {
+  margin: 12px 0 4px;
+  padding: 14px 14px;
+  border-radius: 14px;
+  text-align: center;
+  background: rgba(22, 163, 74, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  transition: all 0.3s ease;
+}
+
+.my-orders__receipt-pending-lead {
+  margin: 0 0 4px;
+  font-size: 0.98rem;
+  font-weight: 800;
+  color: rgba(250, 250, 250, 0.98);
+}
+
+.my-orders__receipt-pending-sub {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.my-orders__items {
+  margin: 12px 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.65);
+  line-height: 1.45;
+}
+
+.my-orders__items li {
+  margin-bottom: 4px;
+}

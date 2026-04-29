@@ -1,0 +1,184 @@
+.home-page {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #3A0000 30%, #1a1220 100%);
+  padding: 0 16px;
+}
+
+/* Первый заказ: скидка */
+.home-discount-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0 16px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: linear-gradient(
+    125deg,
+    rgba(220, 38, 38, 0.22) 0%,
+    rgba(15, 23, 42, 0.75) 55%,
+    rgba(255, 255, 255, 0.06) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.22);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.home-discount-banner:active {
+  transform: scale(0.99);
+}
+
+.home-discount-banner__text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.home-discount-banner__title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.02em;
+}
+
+.home-discount-banner__promo {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.home-discount-banner__promo strong {
+  color: #fecaca;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.home-discount-banner__copy {
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 14px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.35);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.home-discount-banner__copy:active {
+  opacity: 0.88;
+}
+
+/* HERO */
+.hero {
+  padding: 2px 0;
+  margin-bottom: 20px;
+  animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.hero-title {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  margin-bottom: 6px;
+  color: #fff;
+  text-align: center;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  font-family: 'Roboto', sans-serif;
+  font-style: italic;
+  font-weight: 900;
+  text-transform: uppercase;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  font-family: 'Roboto', sans-serif;
+  font-style: italic;
+  font-weight: 900;
+  text-transform: uppercase;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  font-family: 'Roboto', sans-serif;
+  font-style: italic;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.hero-subtitle {
+  font-size: 16px;
+  opacity: 0.7;
+  color: #fff;
+  text-align: center;
+}
+
+.search-input {
+  width: calc(100% - 24px);
+  margin: 12px;
+  padding: 10px;
+  border-radius: 12px;
+  border: none;
+  background: rgba(255, 255, 255, 0.04);
+  color: #ffffff;
+  font-size: 14px;
+  outline: none;
+}
+
+.search-input::placeholder {
+  color: #6b7280;
+}
+
+.categories {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px 12px;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.categories::-webkit-scrollbar {
+  display: none;
+}
+
+.categories button {
+  padding: 8px 14px;
+  min-height: 36px;
+  border-radius: 14px;
+  border: none;
+  background: rgba(255, 255, 255, 0.05);
+  color: #9ca3af;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.categories button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.categories button:active {
+  transform: scale(0.96);
+}
+
+.categories button.active {
+  background: rgba(255, 45, 45, 0.2);
+  color: #ff2d2d;
+}
+
+ /* ввод поиска */  

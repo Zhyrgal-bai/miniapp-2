@@ -1,0 +1,337 @@
+.product-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  overflow: hidden;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+}
+
+.product-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.45),
+    0 0 20px rgba(220, 38, 38, 0.15);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.product-card:active {
+  transform: scale(0.98);
+}
+
+.product-card.out {
+  opacity: 0.55;
+}
+
+.product-card.out:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.product-card.out:hover .product-image-wrapper .image-slide img {
+  transform: none;
+}
+
+/* Слайдер и точки не кликаются, пока товар полностью не в наличии */
+.product-card.out .product-image-wrapper {
+  pointer-events: none;
+}
+
+/* Просмотр деталей в модалке — даже если «нет в наличии» */
+.product-card.out .product-image-wrapper.product-image-wrapper--detail {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.product-image-wrapper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  touch-action: manipulation;
+}
+
+.product-image-wrapper--detail {
+  cursor: pointer;
+}
+
+.product-title--detail {
+  cursor: pointer;
+}
+
+.image-slider {
+  display: flex;
+  height: 100%;
+  transition: transform 0.28s ease-out;
+  will-change: transform;
+}
+
+.image-slide {
+  flex: 0 0 calc(100% / var(--slide-count, 1));
+  height: 100%;
+  min-height: 0;
+  flex-shrink: 0;
+}
+
+.image-slide img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.3s ease;
+}
+
+.product-card:hover .image-slide img {
+  transform: scale(1.05);
+}
+
+.dots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.dots span {
+  pointer-events: auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.dots span.active {
+  background: #fff;
+  transform: scale(1.15);
+}
+
+.product-info {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.colors button {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+.colors button:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: scale(1.06);
+}
+
+.colors button.active {
+  border-color: #ff2d2d;
+  box-shadow:
+    0 0 0 2px rgba(11, 15, 26, 0.9),
+    0 0 0 3px rgba(255, 45, 45, 0.65);
+}
+
+.sizes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sizes button {
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sizes button:hover:not(:disabled) {
+  background: rgba(255, 45, 45, 0.15);
+  border-color: rgba(255, 45, 45, 0.25);
+}
+
+.sizes button.active {
+  background: rgba(255, 45, 45, 0.22);
+  border-color: rgba(255, 45, 45, 0.4);
+  color: #ff6b6b;
+}
+
+.sizes button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.out-of-stock {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #9ca3af;
+  padding: 6px 0;
+}
+
+.product-title {
+  margin: 0 0 6px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  line-clamp: 2;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.product-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.product-price-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.product-price-old {
+  font-size: 11px;
+  color: #6b7280;
+  text-decoration: line-through;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.product-price {
+  font-size: 13px;
+  color: #9ca3af;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.product-price--sale {
+  color: #ff6b6b;
+  font-weight: 700;
+}
+
+.product-price-currency {
+  opacity: 0.95;
+}
+
+.product-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.product-qty {
+  min-width: 16px;
+  text-align: center;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.product-action-btn,
+.product-add-btn,
+.add-button {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: none;
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.product-action-btn {
+  font-size: 14px;
+}
+
+.product-add-btn,
+.add-button {
+  width: auto;
+  min-height: 36px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35);
+}
+
+.product-action-btn:hover,
+.product-add-btn:hover,
+.add-button:hover {
+  background: rgba(255, 45, 45, 0.2);
+}
+
+.product-add-btn:hover,
+.add-button:hover {
+  filter: brightness(1.06);
+  box-shadow: 0 6px 18px rgba(220, 38, 38, 0.45);
+}
+
+.product-action-btn:active,
+.product-add-btn:active,
+.add-button:active {
+  transform: scale(0.9);
+}
+
+.product-action-btn:disabled,
+.product-add-btn:disabled,
+.add-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}

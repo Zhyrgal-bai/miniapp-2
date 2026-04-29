@@ -1,0 +1,84 @@
+.faq {
+  max-width: 36rem;
+  margin: 0 auto;
+  padding: 20px 18px 32px;
+  padding-bottom: max(32px, env(safe-area-inset-bottom, 0));
+  box-sizing: border-box;
+  color: #e8eaef;
+}
+
+/* Legacy plain FAQ (if reused) */
+.faq h2 {
+  margin: 0 0 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8b93a7;
+}
+
+.faq p {
+  margin: 0 0 28px;
+  font-size: 15px;
+  line-height: 1.65;
+  font-weight: 400;
+  color: #c8cdd8;
+}
+
+.faq p:last-of-type {
+  margin-bottom: 0;
+}
+
+/* FAQ page — карточки */
+.faq-page__title {
+  margin: 0 0 22px;
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
+}
+
+.faq-page__list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.faq-page__card {
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: linear-gradient(
+    155deg,
+    rgba(22, 28, 45, 0.95) 0%,
+    rgba(15, 23, 42, 0.88) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.22),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.faq-page__card:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+}
+
+.faq-page__card-title {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.02em;
+}
+
+.faq-page__card-body {
+  margin: 0;
+  font-size: 0.94rem;
+  line-height: 1.6;
+  color: rgba(200, 205, 216, 0.95);
+}
