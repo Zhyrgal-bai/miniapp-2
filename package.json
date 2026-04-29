@@ -10,6 +10,7 @@
     "check": "prisma validate && prisma generate && tsc --noEmit && npm install --prefix frontend && npm run check --prefix frontend",
     "build": "prisma generate && tsc && npm install --prefix frontend && npm run build --prefix frontend",
     "start": "npx prisma migrate deploy && node dist/server/index.js",
+    "db:baseline-init-migration": "prisma migrate resolve --applied 20250430120000_init",
     "dev": "tsx src/server/index.ts",
     "seed": "tsx prisma/seed.ts"
   },
