@@ -1,11 +1,12 @@
 {
   "name": "miniapp-store",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "dist/server/index.js",
   "type": "module",
   "scripts": {
-    "start": "npx prisma db push --accept-data-loss && npx prisma generate && npx tsx src/server/index.ts",
-    "build": "npx prisma generate && npm install --prefix frontend && npm run build --prefix frontend",
+    "build": "prisma generate && tsc && npm run build --prefix frontend",
+    "start": "node dist/server/index.js",
+    "dev": "tsx src/server/index.ts",
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
@@ -28,6 +29,6 @@
     "postcss": "^8.5.8",
     "tailwindcss": "^4.2.2",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.3"
   }
 }
