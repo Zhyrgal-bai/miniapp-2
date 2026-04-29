@@ -10,7 +10,7 @@ import {
 import {
   attachSaasRegistration,
   handleRegistrationCallbacks,
-  tryBeginRegistrationFromDeepLink,
+  handleRegistrationStartCommand,
 } from "./saasRegistration.js";
 import {
   getDynamicOwnerBot,
@@ -396,9 +396,6 @@ export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
     });
 
   tgBot.start(async (ctx) => {
-    if (await tryBeginRegistrationFromDeepLink(role, ctx)) {
-      return;
-    }
     const chatId = ctx.chat?.id;
     if (role.type === "env") {
       if (chatId != null) {
@@ -419,6 +416,13 @@ export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
         );
       }
     }
+
+    if (role.type === "env" && role.botIndex === 0 && ctx.chat?.type === "private") {
+      if (await handleRegistrationStartCommand(role, ctx)) {
+        return;
+      }
+    }
+
     const param = readStartParam(ctx as { message?: { text?: string } });
     let shop = "";
     if (param && param.startsWith("shop_")) {
@@ -438,13 +442,22 @@ export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
           ],
         },
       });
-    } else {
+      return;
+    }
+    if (shop && !base) {
       void ctx.reply(
-        "Бот работает ✅" +
-          (shop && !base
-            ? "\n(Задайте FRONT_URL в .env для кнопки веб-аппа.)"
-            : "")
+        "Задайте FRONT_URL или PUBLIC_URL в .env для кнопки веб-аппа."
       );
+      return;
+    }
+    if (role.type === "env" && role.botIndex === 0 && ctx.chat?.type !== "private") {
+      void ctx.reply(
+        "Регистрация магазина доступна в личном чате с ботом — откройте бота и отправьте /start."
+      );
+      return;
+    }
+    if (role.type === "env" && role.botIndex !== 0) {
+      void ctx.reply("Бот подключён ✅");
     }
   });
 

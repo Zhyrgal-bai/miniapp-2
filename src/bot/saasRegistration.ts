@@ -197,6 +197,11 @@ export function attachSaasRegistration(bot: Telegraf, role: BotRole): void {
 
   bot.use(async (ctx, next) => {
     try {
+      const sess = getRegistrationSession(ctx);
+      if (!sess?.step) {
+        await next();
+        return;
+      }
       if (await registrationFlow(bot, ctx)) {
         return;
       }
@@ -231,6 +236,14 @@ export async function registrationFlow(
   if (rawText === null) return false;
 
   const trimmedInput = rawText.trim();
+  /** Повторный /start в мастере — отдаём команду общему `bot.start()`, чтобы ответить «уже регистрируетесь». */
+  if (
+    sess.step !== undefined &&
+    (trimmedInput === "/start" || trimmedInput.startsWith("/start "))
+  ) {
+    return false;
+  }
+
   if (trimmedInput === "") {
     await ctx.reply("Пожалуйста, введите непустой текст.");
     return true;
@@ -346,7 +359,7 @@ export async function registrationFlow(
 
       if (name === "" || token === "") {
         resetRegistrationWizardFields(ctx);
-        await ctx.reply("Сессия устарела. Начните снова: /start register");
+        await ctx.reply("Сессия устарела. Начните снова: /start");
         logSaas("rejected_attempt", {
           reason: "stale_session_submit",
           telegramUserId: telegramIdString(ctx),
@@ -418,23 +431,32 @@ export async function registrationFlow(
 }
 
 /**
- * Глубокая ссылка `…/start register` или `onboarding`: запускает шаг «имя».
+ * Первый бот (BOT_TOKENS[0]): любой `/start`, кроме `shop_*`, начинает онбординг SaaS.
+ * Возвращает `false`, если передать нужно следующему коду (`shop_*` для веб-приложения).
  */
-export async function tryBeginRegistrationFromDeepLink(
+export async function handleRegistrationStartCommand(
   role: BotRole,
   ctx: Context
 ): Promise<boolean> {
   if (role.type !== "env" || role.botIndex !== 0) return false;
   if (ctx.chat?.type !== "private") return false;
-  const p = readStartParam(ctx)?.toLowerCase();
-  if (p !== "register" && p !== "onboarding") return false;
+
+  const raw = readStartParam(ctx)?.toLowerCase() ?? "";
+  if (raw.startsWith("shop_")) {
+    return false;
+  }
 
   const sess = getRegistrationSession(ctx);
   if (!sess) return false;
 
-  const tgId = telegramIdString(ctx);
+  if (sess.step) {
+    await ctx.reply("Вы уже проходите регистрацию.");
+    return true;
+  }
 
+  const tgId = telegramIdString(ctx);
   const now = Date.now();
+
   if (
     sess.lastAttemptAt != null &&
     now - sess.lastAttemptAt < REGISTRATION_COOLDOWN_MS
@@ -468,13 +490,13 @@ export async function tryBeginRegistrationFromDeepLink(
   }
 
   sess.lastAttemptAt = now;
-  delete sess.step;
   sess.data = {};
   sess.step = "name";
 
-  logSaas("registration_started", { telegramUserId: tgId });
+  await ctx.reply("Давайте создадим ваш магазин 🚀");
+  await ctx.reply("Введите название магазина");
 
-  await ctx.reply("Введите название магазина:");
+  logSaas("registration_started", { telegramUserId: tgId });
   return true;
 }
 
