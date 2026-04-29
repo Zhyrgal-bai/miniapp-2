@@ -7,7 +7,7 @@ import {
   SubscriptionStatus,
   UserRole,
 } from "@prisma/client";
-import { prisma } from "../server/db.js";
+import { logPrismaError, prisma } from "../server/db.js";
 import {
   isValidBotTokenShape,
   isValidStoreName,
@@ -100,6 +100,10 @@ function logSaas(
   meta: Record<string, unknown>
 ): void {
   console.log(`[saasRegistration] ${event}`, meta);
+}
+
+function logStartHandlerError(err: unknown, label: string): void {
+  logPrismaError(`saasRegistration:${label}`, err);
 }
 
 /** Один аккаунт User с магазином (telegramId может быть не уникальным между tenant — берём первую запись). */
@@ -532,9 +536,19 @@ export async function handleRegistrationStartCommand(
       return true;
     }
 
-    const userWithBiz = await findUserWithBusinessForTelegram(
-      telegramIdStr
-    );
+    let userWithBiz: Awaited<
+      ReturnType<typeof findUserWithBusinessForTelegram>
+    >;
+    try {
+      userWithBiz = await findUserWithBusinessForTelegram(telegramIdStr);
+    } catch (dbErr: unknown) {
+      logStartHandlerError(dbErr, "/start DB: findUserWithBusiness failed");
+      await ctx.reply(
+        "Не удалось подключиться к базе данных. Проверьте DATABASE_URL на сервере (Render: Postgres должен быть доступен; часто нужен sslmode=require)."
+      );
+      return true;
+    }
+
     if (userWithBiz?.business) {
       if (process.env.NODE_ENV !== "production") {
         console.log("[saasRegistration] /start: existing merchant", {
@@ -550,7 +564,18 @@ export async function handleRegistrationStartCommand(
       return true;
     }
 
-    if (await hasPendingRegistrationForTelegram(telegramIdStr)) {
+    let hasPending: boolean;
+    try {
+      hasPending = await hasPendingRegistrationForTelegram(telegramIdStr);
+    } catch (dbErr: unknown) {
+      logStartHandlerError(dbErr, "/start DB: hasPendingRegistration failed");
+      await ctx.reply(
+        "Не удалось подключиться к базе данных. Проверьте DATABASE_URL и миграции Prisma на сервере."
+      );
+      return true;
+    }
+
+    if (hasPending) {
       await ctx.reply("Ваша заявка уже на рассмотрении");
       logSaas("rejected_attempt", {
         reason: "already_pending_request",
@@ -570,9 +595,11 @@ export async function handleRegistrationStartCommand(
     logSaas("registration_started", { telegramUserId: telegramIdStr });
     return true;
   } catch (err: unknown) {
-    console.error("START ERROR:", err);
+    logStartHandlerError(err, "START ERROR (unexpected)");
     try {
-      await ctx.reply("Ошибка сервера ❌ Попробуйте позже.");
+      await ctx.reply(
+        "Ошибка сервера ❌ Попробуйте позже. Если повторится — см. лог Render (Prisma/DATABASE_URL)."
+      );
     } catch (replyErr: unknown) {
       console.error("START ERROR (reply failed):", replyErr);
     }

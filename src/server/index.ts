@@ -25,7 +25,7 @@ import {
   registerDynamicUserBot,
 } from "../bot/bot.js";
 import { startAllBots } from "../bot/botManager.js";
-import { prisma } from "./db.js";
+import { connectDatabase, logPrismaError, prisma } from "./db.js";
 import {
   clearPaymentFieldByRowId,
   listPaymentDetailsFromDb,
@@ -1829,6 +1829,15 @@ process.on("unhandledRejection", (reason) => {
 const PORT = process.env.PORT || 3000;
 
 void (async () => {
+  try {
+    await connectDatabase();
+    console.log("DB connected ✅");
+  } catch (e) {
+    logPrismaError("connectDatabase()", e);
+    console.error("DB connection failed — exit");
+    process.exit(1);
+  }
+
   app.listen(PORT, async () => {
     console.log(`Server running on ${PORT}`);
 
