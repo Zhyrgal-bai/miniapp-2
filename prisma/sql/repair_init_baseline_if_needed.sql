@@ -1,0 +1,19 @@
+-- Idempotent: if init was marked applied but schema was never created (bad baseline),
+-- remove that row so `migrate deploy` can apply the real SQL. Safe when Business already exists.
+-- Runs on every deploy — no Render Shell required (free tier).
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_catalog.pg_class c
+    JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relname = '_prisma_migrations' AND c.relkind IN ('r', 'p')
+  ) THEN
+    DELETE FROM public."_prisma_migrations"
+    WHERE migration_name = '20250430120000_init'
+      AND NOT EXISTS (
+        SELECT 1 FROM pg_catalog.pg_class c2
+        JOIN pg_catalog.pg_namespace n2 ON n2.oid = c2.relnamespace
+        WHERE n2.nspname = 'public' AND c2.relname = 'Business' AND c2.relkind IN ('r', 'p')
+      );
+  END IF;
+END $$;
