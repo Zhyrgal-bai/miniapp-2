@@ -102,42 +102,46 @@ function logSaas(
   console.log(`[saasRegistration] ${event}`, meta);
 }
 
-/** `Business.id`, если пользователь уже привязан к магазину как `User`. */
-async function getLinkedMerchantBusinessId(
-  telegramId: string
-): Promise<number | null> {
-  const u = await prisma.user.findFirst({
+/** Один аккаунт User с магазином (telegramId может быть не уникальным между tenant — берём первую запись). */
+async function findUserWithBusinessForTelegram(telegramId: string) {
+  return prisma.user.findFirst({
     where: { telegramId },
-    select: { businessId: true },
+    include: { business: true },
   });
-  return u?.businessId ?? null;
-}
-
-function miniAppFrontBase(): string | null {
-  const raw =
-    process.env.FRONTEND_URL ||
-    process.env.FRONT_URL ||
-    process.env.PUBLIC_URL ||
-    "";
-  const trimmed = raw.trim().replace(/\/$/, "");
-  return trimmed !== "" ? trimmed : null;
 }
 
 async function replyMerchantAlreadyHasShop(
   ctx: Context,
   businessId: number
 ): Promise<void> {
-  const text = "У вас уже есть магазин";
-  const base = miniAppFrontBase();
-  if (!base) {
-    await ctx.reply(
-      `${text}\n\nЗадайте FRONTEND_URL, FRONT_URL или PUBLIC_URL (URL Mini App).`
+  const text = "У вас уже есть магазин 🏪";
+  const rawFront = (
+    process.env.FRONTEND_URL ||
+    process.env.FRONT_URL ||
+    process.env.PUBLIC_URL ||
+    ""
+  ).trim();
+
+  if (rawFront === "") {
+    console.error(
+      "[saasRegistration] FRONTEND_URL / FRONT_URL / PUBLIC_URL отсутствуют — кнопка Mini App недоступна"
     );
+    await ctx.reply("Ошибка конфигурации сервера. Задайте FRONTEND_URL в переменных окружения.");
     return;
   }
-  const q = encodeURIComponent(String(businessId));
+
+  const base = rawFront.replace(/\/$/, "");
+  const bid = Number(businessId);
+  if (!Number.isFinite(bid) || bid <= 0) {
+    console.error("[saasRegistration] invalid business id for merchant reply:", businessId);
+    await ctx.reply("Ошибка данных магазина.");
+    return;
+  }
+
+  const q = encodeURIComponent(String(bid));
   const storeUrl = `${base}/?shop=${q}`;
   const ordersUrl = `${base}/?shop=${q}&view=my-orders`;
+
   await ctx.reply(text, {
     reply_markup: {
       inline_keyboard: [
@@ -363,9 +367,9 @@ export async function registrationFlow(
 
     try {
       const tid = telegramIdString(ctx);
-      const existingBid = await getLinkedMerchantBusinessId(tid);
-      if (existingBid != null) {
-        await replyMerchantAlreadyHasShop(ctx, existingBid);
+      const existingUser = await findUserWithBusinessForTelegram(tid);
+      if (existingUser?.business) {
+        await replyMerchantAlreadyHasShop(ctx, existingUser.business.id);
         resetRegistrationWizardFields(ctx);
         logSaas("rejected_attempt", {
           reason: "already_has_business_at_submit",
@@ -482,59 +486,98 @@ export async function handleRegistrationStartCommand(
     return false;
   }
 
-  const sess = getRegistrationSession(ctx);
-  if (!sess) return false;
+  try {
+    const fromId = ctx.from?.id;
+    if (fromId === undefined || fromId === null) {
+      await ctx.reply("Ошибка пользователя ❌ Не удалось определить Telegram ID.");
+      return true;
+    }
 
-  if (sess.step) {
-    await ctx.reply("Вы уже проходите регистрацию.");
-    return true;
-  }
+    const telegramIdStr = telegramIdString(ctx);
 
-  const tgId = telegramIdString(ctx);
-  const now = Date.now();
+    let sess = getRegistrationSession(ctx);
+    if (!sess && "session" in ctx) {
+      (ctx as { session: RegistrationSessionState }).session = {
+        data: {},
+      };
+      sess = getRegistrationSession(ctx);
+    }
 
-  if (
-    sess.lastAttemptAt != null &&
-    now - sess.lastAttemptAt < REGISTRATION_COOLDOWN_MS
-  ) {
-    await ctx.reply(
-      "Подождите 10 секунд перед следующей попыткой регистрации."
+    if (!sess) {
+      console.error("[saasRegistration] /start: session missing for private DM", {
+        telegramUserId: telegramIdStr,
+      });
+      await ctx.reply("Ошибка сессии. Закройте чат и нажмите /start ещё раз.");
+      return true;
+    }
+
+    if (sess.step) {
+      await ctx.reply("Вы уже проходите регистрацию.");
+      return true;
+    }
+
+    const now = Date.now();
+
+    if (
+      sess.lastAttemptAt != null &&
+      now - sess.lastAttemptAt < REGISTRATION_COOLDOWN_MS
+    ) {
+      await ctx.reply(
+        "Подождите 10 секунд перед следующей попыткой регистрации."
+      );
+      logSaas("rejected_attempt", {
+        reason: "rate_limit_register_start",
+        telegramUserId: telegramIdStr,
+      });
+      return true;
+    }
+
+    const userWithBiz = await findUserWithBusinessForTelegram(
+      telegramIdStr
     );
-    logSaas("rejected_attempt", {
-      reason: "rate_limit_register_start",
-      telegramUserId: tgId,
-    });
+    if (userWithBiz?.business) {
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[saasRegistration] /start: existing merchant", {
+          businessId: userWithBiz.business.id,
+          telegramUserId: telegramIdStr,
+        });
+      }
+      await replyMerchantAlreadyHasShop(ctx, userWithBiz.business.id);
+      logSaas("rejected_attempt", {
+        reason: "already_has_business",
+        telegramUserId: telegramIdStr,
+      });
+      return true;
+    }
+
+    if (await hasPendingRegistrationForTelegram(telegramIdStr)) {
+      await ctx.reply("Ваша заявка уже на рассмотрении");
+      logSaas("rejected_attempt", {
+        reason: "already_pending_request",
+        telegramUserId: telegramIdStr,
+      });
+      return true;
+    }
+
+    sess.lastAttemptAt = now;
+    sess.data = {};
+    sess.step = "name";
+
+    await ctx.reply(
+      "Давайте создадим ваш магазин 🚀\nВведите название магазина."
+    );
+
+    logSaas("registration_started", { telegramUserId: telegramIdStr });
+    return true;
+  } catch (err: unknown) {
+    console.error("START ERROR:", err);
+    try {
+      await ctx.reply("Ошибка сервера ❌ Попробуйте позже.");
+    } catch (replyErr: unknown) {
+      console.error("START ERROR (reply failed):", replyErr);
+    }
     return true;
   }
-
-  const merchantBid = await getLinkedMerchantBusinessId(tgId);
-  if (merchantBid != null) {
-    await replyMerchantAlreadyHasShop(ctx, merchantBid);
-    logSaas("rejected_attempt", {
-      reason: "already_has_business",
-      telegramUserId: tgId,
-    });
-    return true;
-  }
-
-  if (await hasPendingRegistrationForTelegram(tgId)) {
-    await ctx.reply("Ваша заявка уже на рассмотрении");
-    logSaas("rejected_attempt", {
-      reason: "already_pending_request",
-      telegramUserId: tgId,
-    });
-    return true;
-  }
-
-  sess.lastAttemptAt = now;
-  sess.data = {};
-  sess.step = "name";
-
-  await ctx.reply("Давайте создадим ваш магазин 🚀");
-  await ctx.reply("Введите название магазина");
-
-  logSaas("registration_started", { telegramUserId: tgId });
-  return true;
 }
 
 export async function handleRegistrationCallbacks(
