@@ -102,15 +102,50 @@ function logSaas(
   console.log(`[saasRegistration] ${event}`, meta);
 }
 
-/** Пользователь уже привязан к магазину (любая запись User с этим telegramId). */
-async function telegramUserAlreadyHasBusiness(
+/** `Business.id`, если пользователь уже привязан к магазину как `User`. */
+async function getLinkedMerchantBusinessId(
   telegramId: string
-): Promise<boolean> {
+): Promise<number | null> {
   const u = await prisma.user.findFirst({
     where: { telegramId },
-    select: { id: true },
+    select: { businessId: true },
   });
-  return u != null;
+  return u?.businessId ?? null;
+}
+
+function miniAppFrontBase(): string | null {
+  const raw =
+    process.env.FRONTEND_URL ||
+    process.env.FRONT_URL ||
+    process.env.PUBLIC_URL ||
+    "";
+  const trimmed = raw.trim().replace(/\/$/, "");
+  return trimmed !== "" ? trimmed : null;
+}
+
+async function replyMerchantAlreadyHasShop(
+  ctx: Context,
+  businessId: number
+): Promise<void> {
+  const text = "У вас уже есть магазин";
+  const base = miniAppFrontBase();
+  if (!base) {
+    await ctx.reply(
+      `${text}\n\nЗадайте FRONTEND_URL, FRONT_URL или PUBLIC_URL (URL Mini App).`
+    );
+    return;
+  }
+  const q = encodeURIComponent(String(businessId));
+  const storeUrl = `${base}/?shop=${q}`;
+  const ordersUrl = `${base}/?shop=${q}&view=my-orders`;
+  await ctx.reply(text, {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "Открыть магазин", web_app: { url: storeUrl } }],
+        [{ text: "Мои заказы", web_app: { url: ordersUrl } }],
+      ],
+    },
+  });
 }
 
 async function hasPendingRegistrationForTelegram(
@@ -328,8 +363,9 @@ export async function registrationFlow(
 
     try {
       const tid = telegramIdString(ctx);
-      if (await telegramUserAlreadyHasBusiness(tid)) {
-        await ctx.reply("У вас уже есть зарегистрированный магазин");
+      const existingBid = await getLinkedMerchantBusinessId(tid);
+      if (existingBid != null) {
+        await replyMerchantAlreadyHasShop(ctx, existingBid);
         resetRegistrationWizardFields(ctx);
         logSaas("rejected_attempt", {
           reason: "already_has_business_at_submit",
@@ -471,8 +507,9 @@ export async function handleRegistrationStartCommand(
     return true;
   }
 
-  if (await telegramUserAlreadyHasBusiness(tgId)) {
-    await ctx.reply("У вас уже есть зарегистрированный магазин");
+  const merchantBid = await getLinkedMerchantBusinessId(tgId);
+  if (merchantBid != null) {
+    await replyMerchantAlreadyHasShop(ctx, merchantBid);
     logSaas("rejected_attempt", {
       reason: "already_has_business",
       telegramUserId: tgId,

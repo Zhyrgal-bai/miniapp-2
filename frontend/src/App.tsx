@@ -72,6 +72,14 @@ export default function App() {
     }
   }, [location.pathname]);
 
+  /** Диплинк из Telegram: `?shop=…&view=my-orders` */
+  useEffect(() => {
+    const sp = new URLSearchParams(location.search);
+    if (sp.get("view") === "my-orders") {
+      commitPage("my-orders");
+    }
+  }, [location.search, commitPage]);
+
   useEffect(() => {
     const uid = getWebAppUserId();
     if (!Number.isFinite(uid) || uid <= 0) {
