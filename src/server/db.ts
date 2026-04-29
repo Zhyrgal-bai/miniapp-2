@@ -1,6 +1,22 @@
 import { PrismaClient, Prisma } from "@prisma/client";
 
-export const prisma = new PrismaClient();
+/**
+ * На Render Postgres почти всегда нужен TLS. Дополняем URL только на Render и если ssl
+ * ещё не задан — локальный `localhost` без RENDER не трогаем.
+ */
+function ensurePostgresUrlSsl(): void {
+  if (!process.env.RENDER) return;
+  const u = process.env.DATABASE_URL ?? "";
+  if (u === "") return;
+  if (!/^(postgresql|postgres):\/\//i.test(u)) return;
+  if (/\bsslmode=/i.test(u) || /\bsslmode%3D/i.test(u)) return;
+  if (/\bssl=true\b/i.test(u) || /[?&]ssl=1\b/i.test(u)) return;
+  const joiner = u.includes("?") ? "&" : "?";
+  process.env.DATABASE_URL = `${u}${joiner}sslmode=require`;
+  console.log("[db] DATABASE_URL: добавлен sslmode=require (Render)");
+}
+
+ensurePostgresUrlSsl();
 
 function warnPostgresSslIfNeeded(): void {
   const u = process.env.DATABASE_URL ?? "";
@@ -14,6 +30,8 @@ function warnPostgresSslIfNeeded(): void {
 }
 
 warnPostgresSslIfNeeded();
+
+export const prisma = new PrismaClient();
 
 /**
  * Полный лог Prisma-исключений: code / meta / stack (для логов Render).
