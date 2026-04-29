@@ -7,6 +7,11 @@ import {
   mbankOrderQrImageUrl,
   mbankPaymentQrCaption,
 } from "../server/mbankQrUrl.js";
+import {
+  attachSaasRegistration,
+  handleRegistrationCallbacks,
+  tryBeginRegistrationFromDeepLink,
+} from "./saasRegistration.js";
 
 function parseBotTokensFromEnv(): string[] {
   const fromMulti = process.env.BOT_TOKENS?.split(/[,;\s]+/)
@@ -87,11 +92,9 @@ export function getBotTokenForOwner(ownerId: number): string | undefined {
   return botTokens[getBotIndexForOwner(ownerId)] ?? botTokens[0];
 }
 
-/** Вебхук только для динамически подключённых ботов (по `ownerId` = User.id). */
-export function getDynamicOwnerBot(
-  ownerId: number
-): Telegraf | undefined {
-  return dynamicOwnerBots.get(ownerId);
+/** Вебхук динамического бота: `businessId` = `Business.id` (магазин). */
+export function getDynamicOwnerBot(businessId: number): Telegraf | undefined {
+  return dynamicOwnerBots.get(businessId);
 }
 
 /**
@@ -175,15 +178,25 @@ export const adminMemoryOrderInlineKeyboard = adminOrderInlineKeyboard;
 async function loadOrderForBot(orderId: number) {
   return prisma.order.findUnique({
     where: { id: orderId },
-    include: { user: true, items: true },
+    include: { buyerUser: true, items: true },
   });
+}
+
+function buyerTelegramFromOrderRow(row: {
+  buyerUser: { telegramId: string } | null;
+}): number | null {
+  const raw = row.buyerUser?.telegramId;
+  if (raw === undefined || raw === null || String(raw).trim() === "")
+    return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 async function updateOrderStatusInDb(orderId: number, status: OrderStatus) {
   const row = await prisma.order.update({
     where: { id: orderId },
     data: { status },
-    include: { user: true, items: true },
+    include: { buyerUser: true, items: true },
   });
   console.log("ORDER STATUS UPDATE:", orderId, status);
   return row;
@@ -202,10 +215,10 @@ export function yaOpltilKeyboard(orderId: number) {
 
 async function buildAcceptedPaymentMessage(
   orderId: number,
-  ownerId: number,
+  businessId: number,
   orderTotal: number
 ): Promise<{ text: string; qrUrl: string; qrCaption: string }> {
-  const details = await listPaymentDetailsFromDb(prisma, ownerId);
+  const details = await listPaymentDetailsFromDb(prisma, businessId);
   const mbankRow = details.find((d) => d.type.toLowerCase() === "mbank");
   const mbankVal =
     mbankRow?.value?.trim() && mbankRow.value.trim().length > 0
@@ -241,13 +254,13 @@ export async function sendAcceptedPaymentPromptToTelegramUser(params: {
   telegram: Telegraf["telegram"];
   telegramUserId: number;
   orderId: number;
-  ownerId: number;
+  businessId: number;
   orderTotal: number;
 }): Promise<void> {
-  const { telegram, telegramUserId, orderId, ownerId, orderTotal } = params;
+  const { telegram, telegramUserId, orderId, businessId, orderTotal } = params;
   const { text, qrUrl, qrCaption } = await buildAcceptedPaymentMessage(
     orderId,
-    ownerId,
+    businessId,
     orderTotal
   );
   await telegram.sendMessage(telegramUserId, text, {
@@ -259,22 +272,23 @@ export async function sendAcceptedPaymentPromptToTelegramUser(params: {
 /** То же при смене статуса через API (нет ctx.telegram). */
 export async function sendAcceptedPaymentPromptForOrderFromApi(order: {
   id: number;
-  ownerId: number;
+  businessId: number;
   total: number;
-  user: { telegramId: string };
+  buyerUser?: { telegramId: string } | null;
   paymentMethod?: string | null;
 }): Promise<void> {
   if (String(order.paymentMethod ?? "").toLowerCase() === "finik") {
     return;
   }
-  const tgId = Number(order.user.telegramId);
+  const rawTg = order.buyerUser?.telegramId;
+  const tgId = rawTg !== undefined ? Number(rawTg) : NaN;
   if (!Number.isFinite(tgId) || tgId <= 0) return;
   const { text, qrUrl, qrCaption } = await buildAcceptedPaymentMessage(
     order.id,
-    order.ownerId,
+    order.businessId,
     order.total
   );
-  const tBot = getBotForOwner(order.ownerId);
+  const tBot = getBotForOwner(order.businessId);
   if (tBot) {
     await tBot.telegram.sendMessage(tgId, text, {
       reply_markup: yaOpltilKeyboard(order.id),
@@ -283,7 +297,7 @@ export async function sendAcceptedPaymentPromptForOrderFromApi(order: {
     return;
   }
 
-  const token = getBotTokenForOwner(order.ownerId);
+  const token = getBotTokenForOwner(order.businessId);
   if (!token) return;
 
   try {
@@ -345,9 +359,11 @@ function readStartParam(ctx: {
 
 type BotHandlerRole =
   | { type: "env"; botIndex: number }
-  | { type: "dynamic"; ownerId: number };
+  | { type: "dynamic"; businessId: number };
 
 function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
+  attachSaasRegistration(tgBot, role);
+
   void tgBot.telegram
     .getMe()
     .then((info) => {
@@ -357,7 +373,7 @@ function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
         console.log(
           "BOT INFO (dynamic):",
           "owner",
-          role.ownerId,
+          role.businessId,
           info.username,
           info.id
         );
@@ -367,11 +383,14 @@ function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
       if (role.type === "env") {
         console.error("BOT ERROR:", role.botIndex, err);
       } else {
-        console.error("BOT ERROR (dynamic) owner", role.ownerId, err);
+        console.error("BOT ERROR (dynamic) business", role.businessId, err);
       }
     });
 
-  tgBot.start((ctx) => {
+  tgBot.start(async (ctx) => {
+    if (tryBeginRegistrationFromDeepLink(role, ctx)) {
+      return;
+    }
     const chatId = ctx.chat?.id;
     if (role.type === "env") {
       if (chatId != null) {
@@ -384,10 +403,10 @@ function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
       }
     } else {
       if (chatId != null) {
-        notifyFallbackByOwnerId.set(role.ownerId, chatId);
+        notifyFallbackByOwnerId.set(role.businessId, chatId);
         console.log(
-          "NOTIFY_FALLBACK (dynamic) owner",
-          role.ownerId,
+          "NOTIFY_FALLBACK (dynamic) business",
+          role.businessId,
           chatId
         );
       }
@@ -397,7 +416,7 @@ function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
     if (param && param.startsWith("shop_")) {
       shop = param.slice(5);
     } else if (role.type === "dynamic") {
-      shop = String(role.ownerId);
+      shop = String(role.businessId);
     }
     const base = (process.env.FRONT_URL || process.env.PUBLIC_URL || "")
       .trim()
@@ -432,6 +451,10 @@ function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
       const data = ctx.callbackQuery.data;
       if (!data) return;
 
+      if (await handleRegistrationCallbacks(ctx)) {
+        return;
+      }
+
       const msg = ctx.callbackQuery.message;
       if (!msg || !("text" in msg)) {
         await ctx.answerCbQuery("Сообщение недоступно");
@@ -458,9 +481,10 @@ function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
         return;
       }
 
+      const buyerTg = buyerTelegramFromOrderRow(row);
       const order = {
         status: row.status as OrderStatus,
-        customerTelegramId: Number(row.user.telegramId),
+        customerTelegramId: buyerTg ?? Number.NaN,
       };
 
       console.log("CALLBACK:", data, "order", orderId, "status", order.status);
@@ -492,7 +516,7 @@ function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
               telegram: ctx.telegram,
               telegramUserId: tgId,
               orderId: rowAfter.id,
-              ownerId: rowAfter.ownerId,
+              businessId: rowAfter.businessId,
               orderTotal: rowAfter.total,
             });
           }
@@ -519,10 +543,10 @@ function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
           reply_markup: { inline_keyboard: [] },
         });
 
-        const tgId = Number(rowAfter.user.telegramId);
-        if (Number.isFinite(tgId) && tgId > 0) {
+        const shipTg = buyerTelegramFromOrderRow(rowAfter);
+        if (shipTg != null && shipTg > 0) {
           await ctx.telegram.sendMessage(
-            tgId,
+            shipTg,
             `🚚 Заказ отправлен!\n\nВаш заказ #${rowAfter.id} уже в пути 📦`
           );
         }
@@ -553,7 +577,7 @@ function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
           { reply_markup: { inline_keyboard: [] } }
         );
 
-        const adminChat = getNotifyTargetChatId(row.ownerId);
+        const adminChat = getNotifyTargetChatId(row.businessId);
         if (adminChat == null) {
           console.error(
             "CHAT_ID не задан и не было /start — не удалось уведомить админа об оплате"
@@ -599,10 +623,10 @@ function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
           reply_markup: adminShipOnlyKeyboard(orderId),
         });
 
-        const tgId = Number(rowAfter.user.telegramId);
-        if (Number.isFinite(tgId) && tgId > 0) {
+        const confTg = buyerTelegramFromOrderRow(rowAfter);
+        if (confTg != null && confTg > 0) {
           await ctx.telegram.sendMessage(
-            tgId,
+            confTg,
             `💰 Оплата подтверждена!\n\nВаш заказ #${rowAfter.id} готовится к отправке 📦`
           );
         }
@@ -649,7 +673,7 @@ function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
             telegram: ctx.telegram,
             telegramUserId: tgId,
             orderId: rowBack.id,
-            ownerId: rowBack.ownerId,
+            businessId: rowBack.businessId,
             orderTotal: rowBack.total,
           });
         }
@@ -684,11 +708,11 @@ export type RegisterDynamicBotResult = {
 };
 
 /**
- * Онбординг: валидный токен + привязка к User — поднимаем Telegraf и вебхук
- * `POST {API}/telegram-webhook/owner/{userId}`.
+ * Подключение бота магазина по токену + вебхук
+ * `POST {API}/telegram-webhook/owner/{businessId}`.
  */
 export async function registerDynamicUserBot(user: {
-  id: number;
+  businessId: number;
   botToken: string;
 }): Promise<RegisterDynamicBotResult> {
   const token = String(user.botToken).trim();
@@ -706,7 +730,7 @@ export async function registerDynamicUserBot(user: {
     throw new Error("Invalid bot token (getMe failed)");
   }
 
-  const existing = dynamicOwnerBots.get(user.id);
+  const existing = dynamicOwnerBots.get(user.businessId);
   if (existing) {
     try {
       await existing.telegram.deleteWebhook();
@@ -721,18 +745,18 @@ export async function registerDynamicUserBot(user: {
   }
 
   const tg = new Telegraf(token);
-  attachBotHandlers(tg, { type: "dynamic", ownerId: user.id });
-  dynamicOwnerBots.set(user.id, tg);
-  dynamicTokenByOwnerId.set(user.id, token);
+  attachBotHandlers(tg, { type: "dynamic", businessId: user.businessId });
+  dynamicOwnerBots.set(user.businessId, tg);
+  dynamicTokenByOwnerId.set(user.businessId, token);
 
   const publicApiBase = trimApiBase();
   if (publicApiBase) {
-    const url = `${publicApiBase}/telegram-webhook/owner/${user.id}`;
+    const url = `${publicApiBase}/telegram-webhook/owner/${user.businessId}`;
     try {
       await tg.telegram.setWebhook(url);
       console.log("Dynamic webhook set:", url);
     } catch (e) {
-      console.error("Dynamic setWebhook error:", user.id, e);
+      console.error("Dynamic setWebhook error:", user.businessId, e);
     }
   } else {
     console.warn(
@@ -747,16 +771,17 @@ export async function registerDynamicUserBot(user: {
 }
 
 export async function initDynamicUserBotsFromDatabase(): Promise<void> {
-  const users = await prisma.user.findMany({
-    where: { botToken: { not: null } },
+  const stores = await prisma.business.findMany({
     select: { id: true, botToken: true },
   });
-  for (const u of users) {
-    if (!u.botToken) continue;
+  for (const s of stores) {
     try {
-      await registerDynamicUserBot({ id: u.id, botToken: u.botToken });
+      await registerDynamicUserBot({
+        businessId: s.id,
+        botToken: s.botToken,
+      });
     } catch (e) {
-      console.error("initDynamicUserBots: fail user", u.id, e);
+      console.error("initDynamicUserBots: fail business", s.id, e);
     }
   }
 }

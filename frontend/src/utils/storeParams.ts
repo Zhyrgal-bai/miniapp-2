@@ -2,7 +2,7 @@ import { getWebAppUserId } from "./telegramUserId";
 
 const STORAGE_KEY = "miniapp-active-shop";
 
-/** `?shop=<ownerId>` — витрина этого магазина; кладём в sessionStorage, чтобы не терялось при навигации. */
+/** `?shop=<businessId>` (Business.id тенанта) — витрина магазина; кладём в sessionStorage. */
 export function getActiveShopId(): string | undefined {
   if (typeof window === "undefined") return undefined;
   const q = new URLSearchParams(window.location.search).get("shop");

@@ -257,10 +257,11 @@ export default function MyOrders() {
       return;
     }
     try {
-      const data = await fetchMyOrders(userId);
+      const activeShop = getActiveShopId();
+      const data = await fetchMyOrders(userId, activeShop);
       const shop =
-        getActiveShopId() ||
-        (data[0]?.ownerId != null ? String(data[0].ownerId) : null);
+        activeShop ||
+        (data[0]?.businessId != null ? String(data[0].businessId) : null);
       const settingsUrl = new URL(apiAbsoluteUrl("/settings"));
       settingsUrl.searchParams.set("userId", String(userId));
       if (shop) settingsUrl.searchParams.set("shop", shop);

@@ -1,48 +1,59 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, UserRole } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-const CATEGORY_TREE = [
-  {
-    name: "Верх",
-    children: ["Худи", "Футболки", "Свитшоты"],
-  },
-  {
-    name: "Низ",
-    children: ["Штаны", "Шорты"],
-  },
-  {
-    name: "Аксессуары",
-    children: ["Кепки", "Сумки"],
-  },
-] as const;
+const CATEGORY_NAMES = ["Верх", "Низ", "Аксессуары"] as const;
 
 async function main() {
-  const owner = await prisma.user.upsert({
-    where: { telegramId: "seed-owner" },
+  const biz = await prisma.business.upsert({
+    where: { botToken: "seed-bot-token-placeholder" },
     update: {},
-    create: { telegramId: "seed-owner", name: "Seed Owner" },
+    create: {
+      name: "Seed Store",
+      botToken: "seed-bot-token-placeholder",
+      slug: "seed-store",
+      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+    },
   });
 
-  for (const group of CATEGORY_TREE) {
-    let parent = await prisma.category.findFirst({
-      where: { name: group.name, parentId: null, ownerId: owner.id },
+  await prisma.settings.upsert({
+    where: { businessId: biz.id },
+    update: {},
+    create: {
+      businessId: biz.id,
+    },
+  });
+
+  await prisma.user.upsert({
+    where: {
+      businessId_telegramId: {
+        businessId: biz.id,
+        telegramId: "seed-owner",
+      },
+    },
+    update: {},
+    create: {
+      telegramId: "seed-owner",
+      name: "Seed Owner",
+      businessId: biz.id,
+      role: UserRole.ADMIN,
+    },
+  });
+
+  for (const name of CATEGORY_NAMES) {
+    await prisma.category.upsert({
+      where: {
+        businessId_name: {
+          businessId: biz.id,
+          name,
+        },
+      },
+      update: {},
+      create: {
+        name,
+        businessId: biz.id,
+      },
     });
-    if (!parent) {
-      parent = await prisma.category.create({
-        data: { name: group.name, ownerId: owner.id },
-      });
-    }
-    for (const sub of group.children) {
-      const exists = await prisma.category.findFirst({
-        where: { name: sub, parentId: parent.id, ownerId: owner.id },
-      });
-      if (!exists) {
-        await prisma.category.create({
-          data: { name: sub, parentId: parent.id, ownerId: owner.id },
-        });
-      }
-    }
   }
 }
 

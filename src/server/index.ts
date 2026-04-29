@@ -2,19 +2,14 @@ import "dotenv/config";
 import express from "express";
 import type { Request, Response } from "express";
 import multer from "multer";
-import { Prisma } from "@prisma/client";
+import { Prisma, UserRole } from "@prisma/client";
 import cors from "cors";
 import {
   isCloudinaryConfigured,
   uploadImageToCloudinary,
   uploadReceiptToCloudinary,
 } from "./cloudinary.js";
-import {
-  adminUserIdFromRequest,
-  denyIfNotAdmin,
-  denyIfNotAdminQuery,
-  isAdmin,
-} from "./adminAuth.js";
+import { adminUserIdFromRequest, isAdmin } from "./adminAuth.js";
 import {
   isAllowedOrderStatusTransition,
   isValidOrderStatus,
@@ -32,11 +27,6 @@ import {
 } from "../bot/bot.js";
 import { prisma } from "./db.js";
 import {
-  expandShortHex,
-  isValidHexColor,
-  lookupVariantHexByName,
-} from "../shared/variantColorPresets.js";
-import {
   clearPaymentFieldByRowId,
   listPaymentDetailsFromDb,
   upsertPaymentSettings,
@@ -49,7 +39,15 @@ import {
   tryApplyPromoDb,
 } from "./promoRepo.js";
 import { notifyAfterOrderStatusChangeFromApi } from "./orderTelegramNotify.js";
+import {
+  createFinikMerchantSession,
+  mountFinikWebhookRoutes,
+  mountFinikSettingsRoutes,
+  publicApiOrigin,
+} from "./finikMerchant.js";
+import { startSubscriptionMaintenanceScheduler } from "./subscriptionMaintenance.js";
 import { cleanInput, validateKgPhone } from "./orderInputSanitize.js";
+import { businessMiddleware } from "../middleware/business.middleware.js";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -84,7 +82,8 @@ function promoApplyErrorMessage(err: unknown): string {
 
 /** Сверка total/subtotal с промокодом (без списания использования). */
 async function computeOrderTotalFromBody(
-  body: OrderTotalBody
+  body: OrderTotalBody,
+  businessId: number
 ): Promise<
   { ok: true; orderTotal: number; promoRaw: string } | { ok: false; error: string }
 > {
@@ -101,7 +100,12 @@ async function computeOrderTotalFromBody(
       return { ok: false, error: "Нужны subtotal и total для промокода" };
     }
     try {
-      const applied = await tryApplyPromoDb(prisma, promoRaw, subtotalVal);
+      const applied = await tryApplyPromoDb(
+        prisma,
+        businessId,
+        promoRaw,
+        subtotalVal
+      );
       if (Math.abs(bodyTotal - applied.newTotal) > 0.01) {
         return { ok: false, error: "Сумма не совпадает с промокодом" };
       }
@@ -120,136 +124,33 @@ async function computeOrderTotalFromBody(
   return { ok: true, orderTotal, promoRaw: "" };
 }
 
-type CleanVariantInput = {
-  color: string;
-  colorHex: string | null;
-  sizes: { size: string; stock: number }[];
-};
-
-function parseVariantColorInput(
-  raw: unknown,
-  index: number
-): { name: string; hex: string | null } | { error: string } {
-  const n = index + 1;
-  if (raw == null || raw === "") {
-    return { error: `Вариант ${n}: укажите цвет` };
-  }
-  if (typeof raw === "string") {
-    const name = raw.trim();
-    if (!name) {
-      return { error: `Вариант ${n}: укажите название цвета` };
-    }
-    return { name, hex: lookupVariantHexByName(name) };
-  }
-  if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
-    const o = raw as Record<string, unknown>;
-    const name = String(o.name ?? "").trim();
-    if (!name) {
-      return { error: `Вариант ${n}: укажите название цвета` };
-    }
-    let hex: string | null = null;
-    const hexRaw = o.hex;
-    if (typeof hexRaw === "string" && hexRaw.trim() !== "") {
-      const h = expandShortHex(hexRaw.trim());
-      if (!isValidHexColor(h)) {
-        return { error: `Вариант ${n}: неверный HEX` };
-      }
-      hex = expandShortHex(h);
-    }
-    if (!hex) {
-      hex = lookupVariantHexByName(name);
-    }
-    return { name, hex };
-  }
-  return { error: `Вариант ${n}: неверный формат цвета` };
-}
-
-function clampDiscountPercent(n: unknown): number {
-  const v = Number(n);
-  if (!Number.isFinite(v)) return 0;
-  return Math.min(100, Math.max(0, Math.round(v)));
-}
-
-function parseVariantSizes(
-  sizesRaw: unknown,
-  variantIndex: number
-): { size: string; stock: number }[] | { error: string } {
-  const sizes: { size: string; stock: number }[] = [];
-
-  if (Array.isArray(sizesRaw)) {
-    if (sizesRaw.length === 0) {
-      return { error: `Вариант ${variantIndex + 1}: нужны размеры` };
-    }
-    for (const s of sizesRaw) {
-      const z = s as { size?: unknown; stock?: unknown };
-      const size = String(z?.size ?? "").trim();
-      const stock = Number(z?.stock);
-      if (!size || !Number.isFinite(stock) || stock < 0) {
-        return {
-          error: `Вариант ${variantIndex + 1}: неверные размер или количество`,
-        };
-      }
-      if (stock > 0) {
-        sizes.push({ size, stock: Math.round(stock) });
-      }
-    }
-  } else if (sizesRaw != null && typeof sizesRaw === "object") {
-    for (const [key, val] of Object.entries(sizesRaw as Record<string, unknown>)) {
-      const size = String(key ?? "").trim();
-      const stock = Number(val);
-      if (!size || !Number.isFinite(stock) || stock < 0) {
-        return {
-          error: `Вариант ${variantIndex + 1}: неверные размер или количество`,
-        };
-      }
-      if (stock > 0) {
-        sizes.push({ size, stock: Math.round(stock) });
-      }
-    }
-  } else {
-    return { error: `Вариант ${variantIndex + 1}: нужны размеры` };
-  }
-
-  if (sizes.length === 0) {
-    return {
-      error: `Вариант ${variantIndex + 1}: укажите остаток хотя бы для одного размера`,
-    };
-  }
-  return sizes;
-}
-
-function normalizeVariantsInput(
-  raw: unknown
-): CleanVariantInput[] | { error: string } {
-  if (!Array.isArray(raw) || raw.length === 0) {
-    return { error: "Нужен хотя бы один вариант" };
-  }
-  const out: CleanVariantInput[] = [];
-  for (let i = 0; i < raw.length; i++) {
-    const v = raw[i] as { color?: unknown; sizes?: unknown };
-    const col = parseVariantColorInput(v?.color, i);
-    if ("error" in col) {
-      return { error: col.error };
-    }
-    const parsed = parseVariantSizes(v?.sizes, i);
-    if ("error" in parsed) {
-      return { error: parsed.error };
-    }
-    out.push({ color: col.name, colorHex: col.hex, sizes: parsed });
-  }
-  return out;
-}
-
 const app = express();
 
 app.use(
   cors({
     origin: "*",
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "x-telegram-id",
+      "x-business-id",
+    ],
   })
 );
 app.use(express.json());
+mountFinikWebhookRoutes(app);
+mountFinikSettingsRoutes(app);
+
+app.use("/api", businessMiddleware);
+
+app.get("/api/me", (_req: Request, res: Response) => {
+  res.json({
+    businessId: _req.businessId ?? null,
+    telegramId: _req.tenantUser?.telegramId ?? null,
+    businessName: _req.tenantBusiness?.name ?? null,
+  });
+});
 
 function telegramIdFromRequest(req: Request): string | null {
   const rawBody = (req.body as { userId?: unknown } | undefined)?.userId;
@@ -260,73 +161,115 @@ function telegramIdFromRequest(req: Request): string | null {
   return telegramId ? telegramId : null;
 }
 
-async function getOrCreateOwnerByTelegram(
-  tx: typeof prisma,
-  telegramId: string,
-  fallbackName?: string | null
-) {
-  const normalizedName = String(fallbackName ?? "").trim() || null;
-  const existing = await tx.user.findUnique({ where: { telegramId } });
-  if (existing) {
-    if (!existing.name && normalizedName) {
-      return tx.user.update({
-        where: { id: existing.id },
-        data: { name: normalizedName },
-      });
-    }
-    return existing;
+/** Витрина: `shop`, `body.businessId` или `x-business-id` = id Business (тенанта). */
+function businessIdFromNonApiHint(req: Request): number | null {
+  const rawH = req.headers["x-business-id"];
+  const hdr =
+    typeof rawH === "string"
+      ? rawH
+      : Array.isArray(rawH)
+        ? rawH[0]
+        : "";
+  const fromHeader = hdr ? Number(String(hdr).trim()) : NaN;
+  if (Number.isInteger(fromHeader) && fromHeader > 0) return fromHeader;
+
+  const shopRaw = req.query.shop;
+  const qs =
+    typeof shopRaw === "string"
+      ? shopRaw
+      : Array.isArray(shopRaw)
+        ? String(shopRaw[0] ?? "")
+        : "";
+  const shop = Number(qs.trim());
+  if (Number.isInteger(shop) && shop > 0) return shop;
+
+  const body = req.body as { businessId?: unknown } | undefined;
+  const b = body?.businessId;
+  if (typeof b === "number" && Number.isInteger(b) && b > 0) return b;
+  if (typeof b === "string") {
+    const n = Number(b.trim());
+    if (Number.isInteger(n) && n > 0) return n;
   }
-  return tx.user.create({
-    data: {
-      telegramId,
-      name: normalizedName,
-    },
-  });
+  return null;
 }
 
-async function requireOwner(req: Request, res: Response) {
+async function requireMerchantStaff(
+  req: Request,
+  res: Response
+): Promise<
+  import("@prisma/client").User | null
+> {
   const telegramId = telegramIdFromRequest(req);
+  const businessId = businessIdFromNonApiHint(req);
   if (!telegramId) {
     res.status(400).json({ error: "Нужен userId (Telegram)" });
     return null;
   }
-  return getOrCreateOwnerByTelegram(prisma, telegramId);
+  if (businessId == null) {
+    res.status(400).json({
+      error:
+        "Укажите магазин: query shop=<businessId>, заголовок x-business-id или body.businessId",
+    });
+    return null;
+  }
+  const user = await prisma.user.findUnique({
+    where: { businessId_telegramId: { businessId, telegramId } },
+  });
+  if (
+    !user ||
+    (user.role !== UserRole.OWNER && user.role !== UserRole.ADMIN)
+  ) {
+    res.status(403).json({ error: "Нет доступа к этому магазину" });
+    return null;
+  }
+  return user;
 }
 
-/** `?shop=123` — id владельца витрины; иначе владелец = пользователь `userId` (Telegram). */
-function shopIdFromRequest(req: Request): number | null {
-  const raw = req.query.shop;
-  const q = Array.isArray(raw) ? raw[0] : raw;
-  if (q === undefined || q === null || String(q).trim() === "") return null;
-  const n = Number(q);
-  if (Number.isInteger(n) && n > 0) return n;
-  return null;
-}
-
-/** Публичная витрина: владелец магазина либо из `shop`, либо (админ) из `userId`. */
-async function resolveStoreTenant(
+async function resolveCatalogBusinessId(
   req: Request,
   res: Response
-) {
-  const shop = shopIdFromRequest(req);
-  if (shop != null) {
-    const u = await prisma.user.findUnique({ where: { id: shop } });
-    if (!u) {
-      res.status(400).json({ error: "Магазин не найден" });
-      return null;
-    }
-    return u;
+): Promise<number | null> {
+  const businessId = businessIdFromNonApiHint(req);
+  if (businessId == null) {
+    res.status(400).json({ error: "Укажите магазин (shop=id бизнеса)" });
+    return null;
   }
-  return requireOwner(req, res);
+  const exists = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { id: true },
+  });
+  if (!exists) {
+    res.status(400).json({ error: "Магазин не найден" });
+    return null;
+  }
+  return businessId;
 }
 
-function trimTrailingSlash(u: string): string {
-  return u.replace(/\/$/, "");
+async function upsertBuyerUser(
+  tx: Prisma.TransactionClient,
+  businessId: number,
+  telegramId: string,
+  fallbackName: string | null
+) {
+  const normalizedName =
+    fallbackName !== undefined &&
+    fallbackName !== null &&
+    String(fallbackName).trim() !== ""
+      ? String(fallbackName).trim()
+      : null;
+  return tx.user.upsert({
+    where: { businessId_telegramId: { businessId, telegramId } },
+    create: {
+      businessId,
+      telegramId,
+      name: normalizedName,
+      role: UserRole.STAFF,
+    },
+    update: normalizedName != null ? { name: normalizedName } : {},
+  });
 }
 
-const publicApiBase = process.env.API_URL?.trim()
-  ? trimTrailingSlash(process.env.API_URL.trim())
-  : "";
+const publicApiBase = publicApiOrigin();
 
 app.post(
   "/telegram-webhook/:botIndex",
@@ -392,9 +335,24 @@ app.post("/connect-bot", async (req: Request, res: Response) => {
     if (!telegramId) {
       return res.status(400).json({ error: "Нужен userId (Telegram)" });
     }
-    const token = String(
-      (req.body as { botToken?: unknown })?.botToken ?? ""
-    ).trim();
+    const body = req.body as { botToken?: unknown; businessId?: unknown };
+    const businessId = Number(body.businessId);
+    if (!Number.isInteger(businessId) || businessId <= 0) {
+      return res.status(400).json({ error: "Нужен businessId магазина" });
+    }
+    const merchant = await prisma.user.findFirst({
+      where: {
+        businessId,
+        telegramId,
+        role: { in: [UserRole.OWNER, UserRole.ADMIN] },
+      },
+    });
+    if (!merchant) {
+      return res
+        .status(403)
+        .json({ error: "Нет доступа к управлению ботом этого магазина" });
+    }
+    const token = String(body.botToken ?? "").trim();
     if (!token) {
       return res.status(400).json({ error: "Вставьте токен бота" });
     }
@@ -410,9 +368,8 @@ app.post("/connect-bot", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Недействительный токен бота" });
     }
 
-    const user = await getOrCreateOwnerByTelegram(prisma, telegramId);
-    const conflict = await prisma.user.findFirst({
-      where: { botToken: token, id: { not: user.id } },
+    const conflict = await prisma.business.findFirst({
+      where: { botToken: token, NOT: { id: businessId } },
     });
     if (conflict) {
       return res
@@ -420,90 +377,21 @@ app.post("/connect-bot", async (req: Request, res: Response) => {
         .json({ error: "Этот бот уже подключён к другому магазину" });
     }
 
-    await prisma.user.update({
-      where: { id: user.id },
+    await prisma.business.update({
+      where: { id: businessId },
       data: { botToken: token },
     });
 
-    await registerDynamicUserBot({ id: user.id, botToken: token });
+    await registerDynamicUserBot({ businessId, botToken: token });
 
     return res.json({
       ok: true,
-      shopId: user.id,
+      shopId: businessId,
       botUsername: meJson.result.username ?? "",
     });
   } catch (e) {
     console.error("connect-bot:", e);
     return res.status(500).json({ error: "Не удалось подключить бота" });
-  }
-});
-
-/** Finik (и др.): подтверждение оплаты без чека. Тело: `{ paymentId, status }` или аналоги. */
-app.post("/finik/webhook", async (req: Request, res: Response) => {
-  try {
-    const body = req.body as Record<string, unknown>;
-    const paymentIdRaw =
-      body.paymentId ?? body.payment_id ?? body.orderId ?? body.order_id;
-    const statusRaw = body.status ?? body.payment_status ?? body.state;
-    const paymentId =
-      paymentIdRaw != null && String(paymentIdRaw).trim() !== ""
-        ? String(paymentIdRaw).trim()
-        : "";
-    const status = String(statusRaw ?? "").toLowerCase();
-
-    if (!paymentId) {
-      return res.status(400).json({ error: "paymentId required" });
-    }
-
-    const successStatuses = new Set([
-      "success",
-      "paid",
-      "completed",
-      "succeeded",
-    ]);
-    if (!successStatuses.has(status)) {
-      return res.json({ ok: true, ignored: true });
-    }
-
-    const order = await prisma.order.findFirst({
-      where: { paymentId },
-    });
-
-    if (!order) {
-      return res.status(404).json({ error: "Order not found" });
-    }
-
-    if (String(order.paymentMethod ?? "").toLowerCase() !== "finik") {
-      return res.status(400).json({ error: "Not a Finik order" });
-    }
-
-    const cur = String(order.status ?? "").toUpperCase();
-    if (cur === "CONFIRMED" || cur === "SHIPPED") {
-      return res.json({ ok: true, duplicate: true });
-    }
-    if (cur === "CANCELLED") {
-      return res.status(400).json({ error: "Order cancelled" });
-    }
-
-    const updated = await prisma.order.update({
-      where: { id: order.id },
-      data: { status: "CONFIRMED" },
-      include: { user: true },
-    });
-
-    void notifyAfterOrderStatusChangeFromApi({
-      id: updated.id,
-      ownerId: updated.ownerId,
-      status: updated.status,
-      total: updated.total,
-      user: { telegramId: updated.user.telegramId },
-      paymentMethod: updated.paymentMethod,
-    });
-
-    return res.json({ ok: true });
-  } catch (e) {
-    console.error("FINIK WEBHOOK:", e);
-    return res.status(500).json({ error: "Webhook error" });
   }
 });
 
@@ -543,13 +431,17 @@ app.post("/check-admin", (req: Request, res: Response) => {
   res.json({ isAdmin: isAdmin(adminUserIdFromRequest(req)) });
 });
 
-// ================== UPLOAD (Cloudinary, admin) ==================
+// ================== UPLOAD (Cloudinary, админ магазина или платформы) ==================
 app.post(
   "/upload",
   upload.single("file"),
   async (req: Request, res: Response) => {
     console.log("UPLOAD DATA:", req.body);
-    if (!denyIfNotAdmin(req, res)) return;
+    const platform = isAdmin(adminUserIdFromRequest(req));
+    if (!platform) {
+      const m = await requireMerchantStaff(req, res);
+      if (!m) return;
+    }
     try {
       if (!isCloudinaryConfigured()) {
         return res.status(503).json({
@@ -577,7 +469,11 @@ app.post(
   upload.array("files", 15),
   async (req: Request, res: Response) => {
     console.log("UPLOAD-IMAGES DATA:", req.body);
-    if (!denyIfNotAdmin(req, res)) return;
+    const platform = isAdmin(adminUserIdFromRequest(req));
+    if (!platform) {
+      const m = await requireMerchantStaff(req, res);
+      if (!m) return;
+    }
     try {
       if (!isCloudinaryConfigured()) {
         return res.status(503).json({
@@ -608,23 +504,23 @@ app.post(
   }
 );
 
-// ================== PAYMENT (Prisma singleton id=1) ==================
+// ================== PAYMENT (tenant Settings) ==================
 app.get("/settings", async (req: Request, res: Response) => {
   try {
-    const owner = await resolveStoreTenant(req, res);
-    if (!owner) return;
-    let settings = await prisma.paymentSettings.findUnique({
-      where: { ownerId: owner.id },
+    const businessId = await resolveCatalogBusinessId(req, res);
+    if (!businessId) return;
+    let settings = await prisma.settings.findUnique({
+      where: { businessId },
     });
     if (!settings) {
-      settings = await prisma.paymentSettings.create({
-        data: { ownerId: owner.id },
+      settings = await prisma.settings.create({
+        data: { businessId },
       });
     }
     // `other` — совместимый алиас для клиентов, ожидающих это поле.
     return res.json({
       ...settings,
-      other: settings.obank,
+      other: settings.other,
     });
   } catch (e) {
     console.error("GET /settings ERROR:", e);
@@ -633,23 +529,25 @@ app.get("/settings", async (req: Request, res: Response) => {
 });
 
 app.post("/settings", async (req: Request, res: Response) => {
-  if (!denyIfNotAdmin(req, res)) return;
   try {
-    const owner = await requireOwner(req, res);
-    if (!owner) return;
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
     const body = req.body as Record<string, unknown>;
     const data = {
       mbank: body.mbank,
       optima: body.optima,
-      // Поддерживаем `other` как алиас `obank`.
       obank: body.obank ?? body.other,
       card: body.card,
       qr: body.qr,
     } as Record<string, unknown>;
-    const settings = await upsertPaymentSettings(prisma, owner.id, data);
+    const settings = await upsertPaymentSettings(
+      prisma,
+      merchant.businessId,
+      data
+    );
     return res.json({
       ...settings,
-      other: settings.obank,
+      other: settings.other,
     });
   } catch (e) {
     console.error("POST /settings ERROR:", e);
@@ -658,11 +556,10 @@ app.post("/settings", async (req: Request, res: Response) => {
 });
 
 app.post("/payment/list", async (req: Request, res: Response) => {
-  if (!denyIfNotAdmin(req, res)) return;
   try {
-    const owner = await requireOwner(req, res);
-    if (!owner) return;
-    res.json(await listPaymentDetailsFromDb(prisma, owner.id));
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
+    res.json(await listPaymentDetailsFromDb(prisma, merchant.businessId));
   } catch (e) {
     console.error("PAYMENT LIST ERROR:", e);
     res.status(500).json({ error: "Server error" });
@@ -670,14 +567,13 @@ app.post("/payment/list", async (req: Request, res: Response) => {
 });
 
 app.post("/payment", async (req: Request, res: Response) => {
-  if (!denyIfNotAdmin(req, res)) return;
   try {
-    const owner = await requireOwner(req, res);
-    if (!owner) return;
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
     console.log("PAYMENT SAVE:", req.body);
     const saved = await upsertPaymentSettings(
       prisma,
-      owner.id,
+      merchant.businessId,
       req.body as Record<string, unknown>
     );
     res.json(saved);
@@ -688,16 +584,15 @@ app.post("/payment", async (req: Request, res: Response) => {
 });
 
 app.delete("/payment/:id", async (req: Request, res: Response) => {
-  if (!denyIfNotAdmin(req, res)) return;
   try {
-    const owner = await requireOwner(req, res);
-    if (!owner) return;
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) {
       return res.status(400).json({ error: "Неверный id" });
     }
 
-    const ok = await clearPaymentFieldByRowId(prisma, owner.id, id);
+    const ok = await clearPaymentFieldByRowId(prisma, merchant.businessId, id);
     if (!ok) {
       return res.status(404).json({ error: "Не найдено" });
     }
@@ -712,13 +607,24 @@ app.delete("/payment/:id", async (req: Request, res: Response) => {
 // ================== PROMO (Prisma) ==================
 app.post("/promo/apply", async (req: Request, res: Response) => {
   try {
-    const { code, total } = req.body as { code?: unknown; total?: unknown };
+    const { code, total, businessId: bid } = req.body as {
+      code?: unknown;
+      total?: unknown;
+      businessId?: unknown;
+    };
+    const businessId = Number(bid);
     const t = Number(total);
-    if (code == null || String(code).trim() === "" || !Number.isFinite(t)) {
-      return res.status(400).json({ error: "Нужны code и total" });
+    if (
+      code == null ||
+      String(code).trim() === "" ||
+      !Number.isFinite(t) ||
+      !Number.isInteger(businessId) ||
+      businessId <= 0
+    ) {
+      return res.status(400).json({ error: "Нужны businessId, code и total" });
     }
     try {
-      const result = await tryApplyPromoDb(prisma, String(code), t);
+      const result = await tryApplyPromoDb(prisma, businessId, String(code), t);
       return res.json({
         success: true,
         newTotal: result.newTotal,
@@ -736,9 +642,10 @@ app.post("/promo/apply", async (req: Request, res: Response) => {
 });
 
 app.post("/promo/list", async (req: Request, res: Response) => {
-  if (!denyIfNotAdmin(req, res)) return;
   try {
-    res.json(await listPromosFromDb(prisma));
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
+    res.json(await listPromosFromDb(prisma, merchant.businessId));
   } catch (e) {
     console.error("PROMO LIST ERROR:", e);
     res.status(500).json({ error: "Server error" });
@@ -746,8 +653,9 @@ app.post("/promo/list", async (req: Request, res: Response) => {
 });
 
 app.post("/promo", async (req: Request, res: Response) => {
-  if (!denyIfNotAdmin(req, res)) return;
   try {
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
     console.log("PROMO SAVE:", req.body);
     const body = req.body as {
       code?: unknown;
@@ -758,6 +666,7 @@ app.post("/promo", async (req: Request, res: Response) => {
     const lim = body.limit ?? body.maxUses;
     const row = await createPromoDb(
       prisma,
+      merchant.businessId,
       String(body.code ?? ""),
       Number(body.discount),
       Number(lim)
@@ -783,8 +692,9 @@ app.post("/promo", async (req: Request, res: Response) => {
 });
 
 app.delete("/promo/:code", async (req: Request, res: Response) => {
-  if (!denyIfNotAdmin(req, res)) return;
   try {
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
     const codeParam = req.params.code;
     const encoded =
       typeof codeParam === "string"
@@ -793,7 +703,7 @@ app.delete("/promo/:code", async (req: Request, res: Response) => {
           ? (codeParam[0] ?? "")
           : "";
     const raw = decodeURIComponent(encoded);
-    const ok = await deletePromoByCodeDb(prisma, raw);
+    const ok = await deletePromoByCodeDb(prisma, merchant.businessId, raw);
     if (!ok) {
       return res.status(404).json({ error: "Промокод не найден" });
     }
@@ -808,12 +718,11 @@ app.delete("/promo/:code", async (req: Request, res: Response) => {
 // ================== CATEGORIES ==================
 app.get("/categories", async (_req: Request, res: Response) => {
   try {
-    const owner = await resolveStoreTenant(_req, res);
-    if (!owner) return;
+    const businessId = await resolveCatalogBusinessId(_req, res);
+    if (!businessId) return;
     const categories = await prisma.category.findMany({
-      where: { ownerId: owner.id },
-      include: { children: true },
-      orderBy: [{ parentId: "asc" }, { id: "asc" }],
+      where: { businessId },
+      orderBy: { id: "asc" },
     });
     res.json(categories);
   } catch (e) {
@@ -824,20 +733,15 @@ app.get("/categories", async (_req: Request, res: Response) => {
 
 app.post("/categories", async (req: Request, res: Response) => {
   try {
-    const owner = await requireOwner(req, res);
-    if (!owner) return;
-    const body = req.body as { name?: unknown; parentId?: unknown };
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
+    const body = req.body as { name?: unknown };
     const name = String(body.name ?? "").trim();
     if (!name) {
       return res.status(400).json({ error: "Укажите название категории" });
     }
-    const parentIdRaw = body.parentId;
-    const parentId =
-      parentIdRaw === undefined || parentIdRaw === null || parentIdRaw === ""
-        ? null
-        : Number(parentIdRaw);
     const category = await prisma.category.create({
-      data: { name, parentId, ownerId: owner.id },
+      data: { name, businessId: merchant.businessId },
     });
     res.json(category);
   } catch (e) {
@@ -847,10 +751,9 @@ app.post("/categories", async (req: Request, res: Response) => {
 });
 
 app.delete("/categories/:id", async (req: Request, res: Response) => {
-  if (!denyIfNotAdminQuery(req, res)) return;
   try {
-    const owner = await requireOwner(req, res);
-    if (!owner) return;
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) {
       return res.status(400).json({ error: "Неверный id" });
@@ -858,18 +761,14 @@ app.delete("/categories/:id", async (req: Request, res: Response) => {
     const row = await prisma.category.findUnique({
       where: { id },
       include: {
-        children: { select: { id: true } },
         _count: { select: { products: true } },
       },
     });
     if (!row) {
       return res.status(404).json({ error: "Категория не найдена" });
     }
-    if (row.ownerId !== owner.id) {
+    if (row.businessId !== merchant.businessId) {
       return res.status(404).json({ error: "Категория не найдена" });
-    }
-    if (row.children.length > 0) {
-      return res.status(400).json({ error: "Удалите сначала подкатегории" });
     }
     if (row._count.products > 0) {
       return res.status(400).json({ error: "Категория содержит товары" });
@@ -884,10 +783,9 @@ app.delete("/categories/:id", async (req: Request, res: Response) => {
 
 // ================== CREATE PRODUCT ==================
 app.post("/products", async (req: Request, res: Response) => {
-  if (!denyIfNotAdmin(req, res)) return;
   try {
-    const owner = await requireOwner(req, res);
-    if (!owner) return;
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
     console.log("PRODUCT CREATE DATA:", req.body);
     const body = req.body as {
       name?: unknown;
@@ -896,27 +794,9 @@ app.post("/products", async (req: Request, res: Response) => {
       images?: unknown;
       description?: unknown;
       categoryId?: unknown;
-      isNew?: unknown;
-      isPopular?: unknown;
-      isSale?: unknown;
-      discountPercent?: unknown;
-      variants?: unknown;
     };
 
-    const {
-      name,
-      price,
-      image,
-      images,
-      description,
-      categoryId,
-      isNew,
-      isPopular,
-      isSale,
-      discountPercent,
-      variants,
-    } =
-      body;
+    const { name, price, image, images, description, categoryId } = body;
 
     const rawImages = Array.isArray(images)
       ? (images as unknown[])
@@ -929,24 +809,19 @@ app.post("/products", async (req: Request, res: Response) => {
       rawImages.length > 0 ? rawImages : imageStr ? [imageStr] : [];
     const primaryImage = imageList[0] ?? "";
 
-    const cleanVariants = normalizeVariantsInput(variants);
-    if ("error" in cleanVariants) {
-      return res.status(400).json({ error: cleanVariants.error });
-    }
-
     if (!name || price == null || !primaryImage) {
       return res.status(400).json({ error: "Неверные данные" });
     }
     const normalizedCategoryId = Number(categoryId);
     if (!Number.isFinite(normalizedCategoryId)) {
-      return res.status(400).json({ error: "Нужна подкатегория" });
+      return res.status(400).json({ error: "Нужна категория" });
     }
     const category = await prisma.category.findUnique({
       where: { id: normalizedCategoryId },
-      select: { id: true, parentId: true, ownerId: true },
+      select: { id: true, businessId: true },
     });
-    if (!category || category.parentId == null || category.ownerId !== owner.id) {
-      return res.status(400).json({ error: "Выберите подкатегорию" });
+    if (!category || category.businessId !== merchant.businessId) {
+      return res.status(400).json({ error: "Неверная категория" });
     }
 
     const product = await prisma.product.create({
@@ -960,33 +835,10 @@ app.post("/products", async (req: Request, res: Response) => {
             ? String(description).trim()
             : null,
         categoryId: normalizedCategoryId,
-        isNew: Boolean(isNew),
-        isPopular: Boolean(isPopular),
-        isSale: Boolean(isSale),
-        discountPercent: clampDiscountPercent(discountPercent),
-        ownerId: owner.id,
-        variants: {
-          create: cleanVariants.map((v) => ({
-            color: v.color,
-            colorHex: v.colorHex,
-            sizes: {
-              create: v.sizes.map((s) => ({
-                size: s.size,
-                stock: s.stock,
-              })),
-            },
-          })),
-        },
+        businessId: merchant.businessId,
       },
       include: {
-        category: {
-          include: { parent: true },
-        },
-        variants: {
-          include: {
-            sizes: true,
-          },
-        },
+        category: true,
       },
     });
 
@@ -1008,7 +860,7 @@ function jsonWithBigInt<T>(data: T): unknown {
 
 async function performOrderStatusUpdate(
   orderId: number,
-  ownerId: number,
+  businessId: number,
   statusRaw: unknown
 ): Promise<
   | { ok: true; body: unknown }
@@ -1023,9 +875,9 @@ async function performOrderStatusUpdate(
   try {
     const existing = await prisma.order.findUnique({
       where: { id: orderId },
-      include: { user: true },
+      include: { buyerUser: true },
     });
-    if (!existing || existing.ownerId !== ownerId) {
+    if (!existing || existing.businessId !== businessId) {
       return { ok: false, statusCode: 404, error: "Заказ не найден" };
     }
     const cur = existing.status as OrderStatus;
@@ -1047,14 +899,14 @@ async function performOrderStatusUpdate(
     const updated = await prisma.order.update({
       where: { id: orderId },
       data: { status: st },
-      include: { user: true },
+      include: { buyerUser: true },
     });
     void notifyAfterOrderStatusChangeFromApi({
       id: updated.id,
-      ownerId: updated.ownerId,
+      businessId: updated.businessId,
       status: updated.status,
       total: updated.total,
-      user: { telegramId: updated.user.telegramId },
+      buyerUser: updated.buyerUser,
       paymentMethod: updated.paymentMethod,
     });
     return { ok: true, body: updated };
@@ -1073,9 +925,8 @@ async function performOrderStatusUpdate(
 app.post("/order/status", async (req: Request, res: Response) => {
   try {
     console.log("ORDER STATUS DATA:", req.body);
-    if (!denyIfNotAdmin(req, res)) return;
-    const owner = await requireOwner(req, res);
-    if (!owner) return;
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
 
     const { id, status } = req.body as {
       id?: unknown;
@@ -1087,7 +938,11 @@ app.post("/order/status", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Нужен id" });
     }
 
-    const result = await performOrderStatusUpdate(orderId, owner.id, status);
+    const result = await performOrderStatusUpdate(
+      orderId,
+      merchant.businessId,
+      status
+    );
     if (!result.ok) {
       return res.status(result.statusCode).json({ error: result.error });
     }
@@ -1100,15 +955,18 @@ app.post("/order/status", async (req: Request, res: Response) => {
 
 app.put("/orders/:id/status", async (req: Request, res: Response) => {
   try {
-    if (!denyIfNotAdmin(req, res)) return;
-    const owner = await requireOwner(req, res);
-    if (!owner) return;
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
     const orderId = Number(req.params.id);
     if (!Number.isFinite(orderId)) {
       return res.status(400).json({ error: "Неверный id" });
     }
     const { status } = req.body as { status?: unknown };
-    const result = await performOrderStatusUpdate(orderId, owner.id, status);
+    const result = await performOrderStatusUpdate(
+      orderId,
+      merchant.businessId,
+      status
+    );
     if (!result.ok) {
       return res.status(result.statusCode).json({ error: result.error });
     }
@@ -1121,9 +979,8 @@ app.put("/orders/:id/status", async (req: Request, res: Response) => {
 
 async function handleAdminOrderPatch(req: Request, res: Response) {
   try {
-    if (!denyIfNotAdmin(req, res)) return;
-    const owner = await requireOwner(req, res);
-    if (!owner) return;
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
     const orderId = Number(req.params.id);
     if (!Number.isFinite(orderId)) {
       return res.status(400).json({ error: "Неверный id" });
@@ -1158,7 +1015,7 @@ async function handleAdminOrderPatch(req: Request, res: Response) {
     }
 
     const exists = await prisma.order.findUnique({ where: { id: orderId } });
-    if (!exists || exists.ownerId !== owner.id) {
+    if (!exists || exists.businessId !== merchant.businessId) {
       return res.status(404).json({ error: "Заказ не найден" });
     }
 
@@ -1177,7 +1034,7 @@ async function handleAdminOrderPatch(req: Request, res: Response) {
     const updated = await prisma.order.update({
       where: { id: orderId },
       data,
-      include: { user: true },
+      include: { buyerUser: true },
     });
 
     if (
@@ -1187,10 +1044,10 @@ async function handleAdminOrderPatch(req: Request, res: Response) {
     ) {
       void notifyAfterOrderStatusChangeFromApi({
         id: updated.id,
-        ownerId: updated.ownerId,
+        businessId: updated.businessId,
         status: updated.status,
         total: updated.total,
-        user: { telegramId: updated.user.telegramId },
+        buyerUser: updated.buyerUser,
         paymentMethod: updated.paymentMethod,
       });
     }
@@ -1207,9 +1064,8 @@ app.patch("/orders/:id", handleAdminOrderPatch);
 
 app.delete("/orders/clear", async (req: Request, res: Response) => {
   try {
-    if (!denyIfNotAdmin(req, res)) return;
-    const owner = await requireOwner(req, res);
-    if (!owner) return;
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
 
     const rawType = Array.isArray(req.query.type)
       ? req.query.type[0]
@@ -1219,19 +1075,21 @@ app.delete("/orders/clear", async (req: Request, res: Response) => {
     // Исторические алиасы из UI:
     // - completed -> SHIPPED (финальный успешный статус)
     // - rejected  -> CANCELLED (отклонён/отменён)
-    let where: { status?: string } = {};
+    const baseWhere: Prisma.OrderWhereInput = {
+      businessId: merchant.businessId,
+    };
+    let statusFilter: Prisma.EnumOrderStatusFilter | undefined;
     if (type === "completed") {
-      where.status = "SHIPPED";
+      statusFilter = { equals: "SHIPPED" };
     } else if (type === "rejected") {
-      where.status = "CANCELLED";
-    } else if (type === "all") {
-      where = {};
-    } else {
+      statusFilter = { equals: "CANCELLED" };
+    } else if (type !== "all") {
       return res.status(400).json({ error: "Unsupported clear type" });
     }
 
     const deleted = await prisma.order.deleteMany({
-      where: { ...where, ownerId: owner.id },
+      where:
+        statusFilter != null ? { ...baseWhere, status: statusFilter } : baseWhere,
     });
     return res.json({ deleted: deleted.count });
   } catch (e) {
@@ -1241,13 +1099,12 @@ app.delete("/orders/clear", async (req: Request, res: Response) => {
 });
 
 app.post("/analytics", async (req: Request, res: Response) => {
-  if (!denyIfNotAdmin(req, res)) return;
   try {
-    const owner = await requireOwner(req, res);
-    if (!owner) return;
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
     console.log("ANALYTICS DATA:", req.body);
     const orders = await prisma.order.findMany({
-      where: { ownerId: owner.id },
+      where: { businessId: merchant.businessId },
     });
 
     const totalOrders = orders.length;
@@ -1299,17 +1156,12 @@ function orderStatusRu(status: string): string {
 // ================== GET PRODUCTS ==================
 app.get("/products", async (req: Request, res: Response) => {
   try {
-    const owner = await resolveStoreTenant(req, res);
-    if (!owner) return;
+    const businessId = await resolveCatalogBusinessId(req, res);
+    if (!businessId) return;
     const products = await prisma.product.findMany({
-      where: { ownerId: owner.id },
+      where: { businessId },
       include: {
-        category: { include: { parent: true } },
-        variants: {
-          include: {
-            sizes: true,
-          },
-        },
+        category: true,
       },
     });
 
@@ -1322,8 +1174,8 @@ app.get("/products", async (req: Request, res: Response) => {
 
 app.get("/products/:id", async (req: Request, res: Response) => {
   try {
-    const owner = await resolveStoreTenant(req, res);
-    if (!owner) return;
+    const businessId = await resolveCatalogBusinessId(req, res);
+    if (!businessId) return;
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) {
       return res.status(400).json({ error: "Неверный id" });
@@ -1331,16 +1183,13 @@ app.get("/products/:id", async (req: Request, res: Response) => {
     const product = await prisma.product.findUnique({
       where: { id },
       include: {
-        category: { include: { parent: true } },
-        variants: {
-          include: { sizes: true },
-        },
+        category: true,
       },
     });
     if (!product) {
       return res.status(404).json({ error: "Товар не найден" });
     }
-    if (product.ownerId !== owner.id) {
+    if (product.businessId !== businessId) {
       return res.status(404).json({ error: "Товар не найден" });
     }
     res.json(product);
@@ -1350,24 +1199,17 @@ app.get("/products/:id", async (req: Request, res: Response) => {
   }
 });
 
-async function fetchAdminOrdersPayload(ownerId: number) {
+async function fetchAdminOrdersPayload(businessId: number) {
   const rows = await prisma.order.findMany({
-    where: { ownerId },
-    include: { user: true },
+    where: { businessId },
+    include: { buyerUser: true },
     orderBy: { id: "desc" },
   });
   return rows.map((o) => {
-    const phone =
-      (o as { customerPhone?: string | null }).customerPhone?.trim() || "—";
-    const tracking =
-      (o as { tracking?: string | null }).tracking?.trim() || null;
-    const receiptUrl =
-      (o as { receiptUrl?: string | null }).receiptUrl?.trim() || null;
-    const receiptType =
-      (o as { receiptType?: string | null }).receiptType?.trim() || null;
-    const paymentMethod =
-      (o as { paymentMethod?: string | null }).paymentMethod?.trim() ||
-      "receipt";
+    const tracking = (o.tracking ?? "").trim() || null;
+    const receiptUrl = (o.receiptUrl ?? "").trim() || null;
+    const receiptType = (o.receiptType ?? "").trim() || null;
+    const paymentMethod = (o.paymentMethod ?? "").trim() || "receipt";
     const address =
       typeof o.address === "string" && o.address.trim() !== ""
         ? o.address.trim()
@@ -1376,9 +1218,16 @@ async function fetchAdminOrdersPayload(ownerId: number) {
       o.lat != null && Number.isFinite(Number(o.lat)) ? Number(o.lat) : null;
     const lng =
       o.lng != null && Number.isFinite(Number(o.lng)) ? Number(o.lng) : null;
+    const phone =
+      typeof o.phone === "string" && o.phone.trim() !== ""
+        ? o.phone.trim()
+        : "—";
     return {
       id: o.id,
-      name: o.user.name?.trim() || "Гость",
+      name:
+        (o.buyerUser?.name && o.buyerUser.name.trim()) ||
+        (o.name && o.name.trim()) ||
+        "Гость",
       phone,
       status: o.status,
       statusText: orderStatusRu(o.status),
@@ -1401,11 +1250,18 @@ app.get("/orders/my", async (req: Request, res: Response) => {
     if (!telegramId) {
       return res.status(400).json({ error: "Нужен userId (Telegram)" });
     }
-
-    const user = await getOrCreateOwnerByTelegram(prisma, telegramId);
+    const businessId = businessIdFromNonApiHint(req);
+    if (businessId == null) {
+      return res
+        .status(400)
+        .json({ error: "Укажите магазин (shop / x-business-id / body.businessId)" });
+    }
 
     const orders = await prisma.order.findMany({
-      where: { userId: user.id },
+      where: {
+        businessId,
+        buyerUser: { telegramId },
+      },
       orderBy: { id: "desc" },
       include: { items: true },
     });
@@ -1418,11 +1274,10 @@ app.get("/orders/my", async (req: Request, res: Response) => {
 
 // ================== LIST ORDERS (admin, Prisma) ==================
 app.get("/orders", async (req: Request, res: Response) => {
-  if (!denyIfNotAdminQuery(req, res)) return;
   try {
-    const owner = await requireOwner(req, res);
-    if (!owner) return;
-    res.json(await fetchAdminOrdersPayload(owner.id));
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
+    res.json(await fetchAdminOrdersPayload(merchant.businessId));
   } catch (e) {
     console.error("LIST ORDERS ERROR:", e);
     res.status(500).json({ error: "Ошибка загрузки заказов" });
@@ -1430,11 +1285,10 @@ app.get("/orders", async (req: Request, res: Response) => {
 });
 
 app.post("/orders/list", async (req: Request, res: Response) => {
-  if (!denyIfNotAdmin(req, res)) return;
   try {
-    const owner = await requireOwner(req, res);
-    if (!owner) return;
-    res.json(await fetchAdminOrdersPayload(owner.id));
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
+    res.json(await fetchAdminOrdersPayload(merchant.businessId));
   } catch (e) {
     console.error("LIST ORDERS ERROR:", e);
     res.status(500).json({ error: "Ошибка загрузки заказов" });
@@ -1444,14 +1298,14 @@ app.post("/orders/list", async (req: Request, res: Response) => {
 /** Уведомление админу в Telegram о новом заказе из POST /orders (Prisma). */
 async function notifyAdminNewOrderTelegram(input: {
   orderId: number;
-  ownerId: number;
+  businessId: number;
   customerName: string;
   phone: string;
   address: string;
   total: number;
   items: { name: string; quantity: number }[];
 }): Promise<void> {
-  const chatId = getNotifyTargetChatId(input.ownerId);
+  const chatId = getNotifyTargetChatId(input.businessId);
   if (chatId == null) {
     console.log(
       "TELEGRAM ORDER NOTIFY: пропуск (нет чата: задайте CHAT_ID или /start у бота)"
@@ -1469,7 +1323,7 @@ async function notifyAdminNewOrderTelegram(input: {
     input.items.map((i) => `- ${i.name} x${i.quantity}`).join("\n");
 
   try {
-    const tgBot = getBotForOwner(input.ownerId) ?? bot;
+    const tgBot = getBotForOwner(input.businessId) ?? bot;
     if (tgBot) {
       await tgBot.telegram.sendMessage(chatId, message, {
         reply_markup: adminNewOrderNotifyKeyboard(input.orderId),
@@ -1514,16 +1368,6 @@ async function notifyAdminNewOrderTelegram(input: {
   } catch (error) {
     console.error("TELEGRAM ORDER NOTIFY error:", error);
   }
-}
-
-/** Мок Finik: заменить на HTTP-запрос к API и вернуть реальные `paymentId` + `paymentUrl`. */
-function createFinikPaymentMock(input: {
-  orderId: number;
-  amount: number;
-}): { paymentId: string; paymentUrl: string } {
-  const paymentId = `finik_${Date.now()}_${input.orderId}`;
-  const paymentUrl = `https://pay.finik.kg/?amount=${input.amount}&orderId=${encodeURIComponent(paymentId)}`;
-  return { paymentId, paymentUrl };
 }
 
 // ================== CREATE ORDER ==================
@@ -1585,12 +1429,6 @@ app.post("/orders", async (req: Request, res: Response) => {
     }
   }
 
-  const totalComputed = await computeOrderTotalFromBody(body);
-  if (!totalComputed.ok) {
-    return res.status(400).json({ error: totalComputed.error });
-  }
-  const orderTotal = totalComputed.orderTotal;
-
   const rawItems = body.items as Array<{
     productId: number;
     name: string;
@@ -1614,26 +1452,42 @@ app.post("/orders", async (req: Request, res: Response) => {
     productId: Number(item.productId),
   }));
 
+  const probe = await prisma.product.findUnique({
+    where: { id: items[0]!.productId },
+    select: { businessId: true },
+  });
+  if (!probe) {
+    return res.status(400).json({ error: "Товар не найден" });
+  }
+  const tenantBusinessId = probe.businessId;
+
+  const totalComputed = await computeOrderTotalFromBody(
+    body,
+    tenantBusinessId
+  );
+  if (!totalComputed.ok) {
+    return res.status(400).json({ error: totalComputed.error });
+  }
+  const orderTotal = totalComputed.orderTotal;
+
   try {
-    const { order, user } = await prisma.$transaction(async (tx) => {
+    const { order, buyerUser } = await prisma.$transaction(async (tx) => {
       const telegramId = String(body.user.telegramId ?? "").trim();
       if (!telegramId) {
         throw new Error("BAD_TELEGRAM_ID");
       }
-      const user = await getOrCreateOwnerByTelegram(
-        tx as typeof prisma,
+      const businessId = tenantBusinessId;
+      const buyerUserInner = await upsertBuyerUser(
+        tx,
+        businessId,
         telegramId,
         userNameSanitized || null
       );
 
-      const firstProduct = await tx.product.findUnique({
-        where: { id: items[0]!.productId },
-        select: { id: true, ownerId: true },
-      });
-      if (!firstProduct) {
-        throw new Error("NOT_FOUND");
-      }
-      const storeOwnerId = firstProduct.ownerId;
+      const orderNameDisplay =
+        (userNameSanitized && userNameSanitized.trim()) || "Гость";
+      const addrFinal =
+        orderAddress && orderAddress.trim() !== "" ? orderAddress : "—";
 
       for (const item of items) {
         const productId = Number(item.productId);
@@ -1644,59 +1498,29 @@ app.post("/orders", async (req: Request, res: Response) => {
 
         const p = await tx.product.findUnique({
           where: { id: productId },
-          select: { ownerId: true },
+          select: { businessId: true },
         });
-        if (!p || p.ownerId !== storeOwnerId) {
+        if (!p || p.businessId !== businessId) {
           throw new Error("CROSS_SHOP_CART");
         }
-
-        const sizeRow = await tx.size.findFirst({
-          where: {
-            size: String(item.size),
-            variant: {
-              productId,
-              color: String(item.color),
-              product: { ownerId: storeOwnerId },
-            },
-          },
-        });
-
-        if (!sizeRow) {
-          throw new Error("NOT_FOUND");
-        }
-
-        const updated = await tx.size.updateMany({
-          where: {
-            id: sizeRow.id,
-            stock: { gte: qty },
-          },
-          data: { stock: { decrement: qty } },
-        });
-
-        if (updated.count !== 1) {
-          throw new Error("OUT_OF_STOCK");
-        }
-
-        await tx.$executeRaw(
-          Prisma.sql`UPDATE "Product" SET "sold" = "sold" + ${qty} WHERE "id" = ${productId} AND "ownerId" = ${storeOwnerId}`
-        );
       }
 
       const order = await tx.order.create({
         data: {
-          userId: user.id,
-          ownerId: storeOwnerId,
+          businessId,
+          buyerUserId: buyerUserInner.id,
+          name: orderNameDisplay,
+          phone: customerPhoneValue,
+          address: addrFinal,
           total: orderTotal,
           status: "NEW",
-          customerPhone: customerPhoneValue,
-          address: orderAddress,
           lat: orderLat,
           lng: orderLng,
           paymentMethod,
-          /** Finik: id выставится после создания (мок или реальный API). */
           paymentId: paymentMethod === "finik" ? null : paymentId,
           items: {
             create: items.map((item) => ({
+              businessId,
               productId: Number(item.productId),
               name: item.name,
               size: String(item.size),
@@ -1711,7 +1535,7 @@ app.post("/orders", async (req: Request, res: Response) => {
         },
       });
 
-      return { order, user };
+      return { order, buyerUser: buyerUserInner };
     });
 
     console.log("ORDER CREATED:", order);
@@ -1720,10 +1544,20 @@ app.post("/orders", async (req: Request, res: Response) => {
     let orderForResponse = order;
 
     if (paymentMethod === "finik") {
-      const finik = createFinikPaymentMock({
+      const business = await prisma.business.findUnique({
+        where: { id: order.businessId },
+        select: { id: true, finikApiKey: true, finikSecret: true },
+      });
+      if (!business) {
+        return res.status(500).json({ error: "Магазин не найден" });
+      }
+      const finik = await createFinikMerchantSession(business, {
         orderId: order.id,
         amount: order.total,
       });
+      if (!finik.ok) {
+        return res.status(502).json({ error: finik.error });
+      }
       paymentUrl = finik.paymentUrl;
       orderForResponse = await prisma.order.update({
         where: { id: order.id },
@@ -1736,13 +1570,13 @@ app.post("/orders", async (req: Request, res: Response) => {
       orderForResponse.address?.trim() ||
       (addressSanitized !== "" ? addressSanitized : "—");
     const displayName =
-      user.name?.trim() || userNameSanitized || "Гость";
+      buyerUser.name?.trim() || userNameSanitized || "Гость";
     const phone =
-      orderForResponse.customerPhone?.trim() || customerPhoneValue || "—";
+      orderForResponse.phone?.trim() || customerPhoneValue || "—";
 
     void notifyAdminNewOrderTelegram({
       orderId: orderForResponse.id,
-      ownerId: orderForResponse.ownerId,
+      businessId: orderForResponse.businessId,
       customerName: displayName,
       phone,
       address,
@@ -1755,7 +1589,7 @@ app.post("/orders", async (req: Request, res: Response) => {
 
     if (totalComputed.promoRaw) {
       try {
-        await consumePromoDb(prisma, totalComputed.promoRaw);
+        await consumePromoDb(prisma, order.businessId, totalComputed.promoRaw);
       } catch (e) {
         console.error("consumePromo after /orders:", e);
       }
@@ -1769,14 +1603,6 @@ app.post("/orders", async (req: Request, res: Response) => {
     }
     if (code === "BAD_TELEGRAM_ID") {
       return res.status(400).json({ error: "Нужен Telegram userId" });
-    }
-    if (code === "NOT_FOUND") {
-      return res
-        .status(400)
-        .json({ error: "Товар недоступен (цвет или размер не найден)" });
-    }
-    if (code === "OUT_OF_STOCK") {
-      return res.status(400).json({ error: "Недостаточно товара на складе" });
     }
     if (code === "CROSS_SHOP_CART") {
       return res
@@ -1799,8 +1625,8 @@ app.post(
   upload.single("file"),
   async (req: Request, res: Response) => {
     try {
-      const owner = await requireOwner(req, res);
-      if (!owner) return;
+      const merchant = await requireMerchantStaff(req, res);
+      if (!merchant) return;
       if (!isCloudinaryConfigured()) {
         return res.status(503).json({
           error: "Cloudinary не настроен (CLOUD_NAME, CLOUD_KEY, CLOUD_SECRET)",
@@ -1826,7 +1652,7 @@ app.post(
       }
 
       const existing = await prisma.order.findUnique({ where: { id } });
-      if (!existing || existing.ownerId !== owner.id) {
+      if (!existing || existing.businessId !== merchant.businessId) {
         return res.status(404).json({ error: "Заказ не найден" });
       }
 
@@ -1857,7 +1683,7 @@ app.post(
       const order = await prisma.order.update({
         where: { id },
         data: receiptData as Prisma.OrderUpdateInput,
-        include: { items: true, user: true },
+        include: { items: true, buyerUser: true },
       });
 
       res.json(order);
@@ -1870,10 +1696,9 @@ app.post(
 
 // ================== UPDATE PRODUCT ==================
 app.put("/products/:id", async (req: Request, res: Response) => {
-  if (!denyIfNotAdmin(req, res)) return;
   try {
-    const owner = await requireOwner(req, res);
-    if (!owner) return;
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
     console.log("PRODUCT UPDATE DATA:", req.body);
     const body = req.body as {
       name?: unknown;
@@ -1882,11 +1707,6 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       images?: unknown;
       description?: unknown;
       categoryId?: unknown;
-      isNew?: unknown;
-      isPopular?: unknown;
-      isSale?: unknown;
-      discountPercent?: unknown;
-      variants?: unknown;
     };
 
     const id = Number(req.params.id);
@@ -1894,44 +1714,17 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Неверный id" });
     }
 
-    const {
-      name,
-      price,
-      image,
-      images,
-      description,
-      categoryId,
-      isNew,
-      isPopular,
-      isSale,
-      discountPercent,
-      variants,
-    } = body;
+    const { name, price, image, images, description, categoryId } = body;
 
-    const hasVariantUpdate = variants !== undefined;
     if (
       name === undefined &&
       price === undefined &&
       image === undefined &&
       images === undefined &&
       description === undefined &&
-      categoryId === undefined &&
-      isNew === undefined &&
-      isPopular === undefined &&
-      isSale === undefined &&
-      discountPercent === undefined &&
-      !hasVariantUpdate
+      categoryId === undefined
     ) {
       return res.status(400).json({ error: "Нет полей для обновления" });
-    }
-
-    let cleanVariants: CleanVariantInput[] | undefined;
-    if (hasVariantUpdate) {
-      const parsed = normalizeVariantsInput(variants);
-      if ("error" in parsed) {
-        return res.status(400).json({ error: parsed.error });
-      }
-      cleanVariants = parsed;
     }
 
     const scalar: {
@@ -1941,17 +1734,10 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       images?: string[];
       description?: string | null;
       categoryId?: number;
-      isNew?: boolean;
-      isPopular?: boolean;
-      isSale?: boolean;
-      discountPercent?: number;
     } = {};
 
     if (name !== undefined) scalar.name = String(name);
     if (price !== undefined) scalar.price = Number(price);
-    if (discountPercent !== undefined) {
-      scalar.discountPercent = clampDiscountPercent(discountPercent);
-    }
     if (categoryId !== undefined) {
       const normalizedCategoryId = Number(categoryId);
       if (!Number.isFinite(normalizedCategoryId)) {
@@ -1959,16 +1745,13 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       }
       const category = await prisma.category.findUnique({
         where: { id: normalizedCategoryId },
-        select: { id: true, parentId: true, ownerId: true },
+        select: { id: true, businessId: true },
       });
-      if (!category || category.parentId == null || category.ownerId !== owner.id) {
-        return res.status(400).json({ error: "Выберите подкатегорию" });
+      if (!category || category.businessId !== merchant.businessId) {
+        return res.status(400).json({ error: "Неверная категория" });
       }
       scalar.categoryId = normalizedCategoryId;
     }
-    if (isNew !== undefined) scalar.isNew = Boolean(isNew);
-    if (isPopular !== undefined) scalar.isPopular = Boolean(isPopular);
-    if (isSale !== undefined) scalar.isSale = Boolean(isSale);
     if (images !== undefined) {
       const list = Array.isArray(images)
         ? images
@@ -1991,56 +1774,19 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       scalar.description = description === null ? null : String(description);
     }
 
-    const product = await prisma.$transaction(async (tx) => {
-      const exists = await tx.product.findUnique({ where: { id } });
-      if (!exists || exists.ownerId !== owner.id) {
-        throw new Error("PRODUCT_NOT_FOUND");
-      }
-      if (cleanVariants) {
-        await tx.size.deleteMany({
-          where: { variant: { productId: id } },
-        });
-        await tx.variant.deleteMany({ where: { productId: id } });
-        for (const v of cleanVariants) {
-          const variantData = {
-            productId: id,
-            color: v.color,
-            colorHex: v.colorHex,
-            sizes: {
-              create: v.sizes.map((s) => ({
-                size: s.size,
-                stock: s.stock,
-              })),
-            },
-          };
-          await tx.variant.create({
-            data: variantData as Prisma.VariantUncheckedCreateInput,
-          });
-        }
-      }
+    const exists = await prisma.product.findUnique({ where: { id } });
+    if (!exists || exists.businessId !== merchant.businessId) {
+      return res.status(404).json({ error: "Товар не найден" });
+    }
 
-      const include = {
-        category: { include: { parent: true } },
-        variants: { include: { sizes: true } },
-      };
-      if (Object.keys(scalar).length > 0) {
-        return tx.product.update({
-          where: { id },
-          data: scalar,
-          include,
-        });
-      }
-      return tx.product.findUniqueOrThrow({
-        where: { id },
-        include,
-      });
+    const product = await prisma.product.update({
+      where: { id },
+      data: scalar,
+      include: { category: true },
     });
 
     res.json(product);
   } catch (e) {
-    if (e instanceof Error && e.message === "PRODUCT_NOT_FOUND") {
-      return res.status(404).json({ error: "Товар не найден" });
-    }
     console.error("UPDATE PRODUCT ERROR:", e);
     res.status(500).json({ error: "Ошибка обновления товара" });
   }
@@ -2048,37 +1794,23 @@ app.put("/products/:id", async (req: Request, res: Response) => {
 
 // ================== DELETE PRODUCT ==================
 app.delete("/products/:id", async (req: Request, res: Response) => {
-  if (!denyIfNotAdmin(req, res)) return;
   try {
-    const owner = await requireOwner(req, res);
-    if (!owner) return;
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) {
       return res.status(400).json({ error: "Неверный id" });
     }
 
-    await prisma.$transaction(async (tx) => {
-      const exists = await tx.product.findUnique({ where: { id } });
-      if (!exists || exists.ownerId !== owner.id) {
-        throw new Error("PRODUCT_NOT_FOUND");
-      }
-      const variants = await tx.variant.findMany({
-        where: { productId: id },
-        select: { id: true },
-      });
-      const variantIds = variants.map((v) => v.id);
-      if (variantIds.length > 0) {
-        await tx.size.deleteMany({ where: { variantId: { in: variantIds } } });
-      }
-      await tx.variant.deleteMany({ where: { productId: id } });
-      await tx.product.delete({ where: { id } });
-    });
+    const exists = await prisma.product.findUnique({ where: { id } });
+    if (!exists || exists.businessId !== merchant.businessId) {
+      return res.status(404).json({ error: "Товар не найден" });
+    }
+
+    await prisma.product.delete({ where: { id } });
 
     res.status(204).send();
   } catch (e) {
-    if (e instanceof Error && e.message === "PRODUCT_NOT_FOUND") {
-      return res.status(404).json({ error: "Товар не найден" });
-    }
     console.error("DELETE PRODUCT ERROR:", e);
     res.status(500).json({ error: "Ошибка удаления товара" });
   }
@@ -2117,6 +1849,11 @@ void (async () => {
       await initDynamicUserBotsFromDatabase();
     } catch (e) {
       console.error("initDynamicUserBotsFromDatabase:", e);
+    }
+    try {
+      startSubscriptionMaintenanceScheduler();
+    } catch (e) {
+      console.error("startSubscriptionMaintenanceScheduler:", e);
     }
   });
 })();

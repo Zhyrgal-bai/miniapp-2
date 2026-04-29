@@ -1,7 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// Multi-tenant SaaS schema — every tenant row scopes by `businessId`
+// Queries MUST filter `where: { businessId }` at the tenant boundary.
 
 generator client {
   provider = "prisma-client-js"
@@ -12,130 +10,258 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id          Int      @id @default(autoincrement())
-  telegramId  String   @unique
-  name        String?
-  /// Токен @BotFather — свой бот владельца (онбординг без BOT_TOKENS в env)
-  botToken    String?  @unique
+/// Tenant (store / SaaS subscriber). One Telegram bot token per tenant.
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
 
-  orders      Order[]
+enum UserRole {
+  OWNER
+  ADMIN
+  STAFF
+}
+
+/// Optional: explicit plan for Stripe/billing integrations.
+enum BillingPlan {
+  FREE
+  STARTER
+  GROWTH
+  ENTERPRISE
+}
+
+model Business {
+  id   Int    @id @default(autoincrement())
+  name String
+
+  slug String? @unique
+
+  /// Telegram bot token from @BotFather (one active bot per storefront).
+  botToken String @unique
+
+  /// Finik: ключи мерчанта — средства идут клиенту (не на платформу). Не выдавать клиентскому UI в GET.
+  finikApiKey  String?
+  finikSecret String?
+
+  isActive Boolean @default(true)
+
+  subscriptionStatus SubscriptionStatus @default(TRIALING)
+
+  billingPlan BillingPlan?
+
+  /// When the configured trial expires (set on onboarding); null if not using trials.
+  trialEndsAt DateTime?
+
+  subscriptionEndsAt DateTime?
+
+  /// Last day we sent an expiry reminder (rate-limit: at most one reminder batch per calendar day).
+  lastNotifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  users       User[]
   products    Product[]
+  orders      Order[]
   categories  Category[]
-  settings    PaymentSettings[]
-  ownedOrders Order[]  @relation("OrderOwner")
+  settings    Settings?
+  promos      Promo[]
+  orderItems  OrderItem[]
+
+  @@index([isActive])
+  @@index([subscriptionStatus])
 }
 
-model Product {
-  id               Int       @id @default(autoincrement())
-  name             String
-  price            Int
-  createdAt        DateTime  @default(now())
-  image            String
-  images           String[]  @default([])
-  description      String?
-  categoryId       Int
-  category         Category  @relation(fields: [categoryId], references: [id])
-  isNew            Boolean   @default(false)
-  isPopular        Boolean   @default(false)
-  isSale           Boolean   @default(false)
-  discountPercent  Int       @default(0) // 0–100, скидка от поля price
-  sold             Int       @default(0)
-  ownerId          Int
-  owner            User      @relation(fields: [ownerId], references: [id])
+/// End-user inside a tenant. Same Telegram identity can exist in multiple businesses —
+/// uniqueness is `[businessId, telegramId]` (not globally on `telegramId`).
+model User {
+  id Int @id @default(autoincrement())
 
-  variants    Variant[]
+  telegramId String
+  name       String?
+
+  role UserRole @default(ADMIN)
+
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  orders Order[] @relation("OrderBuyer")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, telegramId])
+  @@index([businessId])
 }
 
-model Category {
-  id        Int        @id @default(autoincrement())
-  name      String
-  parentId  Int?
-  ownerId   Int
-  owner     User       @relation(fields: [ownerId], references: [id])
+/// Storefront + payment display settings per tenant (1:1 with Business).
+model Settings {
+  id Int @id @default(autoincrement())
 
-  parent    Category?  @relation("CategoryToCategory", fields: [parentId], references: [id])
-  children  Category[] @relation("CategoryToCategory")
-  products  Product[]
-}
+  businessId Int      @unique
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
-model Variant {
-  id        Int     @id @default(autoincrement())
-  color     String
-  colorHex  String?
+  themeColor String?
+  logoUrl    String?
 
-  product   Product @relation(fields: [productId], references: [id])
-  productId Int
-
-  sizes     Size[]
-}
-
-model Size {
-  id        Int    @id @default(autoincrement())
-  size      String
-  stock     Int
-
-  variant   Variant @relation(fields: [variantId], references: [id])
-  variantId Int
-}
-
-model Order {
-  id        Int      @id @default(autoincrement())
-  user      User     @relation(fields: [userId], references: [id])
-  userId    Int
-  ownerId   Int
-  owner     User     @relation("OrderOwner", fields: [ownerId], references: [id])
-
-  total     Int
-  status    String   @default("NEW") // NEW | ACCEPTED | PAID_PENDING | CONFIRMED | SHIPPED | CANCELLED
-  customerPhone String? // телефон из формы оформления
-  tracking  String? // статус доставки / комментарий для клиента
-
-  address String? // полный адрес доставки (текст)
-  lat     Float? // широта (карта / геолокация)
-  lng     Float? // долгота
-
-  receiptUrl   String? // ссылка на фото или pdf
-  receiptType  String? // "image" | "pdf"
-
-  paymentMethod String @default("receipt") // "finik" | "receipt"
-  paymentId     String? // id платежа Finik (и др.), когда подключено
-
-  items     OrderItem[]
-}
-
-model OrderItem {
-  id        Int   @id @default(autoincrement())
-
-  productId Int
-  name      String
-  size      String
-  color     String
-  quantity  Int
-  price     Int
-
-  order     Order @relation(fields: [orderId], references: [id])
-  orderId   Int
-}
-
-// Singleton id=1: реквизиты для оплаты (мини-апп + бот).
-model PaymentSettings {
-  id      Int    @id @default(autoincrement())
-  ownerId Int
-  owner   User   @relation(fields: [ownerId], references: [id])
   mbank  String?
   optima String?
-  obank  String?
+  other  String?
   card   String?
   qr     String?
 
-  @@unique([ownerId])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Category {
+  id   Int    @id @default(autoincrement())
+  name String
+
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  products Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+  @@unique([businessId, name])
+}
+
+model Product {
+  id          Int      @id @default(autoincrement())
+  name        String
+  price       Int
+  description String?
+
+  image  String?
+  images String[] @default([])
+
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  categoryId Int
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orderItems OrderItem[]
+
+  @@index([businessId])
+  @@index([categoryId])
+}
+
+enum OrderStatus {
+  NEW
+  ACCEPTED
+  PAID_PENDING
+  CONFIRMED
+  SHIPPED
+  CANCELLED
+}
+
+/// Customer order — always anchored to Business; line items optionally reference Product snapshots.
+model Order {
+  id     Int       @id @default(autoincrement())
+  status OrderStatus @default(NEW)
+
+  /// Buyer display name snapshot (from Telegram / form).
+  name    String
+  phone   String
+  address String
+
+  total Int
+
+  paymentMethod String?
+
+  tracking   String?
+  receiptUrl String?
+  receiptType String?
+  paymentId String?
+
+  lat Float?
+  lng Float?
+
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  /// Optional FK to tenant User (Telegram shopper) — still always filter orders by businessId first.
+  buyerUserId Int?
+  buyerUser   User?   @relation("OrderBuyer", fields: [buyerUserId], references: [id], onDelete: SetNull)
+
+  items OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([businessId, status])
+  @@index([buyerUserId])
+}
+
+/// Line item belongs to Order; duplicated `businessId` enables tenant-only deletes / analytics queries without joins.
+model OrderItem {
+  id Int @id @default(autoincrement())
+
+  orderId Int
+  order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  productId Int?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  name     String
+  size     String @default("")
+  color    String @default("")
+  quantity Int
+  price    Int
+
+  @@index([businessId])
+  @@index([orderId])
+}
+
+/// Promotions scoped per tenant (no global `@unique(code)` across businesses).
+enum RegistrationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Incoming merchant signup requests (admin approves → Business + User created).
+model RegistrationRequest {
+  id         Int                  @id @default(autoincrement())
+  name       String
+  botToken   String
+  phone      String
+  telegramId String
+  status     RegistrationStatus @default(PENDING)
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+
+  @@index([status])
+  @@index([telegramId])
 }
 
 model Promo {
-  id       Int    @id @default(autoincrement())
-  code     String @unique
+  id       Int @id @default(autoincrement())
+  code     String
   discount Int
   maxUses  Int
-  used     Int    @default(0)
+  used     Int @default(0)
+
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, code])
+  @@index([businessId])
 }

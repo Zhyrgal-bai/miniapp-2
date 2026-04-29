@@ -1,4 +1,4 @@
-import type { PaymentSettings, PrismaClient } from "@prisma/client";
+import type { PrismaClient, Settings } from "@prisma/client";
 
 export type PaymentDetailRecord = {
   id: number;
@@ -6,13 +6,13 @@ export type PaymentDetailRecord = {
   value: string;
 };
 
-const ORDER = ["mbank", "optima", "obank", "card", "qr"] as const;
+const ORDER = ["mbank", "optima", "other", "card", "qr"] as const;
 type PayField = (typeof ORDER)[number];
 
 const TYPE_TO_ID: Record<PayField, number> = {
   mbank: 1,
   optima: 2,
-  obank: 3,
+  other: 3,
   card: 4,
   qr: 5,
 };
@@ -28,7 +28,13 @@ function strOrNull(v: unknown): string | null {
 }
 
 function fieldValue(
-  row: { mbank: string | null; optima: string | null; obank: string | null; card: string | null; qr: string | null },
+  row: {
+    mbank: string | null;
+    optima: string | null;
+    other: string | null;
+    card: string | null;
+    qr: string | null;
+  },
   type: PayField
 ): string | null {
   switch (type) {
@@ -36,8 +42,8 @@ function fieldValue(
       return row.mbank;
     case "optima":
       return row.optima;
-    case "obank":
-      return row.obank;
+    case "other":
+      return row.other;
     case "card":
       return row.card;
     case "qr":
@@ -47,11 +53,12 @@ function fieldValue(
   }
 }
 
+/** @param businessId — id тенанта (Business.id) */
 export async function listPaymentDetailsFromDb(
   client: PrismaClient,
-  ownerId: number
+  businessId: number
 ): Promise<PaymentDetailRecord[]> {
-  const row = await client.paymentSettings.findUnique({ where: { ownerId } });
+  const row = await client.settings.findUnique({ where: { businessId } });
   if (!row) return [];
   const out: PaymentDetailRecord[] = [];
   for (const type of ORDER) {
@@ -64,19 +71,19 @@ export async function listPaymentDetailsFromDb(
 
 export async function upsertPaymentSettings(
   client: PrismaClient,
-  ownerId: number,
+  businessId: number,
   body: Record<string, unknown>
-): Promise<PaymentSettings> {
+): Promise<Settings> {
   const data = {
     mbank: strOrNull(body.mbank),
     optima: strOrNull(body.optima),
-    obank: strOrNull(body.obank),
+    other: strOrNull(body.obank ?? body.other),
     card: strOrNull(body.card),
     qr: strOrNull(body.qr),
   };
-  return client.paymentSettings.upsert({
-    where: { ownerId },
-    create: { ownerId, ...data },
+  return client.settings.upsert({
+    where: { businessId },
+    create: { businessId, ...data },
     update: data,
   });
 }
@@ -84,15 +91,15 @@ export async function upsertPaymentSettings(
 /** Синтетический id строки списка → очистить поле в настройках. */
 export async function clearPaymentFieldByRowId(
   client: PrismaClient,
-  ownerId: number,
+  businessId: number,
   rowId: number
 ): Promise<boolean> {
   const type = ID_TO_TYPE.get(rowId);
   if (!type) return false;
-  const exists = await client.paymentSettings.findUnique({ where: { ownerId } });
+  const exists = await client.settings.findUnique({ where: { businessId } });
   if (!exists) return false;
-  await client.paymentSettings.update({
-    where: { ownerId },
+  await client.settings.update({
+    where: { businessId },
     data: { [type]: null },
   });
   return true;

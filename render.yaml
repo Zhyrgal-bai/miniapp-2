@@ -1,0 +1,28 @@
+# Blueprint Render: Web + PostgreSQL.
+# New → Blueprint → подключите репозиторий → применить файл.
+# После деплоя добавьте секреты бота (BOT_TOKENS и т.д.) в Environment.
+databases:
+  - name: miniapp-db
+    databaseName: miniapp
+    user: miniapp
+    plan: free
+
+services:
+  - type: web
+    name: miniapp-store
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    # Схема без папки migrations — подтягиваем модель в БД при старте
+    startCommand: npx prisma db push && npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: miniapp-db
+          property: connectionString
+      # Если задать API_URL вручную — имеет приоритет над RENDER_EXTERNAL_URL
+      - key: API_URL
+        sync: false

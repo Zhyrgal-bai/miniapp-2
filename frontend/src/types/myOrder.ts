@@ -1,8 +1,8 @@
 export type MyOrderRow = {
   id: number;
-  userId: number;
-  /** Владелец магазина (для реквизитов / multi-tenant) */
-  ownerId?: number;
+  /** Тенант (магазин) */
+  businessId?: number;
+  userId?: number;
   total: number;
   status: string;
   paymentMethod?: string;
@@ -11,6 +11,7 @@ export type MyOrderRow = {
   lat?: number | null;
   lng?: number | null;
   tracking?: string | null;
+  phone?: string | null;
   customerPhone?: string | null;
   receiptUrl?: string | null;
   receiptType?: string | null;

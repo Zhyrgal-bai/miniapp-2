@@ -7,6 +7,7 @@ import { getTelegramUser, getTelegramWebAppUserId } from "../utils/telegram";
 import { cleanInput, validateKgPhone } from "../utils/orderInputSanitize";
 import MapPicker from "../components/checkout/MapPicker";
 import "../components/ui/CheckoutPage.css";
+import { getActiveShopId } from "../utils/storeParams";
 
 type CheckoutPaymentMethod = "finik" | "receipt";
 
@@ -105,10 +106,13 @@ export default function CheckoutPage({ onBack, onOrderSuccess }: Props) {
     let cancelled = false;
     (async () => {
       try {
-        const rows = await fetchMyOrders(uid);
-        const saved = rows.find(
-          (o) => o.customerPhone != null && String(o.customerPhone).trim() !== ""
-        )?.customerPhone;
+        const rows = await fetchMyOrders(uid, getActiveShopId());
+        const prev = rows.find((o) => {
+          const raw = o.phone ?? o.customerPhone;
+          return raw != null && String(raw).trim() !== "";
+        });
+        const saved =
+          prev != null ? String(prev.phone ?? prev.customerPhone ?? "").trim() : "";
         const trimmed = saved != null ? String(saved).trim() : "";
         if (!cancelled && trimmed !== "") {
           setPhone(trimmed);
@@ -129,10 +133,19 @@ export default function CheckoutPage({ onBack, onOrderSuccess }: Props) {
       setPromoPreview(null);
       return totalPrice;
     }
+    const shop = getActiveShopId();
+    const businessId = shop ? Number(shop) : NaN;
+    if (!Number.isInteger(businessId) || businessId <= 0) {
+      alert(
+        "Откройте мини-приложение со ссылкой ?shop=id_магазина — нужен промокод по магазину"
+      );
+      setPromoPreview(null);
+      return null;
+    }
     const applyRes = await fetch(promoApplyUrl(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, total: totalPrice }),
+      body: JSON.stringify({ code, total: totalPrice, businessId }),
     });
     const data = (await applyRes.json().catch(() => ({}))) as {
       newTotal?: number;
