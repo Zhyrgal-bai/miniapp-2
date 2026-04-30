@@ -802,7 +802,12 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
       { reply_markup: { inline_keyboard: [] } }
     );
 
-    const front = (process.env.FRONT_URL || process.env.PUBLIC_URL || "")
+    const front = (
+      process.env.FRONTEND_URL ||
+      process.env.FRONT_URL ||
+      process.env.PUBLIC_URL ||
+      ""
+    )
       .trim()
       .replace(/\/$/, "");
     const tgUrl =
@@ -825,7 +830,7 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
         .sendMessage(
           row.telegramId,
           `Ваш магазин активирован ✅\n` +
-            `shop=${businessId} (задайте FRONT_URL для кнопки мини-приложения)`
+            `shop=${businessId} (задайте FRONTEND_URL или FRONT_URL для кнопки мини-приложения)`
         )
         .catch((e: unknown) => console.error("approved user ping:", e));
     }
