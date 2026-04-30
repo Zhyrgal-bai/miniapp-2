@@ -16,6 +16,8 @@ interface TelegramWebApp {
   initData: string;
   initDataUnsafe: {
     user?: TelegramWebAppUser;
+    /** `startapp` payload (например `12` или `shop_12`) для multi-tenant витрины */
+    start_param?: string;
     query_id?: string;
     auth_date?: string;
     hash?: string;

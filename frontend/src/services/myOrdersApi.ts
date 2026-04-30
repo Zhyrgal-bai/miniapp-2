@@ -6,7 +6,10 @@ export async function fetchMyOrders(
   shop?: string
 ): Promise<MyOrderRow[]> {
   const params: Record<string, string | number> = { userId };
-  if (shop && /^\d+$/.test(shop)) params.shop = shop;
+  if (shop && /^\d+$/.test(shop)) {
+    params.shop = shop;
+    params.businessId = shop;
+  }
   const res = await api.get<MyOrderRow[]>("/orders/my", { params });
   return Array.isArray(res.data) ? res.data : [];
 }

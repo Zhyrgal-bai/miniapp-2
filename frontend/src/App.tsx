@@ -7,6 +7,7 @@ import MyOrders from "./pages/MyOrders";
 import ConnectBotPage from "./pages/ConnectBotPage";
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useShop } from "./context/ShopContext";
 import { useCartStore } from "./store/useCartStore";
 import { useAdminPanelVisible, useAdminAccessBootstrap } from "@/utils/admin";
 import { fetchMyOrders } from "./services/myOrdersApi";
@@ -42,11 +43,31 @@ function initialPageFromPath(): AppNavPage {
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { businessId } = useShop();
   const [page, setPage] = useState<AppNavPage>(initialPageFromPath);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [myOrdersAttention, setMyOrdersAttention] = useState(false);
+  const [adminByHash, setAdminByHash] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.location.hash.startsWith("#/admin")
+  );
   const adminAllowed = useAdminPanelVisible();
   useAdminAccessBootstrap();
+
+  useEffect(() => {
+    const onHash = () =>
+      setAdminByHash(window.location.hash.startsWith("#/admin"));
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  const allowWithoutShop =
+    page === "admin" ||
+    adminByHash ||
+    page === "connect-bot" ||
+    page === "faq";
+  const shopMissing = !allowWithoutShop && businessId == null;
 
   const items = useCartStore((state) => state.items);
   const totalQuantity = items.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
@@ -82,7 +103,7 @@ export default function App() {
 
   useEffect(() => {
     const uid = getWebAppUserId();
-    if (!Number.isFinite(uid) || uid <= 0) {
+    if (!Number.isFinite(uid) || uid <= 0 || businessId == null) {
       setMyOrdersAttention(false);
       return;
     }
@@ -90,7 +111,7 @@ export default function App() {
     const refreshAttention = () => {
       void (async () => {
         try {
-          const rows = await fetchMyOrders(uid);
+          const rows = await fetchMyOrders(uid, String(businessId));
           if (!cancelled) setMyOrdersAttention(myOrdersNeedAttention(rows));
         } catch {
           if (!cancelled) setMyOrdersAttention(false);
@@ -103,7 +124,7 @@ export default function App() {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [page]);
+  }, [page, businessId]);
 
   useEffect(() => {
     const onPop = () => {
@@ -150,7 +171,24 @@ export default function App() {
     setIsMenuOpen(false);
   };
 
-  const showHeaderAttentionDot = myOrdersAttention && page !== "my-orders";
+  const showHeaderAttentionDot =
+    myOrdersAttention && page !== "my-orders" && businessId != null;
+
+  if (shopMissing) {
+    return (
+      <div className="app app--shop-missing">
+        <div className="shop-missing" role="alert">
+          <p className="shop-missing__title">Магазин не найден</p>
+          <p className="shop-missing__hint">
+            Откройте витрину по ссылке с параметром{" "}
+            <code className="shop-missing__code">?shop=ID</code> или{" "}
+            <code className="shop-missing__code">?businessId=ID</code>, либо
+            через кнопку «Открыть» в Telegram (Mini App).
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app">

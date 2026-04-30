@@ -183,6 +183,16 @@ function businessIdFromNonApiHint(req: Request): number | null {
   const shop = Number(qs.trim());
   if (Number.isInteger(shop) && shop > 0) return shop;
 
+  const bidRaw = req.query.businessId;
+  const bidStr =
+    typeof bidRaw === "string"
+      ? bidRaw
+      : Array.isArray(bidRaw)
+        ? String(bidRaw[0] ?? "")
+        : "";
+  const bid = Number(bidStr.trim());
+  if (Number.isInteger(bid) && bid > 0) return bid;
+
   const body = req.body as { businessId?: unknown } | undefined;
   const b = body?.businessId;
   if (typeof b === "number" && Number.isInteger(b) && b > 0) return b;

@@ -251,3 +251,38 @@ button {
 button:active {
   transform: scale(0.95);
 }
+
+.app--shop-missing {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.shop-missing {
+  max-width: 420px;
+  text-align: center;
+  color: var(--text, #e8e8e8);
+}
+
+.shop-missing__title {
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+
+.shop-missing__hint {
+  margin: 0;
+  line-height: 1.5;
+  opacity: 0.85;
+  font-size: 0.95rem;
+}
+
+.shop-missing__code {
+  font-size: 0.85em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+}

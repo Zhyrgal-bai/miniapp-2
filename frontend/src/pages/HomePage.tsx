@@ -5,6 +5,7 @@ import type { Category, Product } from "../types";
 import ProductGrid from "../components/product/ProductGrid";
 import ProductDetailModal from "../components/product/ProductDetailModal";
 import Toast from "../components/ui/Toast";
+import { useShop } from "../context/ShopContext";
 import { getWebAppUserId } from "../utils/telegramUserId";
 import { buildCatalogRequestParams } from "../utils/storeParams";
 import { categoryRoots } from "../utils/categoryTree";
@@ -12,6 +13,7 @@ import { APP_NAME, FIRST_ORDER_PROMO } from "../config/brand";
 import "../components/ui/HomePage.css";
 
 export default function HomePage() {
+  const { businessId } = useShop();
   const [products, setProducts] = useState<Product[]>([]);
   const [toast, setToast] = useState("");
   const [isToastVisible, setIsToastVisible] = useState(false);
@@ -32,12 +34,12 @@ export default function HomePage() {
 
   useEffect(() => {
     const fetchProducts = async () => {
+      if (businessId == null) {
+        setProducts([]);
+        return;
+      }
       try {
         const params = buildCatalogRequestParams();
-        if (!params.shop && !params.userId) {
-          setProducts([]);
-          return;
-        }
         const res = await api.get("/products", { params });
         setProducts(res.data || []);
       } catch (e) {
@@ -46,17 +48,17 @@ export default function HomePage() {
       }
     };
 
-    fetchProducts();
-  }, []);
+    void fetchProducts();
+  }, [businessId]);
 
   useEffect(() => {
     void (async () => {
+      if (businessId == null) {
+        setCategoryTree([]);
+        return;
+      }
       try {
         const params = buildCatalogRequestParams();
-        if (!params.shop && !params.userId) {
-          setCategoryTree([]);
-          return;
-        }
         const res = await api.get<Category[]>(apiAbsoluteUrl("/categories"), {
           params,
         });
@@ -65,18 +67,18 @@ export default function HomePage() {
         setCategoryTree([]);
       }
     })();
-  }, []);
+  }, [businessId]);
 
   useEffect(() => {
     const uid = getWebAppUserId();
-    if (!Number.isFinite(uid) || uid <= 0) {
+    if (!Number.isFinite(uid) || uid <= 0 || businessId == null) {
       setShowFirstOrderBanner(false);
       return;
     }
     let cancelled = false;
     (async () => {
       try {
-        const rows = await fetchMyOrders(uid);
+        const rows = await fetchMyOrders(uid, String(businessId));
         if (!cancelled) {
           setShowFirstOrderBanner(rows.length === 0);
         }
@@ -89,7 +91,7 @@ export default function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [businessId]);
 
   const copyPromoCode = async () => {
     try {

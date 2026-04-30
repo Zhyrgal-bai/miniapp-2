@@ -1,4 +1,5 @@
 import { useCartStore } from "../store/useCartStore";
+import { getActiveShopId } from "../utils/storeParams";
 import "../components/ui/Cart.css";
 
 type Props = {
@@ -15,7 +16,9 @@ export default function CartPage({ onGoToCheckout }: Props) {
   }, 0);
 
   const handleGoShop = () => {
-    window.location.href = "/";
+    const shop = getActiveShopId();
+    const q = shop ? `?shop=${encodeURIComponent(shop)}` : "";
+    window.location.href = `/${q}`;
   };
 
   const handleIncrement = (item: (typeof items)[number]) => {
