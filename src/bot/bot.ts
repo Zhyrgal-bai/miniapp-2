@@ -430,12 +430,18 @@ export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
     } else if (role.type === "dynamic") {
       shop = String(role.businessId);
     }
-    const base = (process.env.FRONT_URL || process.env.PUBLIC_URL || "")
+    const base = (
+      process.env.FRONTEND_URL ||
+      process.env.FRONT_URL ||
+      process.env.PUBLIC_URL ||
+      ""
+    )
       .trim()
       .replace(/\/$/, "");
     if (shop && base) {
       const url = `${base}/?shop=${encodeURIComponent(shop)}`;
-      void ctx.reply("Открыть магазин", {
+      await ctx.reply("Добро пожаловать в ваш магазин 🏪");
+      await ctx.reply("Открыть магазин", {
         reply_markup: {
           inline_keyboard: [
             [{ text: "Открыть", web_app: { url } }],
@@ -446,7 +452,7 @@ export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
     }
     if (shop && !base) {
       void ctx.reply(
-        "Задайте FRONT_URL или PUBLIC_URL в .env для кнопки веб-аппа."
+        "Задайте FRONTEND_URL, FRONT_URL или PUBLIC_URL в .env для кнопки веб-аппа."
       );
       return;
     }

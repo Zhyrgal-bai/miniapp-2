@@ -783,16 +783,14 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
       businessId = business.id;
     });
 
-    const { registerDynamicUserBot } = await import("./dynamicBots.js");
+    const { launchClientBot } = await import("./launchClientBot.js");
     let botUsername = "";
-    try {
-      const r = await registerDynamicUserBot({
-        businessId,
-        botToken: row.botToken.trim(),
-      });
-      botUsername = r.username;
-    } catch (e) {
-      console.error("approve: registerDynamicUserBot failed:", e);
+    const launched = await launchClientBot({
+      id: businessId,
+      botToken: row.botToken.trim(),
+    });
+    if (launched) {
+      botUsername = launched.username;
     }
 
     await ctx.editMessageText(
