@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole } from "@prisma/client";
+import { MembershipRole, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -24,19 +24,24 @@ async function main() {
     },
   });
 
-  await prisma.user.upsert({
-    where: {
-      businessId_telegramId: {
-        businessId: biz.id,
-        telegramId: "seed-owner",
-      },
-    },
+  const usr = await prisma.user.upsert({
+    where: { telegramId: "seed-owner" },
     update: {},
     create: {
       telegramId: "seed-owner",
       name: "Seed Owner",
+    },
+  });
+
+  await prisma.membership.upsert({
+    where: {
+      userId_businessId: { userId: usr.id, businessId: biz.id },
+    },
+    update: {},
+    create: {
+      userId: usr.id,
       businessId: biz.id,
-      role: UserRole.ADMIN,
+      role: MembershipRole.ADMIN,
     },
   });
 

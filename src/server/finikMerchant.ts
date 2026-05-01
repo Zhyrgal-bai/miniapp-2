@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import { UserRole } from "@prisma/client";
+import { MembershipRole } from "@prisma/client";
 import { prisma } from "./db.js";
 import { adminUserIdFromRequest } from "./adminAuth.js";
 import { notifyAfterOrderStatusChangeFromApi } from "./orderTelegramNotify.js";
@@ -326,11 +326,11 @@ export function mountFinikSettingsRoutes(app: Express): void {
         return;
       }
 
-      const allowed = await prisma.user.findFirst({
+      const allowed = await prisma.membership.findFirst({
         where: {
           businessId,
-          telegramId: telegramStr,
-          role: { in: [UserRole.OWNER, UserRole.ADMIN] },
+          role: { in: [MembershipRole.OWNER, MembershipRole.ADMIN] },
+          user: { telegramId: telegramStr },
         },
       });
       if (!allowed) {
@@ -372,11 +372,11 @@ export function mountFinikSettingsRoutes(app: Express): void {
         return;
       }
 
-      const allowed = await prisma.user.findFirst({
+      const allowed = await prisma.membership.findFirst({
         where: {
           businessId,
-          telegramId: telegramStr,
-          role: { in: [UserRole.OWNER, UserRole.ADMIN] },
+          role: { in: [MembershipRole.OWNER, MembershipRole.ADMIN] },
+          user: { telegramId: telegramStr },
         },
       });
       if (!allowed) {

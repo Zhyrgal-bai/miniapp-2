@@ -23,6 +23,8 @@ interface TelegramWebApp {
     hash?: string;
   };
   ready: () => void;
+  /** Развернуть на весь экран внутри Telegram */
+  expand?: () => void;
   /** Opens `https://t.me/...` inside Telegram when available */
   openTelegramLink?: (url: string) => void;
 }

@@ -1,5 +1,7 @@
 import "dotenv/config";
 import { Telegraf } from "telegraf";
+import { MembershipRole } from "@prisma/client";
+import type { Context } from "telegraf";
 import type { OrderStatus } from "../server/orderStatus.js";
 import { prisma } from "../server/db.js";
 import { listPaymentDetailsFromDb } from "../server/paymentRepo.js";
@@ -350,6 +352,55 @@ export async function sendAcceptedPaymentPromptForOrderFromApi(order: {
   }
 }
 
+type TenantTelegrafCtx = Context & {
+  tenantRole?: MembershipRole | null;
+  businessId?: number;
+};
+
+type BotHandlerRole =
+  | { type: "env"; botIndex: number }
+  | { type: "dynamic"; businessId: number };
+
+function isMerchantBotRole(
+  roles: MembershipRole | null | undefined,
+): boolean {
+  return roles === MembershipRole.OWNER || roles === MembershipRole.ADMIN;
+}
+
+function attachEnvTenantRoleMiddleware(
+  tgBot: Telegraf,
+  r: BotHandlerRole,
+): void {
+  tgBot.use(async (ctx, next) => {
+    if (r.type !== "env") {
+      await next();
+      return;
+    }
+    const c = ctx as TenantTelegrafCtx;
+    const fromId = ctx.from?.id;
+    if (fromId == null) {
+      c.tenantRole = null;
+      await next();
+      return;
+    }
+    const userRow = await prisma.user.findUnique({
+      where: { telegramId: String(fromId) },
+    });
+    const ms =
+      userRow == null
+        ? null
+        : await prisma.membership.findFirst({
+            where: {
+              userId: userRow.id,
+              role: { in: [MembershipRole.OWNER, MembershipRole.ADMIN] },
+            },
+            orderBy: { businessId: "asc" },
+          });
+    c.tenantRole = ms?.role ?? null;
+    await next();
+  });
+}
+
 function readStartParam(ctx: {
   message?: { text?: string };
   [key: string]: unknown;
@@ -365,12 +416,26 @@ function readStartParam(ctx: {
   return undefined;
 }
 
-type BotHandlerRole =
-  | { type: "env"; botIndex: number }
-  | { type: "dynamic"; businessId: number };
-
 export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
   attachSaasRegistration(tgBot, role);
+  attachEnvTenantRoleMiddleware(tgBot, role);
+
+  tgBot.command("admin", async (ctx) => {
+    const tr = (ctx as TenantTelegrafCtx).tenantRole ?? null;
+    if (!isMerchantBotRole(tr)) {
+      await ctx.reply("У вас нет доступа ❌");
+      return;
+    }
+    await ctx.reply("Админ панель", {
+      reply_markup: {
+        keyboard: [
+          ["📦 Товары", "📊 Заказы"],
+          ["⚙️ Настройки"],
+        ],
+        resize_keyboard: true,
+      },
+    });
+  });
 
   void tgBot.telegram
     .getMe()
@@ -396,23 +461,25 @@ export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
     });
 
   tgBot.start(async (ctx) => {
+    const tenantRoleResolved =
+      (ctx as TenantTelegrafCtx).tenantRole ?? null;
+    const merchantHere = isMerchantBotRole(tenantRoleResolved);
     const chatId = ctx.chat?.id;
-    if (role.type === "env") {
-      if (chatId != null) {
+
+    if (merchantHere && ctx.chat?.type === "private" && chatId != null) {
+      if (role.type === "env") {
         notifyFallbackByIndex.set(role.botIndex, chatId);
         console.log(
           "NOTIFY_FALLBACK chat set from /start, bot",
           role.botIndex,
-          chatId
+          chatId,
         );
-      }
-    } else {
-      if (chatId != null) {
+      } else if (chatId != null) {
         notifyFallbackByOwnerId.set(role.businessId, chatId);
         console.log(
           "NOTIFY_FALLBACK (dynamic) business",
           role.businessId,
-          chatId
+          chatId,
         );
       }
     }
@@ -424,12 +491,47 @@ export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
     }
 
     const param = readStartParam(ctx as { message?: { text?: string } });
+
+    /** Витрина Mini App всегда жёстко к текущему тенанту динамического бота. */
     let shop = "";
-    if (param && param.startsWith("shop_")) {
+    if (role.type === "dynamic") {
+      const ctxTyped = ctx as Context & { businessId?: number };
+      const boundFromCtx =
+        typeof ctxTyped.businessId === "number" &&
+        Number.isFinite(ctxTyped.businessId) &&
+        ctxTyped.businessId > 0
+          ? ctxTyped.businessId
+          : role.businessId;
+
+      if (typeof param === "string" && param.startsWith("shop_")) {
+        const foreign = Number(String(param.slice(5)).trim());
+        if (
+          Number.isInteger(foreign) &&
+          foreign > 0 &&
+          foreign !== boundFromCtx
+        ) {
+          console.warn(
+            "[bot] Dynamic bot /start: ignoring shop_ from another tenant",
+            {
+              webhookBusinessId: boundFromCtx,
+              startParamShop: foreign,
+              chatId: ctx.chat?.id,
+            },
+          );
+        }
+      }
+
+      shop = String(boundFromCtx);
+      console.log(
+        "[bot] Tenant Mini App Shop ID (dynamic bot /start):",
+        shop,
+        "ctx.businessId:",
+        ctxTyped.businessId ?? "(unset)",
+      );
+    } else if (param && param.startsWith("shop_")) {
       shop = param.slice(5);
-    } else if (role.type === "dynamic") {
-      shop = String(role.businessId);
     }
+
     const base = (
       process.env.FRONTEND_URL ||
       process.env.FRONT_URL ||
@@ -440,14 +542,20 @@ export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
       .replace(/\/$/, "");
     if (shop && base) {
       const url = `${base}/?shop=${encodeURIComponent(shop)}`;
-      await ctx.reply("Добро пожаловать в ваш магазин 🏪");
+      const lead = merchantHere
+        ? "Ваш магазин 🏪"
+        : "Добро пожаловать в магазин 🛍️";
+      await ctx.reply(lead);
       await ctx.reply("Открыть магазин", {
         reply_markup: {
           inline_keyboard: [
-            [{ text: "Открыть", web_app: { url } }],
+            [{ text: "Открыть магазин", web_app: { url } }],
           ],
         },
       });
+      if (merchantHere) {
+        await ctx.reply("Администрирование Mini App: команда /admin");
+      }
       return;
     }
     if (shop && !base) {

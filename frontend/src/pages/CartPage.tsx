@@ -1,5 +1,5 @@
 import { useCartStore } from "../store/useCartStore";
-import { getActiveShopId } from "../utils/storeParams";
+import { mergeTenantShopIntoSearch, readShopIdString } from "../utils/storeParams";
 import "../components/ui/Cart.css";
 
 type Props = {
@@ -16,9 +16,13 @@ export default function CartPage({ onGoToCheckout }: Props) {
   }, 0);
 
   const handleGoShop = () => {
-    const shop = getActiveShopId();
-    const q = shop ? `?shop=${encodeURIComponent(shop)}` : "";
-    window.location.href = `/${q}`;
+    const shop = readShopIdString();
+    if (!shop) {
+      window.location.href = "/";
+      return;
+    }
+    const qs = mergeTenantShopIntoSearch(window.location.search, shop);
+    window.location.href = `${window.location.pathname}${qs}`;
   };
 
   const handleIncrement = (item: (typeof items)[number]) => {

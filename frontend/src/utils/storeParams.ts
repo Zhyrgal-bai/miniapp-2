@@ -8,6 +8,11 @@ function parseDigits(s: string | null | undefined): string | undefined {
   return /^\d+$/.test(t) ? t : undefined;
 }
 
+function isLikelyMiniAppEnv(): boolean {
+  if (typeof window === "undefined") return false;
+  return Boolean(window.Telegram?.WebApp);
+}
+
 /** `startapp=shop_12` или `startapp=12` в Mini App. */
 function shopFromTelegramStartParam(raw: string | undefined): string | undefined {
   if (!raw) return undefined;
@@ -18,31 +23,34 @@ function shopFromTelegramStartParam(raw: string | undefined): string | undefined
 }
 
 /**
- * Читает `?shop=`, `?businessId=`, `tgWebAppStartParam`, `Telegram.WebApp.initDataUnsafe.start_param`;
- * при успехе пишет в sessionStorage для навигации без query.
+ * Читает магазин из `?shop=` / `?businessId=`, параметров Telegram Mini App или `start_param`;
+ * сохраняет в sessionStorage только после явного источника (URL/Telegram).
+ * В обычном браузере без этих источников sessionStorage игнорируется — без «общего» маркетплейса.
  */
 export function readShopIdString(): string | undefined {
   if (typeof window === "undefined") return undefined;
 
   const sp = new URLSearchParams(window.location.search);
-  let id =
-    parseDigits(sp.get("shop")) ??
-    parseDigits(sp.get("businessId")) ??
-    shopFromTelegramStartParam(sp.get("tgWebAppStartParam") ?? undefined);
+  const urlShop =
+    parseDigits(sp.get("shop")) ?? parseDigits(sp.get("businessId"));
+  const tgFromQuery = shopFromTelegramStartParam(
+    sp.get("tgWebAppStartParam") ?? undefined,
+  );
+  const tgInit = shopFromTelegramStartParam(
+    window.Telegram?.WebApp?.initDataUnsafe?.start_param,
+  );
 
-  if (!id) {
-    id = shopFromTelegramStartParam(
-      window.Telegram?.WebApp?.initDataUnsafe?.start_param,
-    );
-  }
+  const id = urlShop ?? tgFromQuery ?? tgInit;
 
   if (id) {
     sessionStorage.setItem(STORAGE_KEY, id);
     return id;
   }
 
-  const mem = sessionStorage.getItem(STORAGE_KEY);
-  return parseDigits(mem ?? undefined);
+  const mem = parseDigits(sessionStorage.getItem(STORAGE_KEY));
+  if (mem && isLikelyMiniAppEnv()) return mem;
+
+  return undefined;
 }
 
 export function getActiveShopId(): string | undefined {
@@ -67,4 +75,17 @@ export function buildCatalogRequestParams(): Record<string, string> {
   }
   if (Number.isFinite(uid) && uid > 0) p.userId = String(uid);
   return p;
+}
+
+/**
+ * Объединяет текущий query с каноническим `shop=` (для навигации без потери tenant).
+ */
+export function mergeTenantShopIntoSearch(rawSearch: string, shopId: string): string {
+  const trimmed = rawSearch.trim();
+  const withoutQ =
+    trimmed.startsWith("?") ? trimmed.slice(1) : trimmed;
+  const p = new URLSearchParams(withoutQ);
+  p.set("shop", shopId);
+  const out = p.toString();
+  return out ? `?${out}` : `?shop=${encodeURIComponent(shopId)}`;
 }

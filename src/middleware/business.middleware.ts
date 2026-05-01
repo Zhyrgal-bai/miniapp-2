@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import type { Business, User } from "@prisma/client";
+import type { Business, Membership, User } from "@prisma/client";
 import { SubscriptionStatus } from "@prisma/client";
 import { prisma } from "../server/db.js";
 import { isSubscriptionFullyExpired } from "../server/subscriptionMaintenance.js";
@@ -8,8 +8,9 @@ declare global {
   namespace Express {
     interface Request {
       businessId?: number;
-      tenantUser?: User;
+      tenantUser?: User | null;
       tenantBusiness?: Business;
+      tenantMembership?: Membership | null;
     }
   }
 }
@@ -25,7 +26,21 @@ function trimmedHeader(req: Request, name: string): string | undefined {
   return s === "" ? undefined : s;
 }
 
-function telegramFromRequest(req: Request): string | undefined {
+/** Same digit rules as public catalog endpoints (see `businessIdFromNonApiHint`). */
+function parseTenantHintInt(raw: unknown): number | undefined {
+  const s =
+    typeof raw === "string"
+      ? raw.trim()
+      : Array.isArray(raw) && typeof raw[0] === "string"
+        ? raw[0].trim()
+        : "";
+  if (!/^\d+$/.test(s)) return undefined;
+  const n = Number(s);
+  if (!Number.isSafeInteger(n) || n <= 0) return undefined;
+  return n;
+}
+
+export function telegramFromRequest(req: Request): string | null {
   const h = trimmedHeader(req, "x-telegram-id");
   if (h) return h;
   const body = req.body as { userId?: unknown } | undefined;
@@ -37,40 +52,40 @@ function telegramFromRequest(req: Request): string | undefined {
   const q = req.query.userId;
   const qs = typeof q === "string" ? q : Array.isArray(q) ? String(q[0]) : "";
   const t = qs.trim();
-  return t === "" ? undefined : t;
+  return t === "" ? null : t;
 }
 
+/** `?businessId` → `?shop` → `x-business-id` → JSON `businessId` / `shop`. */
 function businessIdHintFromRequest(req: Request): number | undefined {
+  const fromBid = parseTenantHintInt(req.query.businessId);
+  if (fromBid !== undefined) return fromBid;
+
+  const fromShop = parseTenantHintInt(req.query.shop);
+  if (fromShop !== undefined) return fromShop;
+
   const hRaw = trimmedHeader(req, "x-business-id");
-  if (hRaw) {
-    const n = Number(hRaw);
-    if (Number.isInteger(n) && n > 0) return n;
+  const fromHeader = hRaw ? parseTenantHintInt(hRaw) : undefined;
+  if (fromHeader !== undefined) return fromHeader;
+
+  const body = req.body as { businessId?: unknown; shop?: unknown } | undefined;
+  const b = body?.businessId;
+  if (typeof b === "number" && Number.isInteger(b)) {
+    const fb = parseTenantHintInt(String(b));
+    if (fb !== undefined) return fb;
   }
-  const body = req.body as { businessId?: unknown } | undefined;
-  if (typeof body?.businessId === "number") {
-    return Number.isInteger(body.businessId) && body.businessId > 0
-      ? body.businessId
-      : undefined;
+  if (typeof b === "string") {
+    const fb = parseTenantHintInt(b.trim());
+    if (fb !== undefined) return fb;
   }
-  if (typeof body?.businessId === "string") {
-    const n = Number(body.businessId);
-    return Number.isInteger(n) && n > 0 ? n : undefined;
+  const shopB = body?.shop;
+  if (typeof shopB === "string") {
+    const fs = parseTenantHintInt(shopB.trim());
+    if (fs !== undefined) return fs;
   }
-  const shopRaw = req.query.shop;
-  const sq =
-    typeof shopRaw === "string"
-      ? shopRaw
-      : Array.isArray(shopRaw)
-        ? String(shopRaw[0] ?? "")
-        : "";
-  const shop = Number(sq);
-  return Number.isInteger(shop) && shop > 0 ? shop : undefined;
+
+  return undefined;
 }
 
-/**
- * After trial or paid entitlement ends — block API access when tenant isn't allowed to operate.
- * Aligns with `subscriptionMaintenance` auto-expire rules.
- */
 export function businessSubscriptionBlocked(business: Business, now = new Date()): boolean {
   if (!business.isActive) return true;
 
@@ -91,7 +106,7 @@ export function businessSubscriptionBlocked(business: Business, now = new Date()
         trialEndsAt: business.trialEndsAt,
         subscriptionEndsAt: business.subscriptionEndsAt,
       },
-      now
+      now,
     )
   ) {
     return true;
@@ -101,16 +116,17 @@ export function businessSubscriptionBlocked(business: Business, now = new Date()
 }
 
 /**
- * Resolves tenant + user via compound unique `[businessId, telegramId]` (see Prisma schema).
- * Accepts tenant hint from `x-business-id`, `?shop=` or JSON `businessId`.
+ * Resolves tenant Business + Membership for `/api/*`.
+ * Если пользователя или Membership ещё нет, но указан известный `businessId`,
+ * считаем клиента витрины (CLIENT) — достаточно для GET /api/me без заказов.
  */
 export async function businessMiddleware(
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> {
   const skipPath = SKIP_PATH_PREFIXES.some(
-    (p) => req.path === p || req.path.startsWith(`${p}/`)
+    (p) => req.path === p || req.path.startsWith(`${p}/`),
   );
   if (skipPath) {
     next();
@@ -126,53 +142,70 @@ export async function businessMiddleware(
   const hinted = businessIdHintFromRequest(req);
 
   try {
-    if (hinted != null) {
-      const user = await prisma.user.findUnique({
-        where: {
-          businessId_telegramId: { businessId: hinted, telegramId },
-        },
-        include: { business: true },
-      });
-      if (!user) {
+    if (hinted != undefined) {
+      const business = await prisma.business.findUnique({ where: { id: hinted } });
+      if (!business) {
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
-      if (businessSubscriptionBlocked(user.business)) {
+      if (businessSubscriptionBlocked(business)) {
         res.status(403).json({ error: "Subscription expired" });
         return;
       }
-      req.businessId = user.businessId;
-      req.tenantUser = user;
-      req.tenantBusiness = user.business;
+
+      const userRow = await prisma.user.findUnique({ where: { telegramId } });
+
+      const membershipRow =
+        userRow == null
+          ? null
+          : await prisma.membership.findUnique({
+              where: {
+                userId_businessId: { userId: userRow.id, businessId: hinted },
+              },
+            });
+
+      req.businessId = hinted;
+      req.tenantBusiness = business;
+      req.tenantUser = userRow;
+      req.tenantMembership = membershipRow;
       next();
       return;
     }
 
-    const candidates = await prisma.user.findMany({
-      where: { telegramId },
-      include: { business: true },
-    });
+    const userRow = await prisma.user.findUnique({ where: { telegramId } });
 
-    if (candidates.length === 0) {
+    if (!userRow) {
       res.status(401).json({ error: "Unauthorized" });
       return;
     }
-    if (candidates.length > 1) {
+
+    const memberships = await prisma.membership.findMany({
+      where: { userId: userRow.id },
+      include: { business: true },
+      orderBy: { businessId: "asc" },
+    });
+
+    if (memberships.length === 0) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    if (memberships.length > 1) {
       res.status(400).json({
         error: "Ambiguous tenant: send x-business-id header or shop query",
       });
       return;
     }
 
-    const only = candidates[0]!;
+    const only = memberships[0]!;
     if (businessSubscriptionBlocked(only.business)) {
       res.status(403).json({ error: "Subscription expired" });
       return;
     }
 
     req.businessId = only.businessId;
-    req.tenantUser = only;
     req.tenantBusiness = only.business;
+    req.tenantUser = userRow;
+    req.tenantMembership = only;
     next();
   } catch (e) {
     console.error("businessMiddleware:", e);

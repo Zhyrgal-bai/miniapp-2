@@ -1,13 +1,24 @@
 import type { ReactNode } from "react";
+import { useMemo } from "react";
 import { adminNavKeyFromPath, type AdminNavKey } from "./adminHashRoute";
 
-const nav: {
+type NavItem = {
   href: string;
   match: AdminNavKey;
   label: string;
   icon: string;
-}[] = [
+  ownerOnly?: boolean;
+};
+
+const navAll: NavItem[] = [
   { href: "#/admin/orders", match: "orders", label: "Заказы", icon: "📦" },
+  {
+    href: "#/admin/users",
+    match: "users",
+    label: "Пользователи",
+    icon: "👥",
+    ownerOnly: true,
+  },
   { href: "#/admin/products", match: "products", label: "Товары", icon: "➕" },
   {
     href: "#/admin/products/manage",
@@ -29,14 +40,22 @@ type AdminLayoutProps = {
   onExit: () => void;
   path: string;
   children: ReactNode;
+  /** Только владелец видит пункт «Пользователи». */
+  showOwnerNav?: boolean;
 };
 
 export default function AdminLayout({
   onExit,
   path,
   children,
+  showOwnerNav = false,
 }: AdminLayoutProps) {
   const active = adminNavKeyFromPath(path);
+
+  const nav = useMemo(
+    () => navAll.filter((item) => !item.ownerOnly || showOwnerNav),
+    [showOwnerNav],
+  );
 
   return (
     <div className="admin-dash">

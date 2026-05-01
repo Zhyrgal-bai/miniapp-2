@@ -3,9 +3,9 @@ import { session } from "telegraf";
 import type { Telegraf } from "telegraf";
 import {
   BillingPlan,
+  MembershipRole,
   RegistrationStatus,
   SubscriptionStatus,
-  UserRole,
 } from "@prisma/client";
 import { logPrismaError, prisma } from "../server/db.js";
 import {
@@ -121,10 +121,20 @@ function merchantMiniAppBaseUrl(): string {
     .replace(/\/$/, "");
 }
 
-/** Все привязки Telegram → магазины (tenant `User`; один telegramId может встречаться в нескольких Business). */
+/** Магазины, где пользователь — OWNER или ADMIN. */
 async function findMerchantMembershipsForTelegram(telegramId: string) {
-  return prisma.user.findMany({
+  const identity = await prisma.user.findUnique({
     where: { telegramId },
+    select: { id: true },
+  });
+  if (!identity) {
+    return [];
+  }
+  return prisma.membership.findMany({
+    where: {
+      userId: identity.id,
+      role: { in: [MembershipRole.OWNER, MembershipRole.ADMIN] },
+    },
     include: { business: true },
     orderBy: [{ businessId: "asc" }, { id: "asc" }],
   });
@@ -177,6 +187,12 @@ async function replyMerchantStoreDashboard(
         { text: "📦 Заказы", web_app: { url: ordersUrl } },
       ]);
     }
+    keyboard.push([
+      {
+        text: "📊 Кабинет (подписки)",
+        web_app: { url: `${base}/merchant` },
+      },
+    ]);
   }
 
   keyboard.push([
@@ -804,12 +820,20 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
         },
       });
 
-      await tx.user.create({
-        data: {
+      const ownerUser = await tx.user.upsert({
+        where: { telegramId: row.telegramId },
+        update: { name: normalizeStoreName(row.name) },
+        create: {
           telegramId: row.telegramId,
           name: normalizeStoreName(row.name),
+        },
+      });
+
+      await tx.membership.create({
+        data: {
+          userId: ownerUser.id,
           businessId: business.id,
-          role: UserRole.ADMIN,
+          role: MembershipRole.OWNER,
         },
       });
 

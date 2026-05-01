@@ -78,6 +78,13 @@ export type AdminPaymentDetail = {
   value: string;
 };
 
+export type AdminMembershipRow = {
+  userId: number;
+  role: string;
+  telegramId: string;
+  name: string | null;
+};
+
 export type AdminPromoRecord = {
   code: string;
   discount: number;
@@ -375,5 +382,44 @@ export const adminService = {
 
   async deleteCategory(id: number): Promise<void> {
     await adminDelete(apiAbsoluteUrl(`/categories/${id}`));
+  },
+
+  async getMembershipRows(
+    businessId: number,
+  ): Promise<AdminMembershipRow[]> {
+    const userId = requireAdminUserId();
+    const url = new URL(resolveAdminUrl("/api/memberships"));
+    url.searchParams.set("userId", String(userId));
+    url.searchParams.set("shop", String(businessId));
+    const res = await fetch(url.toString(), { method: "GET" });
+    if (!res.ok) throw new Error(await readFetchError(res));
+    const data = (await res.json().catch(() => [])) as unknown;
+    return Array.isArray(data) ? (data as AdminMembershipRow[]) : [];
+  },
+
+  async updateMembershipRole(input: {
+    targetUserId: number;
+    businessId: number;
+    role: "ADMIN" | "CLIENT";
+  }): Promise<void> {
+    const telegramUserId = requireAdminUserId();
+    const url = new URL(
+      resolveAdminUrl("/api/memberships/update-role"),
+    );
+    url.searchParams.set("userId", String(telegramUserId));
+    url.searchParams.set("shop", String(input.businessId));
+    const res = await fetch(url.toString(), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-telegram-id": String(telegramUserId),
+      },
+      body: JSON.stringify({
+        userId: input.targetUserId,
+        businessId: input.businessId,
+        role: input.role,
+      }),
+    });
+    if (!res.ok) throw new Error(await readFetchError(res));
   },
 };

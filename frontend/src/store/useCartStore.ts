@@ -11,6 +11,9 @@ type CartItem = {
 };
 
 type CartStore = {
+  tenantShopId: string | null;
+
+  syncTenantShopId: (shopId: string | null) => void;
   items: CartItem[];
 
   addItem: (item: CartItem) => void;
@@ -21,6 +24,17 @@ type CartStore = {
 };
 
 export const useCartStore = create<CartStore>((set, get) => ({
+  tenantShopId: null,
+
+  syncTenantShopId: (shopId) =>
+    set((state) => ({
+      tenantShopId: shopId,
+      items:
+        state.tenantShopId === shopId || state.items.length === 0
+          ? state.items
+          : [],
+    })),
+
   items: [],
 
   addItem: (item) =>

@@ -19,10 +19,11 @@ enum SubscriptionStatus {
   EXPIRED
 }
 
-enum UserRole {
+/// Роль членства в конкретном Business (глобальный User может иметь несколько Membership).
+enum MembershipRole {
   OWNER
   ADMIN
-  STAFF
+  CLIENT
 }
 
 /// Optional: explicit plan for Stripe/billing integrations.
@@ -62,7 +63,7 @@ model Business {
 
   createdAt DateTime @default(now())
 
-  users       User[]
+  memberships Membership[]
   products    Product[]
   orders      Order[]
   categories  Category[]
@@ -74,26 +75,35 @@ model Business {
   @@index([subscriptionStatus])
 }
 
-/// Tenant member (в т.ч. владелец магазина после SaaS). Один Telegram-пользователь
-/// может иметь несколько записей User — по одному на каждый Business (merchant multi-store).
-/// Уникальность: `[businessId, telegramId]`.
+/// Глобальная связка Telegram-пользователя (multi-tenant: один аккаунт — несколько Membership).
 model User {
   id Int @id @default(autoincrement())
 
-  telegramId String
+  telegramId String @unique
   name       String?
 
-  role UserRole @default(ADMIN)
+  memberships Membership[]
+  orders      Order[]     @relation("OrderBuyer")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Membership {
+  id Int @id @default(autoincrement())
+
+  role MembershipRole @default(CLIENT)
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   businessId Int
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
-  orders Order[] @relation("OrderBuyer")
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([businessId, telegramId])
+  @@unique([userId, businessId])
   @@index([businessId])
 }
 

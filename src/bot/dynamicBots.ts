@@ -1,3 +1,4 @@
+import type { MembershipRole } from "@prisma/client";
 import { Telegraf } from "telegraf";
 import type { Context } from "telegraf";
 import { prisma } from "../server/db.js";
@@ -42,9 +43,31 @@ export type RegisterDynamicBotResult = {
 /**
  * Проставляет `ctx.businessId` для динамического бота (удобно общим middleware).
  */
+/** Изоляция SaaS: `ctx.businessId` + членство пользователя в этом магазине (`ctx.tenantRole`). */
 function attachTenantContext(tgBot: Telegraf, businessId: number): void {
   tgBot.use(async (ctx: Context, next) => {
-    (ctx as Context & { businessId?: number }).businessId = businessId;
+    const cx = ctx as Context & {
+      businessId?: number;
+      tenantRole?: MembershipRole | null;
+    };
+    cx.businessId = businessId;
+    cx.tenantRole = null;
+    const from = ctx.from?.id;
+    if (from != null) {
+      const tid = String(from);
+      const userRow = await prisma.user.findUnique({
+        where: { telegramId: tid },
+      });
+      const ms =
+        userRow == null
+          ? null
+          : await prisma.membership.findUnique({
+              where: {
+                userId_businessId: { userId: userRow.id, businessId },
+              },
+            });
+      cx.tenantRole = ms?.role ?? null;
+    }
     await next();
   });
 }
@@ -139,7 +162,14 @@ export async function registerDynamicUserBot(user: {
     const url = `${publicApiBase}/telegram-webhook/owner/${user.businessId}`;
     try {
       await tg.telegram.setWebhook(url);
-      console.log("Dynamic webhook set:", url);
+      const uname = String(meJson.result.username ?? "");
+      console.log(
+        "[dynamicBots] Bot instance mapped to business:",
+        user.businessId,
+        uname !== "" ? `@${uname}` : "(no username)",
+        "webhook:",
+        url,
+      );
     } catch (e) {
       console.error("Dynamic setWebhook error:", user.businessId, e);
     }

@@ -5,13 +5,15 @@ import AdminApp from "./pages/admin/AdminApp";
 import FAQ from "./pages/FAQ";
 import MyOrders from "./pages/MyOrders";
 import ConnectBotPage from "./pages/ConnectBotPage";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShop } from "./context/ShopContext";
+import { useAdminGateStore } from "./store/adminGate.store";
 import { useCartStore } from "./store/useCartStore";
 import { useAdminPanelVisible, useAdminAccessBootstrap } from "@/utils/admin";
 import { fetchMyOrders } from "./services/myOrdersApi";
 import { getWebAppUserId } from "./utils/telegramUserId";
+import { mergeTenantShopIntoSearch } from "./utils/storeParams";
 import type { MyOrderRow } from "./types/myOrder";
 import "./App.css";
 import "./components/ui/Admin.css";
@@ -43,7 +45,7 @@ function initialPageFromPath(): AppNavPage {
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { businessId } = useShop();
+  const { businessId, shopIdString } = useShop();
   const [page, setPage] = useState<AppNavPage>(initialPageFromPath);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [myOrdersAttention, setMyOrdersAttention] = useState(false);
@@ -53,7 +55,20 @@ export default function App() {
       window.location.hash.startsWith("#/admin")
   );
   const adminAllowed = useAdminPanelVisible();
+  const refreshAdminGate = useAdminGateStore((s) => s.refresh);
   useAdminAccessBootstrap();
+
+  useEffect(() => {
+    void refreshAdminGate(businessId ?? undefined);
+  }, [businessId, refreshAdminGate]);
+
+  const tenantMergedSearch = useMemo(() => {
+    if (!shopIdString) {
+      const s = location.search.trim();
+      return s && s !== "?" ? s : "";
+    }
+    return mergeTenantShopIntoSearch(location.search ?? "", shopIdString);
+  }, [shopIdString, location.search]);
 
   useEffect(() => {
     const onHash = () =>
@@ -75,16 +90,31 @@ export default function App() {
   const commitPage = useCallback(
     (next: AppNavPage) => {
       if (next === "faq") {
-        navigate("/faq");
+        navigate({
+          pathname: "/faq",
+          search:
+            tenantMergedSearch && tenantMergedSearch !== "?"
+              ? tenantMergedSearch
+              : "",
+        });
         setPage("faq");
         return;
       }
       setPage(next);
       if (location.pathname === "/faq") {
-        navigate("/", { replace: true });
+        navigate(
+          {
+            pathname: "/",
+            search:
+              tenantMergedSearch && tenantMergedSearch !== "?"
+                ? tenantMergedSearch
+                : "",
+          },
+          { replace: true }
+        );
       }
     },
-    [navigate, location.pathname]
+    [navigate, location.pathname, tenantMergedSearch]
   );
 
   useEffect(() => {
@@ -93,13 +123,37 @@ export default function App() {
     }
   }, [location.pathname]);
 
-  /** Диплинк из Telegram: `?shop=…&view=my-orders` */
+  /** Диплинк из Telegram: `view=my-orders` | Mini App «Настройки» из личного кабинета. */
   useEffect(() => {
     const sp = new URLSearchParams(location.search);
-    if (sp.get("view") === "my-orders") {
+    const v = sp.get("view");
+    if (v === "my-orders") {
       commitPage("my-orders");
+      return;
     }
-  }, [location.search, commitPage]);
+    if (v === "merchant-settings") {
+      setPage("admin");
+      window.location.hash = "#/admin/settings";
+      if (location.pathname === "/faq") {
+        navigate(
+          {
+            pathname: "/",
+            search:
+              tenantMergedSearch && tenantMergedSearch !== "?"
+                ? tenantMergedSearch
+                : "",
+          },
+          { replace: true }
+        );
+      }
+    }
+  }, [
+    location.search,
+    commitPage,
+    location.pathname,
+    navigate,
+    tenantMergedSearch,
+  ]);
 
   useEffect(() => {
     const uid = getWebAppUserId();
@@ -158,7 +212,16 @@ export default function App() {
   ) => {
     setPage("admin");
     if (location.pathname === "/faq") {
-      navigate("/", { replace: true });
+      navigate(
+        {
+          pathname: "/",
+          search:
+            tenantMergedSearch && tenantMergedSearch !== "?"
+              ? tenantMergedSearch
+              : "",
+        },
+        { replace: true }
+      );
     }
     const paths: Record<typeof section, string> = {
       orders: "#/admin/orders",

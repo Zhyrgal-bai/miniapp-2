@@ -19,18 +19,15 @@ export function viteAdminIdsAllow(): boolean {
 }
 
 /**
- * Показывать админку: при успешном ответе сервера — только `isAdmin` с бэка;
- * если сервер недоступен или Telegram ещё не отдал userId — допускаем VITE_ADMIN_IDS.
+ * Админку Mini App показываем только по роли OWNER/ADMIN из GET /api/me (бэкенд валидирует).
  */
 export function useAdminPanelVisible(): boolean {
   const status = useAdminGateStore((s) => s.status);
   const serverIsAdmin = useAdminGateStore((s) => s.serverIsAdmin);
   const lastHttpOk = useAdminGateStore((s) => s.lastHttpOk);
-  const vite = viteAdminIdsAllow();
 
-  if (status === "idle" || status === "loading") return vite;
-  if (lastHttpOk) return serverIsAdmin;
-  return vite;
+  if (status === "idle" || status === "loading") return false;
+  return lastHttpOk && serverIsAdmin;
 }
 
 /** Опрос `/check-admin`, пока не появится Telegram user id (до ~5 с). */

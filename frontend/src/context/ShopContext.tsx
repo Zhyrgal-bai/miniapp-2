@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useLocation } from "react-router-dom";
 import { readShopIdString } from "../utils/storeParams";
+import { useCartStore } from "../store/useCartStore";
 
 export type ShopContextValue = {
   /** `Business.id` тенанта из `?shop=` / `?businessId=` / Telegram Mini App start_param */
@@ -44,6 +45,10 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       shopIdString,
     };
   }, [searchTick, telegramTick]);
+
+  useEffect(() => {
+    useCartStore.getState().syncTenantShopId(value.shopIdString ?? null);
+  }, [value.shopIdString]);
 
   return (
     <ShopContext.Provider value={value}>{children}</ShopContext.Provider>

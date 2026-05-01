@@ -1,0 +1,192 @@
+.mdb {
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 18px 16px 28px;
+  background: linear-gradient(180deg, #0e0f12 0%, #17181f 52%, #121318 100%);
+  color: #e9eaee;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
+}
+
+.mdb__head {
+  margin-bottom: 22px;
+}
+
+.mdb__title {
+  margin: 0 0 6px;
+  font-size: 1.35rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.mdb__subtitle {
+  margin: 0;
+  font-size: 0.92rem;
+  color: rgba(233, 234, 238, 0.55);
+}
+
+.mdb__muted {
+  margin: 0;
+  font-size: 0.85rem;
+  color: rgba(233, 234, 238, 0.45);
+}
+
+.mdb__err {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 60, 60, 0.12);
+  color: #ff9e9e;
+  font-size: 0.9rem;
+}
+
+.mdb__empty {
+  margin-top: 20px;
+  padding: 20px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.mdb__empty-title {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.mdb__empty-hint {
+  margin: 0;
+  font-size: 0.88rem;
+  color: rgba(233, 234, 238, 0.5);
+  line-height: 1.45;
+}
+
+.mdb__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mdb-card {
+  border-radius: 16px;
+  padding: 14px 14px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.mdb-card__row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.mdb-card__emoji {
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.mdb-card__body {
+  min-width: 0;
+}
+
+.mdb-card__name {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.mdb-card__id {
+  margin: 3px 0 0;
+  font-size: 0.76rem;
+  color: rgba(233, 234, 238, 0.45);
+  font-variant-numeric: tabular-nums;
+}
+
+.mdb-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+
+.mdb-card__badge {
+  font-size: 0.74rem;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+}
+
+.mdb-card__badge--ok {
+  background: rgba(56, 199, 128, 0.18);
+  color: #8ee5bb;
+}
+
+.mdb-card__badge--muted {
+  color: rgba(233, 234, 238, 0.55);
+}
+
+.mdb-card__badge--warn {
+  background: rgba(255, 180, 80, 0.15);
+  color: #ffc48a;
+}
+
+.mdb-card__date {
+  font-size: 0.83rem;
+  color: rgba(233, 234, 238, 0.7);
+}
+
+.mdb-card__sub {
+  font-size: 0.72rem;
+  color: rgba(233, 234, 238, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mdb-card__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.mdb-btn {
+  flex: 1;
+  min-height: 40px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e9eaee;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.mdb-btn:active {
+  transform: scale(0.98);
+}
+
+.mdb-btn--primary {
+  background: rgba(104, 160, 255, 0.22);
+  border-color: rgba(104, 160, 255, 0.45);
+}
+
+.mdb-btn--primary:hover {
+  background: rgba(104, 160, 255, 0.32);
+}
+
+.mdb-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.mdb__foot {
+  margin-top: 28px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}

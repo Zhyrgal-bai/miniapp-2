@@ -1,8 +1,9 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 import App from "./App";
 import { ShopProvider } from "./context/ShopContext";
+import MerchantDashboardPage from "./pages/MerchantDashboardPage";
 import "leaflet/dist/leaflet.css";
 import "./index.css";
 
@@ -13,7 +14,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>
       <ShopProvider>
-        <App />
+        <Routes>
+          <Route path="/merchant" element={<MerchantDashboardPage />} />
+          <Route path="*" element={<App />} />
+        </Routes>
       </ShopProvider>
     </BrowserRouter>
   </React.StrictMode>

@@ -1,4 +1,4 @@
-import { SubscriptionStatus, UserRole } from "@prisma/client";
+import { MembershipRole, SubscriptionStatus } from "@prisma/client";
 import { prisma } from "./db.js";
 
 function pluralDaysRu(n: number): string {
@@ -71,18 +71,18 @@ function daysLeftUntil(end: Date | null, now: Date): number | null {
 async function findPrimaryOwnerTelegramId(
   businessId: number
 ): Promise<string | null> {
-  const owner = await prisma.user.findFirst({
-    where: { businessId, role: UserRole.OWNER },
-    select: { telegramId: true },
+  const owner = await prisma.membership.findFirst({
+    where: { businessId, role: MembershipRole.OWNER },
+    include: { user: true },
     orderBy: { id: "asc" },
   });
-  if (owner) return owner.telegramId;
-  const anyUser = await prisma.user.findFirst({
+  if (owner?.user?.telegramId) return owner.user.telegramId;
+  const anyUser = await prisma.membership.findFirst({
     where: { businessId },
-    select: { telegramId: true },
+    include: { user: true },
     orderBy: { id: "asc" },
   });
-  return anyUser?.telegramId ?? null;
+  return anyUser?.user?.telegramId ?? null;
 }
 
 async function sendTelegramToUser(

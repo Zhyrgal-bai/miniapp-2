@@ -1569,3 +1569,99 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* —— Участники / роли (только OWNER) —— */
+.admin-members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-members-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.admin-members-row__main {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.admin-members-row__name {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.admin-members-row__meta {
+  margin: 0;
+  font-size: 13px;
+  color: #9ca3af;
+}
+
+.admin-role-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-role-badge--owner {
+  background: rgba(234, 179, 8, 0.25);
+  color: #fcd34d;
+}
+
+.admin-role-badge--admin {
+  background: rgba(59, 130, 246, 0.28);
+  color: #bfdbfe;
+}
+
+.admin-role-badge--client {
+  background: rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
+}
+
+.admin-members-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.admin-members-actions__btn {
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.admin-members-actions__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.admin-members-actions__btn--promote {
+  border-color: rgba(34, 197, 94, 0.45);
+  background: rgba(34, 197, 94, 0.22);
+}
+
+.admin-members-actions__btn--demote {
+  border-color: rgba(148, 163, 184, 0.4);
+  background: rgba(148, 163, 184, 0.12);
+}

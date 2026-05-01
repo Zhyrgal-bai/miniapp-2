@@ -13,8 +13,8 @@ services:
     runtime: node
     plan: free
     buildCommand: npm install && npm run build
-    # Схема без папки migrations — подтягиваем модель в БД при старте
-    startCommand: npx prisma db push && npm start
+    # Миграции и запуск: scripts/productionStart.mjs (migrate deploy + node dist/server/index.js)
+    startCommand: npm start
     healthCheckPath: /
     envVars:
       - key: NODE_VERSION

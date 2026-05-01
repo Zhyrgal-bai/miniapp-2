@@ -3,11 +3,12 @@ import axios from "axios";
 import { useCartStore } from "../store/useCartStore";
 import { api, apiAbsoluteUrl } from "../services/api";
 import { fetchMyOrders } from "../services/myOrdersApi";
+import { useShop } from "../context/ShopContext";
 import { getTelegramUser, getTelegramWebAppUserId } from "../utils/telegram";
 import { cleanInput, validateKgPhone } from "../utils/orderInputSanitize";
 import MapPicker from "../components/checkout/MapPicker";
 import "../components/ui/CheckoutPage.css";
-import { getActiveShopId } from "../utils/storeParams";
+import { buildCatalogRequestParams } from "../utils/storeParams";
 
 type CheckoutPaymentMethod = "finik" | "receipt";
 
@@ -48,6 +49,7 @@ function orderErrorMessage(err: unknown): string {
 }
 
 export default function CheckoutPage({ onBack, onOrderSuccess }: Props) {
+  const { businessId } = useShop();
   const items = useCartStore((state) => state.items);
   const clearCart = useCartStore((state) => state.clearCart);
 
@@ -106,7 +108,7 @@ export default function CheckoutPage({ onBack, onOrderSuccess }: Props) {
     let cancelled = false;
     (async () => {
       try {
-        const rows = await fetchMyOrders(uid, getActiveShopId());
+        const rows = await fetchMyOrders(uid, buildCatalogRequestParams().shop);
         const prev = rows.find((o) => {
           const raw = o.phone ?? o.customerPhone;
           return raw != null && String(raw).trim() !== "";
@@ -133,7 +135,7 @@ export default function CheckoutPage({ onBack, onOrderSuccess }: Props) {
       setPromoPreview(null);
       return totalPrice;
     }
-    const shop = getActiveShopId();
+    const shop = buildCatalogRequestParams().shop;
     const businessId = shop ? Number(shop) : NaN;
     if (!Number.isInteger(businessId) || businessId <= 0) {
       alert(
@@ -369,10 +371,15 @@ export default function CheckoutPage({ onBack, onOrderSuccess }: Props) {
 
     setSubmitting(true);
     try {
+      const tenantParams =
+        businessId != null
+          ? { businessId, shop: String(businessId) }
+          : {};
       const { data } = await api.post<{
         id: number;
         paymentUrl?: string | null;
       }>("/orders", {
+        ...tenantParams,
         ...(Number.isFinite(userId) ? { userId } : {}),
         user: {
           telegramId: Number.isFinite(Number(tg?.id)) ? Number(tg?.id) : 0,

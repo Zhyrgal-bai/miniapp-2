@@ -2,14 +2,15 @@ import "dotenv/config";
 import express from "express";
 import type { Request, Response } from "express";
 import multer from "multer";
-import { Prisma, UserRole } from "@prisma/client";
+import { MembershipRole, Prisma } from "@prisma/client";
 import cors from "cors";
 import {
   isCloudinaryConfigured,
   uploadImageToCloudinary,
   uploadReceiptToCloudinary,
 } from "./cloudinary.js";
-import { adminUserIdFromRequest, isAdmin } from "./adminAuth.js";
+import { adminUserIdFromRequest } from "./adminAuth.js";
+import { listMerchantOwnedBusinesses } from "./merchantDashboard.js";
 import {
   isAllowedOrderStatusTransition,
   isValidOrderStatus,
@@ -144,15 +145,171 @@ mountFinikSettingsRoutes(app);
 
 app.use("/api", businessMiddleware);
 
-app.get("/api/me", (_req: Request, res: Response) => {
-  res.json({
-    businessId: _req.businessId ?? null,
-    telegramId: _req.tenantUser?.telegramId ?? null,
-    businessName: _req.tenantBusiness?.name ?? null,
-  });
+app.get("/api/me", (req: Request, res: Response) => {
+  try {
+    if (typeof req.businessId !== "number" || req.tenantBusiness == null) {
+      res.status(400).json({
+        error: "Missing tenant: pass shop or businessId in query",
+      });
+      return;
+    }
+    const role =
+      req.tenantMembership?.role ?? MembershipRole.CLIENT;
+    res.json({
+      role,
+      businessId: req.businessId,
+      telegramId:
+        typeof req.tenantUser?.telegramId === "string"
+          ? req.tenantUser.telegramId
+          : null,
+      businessName: req.tenantBusiness.name ?? null,
+    });
+  } catch (e) {
+    console.error("GET /api/me:", e);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
+app.get("/api/memberships", async (req: Request, res: Response) => {
+  try {
+    if (typeof req.businessId !== "number") {
+      res.status(400).json({
+        error: "Missing tenant: pass shop or businessId in query",
+      });
+      return;
+    }
+
+    const ownerCtx = await requireStoreOwnerForApi(
+      req,
+      res,
+      req.businessId,
+    );
+    if (!ownerCtx) return;
+
+    const rows = await prisma.membership.findMany({
+      where: { businessId: req.businessId },
+      include: {
+        user: { select: { telegramId: true, name: true } },
+      },
+      orderBy: [{ role: "asc" }, { userId: "asc" }],
+    });
+
+    res.json(
+      rows.map((m) => ({
+        userId: m.userId,
+        role: m.role,
+        telegramId: m.user.telegramId,
+        name: m.user.name ?? null,
+      })),
+    );
+  } catch (e) {
+    console.error("GET /api/memberships:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.post("/api/memberships/update-role", async (req: Request, res: Response) => {
+  try {
+    const body = req.body as {
+      userId?: unknown;
+      businessId?: unknown;
+      role?: unknown;
+    };
+
+    const targetUserIdRaw = Number(body.userId);
+    const businessBodyRaw = Number(body.businessId);
+    const roleRaw = String(body.role ?? "").trim().toUpperCase();
+
+    if (
+      !Number.isSafeInteger(targetUserIdRaw) ||
+      targetUserIdRaw <= 0 ||
+      !Number.isSafeInteger(businessBodyRaw) ||
+      businessBodyRaw <= 0
+    ) {
+      res.status(400).json({ error: "Нужны userId, businessId и role" });
+      return;
+    }
+
+    let nextRole: MembershipRole | null = null;
+    if (roleRaw === "ADMIN") nextRole = MembershipRole.ADMIN;
+    else if (roleRaw === "CLIENT") nextRole = MembershipRole.CLIENT;
+
+    if (nextRole == null) {
+      res.status(400).json({ error: "role только ADMIN или CLIENT" });
+      return;
+    }
+
+    if (typeof req.businessId !== "number") {
+      res.status(400).json({
+        error: "Missing tenant: pass shop or businessId in query",
+      });
+      return;
+    }
+
+    if (req.businessId !== businessBodyRaw) {
+      res.status(403).json({ error: "Несовпадение магазина" });
+      return;
+    }
+
+    const ownerCtx = await requireStoreOwnerForApi(
+      req,
+      res,
+      req.businessId,
+    );
+    if (!ownerCtx) return;
+
+    if (targetUserIdRaw === ownerCtx.requesterDbUserId) {
+      res.status(403).json({ error: "Нельзя изменить собственную роль" });
+      return;
+    }
+
+    const existing = await prisma.membership.findUnique({
+      where: {
+        userId_businessId: {
+          userId: targetUserIdRaw,
+          businessId: req.businessId,
+        },
+      },
+    });
+
+    if (!existing) {
+      res.status(404).json({ error: "Участник не найден" });
+      return;
+    }
+
+    if (existing.role === MembershipRole.OWNER) {
+      res.status(403).json({ error: "Нельзя менять роль владельца" });
+      return;
+    }
+
+    await prisma.membership.update({
+      where: {
+        userId_businessId: {
+          userId: targetUserIdRaw,
+          businessId: req.businessId,
+        },
+      },
+      data: { role: nextRole },
+    });
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("POST /api/memberships/update-role:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/** Telegram пользователя запроса: заголовок (для тел JSON с полем userId как id в БД) → body.userId → query.userId */
 function telegramIdFromRequest(req: Request): string | null {
+  const rawXi = req.headers["x-telegram-id"];
+  const xi =
+    typeof rawXi === "string"
+      ? rawXi.trim()
+      : Array.isArray(rawXi) && typeof rawXi[0] === "string"
+        ? rawXi[0].trim()
+        : "";
+  if (/^\d+$/.test(xi)) return xi;
+
   const rawBody = (req.body as { userId?: unknown } | undefined)?.userId;
   const rawQuery = req.query.userId;
   const raw = rawBody ?? (Array.isArray(rawQuery) ? rawQuery[0] : rawQuery);
@@ -161,54 +318,116 @@ function telegramIdFromRequest(req: Request): string | null {
   return telegramId ? telegramId : null;
 }
 
-/** Витрина: `shop`, `body.businessId` или `x-business-id` = id Business (тенанта). */
+const PUBLIC_BUSINESS_PARSE_ERROR = "Invalid businessId";
+const PUBLIC_BUSINESS_MISSING_ERROR = "Not found";
+
+function queryParamToTrimmedString(raw: unknown): string {
+  if (typeof raw === "string") return raw.trim();
+  if (Array.isArray(raw) && typeof raw[0] === "string") return raw[0].trim();
+  return "";
+}
+
+/** Строго: только строка из цифр, без `1e9`, пробелов после trim, только safe integer > 0. */
+function parseTenantBusinessDigits(trimmedNonEmpty: string): number | undefined {
+  if (trimmedNonEmpty === "") return undefined;
+  if (!/^\d+$/.test(trimmedNonEmpty)) return undefined;
+  const n = Number(trimmedNonEmpty);
+  if (!Number.isSafeInteger(n) || n <= 0) return undefined;
+  return n;
+}
+
+/**
+ * Тенант витрины / публичных API: порядок `?businessId` → `?shop` → `x-business-id` → `body.businessId`.
+ */
 function businessIdFromNonApiHint(req: Request): number | null {
+  const fromBid = parseTenantBusinessDigits(
+    queryParamToTrimmedString(req.query.businessId)
+  );
+  if (fromBid !== undefined) return fromBid;
+
+  const fromShop = parseTenantBusinessDigits(
+    queryParamToTrimmedString(req.query.shop)
+  );
+  if (fromShop !== undefined) return fromShop;
+
   const rawH = req.headers["x-business-id"];
   const hdr =
     typeof rawH === "string"
-      ? rawH
-      : Array.isArray(rawH)
-        ? rawH[0]
+      ? rawH.trim()
+      : Array.isArray(rawH) && typeof rawH[0] === "string"
+        ? rawH[0].trim()
         : "";
-  const fromHeader = hdr ? Number(String(hdr).trim()) : NaN;
-  if (Number.isInteger(fromHeader) && fromHeader > 0) return fromHeader;
-
-  const shopRaw = req.query.shop;
-  const qs =
-    typeof shopRaw === "string"
-      ? shopRaw
-      : Array.isArray(shopRaw)
-        ? String(shopRaw[0] ?? "")
-        : "";
-  const shop = Number(qs.trim());
-  if (Number.isInteger(shop) && shop > 0) return shop;
-
-  const bidRaw = req.query.businessId;
-  const bidStr =
-    typeof bidRaw === "string"
-      ? bidRaw
-      : Array.isArray(bidRaw)
-        ? String(bidRaw[0] ?? "")
-        : "";
-  const bid = Number(bidStr.trim());
-  if (Number.isInteger(bid) && bid > 0) return bid;
+  const fromHeader = parseTenantBusinessDigits(hdr);
+  if (fromHeader !== undefined) return fromHeader;
 
   const body = req.body as { businessId?: unknown } | undefined;
   const b = body?.businessId;
-  if (typeof b === "number" && Number.isInteger(b) && b > 0) return b;
-  if (typeof b === "string") {
-    const n = Number(b.trim());
-    if (Number.isInteger(n) && n > 0) return n;
+  if (typeof b === "number" && Number.isInteger(b)) {
+    const fromBody = parseTenantBusinessDigits(String(b));
+    if (fromBody !== undefined) return fromBody;
   }
+  if (typeof b === "string") {
+    const fromBody = parseTenantBusinessDigits(b.trim());
+    if (fromBody !== undefined) return fromBody;
+  }
+
+  const rawShopBody = (req.body as { shop?: unknown } | undefined)?.shop;
+  if (typeof rawShopBody === "string") {
+    const fromShopBody = parseTenantBusinessDigits(rawShopBody.trim());
+    if (fromShopBody !== undefined) return fromShopBody;
+  }
+
   return null;
+}
+
+type MerchantStaffContext = {
+  businessId: number;
+};
+
+/** Только OWNER магазина (Mini App уже привязан к tenant через middleware). */
+async function requireStoreOwnerForApi(
+  req: Request,
+  res: Response,
+  businessId: number,
+): Promise<{ requesterDbUserId: number } | null> {
+  const telegramId = telegramIdFromRequest(req);
+  if (!telegramId) {
+    res.status(401).json({ error: "Unauthorized" });
+    return null;
+  }
+  if (typeof req.businessId !== "number" || req.businessId !== businessId) {
+    res.status(403).json({ error: "Несовпадение магазина" });
+    return null;
+  }
+
+  const requesterUser = await prisma.user.findUnique({
+    where: { telegramId },
+  });
+  if (!requesterUser) {
+    res.status(403).json({ error: "Нет доступа" });
+    return null;
+  }
+
+  const m = await prisma.membership.findUnique({
+    where: {
+      userId_businessId: {
+        userId: requesterUser.id,
+        businessId,
+      },
+    },
+  });
+  if (!m || m.role !== MembershipRole.OWNER) {
+    res.status(403).json({ error: "Только владелец магазина" });
+    return null;
+  }
+
+  return { requesterDbUserId: requesterUser.id };
 }
 
 async function requireMerchantStaff(
   req: Request,
   res: Response
-): Promise<
-  import("@prisma/client").User | null
-> {
+): Promise<MerchantStaffContext | null> {
   const telegramId = telegramIdFromRequest(req);
   const businessId = businessIdFromNonApiHint(req);
   if (!telegramId) {
@@ -222,37 +441,49 @@ async function requireMerchantStaff(
     });
     return null;
   }
-  const user = await prisma.user.findUnique({
-    where: { businessId_telegramId: { businessId, telegramId } },
+
+  const userRecord = await prisma.user.findUnique({
+    where: { telegramId },
   });
+  const membershipRecord =
+    userRecord == null
+      ? null
+      : await prisma.membership.findUnique({
+          where: {
+            userId_businessId: { userId: userRecord.id, businessId },
+          },
+        });
+
   if (
-    !user ||
-    (user.role !== UserRole.OWNER && user.role !== UserRole.ADMIN)
+    !membershipRecord ||
+    (membershipRecord.role !== MembershipRole.OWNER &&
+      membershipRecord.role !== MembershipRole.ADMIN)
   ) {
     res.status(403).json({ error: "Нет доступа к этому магазину" });
     return null;
   }
-  return user;
+  return { businessId };
 }
 
+/** Каталог / settings / заказы клиента по магазину: валидный id + строка Business в БД. */
 async function resolveCatalogBusinessId(
   req: Request,
   res: Response
 ): Promise<number | null> {
   const businessId = businessIdFromNonApiHint(req);
   if (businessId == null) {
-    res.status(400).json({ error: "Укажите магазин (shop=id бизнеса)" });
+    res.status(400).json({ error: PUBLIC_BUSINESS_PARSE_ERROR });
     return null;
   }
-  const exists = await prisma.business.findUnique({
+  const business = await prisma.business.findUnique({
     where: { id: businessId },
     select: { id: true },
   });
-  if (!exists) {
-    res.status(400).json({ error: "Магазин не найден" });
+  if (!business) {
+    res.status(404).json({ error: PUBLIC_BUSINESS_MISSING_ERROR });
     return null;
   }
-  return businessId;
+  return business.id;
 }
 
 async function upsertBuyerUser(
@@ -267,16 +498,26 @@ async function upsertBuyerUser(
     String(fallbackName).trim() !== ""
       ? String(fallbackName).trim()
       : null;
-  return tx.user.upsert({
-    where: { businessId_telegramId: { businessId, telegramId } },
-    create: {
-      businessId,
-      telegramId,
-      name: normalizedName,
-      role: UserRole.STAFF,
-    },
+
+  const u = await tx.user.upsert({
+    where: { telegramId },
+    create: { telegramId, name: normalizedName },
     update: normalizedName != null ? { name: normalizedName } : {},
   });
+
+  await tx.membership.upsert({
+    where: {
+      userId_businessId: { userId: u.id, businessId },
+    },
+    create: {
+      userId: u.id,
+      businessId,
+      role: MembershipRole.CLIENT,
+    },
+    update: {},
+  });
+
+  return u;
 }
 
 const publicApiBase = publicApiOrigin();
@@ -350,11 +591,11 @@ app.post("/connect-bot", async (req: Request, res: Response) => {
     if (!Number.isInteger(businessId) || businessId <= 0) {
       return res.status(400).json({ error: "Нужен businessId магазина" });
     }
-    const merchant = await prisma.user.findFirst({
+    const merchant = await prisma.membership.findFirst({
       where: {
         businessId,
-        telegramId,
-        role: { in: [UserRole.OWNER, UserRole.ADMIN] },
+        user: { telegramId },
+        role: { in: [MembershipRole.OWNER, MembershipRole.ADMIN] },
       },
     });
     if (!merchant) {
@@ -437,21 +678,80 @@ app.get("/test-telegram", async (req: Request, res: Response) => {
 });
 
 // ================== CHECK ADMIN ==================
-app.post("/check-admin", (req: Request, res: Response) => {
-  res.json({ isAdmin: isAdmin(adminUserIdFromRequest(req)) });
+/** Мини-приложение: только OWNER / ADMIN этого `shop`/`businessId` (платформенные ADMIN_IDS не дают доступ к чужим данным). */
+app.post("/check-admin", async (req: Request, res: Response) => {
+  try {
+    const uid = adminUserIdFromRequest(req);
+    const body = req.body as { shop?: unknown; businessId?: unknown };
+    const shopRaw = body.shop ?? body.businessId;
+    const shop =
+      typeof shopRaw === "number" &&
+      Number.isInteger(shopRaw) &&
+      shopRaw > 0
+        ? shopRaw
+        : typeof shopRaw === "string"
+          ? Number(shopRaw.trim())
+          : NaN;
+
+    if (Number.isInteger(shop) && shop > 0) {
+      const tid = String(uid ?? "").trim();
+      const mship =
+        tid === ""
+          ? null
+          : await prisma.membership.findFirst({
+              where: {
+                businessId: shop,
+                user: { telegramId: tid },
+                role: {
+                  in: [MembershipRole.OWNER, MembershipRole.ADMIN],
+                },
+              },
+            });
+      res.json({ isAdmin: mship != null });
+      return;
+    }
+
+    res.json({ isAdmin: false });
+  } catch (e) {
+    console.error("CHECK-ADMIN:", e);
+    res.status(500).json({ isAdmin: false });
+  }
 });
 
-// ================== UPLOAD (Cloudinary, админ магазина или платформы) ==================
+// ================== TELEGRAM MERCHANT DASHBOARD (Mini App) ==================
+async function merchantMyBusinessesHandler(
+  req: Request,
+  res: Response
+): Promise<void> {
+  try {
+    const raw = req.query.telegramId ?? req.query.userId;
+    const s = typeof raw === "string" ? raw : Array.isArray(raw) ? raw[0] : "";
+    const telegramId = String(s ?? "").trim();
+    if (telegramId === "" || !/^\d+$/.test(telegramId)) {
+      res.status(400).json({
+        error: "Нужен query telegramId (или userId) — числовой Telegram id",
+      });
+      return;
+    }
+    const businesses = await listMerchantOwnedBusinesses(telegramId);
+    res.json({ businesses });
+  } catch (e) {
+    console.error("GET /my-businesses:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+}
+
+app.get("/my-businesses", merchantMyBusinessesHandler);
+app.get("/api/my-businesses", merchantMyBusinessesHandler);
+
+// ================== UPLOAD (Cloudinary, только персонал магазина) ==================
 app.post(
   "/upload",
   upload.single("file"),
   async (req: Request, res: Response) => {
     console.log("UPLOAD DATA:", req.body);
-    const platform = isAdmin(adminUserIdFromRequest(req));
-    if (!platform) {
-      const m = await requireMerchantStaff(req, res);
-      if (!m) return;
-    }
+    const m = await requireMerchantStaff(req, res);
+    if (!m) return;
     try {
       if (!isCloudinaryConfigured()) {
         return res.status(503).json({
@@ -479,11 +779,8 @@ app.post(
   upload.array("files", 15),
   async (req: Request, res: Response) => {
     console.log("UPLOAD-IMAGES DATA:", req.body);
-    const platform = isAdmin(adminUserIdFromRequest(req));
-    if (!platform) {
-      const m = await requireMerchantStaff(req, res);
-      if (!m) return;
-    }
+    const m = await requireMerchantStaff(req, res);
+    if (!m) return;
     try {
       if (!isCloudinaryConfigured()) {
         return res.status(503).json({
@@ -622,17 +919,31 @@ app.post("/promo/apply", async (req: Request, res: Response) => {
       total?: unknown;
       businessId?: unknown;
     };
-    const businessId = Number(bid);
+    const businessIdParsed =
+      typeof bid === "number" && Number.isInteger(bid)
+        ? parseTenantBusinessDigits(String(bid))
+        : typeof bid === "string"
+          ? parseTenantBusinessDigits(String(bid).trim())
+          : undefined;
     const t = Number(total);
     if (
       code == null ||
       String(code).trim() === "" ||
       !Number.isFinite(t) ||
-      !Number.isInteger(businessId) ||
-      businessId <= 0
+      businessIdParsed === undefined
     ) {
       return res.status(400).json({ error: "Нужны businessId, code и total" });
     }
+
+    const businessRow = await prisma.business.findUnique({
+      where: { id: businessIdParsed },
+      select: { id: true },
+    });
+    if (!businessRow) {
+      return res.status(404).json({ error: PUBLIC_BUSINESS_MISSING_ERROR });
+    }
+
+    const businessId = businessIdParsed;
     try {
       const result = await tryApplyPromoDb(prisma, businessId, String(code), t);
       return res.json({
@@ -1260,12 +1571,9 @@ app.get("/orders/my", async (req: Request, res: Response) => {
     if (!telegramId) {
       return res.status(400).json({ error: "Нужен userId (Telegram)" });
     }
-    const businessId = businessIdFromNonApiHint(req);
-    if (businessId == null) {
-      return res
-        .status(400)
-        .json({ error: "Укажите магазин (shop / x-business-id / body.businessId)" });
-    }
+
+    const businessId = await resolveCatalogBusinessId(req, res);
+    if (!businessId) return;
 
     const orders = await prisma.order.findMany({
       where: {
@@ -1470,6 +1778,11 @@ app.post("/orders", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "Товар не найден" });
   }
   const tenantBusinessId = probe.businessId;
+
+  const hintedTenant = businessIdFromNonApiHint(req);
+  if (hintedTenant != null && hintedTenant !== tenantBusinessId) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
 
   const totalComputed = await computeOrderTotalFromBody(
     body,

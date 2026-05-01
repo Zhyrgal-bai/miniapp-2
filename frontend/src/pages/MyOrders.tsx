@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchMyOrders } from "../services/myOrdersApi";
 import { apiAbsoluteUrl } from "../services/api";
+import { useShop } from "../context/ShopContext";
 import { getWebAppUserId } from "../utils/telegramUserId";
-import { getActiveShopId } from "../utils/storeParams";
 import type { MyOrderRow } from "../types/myOrder";
 import "./MyOrders.css";
 
@@ -247,6 +247,7 @@ export default function MyOrders() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const { shopIdString, businessId } = useShop();
   const userId = getWebAppUserId();
 
   const load = useCallback(async () => {
@@ -256,15 +257,19 @@ export default function MyOrders() {
       setLoading(false);
       return;
     }
+    if (shopIdString == null || businessId == null) {
+      setOrders([]);
+      setSettings(null);
+      setError("Магазин не найден");
+      setLoading(false);
+      return;
+    }
     try {
-      const activeShop = getActiveShopId();
-      const data = await fetchMyOrders(userId, activeShop);
-      const shop =
-        activeShop ||
-        (data[0]?.businessId != null ? String(data[0].businessId) : null);
+      const data = await fetchMyOrders(userId, shopIdString);
       const settingsUrl = new URL(apiAbsoluteUrl("/settings"));
       settingsUrl.searchParams.set("userId", String(userId));
-      if (shop) settingsUrl.searchParams.set("shop", shop);
+      settingsUrl.searchParams.set("shop", shopIdString);
+      settingsUrl.searchParams.set("businessId", shopIdString);
       const settingsRes = await fetch(settingsUrl.toString(), { method: "GET" });
       const settingsData = (await settingsRes
         .json()
@@ -279,7 +284,7 @@ export default function MyOrders() {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, shopIdString, businessId]);
 
   useEffect(() => {
     setLoading(true);
