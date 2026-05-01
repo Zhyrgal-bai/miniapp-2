@@ -74,8 +74,9 @@ model Business {
   @@index([subscriptionStatus])
 }
 
-/// End-user inside a tenant. Same Telegram identity can exist in multiple businesses —
-/// uniqueness is `[businessId, telegramId]` (not globally on `telegramId`).
+/// Tenant member (в т.ч. владелец магазина после SaaS). Один Telegram-пользователь
+/// может иметь несколько записей User — по одному на каждый Business (merchant multi-store).
+/// Уникальность: `[businessId, telegramId]`.
 model User {
   id Int @id @default(autoincrement())
 

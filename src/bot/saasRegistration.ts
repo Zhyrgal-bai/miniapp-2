@@ -96,7 +96,11 @@ function resetRegistrationWizardFields(ctx: Context): void {
 }
 
 function logSaas(
-  event: "registration_started" | "registration_completed" | "rejected_attempt",
+  event:
+    | "registration_started"
+    | "registration_completed"
+    | "rejected_attempt"
+    | "merchant_dashboard_opened",
   meta: Record<string, unknown>
 ): void {
   console.log(`[saasRegistration] ${event}`, meta);
@@ -106,53 +110,81 @@ function logStartHandlerError(err: unknown, label: string): void {
   logPrismaError(`saasRegistration:${label}`, err);
 }
 
-/** Один аккаунт User с магазином (telegramId может быть не уникальным между tenant — берём первую запись). */
-async function findUserWithBusinessForTelegram(telegramId: string) {
-  return prisma.user.findFirst({
-    where: { telegramId },
-    include: { business: true },
-  });
-}
-
-async function replyMerchantAlreadyHasShop(
-  ctx: Context,
-  businessId: number
-): Promise<void> {
-  const text = "У вас уже есть магазин 🏪";
-  const rawFront = (
+function merchantMiniAppBaseUrl(): string {
+  return (
     process.env.FRONTEND_URL ||
     process.env.FRONT_URL ||
     process.env.PUBLIC_URL ||
     ""
-  ).trim();
+  )
+    .trim()
+    .replace(/\/$/, "");
+}
 
-  if (rawFront === "") {
-    console.error(
-      "[saasRegistration] FRONTEND_URL / FRONT_URL / PUBLIC_URL отсутствуют — кнопка Mini App недоступна"
+/** Все привязки Telegram → магазины (tenant `User`; один telegramId может встречаться в нескольких Business). */
+async function findMerchantMembershipsForTelegram(telegramId: string) {
+  return prisma.user.findMany({
+    where: { telegramId },
+    include: { business: true },
+    orderBy: [{ businessId: "asc" }, { id: "asc" }],
+  });
+}
+
+type MerchantMembershipRow = Awaited<
+  ReturnType<typeof findMerchantMembershipsForTelegram>
+>[number];
+
+/** Список витрин + Mini App-кнопки + заявка на ещё один магазин. */
+async function replyMerchantStoreDashboard(
+  ctx: Context,
+  rows: MerchantMembershipRow[],
+): Promise<void> {
+  if (rows.length === 0) return;
+
+  const base = merchantMiniAppBaseUrl();
+
+  const title =
+    rows.length === 1
+      ? `Ваш магазин: «${rows[0]!.business.name}»`
+      : `У вас ${rows.length} магазинов. Выберите витрину или добавьте ещё:`;
+
+  const lines: string[] = [title];
+  if (!base) {
+    lines.push(
+      "",
+      "Задайте FRONT_URL / FRONTEND_URL / PUBLIC_URL — тогда появятся кнопки Mini App.",
     );
-    await ctx.reply("Ошибка конфигурации сервера. Задайте FRONTEND_URL в переменных окружения.");
-    return;
+    rows.forEach((r, i) => {
+      lines.push(`${i + 1}. «${r.business.name}» — shop=${r.business.id}`);
+    });
   }
 
-  const base = rawFront.replace(/\/$/, "");
-  const bid = Number(businessId);
-  if (!Number.isFinite(bid) || bid <= 0) {
-    console.error("[saasRegistration] invalid business id for merchant reply:", businessId);
-    await ctx.reply("Ошибка данных магазина.");
-    return;
+  type Kb =
+    | { text: string; web_app: { url: string } }
+    | { text: string; callback_data: string };
+  const keyboard: Kb[][] = [];
+
+  if (base) {
+    for (const row of rows) {
+      const b = row.business;
+      const q = encodeURIComponent(String(b.id));
+      const storeUrl = `${base}/?shop=${q}`;
+      const ordersUrl = `${base}/?shop=${q}&view=my-orders`;
+      const short =
+        b.name.length > 18 ? `${b.name.slice(0, 17)}…` : b.name;
+      keyboard.push([
+        { text: `🛍 ${short}`, web_app: { url: storeUrl } },
+        { text: "📦 Заказы", web_app: { url: ordersUrl } },
+      ]);
+    }
   }
 
-  const q = encodeURIComponent(String(bid));
-  const storeUrl = `${base}/?shop=${q}`;
-  const ordersUrl = `${base}/?shop=${q}&view=my-orders`;
+  keyboard.push([
+    { text: "➕ Добавить магазин", callback_data: "saas_new_store" },
+  ]);
 
-  await ctx.reply(text, {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: "Открыть магазин", web_app: { url: storeUrl } }],
-        [{ text: "Мои заказы", web_app: { url: ordersUrl } }],
-      ],
-    },
+  await ctx.reply(lines.join("\n"), {
+    reply_markup: { inline_keyboard: keyboard },
   });
 }
 
@@ -371,16 +403,6 @@ export async function registrationFlow(
 
     try {
       const tid = telegramIdString(ctx);
-      const existingUser = await findUserWithBusinessForTelegram(tid);
-      if (existingUser?.business) {
-        await replyMerchantAlreadyHasShop(ctx, existingUser.business.id);
-        resetRegistrationWizardFields(ctx);
-        logSaas("rejected_attempt", {
-          reason: "already_has_business_at_submit",
-          telegramUserId: tid,
-        });
-        return true;
-      }
 
       const duplicate = await prisma.registrationRequest.findFirst({
         where: {
@@ -536,31 +558,14 @@ export async function handleRegistrationStartCommand(
       return true;
     }
 
-    let userWithBiz: Awaited<
-      ReturnType<typeof findUserWithBusinessForTelegram>
-    >;
+    let memberships: MerchantMembershipRow[];
     try {
-      userWithBiz = await findUserWithBusinessForTelegram(telegramIdStr);
+      memberships = await findMerchantMembershipsForTelegram(telegramIdStr);
     } catch (dbErr: unknown) {
-      logStartHandlerError(dbErr, "/start DB: findUserWithBusiness failed");
+      logStartHandlerError(dbErr, "/start DB: findMerchantMemberships failed");
       await ctx.reply(
         "Не удалось подключиться к базе данных. Проверьте DATABASE_URL на сервере (Render: Postgres должен быть доступен; часто нужен sslmode=require)."
       );
-      return true;
-    }
-
-    if (userWithBiz?.business) {
-      if (process.env.NODE_ENV !== "production") {
-        console.log("[saasRegistration] /start: existing merchant", {
-          businessId: userWithBiz.business.id,
-          telegramUserId: telegramIdStr,
-        });
-      }
-      await replyMerchantAlreadyHasShop(ctx, userWithBiz.business.id);
-      logSaas("rejected_attempt", {
-        reason: "already_has_business",
-        telegramUserId: telegramIdStr,
-      });
       return true;
     }
 
@@ -580,6 +585,15 @@ export async function handleRegistrationStartCommand(
       logSaas("rejected_attempt", {
         reason: "already_pending_request",
         telegramUserId: telegramIdStr,
+      });
+      return true;
+    }
+
+    if (memberships.length > 0) {
+      await replyMerchantStoreDashboard(ctx, memberships);
+      logSaas("merchant_dashboard_opened", {
+        telegramUserId: telegramIdStr,
+        storeCount: memberships.length,
       });
       return true;
     }
@@ -620,6 +634,56 @@ export async function handleRegistrationCallbacks(
 
   const data = ctx.callbackQuery.data;
   if (typeof data !== "string") return false;
+
+  if (data === "saas_new_store") {
+    if (ctx.chat?.type !== "private") {
+      try {
+        await ctx.answerCbQuery("Только в личном чате");
+      } catch {
+        /* ignore */
+      }
+      return true;
+    }
+    const tid = telegramIdString(ctx);
+    if (tid === "") {
+      try {
+        await ctx.answerCbQuery();
+      } catch {
+        /* ignore */
+      }
+      return true;
+    }
+    try {
+      if (await hasPendingRegistrationForTelegram(tid)) {
+        await ctx.answerCbQuery("Сначала дождитесь решения по заявке");
+        return true;
+      }
+      const sess = getRegistrationSession(ctx);
+      if (!sess) {
+        await ctx.answerCbQuery("Нажмите /start");
+        return true;
+      }
+      if (sess.step) {
+        await ctx.answerCbQuery("Завершите текущую регистрацию");
+        return true;
+      }
+      sess.step = "name";
+      sess.data = {};
+      sess.lastAttemptAt = Date.now();
+      await ctx.answerCbQuery().catch(() => undefined);
+      await ctx.reply(
+        "Новый магазин 🚀\nВведите название магазина (оно может отличаться от других ваших магазинов)."
+      );
+      logSaas("registration_started", {
+        telegramUserId: tid,
+        reason: "add_store_from_dashboard",
+      });
+    } catch (e) {
+      console.error("saas_new_store callback:", e);
+      await ctx.answerCbQuery("Ошибка").catch(() => undefined);
+    }
+    return true;
+  }
 
   const appr = parseCallbackId("rega", data);
   const rej = parseCallbackId("regr", data);
@@ -691,25 +755,6 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
       return;
     }
 
-    const applicantHasStore = await prisma.user.findFirst({
-      where: { telegramId: row.telegramId },
-      select: { id: true, businessId: true },
-    });
-    if (applicantHasStore) {
-      console.warn(
-        "[saasRegistration] approve blocked: applicant already linked to business",
-        { requestId, businessId: applicantHasStore.businessId }
-      );
-      await ctx.editMessageText(
-        "⚠️ Этот Telegram уже привязан к магазину — одобрение отменено."
-      );
-      await prisma.registrationRequest.update({
-        where: { id: row.id },
-        data: { status: RegistrationStatus.REJECTED },
-      });
-      return;
-    }
-
     const slug = `shop-${requestId}-${Date.now().toString(36)}`;
     const trialEnd = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
 
@@ -740,13 +785,6 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
       });
       if (tokenConflict) {
         throw new Error("SAAS_APPROVE_TOKEN_CONFLICT");
-      }
-      const userConflict = await tx.user.findFirst({
-        where: { telegramId: row.telegramId },
-        select: { id: true },
-      });
-      if (userConflict) {
-        throw new Error("SAAS_APPROVE_USER_CONFLICT");
       }
       const business = await tx.business.create({
         data: {
@@ -839,10 +877,7 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "";
-    if (
-      msg === "SAAS_APPROVE_TOKEN_CONFLICT" ||
-      msg === "SAAS_APPROVE_USER_CONFLICT"
-    ) {
+    if (msg === "SAAS_APPROVE_TOKEN_CONFLICT") {
       console.warn("[saasRegistration] approve transaction conflict:", msg, {
         requestId,
       });
@@ -856,7 +891,7 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
       }
       try {
         await ctx.editMessageText(
-          "⚠️ Токен или пользователь уже заняты (учтите при повторной заявке). Заявка отклонена."
+          "⚠️ Этот токен уже привязан к магазину. Заявка отклонена."
         );
       } catch {
         /* ignore */
