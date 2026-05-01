@@ -2,7 +2,7 @@ import type { Business } from "@prisma/client";
 import type { Telegraf } from "telegraf";
 import {
   activeBots,
-  registerDynamicUserBot,
+  initDynamicStoreBot,
   type RegisterDynamicBotResult,
 } from "./dynamicBots.js";
 
@@ -10,36 +10,42 @@ export type LaunchClientBotOutcome = {
   bot: Telegraf;
 } & RegisterDynamicBotResult;
 
+export type LaunchClientBotResult =
+  | ({ ok: true } & LaunchClientBotOutcome)
+  | { ok: false; error: string };
+
 /**
- * Запускает клиентского бота после SaaS-одобрения: токен из записи Business.
- *
- * На продакшене обновления идут через **webhook** (`setWebhook`), а не через
- * `bot.launch()` — иначе дублирование с вебхуком и несколько процессов на Render сломают доставку.
- * Внутри вызывается `registerDynamicUserBot` → полный `attachBotHandlers` + Mini App-кнопка на `/start`.
+ * Мгновенная активация клиентского бота после создания Business (без рестарта сервера).
+ * Webhook задаётся внутри `initDynamicStoreBot`; polling не используется.
  */
 export async function launchClientBot(
   business: Pick<Business, "id" | "botToken">
-): Promise<LaunchClientBotOutcome | undefined> {
+): Promise<LaunchClientBotResult> {
   const token = String(business.botToken ?? "").trim();
-  if (!token) return undefined;
+  if (!token) {
+    return { ok: false, error: "У магазина нет botToken" };
+  }
 
   try {
-    const result = await registerDynamicUserBot({
+    const result = await initDynamicStoreBot({
       businessId: business.id,
       botToken: token,
     });
     const bot = activeBots.get(business.id);
     if (!bot) {
-      console.error(
-        "launchClientBot: Telegraf отсутствует в карте после register",
-        business.id
-      );
-      return undefined;
+      const msg = "Telegraf отсутствует в карте после initDynamicStoreBot";
+      console.error("launchClientBot:", business.id, msg);
+      return { ok: false, error: msg };
     }
-    console.log("Client bot started (webhook):", business.id, result.username);
-    return { bot, ...result };
-  } catch (e) {
+    console.log(
+      "[launchClientBot] Instant activation:",
+      business.id,
+      `@${result.username}`
+    );
+    return { ok: true, bot, ...result };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     console.error("launchClientBot failed:", business.id, e);
-    return undefined;
+    return { ok: false, error: msg };
   }
 }

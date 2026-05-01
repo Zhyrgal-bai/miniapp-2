@@ -4,6 +4,7 @@ import type { Telegraf } from "telegraf";
 import {
   BillingPlan,
   MembershipRole,
+  Prisma,
   RegistrationStatus,
   SubscriptionStatus,
 } from "@prisma/client";
@@ -19,6 +20,11 @@ type BotRole =
   | { type: "dynamic"; businessId: number };
 
 const REGISTRATION_COOLDOWN_MS = 10_000;
+
+/** Если `1` — заявка ждёт кнопки админа; иначе магазин создаётся сразу после токена и телефона. */
+function saasRequiresManualApproval(): boolean {
+  return String(process.env.SAAS_MANUAL_APPROVAL ?? "").trim() === "1";
+}
 
 /**
  * Состояние онбординга в `ctx.session` (ключ сессии = пользователь в private).
@@ -162,7 +168,7 @@ async function replyMerchantStoreDashboard(
   if (!base) {
     lines.push(
       "",
-      "Задайте FRONT_URL / FRONTEND_URL / PUBLIC_URL — тогда появятся кнопки Mini App.",
+      "Ссылки на ваши магазины в Mini App включатся после настройки адресов витрины на сервере.",
     );
     rows.forEach((r, i) => {
       lines.push(`${i + 1}. «${r.business.name}» — shop=${r.business.id}`);
@@ -269,6 +275,56 @@ function registrationMarkup(requestId: number) {
   };
 }
 
+/** Business + Settings + OWNER membership (общая транзакция для ручного и авто режима). */
+async function provisionMerchantStoreInTx(
+  tx: Prisma.TransactionClient,
+  params: {
+    name: string;
+    botToken: string;
+    telegramId: string;
+    slugSuffix: string;
+  },
+): Promise<number> {
+  const slug = `shop-${params.slugSuffix}`;
+  const trialEnd = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
+  const botTok = params.botToken.trim();
+
+  const business = await tx.business.create({
+    data: {
+      name: params.name.trim(),
+      slug,
+      botToken: botTok,
+      isActive: true,
+      subscriptionStatus: SubscriptionStatus.TRIALING,
+      billingPlan: BillingPlan.FREE,
+      trialEndsAt: trialEnd,
+    },
+  });
+
+  await tx.settings.create({
+    data: { businessId: business.id },
+  });
+
+  const ownerUser = await tx.user.upsert({
+    where: { telegramId: params.telegramId },
+    update: { name: normalizeStoreName(params.name) },
+    create: {
+      telegramId: params.telegramId,
+      name: normalizeStoreName(params.name),
+    },
+  });
+
+  await tx.membership.create({
+    data: {
+      userId: ownerUser.id,
+      businessId: business.id,
+      role: MembershipRole.OWNER,
+    },
+  });
+
+  return business.id;
+}
+
 export function attachSaasRegistration(bot: Telegraf, role: BotRole): void {
   if (role.type !== "env" || role.botIndex !== 0) {
     return;
@@ -373,7 +429,7 @@ export async function registrationFlow(
     const v = await verifyTokenWithTelegram(tokenTrimmed);
     if (!v.ok) {
       await ctx.reply(
-        "Не удалось проверить токен через Telegram API. Вставьте корректный токен."
+        "Токен не подходит. Скопируйте новый полностью из @BotFather (формат вида 123456:AA…)."
       );
       return true;
     }
@@ -420,16 +476,16 @@ export async function registrationFlow(
     try {
       const tid = telegramIdString(ctx);
 
-      const duplicate = await prisma.registrationRequest.findFirst({
+      const duplicatePending = await prisma.registrationRequest.findFirst({
         where: {
           telegramId: tid,
           status: RegistrationStatus.PENDING,
         },
         select: { id: true },
       });
-      if (duplicate) {
+      if (duplicatePending && saasRequiresManualApproval()) {
         await ctx.reply(
-          "У вас уже есть активная заявка на модерацию. Ожидайте решения администратора."
+          "У вас уже есть заявка на рассмотрении — ответ придёт здесь после проверки."
         );
         resetRegistrationWizardFields(ctx);
         logSaas("rejected_attempt", {
@@ -441,7 +497,9 @@ export async function registrationFlow(
 
       if (name === "" || token === "") {
         resetRegistrationWizardFields(ctx);
-        await ctx.reply("Сессия устарела. Начните снова: /start");
+        await ctx.reply(
+          "Шаги сбросились. Нажмите /start и заново укажите название и токен бота."
+        );
         logSaas("rejected_attempt", {
           reason: "stale_session_submit",
           telegramUserId: telegramIdString(ctx),
@@ -449,54 +507,175 @@ export async function registrationFlow(
         return true;
       }
 
-      const row = await prisma.registrationRequest.create({
-        data: {
-          name,
-          botToken: token,
-          phone,
-          telegramId: telegramIdString(ctx),
-        },
+      if (saasRequiresManualApproval()) {
+        const row = await prisma.registrationRequest.create({
+          data: {
+            name,
+            botToken: token,
+            phone,
+            telegramId: tid,
+          },
+        });
+
+        resetRegistrationWizardFields(ctx);
+        logSaas("registration_completed", {
+          telegramUserId: tid,
+          requestId: row.id,
+          mode: "manual",
+        });
+
+        await ctx.reply(
+          [
+            "Заявка принята ✅",
+            `Магазин: «${name}»`,
+            `Телефон: ${phone}`,
+            "",
+            "После одобрения вы сможете открыть витрину через вашего бота из @BotFather.",
+          ].join("\n")
+        );
+
+        const admins = adminTelegramNumericIds();
+        if (admins.length === 0) {
+          console.warn(
+            "[saasRegistration] SAAS_MANUAL_APPROVAL=1, но ADMIN_IDS пуст — заявке некому управлять из Telegram."
+          );
+          await ctx.reply(
+            "Заявка сохранена. Как только её подключат, напишем здесь же."
+          );
+          return true;
+        }
+
+        const lines = [
+          "📩 Новая заявка на магазин",
+          `ID заявки: #${row.id}`,
+          `Название: ${row.name}`,
+          `Телефон: ${row.phone}`,
+          `Telegram пользователя (id): ${row.telegramId}`,
+        ];
+
+        for (const aid of admins) {
+          await _bot.telegram
+            .sendMessage(aid, lines.join("\n"), {
+              reply_markup: registrationMarkup(row.id),
+            })
+            .catch((e: unknown) => {
+              console.error("notify admin:", aid, e);
+            });
+        }
+        return true;
+      }
+
+      let businessId: number;
+      try {
+        businessId = await prisma.$transaction(async (tx) => {
+          const tok = token.trim();
+          const taken = await tx.business.findUnique({
+            where: { botToken: tok },
+            select: { id: true },
+          });
+          if (taken != null) {
+            throw new Error("SAAS_TOKEN_BUSY");
+          }
+
+          const bid = await provisionMerchantStoreInTx(tx, {
+            name,
+            botToken: tok,
+            telegramId: tid,
+            slugSuffix: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+          });
+
+          await tx.registrationRequest.create({
+            data: {
+              name,
+              botToken: tok,
+              phone,
+              telegramId: tid,
+              status: RegistrationStatus.APPROVED,
+            },
+          });
+          return bid;
+        });
+      } catch (txErr: unknown) {
+        if (txErr instanceof Error && txErr.message === "SAAS_TOKEN_BUSY") {
+          await ctx.reply(
+            "Этот бот уже занят другим магазином. Создайте нового у @BotFather и пришлите новый токен."
+          );
+          logSaas("rejected_attempt", {
+            reason: "token_race_duplicate",
+            telegramUserId: tid,
+          });
+          return true;
+        }
+        if (
+          txErr instanceof Prisma.PrismaClientKnownRequestError &&
+          txErr.code === "P2002"
+        ) {
+          await ctx.reply(
+            "Этот бот или данные уже используются. Проверьте токен или начните с /start заново."
+          );
+          logSaas("rejected_attempt", {
+            reason: "prisma_unique_conflict",
+            telegramUserId: tid,
+          });
+          return true;
+        }
+        throw txErr;
+      }
+
+      const { launchClientBot } = await import("./launchClientBot.js");
+      const launched = await launchClientBot({
+        id: businessId,
+        botToken: token.trim(),
       });
 
       resetRegistrationWizardFields(ctx);
       logSaas("registration_completed", {
-        telegramUserId: telegramIdString(ctx),
-        requestId: row.id,
+        telegramUserId: tid,
+        businessId,
+        mode: "auto",
       });
 
+      const front = merchantMiniAppBaseUrl();
+      const shopQ = encodeURIComponent(String(businessId));
+      const userLines = [
+        `✅ Магазин «${name}» готов.`,
+        "",
+        "Ваш клиентский бот (токен из @BotFather) уже работает.",
+        "Откройте чат с этим ботом и нажмите /start — появится кнопка «Открыть» с вашей витриной Mini App.",
+        "Покупатели пишут тому же боту.",
+      ];
+      if (!launched.ok) {
+        userLines.push("", "Откройте магазин кнопкой ниже или повторите /start у своего бота чуть позже.");
+      }
+
       await ctx.reply(
-        "Заявка отправлена ✅\n\n" +
-          "Название: " +
-          name +
-          "\n" +
-          "Телефон: " +
-          phone
+        userLines.join("\n"),
+        front === ""
+          ? undefined
+          : {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: "🛍 Открыть мой магазин",
+                      web_app: { url: `${front}/?shop=${shopQ}` },
+                    },
+                  ],
+                ],
+              },
+            },
       );
 
       const admins = adminTelegramNumericIds();
-      if (admins.length === 0) {
-        console.error(
-          "ADMIN_IDS не задан — некому отправить заявку на модерацию (saasRegistration)."
-        );
-        return true;
-      }
-
-      const lines = [
-        "📩 Новая заявка на магазин",
-        `ID заявки: #${row.id}`,
-        `Название: ${row.name}`,
-        `Телефон: ${row.phone}`,
-        `Telegram пользователя (id): ${row.telegramId}`,
-      ];
-
-      for (const aid of admins) {
-        await _bot.telegram
-          .sendMessage(aid, lines.join("\n"), {
-            reply_markup: registrationMarkup(row.id),
-          })
-          .catch((e: unknown) => {
-            console.error("notify admin:", aid, e);
-          });
+      if (admins.length > 0) {
+        const note = [
+          "Новый магазин (автовключение)",
+          `«${name}» · id=${businessId}`,
+          `Владелец: ${tid}`,
+        ].join("\n");
+        for (const aid of admins) {
+          await _bot.telegram.sendMessage(aid, note).catch(() => undefined);
+        }
       }
     } catch (e: unknown) {
       console.error("registration save:", e);
@@ -504,7 +683,9 @@ export async function registrationFlow(
         reason: "save_error",
         telegramUserId: telegramIdString(ctx),
       });
-      await ctx.reply("Не удалось сохранить заявку. Попробуйте позже.");
+      await ctx.reply(
+        "Сейчас не получилось завершить регистрацию. Попробуйте через минуту или нажмите /start снова."
+      );
     }
     return true;
   }
@@ -531,7 +712,7 @@ export async function handleRegistrationStartCommand(
   try {
     const fromId = ctx.from?.id;
     if (fromId === undefined || fromId === null) {
-      await ctx.reply("Ошибка пользователя ❌ Не удалось определить Telegram ID.");
+      await ctx.reply("Не вижу ваш Telegram-профиль. Откройте бота из аккаунта и нажмите /start снова.");
       return true;
     }
 
@@ -549,12 +730,12 @@ export async function handleRegistrationStartCommand(
       console.error("[saasRegistration] /start: session missing for private DM", {
         telegramUserId: telegramIdStr,
       });
-      await ctx.reply("Ошибка сессии. Закройте чат и нажмите /start ещё раз.");
+      await ctx.reply("Откройте чат заново или нажмите /start ещё раз.");
       return true;
     }
 
     if (sess.step) {
-      await ctx.reply("Вы уже проходите регистрацию.");
+      await ctx.reply("Вы уже заполняете анкету магазина — продолжите ответами в этом чате.");
       return true;
     }
 
@@ -565,7 +746,7 @@ export async function handleRegistrationStartCommand(
       now - sess.lastAttemptAt < REGISTRATION_COOLDOWN_MS
     ) {
       await ctx.reply(
-        "Подождите 10 секунд перед следующей попыткой регистрации."
+        "Слишком часто 🙂 Подождите около 10 секунд и нажмите /start ещё раз."
       );
       logSaas("rejected_attempt", {
         reason: "rate_limit_register_start",
@@ -580,7 +761,7 @@ export async function handleRegistrationStartCommand(
     } catch (dbErr: unknown) {
       logStartHandlerError(dbErr, "/start DB: findMerchantMemberships failed");
       await ctx.reply(
-        "Не удалось подключиться к базе данных. Проверьте DATABASE_URL на сервере (Render: Postgres должен быть доступен; часто нужен sslmode=require)."
+        "Сервис сейчас перегружен. Попробуйте через минуту."
       );
       return true;
     }
@@ -591,13 +772,17 @@ export async function handleRegistrationStartCommand(
     } catch (dbErr: unknown) {
       logStartHandlerError(dbErr, "/start DB: hasPendingRegistration failed");
       await ctx.reply(
-        "Не удалось подключиться к базе данных. Проверьте DATABASE_URL и миграции Prisma на сервере."
+        "Сервис сейчас перегружен. Попробуйте через минуту."
       );
       return true;
     }
 
     if (hasPending) {
-      await ctx.reply("Ваша заявка уже на рассмотрении");
+      await ctx.reply(
+        saasRequiresManualApproval()
+          ? "Заявка на рассмотрении — ответ будет в этом чате."
+          : "По вашему профилю ещё числится проверка. Ожидайте сообщение или напишите в поддержку платформы."
+      );
       logSaas("rejected_attempt", {
         reason: "already_pending_request",
         telegramUserId: telegramIdStr,
@@ -628,7 +813,7 @@ export async function handleRegistrationStartCommand(
     logStartHandlerError(err, "START ERROR (unexpected)");
     try {
       await ctx.reply(
-        "Ошибка сервера ❌ Попробуйте позже. Если повторится — см. лог Render (Prisma/DATABASE_URL)."
+        "Что-то пошло не так. Нажмите /start через минуту."
       );
     } catch (replyErr: unknown) {
       console.error("START ERROR (reply failed):", replyErr);
@@ -696,7 +881,7 @@ export async function handleRegistrationCallbacks(
       });
     } catch (e) {
       console.error("saas_new_store callback:", e);
-      await ctx.answerCbQuery("Ошибка").catch(() => undefined);
+      await ctx.answerCbQuery("Позже попробуйте").catch(() => undefined);
     }
     return true;
   }
@@ -771,9 +956,6 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
       return;
     }
 
-    const slug = `shop-${requestId}-${Date.now().toString(36)}`;
-    const trialEnd = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
-
     const bizInUse = await prisma.business.findUnique({
       where: { botToken: row.botToken.trim() },
     });
@@ -802,47 +984,17 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
       if (tokenConflict) {
         throw new Error("SAAS_APPROVE_TOKEN_CONFLICT");
       }
-      const business = await tx.business.create({
-        data: {
-          name: row.name,
-          slug,
-          botToken: row.botToken.trim(),
-          isActive: true,
-          subscriptionStatus: SubscriptionStatus.TRIALING,
-          billingPlan: BillingPlan.FREE,
-          trialEndsAt: trialEnd,
-        },
-      });
-
-      await tx.settings.create({
-        data: {
-          businessId: business.id,
-        },
-      });
-
-      const ownerUser = await tx.user.upsert({
-        where: { telegramId: row.telegramId },
-        update: { name: normalizeStoreName(row.name) },
-        create: {
-          telegramId: row.telegramId,
-          name: normalizeStoreName(row.name),
-        },
-      });
-
-      await tx.membership.create({
-        data: {
-          userId: ownerUser.id,
-          businessId: business.id,
-          role: MembershipRole.OWNER,
-        },
+      businessId = await provisionMerchantStoreInTx(tx, {
+        name: row.name,
+        botToken: row.botToken.trim(),
+        telegramId: row.telegramId,
+        slugSuffix: `${requestId}-${Date.now().toString(36)}`,
       });
 
       await tx.registrationRequest.update({
         where: { id: row.id },
         data: { status: "APPROVED" },
       });
-
-      businessId = business.id;
     });
 
     const { launchClientBot } = await import("./launchClientBot.js");
@@ -851,14 +1003,21 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
       id: businessId,
       botToken: row.botToken.trim(),
     });
-    if (launched) {
+    if (launched.ok) {
       botUsername = launched.username;
     }
 
     await ctx.editMessageText(
-      `✅ Заявка #${requestId} одобрена.\n` +
-        `Магазин businessId=${businessId}` +
-        (botUsername !== "" ? `\n@${botUsername}` : ""),
+      [
+        `✅ Заявка #${requestId} одобрена.`,
+        `Магазин id=${businessId}` +
+          (botUsername !== "" ? ` · @${botUsername}` : ""),
+        launched.ok
+          ? ""
+          : "Подскажите клиенту /start у его бота (из @BotFather), если меню не обновилось.",
+      ]
+        .filter((s) => s !== "")
+        .join("\n"),
       { reply_markup: { inline_keyboard: [] } }
     );
 
@@ -877,20 +1036,32 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
 
     if (tgUrl) {
       await ctx.telegram
-        .sendMessage(row.telegramId, "Ваш магазин активирован ✅", {
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: "Открыть магазин", web_app: { url: tgUrl } }],
-            ],
-          },
-        })
+        .sendMessage(
+          row.telegramId,
+          [
+            "Магазин подключён ✅",
+            "",
+            "Откройте своего бота из @BotFather, нажмите /start — там кнопка вашей витрины Mini App.",
+          ].join("\n"),
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "🛍 Открыть мой магазин", web_app: { url: tgUrl } }],
+              ],
+            },
+          }
+        )
         .catch((e: unknown) => console.error("approved user ping:", e));
     } else {
       await ctx.telegram
         .sendMessage(
           row.telegramId,
-          `Ваш магазин активирован ✅\n` +
-            `shop=${businessId} (задайте FRONTEND_URL или FRONT_URL для кнопки мини-приложения)`
+          [
+            "Магазин подключён ✅",
+            `Витрина: shop=${businessId}`,
+            "",
+            "Откройте своего бота и отправьте /start.",
+          ].join("\n")
         )
         .catch((e: unknown) => console.error("approved user ping:", e));
     }
@@ -925,7 +1096,7 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
     console.error("handleApproveFlow:", e);
     try {
       await ctx.editMessageText(
-        "Ошибка создания Business. Посмотрите лог сервера."
+        "Не получилось создать магазин — попробуйте ещё раз или проверьте логи сервера."
       );
     } catch {
       /* ignore */

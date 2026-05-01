@@ -23,8 +23,73 @@ export const activeDynamicBotsByToken = activeBotsByToken;
 /** businessId → токен (для API без хранения в Map активных процессов) */
 const tokenByBusinessId = new Map<number, string>();
 
-function trimApiBase(): string {
-  return (process.env.API_URL || "").trim().replace(/\/$/, "");
+/** Подключение команд /start, Mini App, callbacks — задаётся в `registerDynamicBrain.ts` при старте. */
+type AttachDynamicFn = (tg: Telegraf, businessId: number) => void;
+let attachDynamicHandlers: AttachDynamicFn | undefined;
+
+/** Вызывается один раз из `registerDynamicBrain.ts` (импорт в `server/index`). */
+export function setAttachDynamicHandlers(fn: AttachDynamicFn): void {
+  attachDynamicHandlers = fn;
+}
+
+function mountDynamicBrain(tgBot: Telegraf, businessId: number): void {
+  const attach = attachDynamicHandlers;
+  if (attach === undefined) {
+    throw new Error(
+      "Не подключены обработчики SaaS-бота: добавьте import '../bot/registerDynamicBrain.js' до initDynamicStoreBot (см. server/index)",
+    );
+  }
+  attach(tgBot, businessId);
+}
+
+/**
+ * Публичный origin для `setWebhook` (без финального `/`).
+ * Без циклов с `finikMerchant`: тот же порядок fallback, что у `publicApiOrigin` там.
+ */
+function publicWebhookBaseUrl(): string {
+  const manual = (process.env.API_URL ?? "").trim();
+  if (manual) return manual.replace(/\/$/, "");
+  const render = (process.env.RENDER_EXTERNAL_URL ?? "").trim();
+  if (render) return render.replace(/\/$/, "");
+  const base = (process.env.BASE_URL ?? "").trim();
+  return base.replace(/\/$/, "");
+}
+
+/** Относительный путь webhook в Express: `POST {API_URL}/webhook/:businessId`. */
+export function dynamicWebhookPathForBusiness(businessId: number): string {
+  return `/webhook/${businessId}`;
+}
+
+function dynamicWebhookAbsoluteUrl(publicApiBase: string, businessId: number): string {
+  const base = publicApiBase.trim().replace(/\/$/, "");
+  return `${base}${dynamicWebhookPathForBusiness(businessId)}`;
+}
+
+async function teardownStoreBotSession(businessId: number): Promise<void> {
+  const existing = activeBots.get(businessId);
+  const previousTokenForBusiness = tokenByBusinessId.get(businessId);
+  if (!existing) {
+    tokenByBusinessId.delete(businessId);
+    if (previousTokenForBusiness) {
+      activeBotsByToken.delete(previousTokenForBusiness.trim());
+    }
+    return;
+  }
+  try {
+    await existing.telegram.deleteWebhook();
+  } catch {
+    /* ignore */
+  }
+  try {
+    await existing.stop();
+  } catch {
+    /* ignore */
+  }
+  activeBots.delete(businessId);
+  tokenByBusinessId.delete(businessId);
+  if (previousTokenForBusiness) {
+    activeBotsByToken.delete(previousTokenForBusiness.trim());
+  }
 }
 
 export function getDynamicOwnerBot(businessId: number): Telegraf | undefined {
@@ -74,7 +139,8 @@ function attachTenantContext(tgBot: Telegraf, businessId: number): void {
 
 /**
  * Подключение бота магазина по токену.
- * Один домен один сервер → вебхук `POST {API_URL}/telegram-webhook/owner/{businessId}`.
+ * Экземпляры хранятся в `activeBots` и переиспользуются: при том же токене middleware не дублируется.
+ * Webhook: `POST {PUBLIC_URL}/webhook/{businessId}` (старый путь `/telegram-webhook/owner/...` тоже поддерживается).
  */
 export async function registerDynamicUserBot(user: {
   businessId: number;
@@ -83,6 +149,35 @@ export async function registerDynamicUserBot(user: {
   const token = String(user.botToken).trim();
   if (!token) {
     throw new Error("empty bot token");
+  }
+
+  const persistent = activeBots.get(user.businessId);
+  const persistedToken = tokenByBusinessId.get(user.businessId)?.trim();
+  if (persistent !== undefined && persistedToken === token) {
+    const publicApiBase = publicWebhookBaseUrl();
+    try {
+      if (publicApiBase) {
+        const url = dynamicWebhookAbsoluteUrl(publicApiBase, user.businessId);
+        await persistent.telegram.setWebhook(url);
+        console.log(
+          "[dynamicBots] Reuse persistent bot, webhook:",
+          user.businessId,
+          url,
+        );
+      }
+      const info = await persistent.telegram.getMe();
+      return {
+        username: String(info.username ?? ""),
+        id: Number(info.id),
+      };
+    } catch (e: unknown) {
+      console.error(
+        "[dynamicBots] Persistent bot failed (re-register):",
+        user.businessId,
+        e,
+      );
+      await teardownStoreBotSession(user.businessId);
+    }
   }
 
   const meRes = await fetch(
@@ -96,25 +191,7 @@ export async function registerDynamicUserBot(user: {
     throw new Error("Invalid bot token (getMe failed)");
   }
 
-  const existing = activeBots.get(user.businessId);
-  const previousTokenForBusiness = tokenByBusinessId.get(user.businessId);
-  if (existing) {
-    try {
-      await existing.telegram.deleteWebhook();
-    } catch {
-      /* ignore */
-    }
-    try {
-      await existing.stop();
-    } catch {
-      /* ignore */
-    }
-    activeBots.delete(user.businessId);
-    tokenByBusinessId.delete(user.businessId);
-    if (previousTokenForBusiness) {
-      activeBotsByToken.delete(previousTokenForBusiness.trim());
-    }
-  }
+  await teardownStoreBotSession(user.businessId);
 
   const occupied = activeBotsByToken.get(token);
   if (occupied !== undefined && occupied.businessId !== user.businessId) {
@@ -133,11 +210,10 @@ export async function registerDynamicUserBot(user: {
     throw e;
   }
 
-  const { attachBotHandlers } = await import("./bot.js");
   attachTenantContext(tg, user.businessId);
 
   try {
-    attachBotHandlers(tg, { type: "dynamic", businessId: user.businessId });
+    mountDynamicBrain(tg, user.businessId);
     tg.catch((err: unknown) => {
       console.error("dynamic bot middleware error:", user.businessId, err);
     });
@@ -157,9 +233,9 @@ export async function registerDynamicUserBot(user: {
     throw e;
   }
 
-  const publicApiBase = trimApiBase();
+  const publicApiBase = publicWebhookBaseUrl();
   if (publicApiBase) {
-    const url = `${publicApiBase}/telegram-webhook/owner/${user.businessId}`;
+    const url = dynamicWebhookAbsoluteUrl(publicApiBase, user.businessId);
     try {
       await tg.telegram.setWebhook(url);
       const uname = String(meJson.result.username ?? "");
@@ -175,7 +251,7 @@ export async function registerDynamicUserBot(user: {
     }
   } else {
     console.warn(
-      "API_URL not set — dynamic bot registered without webhook; set API_URL for production"
+      "[dynamicBots] Публичный URL не задан (API_URL / RENDER_EXTERNAL_URL / BASE_URL) — бот в памяти без webhook; задайте переменную для продакшена",
     );
   }
 
@@ -190,23 +266,56 @@ export async function registerDynamicUserBot(user: {
   };
 }
 
+/**
+ * Горячая активация клиентского бота: `activeBots` + handlers + `setWebhook` без рестарта процесса.
+ * Вызывать сразу после `Business` с токеном (одобрение заявки, `/connect-bot`).
+ */
+export async function initDynamicStoreBot(input: {
+  businessId: number;
+  botToken: string;
+}): Promise<RegisterDynamicBotResult> {
+  return registerDynamicUserBot(input);
+}
+
+/**
+ * Восстановить экземпляр SaaS-бота в памяти процесса (после рестарта, на другом воркере или гонке с одобрением).
+ * То же действие что при старте `loadDynamicBotsFromDatabase`; **не вызывает** создание клиента Telegram на каждом апдейте,
+ * только если в `activeBots` ещё нет записи.
+ */
+export async function hydrateDynamicStoreBotIfMissing(
+  businessId: number,
+): Promise<boolean> {
+  if (activeBots.has(businessId)) {
+    return true;
+  }
+
+  const b = await prisma.business.findFirst({
+    where: { id: businessId, isActive: true },
+    select: { id: true, botToken: true },
+  });
+  const tok = String(b?.botToken ?? "").trim();
+  if (b == null || !tok) {
+    return false;
+  }
+
+  try {
+    await initDynamicStoreBot({ businessId: b.id, botToken: tok });
+  } catch (e: unknown) {
+    console.error(
+      "[dynamicBots] hydrateDynamicStoreBotIfMissing failed:",
+      businessId,
+      e,
+    );
+    return false;
+  }
+  return activeBots.has(businessId);
+}
+
 /** Корректно остановить все динамические ботов (вебхуки, stop, очистить Map). */
 export async function shutdownDynamicUserBots(): Promise<void> {
-  for (const [businessId, tg] of [...activeBots.entries()]) {
-    try {
-      await tg.telegram.deleteWebhook();
-    } catch {
-      /* ignore */
-    }
-    try {
-      await tg.stop();
-    } catch {
-      /* ignore */
-    }
-    const tok = tokenByBusinessId.get(businessId);
-    activeBots.delete(businessId);
-    tokenByBusinessId.delete(businessId);
-    if (tok) activeBotsByToken.delete(tok.trim());
+  const ids = [...activeBots.keys()];
+  for (const businessId of ids) {
+    await teardownStoreBotSession(businessId);
   }
 }
 
@@ -222,7 +331,7 @@ export async function loadDynamicBotsFromDatabase(): Promise<void> {
     if (!tok) continue;
 
     try {
-      await registerDynamicUserBot({
+      await initDynamicStoreBot({
         businessId: business.id,
         botToken: tok,
       });

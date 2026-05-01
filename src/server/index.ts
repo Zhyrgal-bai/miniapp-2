@@ -23,8 +23,11 @@ import {
   getBotForOwner,
   getDynamicOwnerBot,
   getNotifyTargetChatId,
-  registerDynamicUserBot,
+  hydrateDynamicStoreBotIfMissing,
+  initDynamicStoreBot,
 } from "../bot/bot.js";
+/** Навешивает `attachBotHandlers` на клиентские боты без цикла dynamicBots ↔ bot */
+import "../bot/registerDynamicBrain.js";
 import { startAllBots } from "../bot/botManager.js";
 import { connectDatabase, logPrismaError, prisma } from "./db.js";
 import {
@@ -557,25 +560,51 @@ app.post("/telegram-webhook", async (req: Request, res: Response) => {
   }
 });
 
-/** Клиентский бот (токен из `User.botToken`). */
+/**
+ * SaaS-бот из `activeBots`: на апдейте только `handleUpdate` без `new Telegraf`.
+ * Если процесс только что подняли — один раз подтягиваем токен из БД (как при `startAllBots`).
+ */
+async function relayDynamicStoreWebhook(
+  req: Request,
+  res: Response,
+  businessId: number
+): Promise<void> {
+  if (!Number.isInteger(businessId) || businessId <= 0) {
+    res.sendStatus(400);
+    return;
+  }
+  let tBot = getDynamicOwnerBot(businessId);
+  if (!tBot) {
+    await hydrateDynamicStoreBotIfMissing(businessId);
+    tBot = getDynamicOwnerBot(businessId);
+  }
+  if (!tBot) {
+    res.sendStatus(404);
+    return;
+  }
+  try {
+    await tBot.handleUpdate(req.body);
+    res.sendStatus(200);
+  } catch (e) {
+    console.error("webhook (dynamic store):", businessId, e);
+    res.sendStatus(500);
+  }
+}
+
 app.post(
-  "/telegram-webhook/owner/:ownerId",
+  "/webhook/:businessId",
   async (req: Request, res: Response) => {
-    const ownerId = Number(req.params.ownerId);
-    if (!Number.isInteger(ownerId) || ownerId <= 0) {
-      return res.sendStatus(400);
-    }
-    const tBot = getDynamicOwnerBot(ownerId);
-    if (!tBot) {
-      return res.sendStatus(404);
-    }
-    try {
-      await tBot.handleUpdate(req.body);
-      return res.sendStatus(200);
-    } catch (e) {
-      console.error("telegram-webhook/owner:", ownerId, e);
-      return res.sendStatus(500);
-    }
+    const businessId = Number(req.params.businessId);
+    await relayDynamicStoreWebhook(req, res, businessId);
+  }
+);
+
+/** Совместимость со старым URL после `setWebhook`. */
+app.post(
+  "/telegram-webhook/owner/:businessId",
+  async (req: Request, res: Response) => {
+    const businessId = Number(req.params.businessId);
+    await relayDynamicStoreWebhook(req, res, businessId);
   }
 );
 
@@ -633,7 +662,7 @@ app.post("/connect-bot", async (req: Request, res: Response) => {
       data: { botToken: token },
     });
 
-    await registerDynamicUserBot({ businessId, botToken: token });
+    await initDynamicStoreBot({ businessId, botToken: token });
 
     return res.json({
       ok: true,

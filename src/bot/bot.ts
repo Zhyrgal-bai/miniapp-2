@@ -23,6 +23,9 @@ export {
   activeDynamicBotsByToken,
   activeBots,
   activeBotsByToken,
+  dynamicWebhookPathForBusiness,
+  hydrateDynamicStoreBotIfMissing,
+  initDynamicStoreBot,
   loadDynamicBotsFromDatabase,
   getDynamicOwnerBot,
   getDynamicTokenForBusiness,
@@ -545,6 +548,22 @@ export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
       const lead = merchantHere
         ? "Ваш магазин 🏪"
         : "Добро пожаловать в магазин 🛍️";
+
+      /** Клиентский SaaS-бот: одно сообщение + Mini App для своего businessId. */
+      if (role.type === "dynamic") {
+        await ctx.reply(lead, {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "🛍 Открыть", web_app: { url } }],
+            ],
+          },
+        });
+        if (merchantHere) {
+          await ctx.reply("Администрирование Mini App: команда /admin");
+        }
+        return;
+      }
+
       await ctx.reply(lead);
       await ctx.reply("Открыть магазин", {
         reply_markup: {
