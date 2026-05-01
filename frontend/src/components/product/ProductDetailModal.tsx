@@ -8,6 +8,7 @@ import {
   getProductImages,
 } from "../../utils/product";
 import { getVariantCssBackground } from "../../utils/variantColor";
+import { useTheme } from "../../context/ThemeContext";
 import "./ProductDetailModal.css";
 
 type ProductDetailModalProps = {
@@ -19,6 +20,7 @@ export default function ProductDetailModal({
   product,
   onClose,
 }: ProductDetailModalProps) {
+  const { theme } = useTheme();
   const open = product != null;
   const [imgIndex, setImgIndex] = useState(0);
   const touchStartXRef = useRef<number | null>(null);
@@ -90,6 +92,12 @@ export default function ProductDetailModal({
             aria-modal="true"
             aria-labelledby="pdm-title"
             className="pdm-panel"
+            style={{
+              background: theme.cardColor,
+              backgroundImage: "none",
+              color: theme.textColor,
+              borderColor: `${theme.primaryColor}44`,
+            }}
             initial={{ opacity: 0, scale: 0.92, y: 18 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.92, y: 18 }}
@@ -167,6 +175,11 @@ export default function ProductDetailModal({
                     key={i}
                     type="button"
                     className={`pdm-dot${i === imgIndex ? " pdm-dot--active" : ""}`}
+                    style={
+                      i === imgIndex
+                        ? { borderColor: theme.primaryColor }
+                        : undefined
+                    }
                     aria-label={`Фото ${i + 1}`}
                     aria-selected={i === imgIndex}
                     onClick={() => setImgIndex(i)}

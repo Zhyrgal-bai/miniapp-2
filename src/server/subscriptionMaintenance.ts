@@ -120,6 +120,7 @@ export async function runSubscriptionMaintenanceOnce(now = new Date()): Promise<
   const businesses = await prisma.business.findMany();
 
   for (const b of businesses) {
+    if (b.isBlocked) continue;
     try {
       const trialLeft = b.isActive ? daysLeftUntil(b.trialEndsAt, now) : null;
       const subLeft = b.isActive

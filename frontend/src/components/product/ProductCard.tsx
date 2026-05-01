@@ -10,6 +10,7 @@ import {
 } from "../../utils/product";
 import { getVariantCssBackground } from "../../utils/variantColor";
 import "../ui/ProductCard.css";
+import { useTheme } from "../../context/ThemeContext";
 
 type Props = {
   product: Product;
@@ -19,6 +20,7 @@ type Props = {
 };
 
 export default function ProductCard({ product, showToast, onOpenDetail }: Props) {
+  const { theme } = useTheme();
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -196,7 +198,13 @@ export default function ProductCard({ product, showToast, onOpenDetail }: Props)
   };
 
   return (
-    <div className={`product-card${outOfStock ? " out" : ""}`}>
+    <div
+      className={`product-card${outOfStock ? " out" : ""}`}
+      style={{
+        backgroundColor: theme.cardColor,
+        color: theme.textColor,
+      }}
+    >
       <div
         className={`product-image-wrapper${onOpenDetail ? " product-image-wrapper--detail" : ""}`}
         onTouchStart={handleTouchStart}
@@ -290,6 +298,14 @@ export default function ProductCard({ product, showToast, onOpenDetail }: Props)
                   type="button"
                   disabled={s.stock === 0}
                   className={selectedSize === s.size ? "active" : ""}
+                  style={
+                    selectedSize === s.size
+                      ? {
+                          borderColor: theme.primaryColor,
+                          color: theme.primaryColor,
+                        }
+                      : { color: theme.textColor }
+                  }
                   onClick={() => setSelectedSize(s.size)}
                 >
                   {s.size} ({s.stock})
@@ -324,6 +340,7 @@ export default function ProductCard({ product, showToast, onOpenDetail }: Props)
             {quantity <= 0 ? (
               <button
                 className="product-add-btn"
+                style={{ backgroundColor: theme.primaryColor, color: "#fff" }}
                 onClick={handleAddToCart}
                 disabled={outOfStock || !canAddToCart}
                 type="button"
@@ -334,6 +351,7 @@ export default function ProductCard({ product, showToast, onOpenDetail }: Props)
               <>
                 <button
                   className="product-action-btn"
+                  style={{ color: theme.primaryColor, borderColor: theme.primaryColor }}
                   onClick={handleDecrement}
                   disabled={
                     outOfStock ||
@@ -350,6 +368,7 @@ export default function ProductCard({ product, showToast, onOpenDetail }: Props)
                 </span>
                 <button
                   className="product-action-btn"
+                  style={{ color: theme.primaryColor, borderColor: theme.primaryColor }}
                   onClick={handleIncrement}
                   disabled={
                     outOfStock ||

@@ -5,13 +5,14 @@ export type MerchantBusinessCardDTO = {
   id: number;
   name: string;
   isActive: boolean;
+  isBlocked: boolean;
   role: string;
   subscriptionStatus: string;
   billingPlan: string | null;
   trialEndsAt: string | null;
   subscriptionEndsAt: string | null;
   daysLeft: number | null;
-  accessState: "active" | "pay_required" | "paused";
+  accessState: "active" | "blocked" | "pay_required" | "paused";
 };
 
 export async function fetchMerchantBusinesses(params: {

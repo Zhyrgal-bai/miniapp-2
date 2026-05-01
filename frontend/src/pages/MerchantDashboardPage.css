@@ -137,6 +137,11 @@
   color: #ffc48a;
 }
 
+.mdb-card__badge--danger {
+  background: rgba(248, 113, 113, 0.2);
+  color: #fecaca;
+}
+
 .mdb-card__date {
   font-size: 0.83rem;
   color: rgba(233, 234, 238, 0.7);

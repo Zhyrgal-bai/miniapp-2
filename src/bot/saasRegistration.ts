@@ -295,6 +295,7 @@ async function provisionMerchantStoreInTx(
       slug,
       botToken: botTok,
       isActive: true,
+      isBlocked: false,
       subscriptionStatus: SubscriptionStatus.TRIALING,
       billingPlan: BillingPlan.FREE,
       trialEndsAt: trialEnd,

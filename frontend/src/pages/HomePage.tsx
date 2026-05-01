@@ -1,26 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, apiAbsoluteUrl } from "../services/api";
-import { fetchMyOrders } from "../services/myOrdersApi";
 import type { Category, Product } from "../types";
 import ProductGrid from "../components/product/ProductGrid";
 import ProductDetailModal from "../components/product/ProductDetailModal";
 import Toast from "../components/ui/Toast";
 import { useShop } from "../context/ShopContext";
-import { getWebAppUserId } from "../utils/telegramUserId";
 import { buildCatalogRequestParams } from "../utils/storeParams";
 import { categoryRoots } from "../utils/categoryTree";
-import { APP_NAME, FIRST_ORDER_PROMO } from "../config/brand";
+import { APP_NAME } from "../config/brand";
+import { useTheme } from "../context/ThemeContext";
 import "../components/ui/HomePage.css";
 
 export default function HomePage() {
   const { businessId } = useShop();
+  const { theme } = useTheme();
   const [products, setProducts] = useState<Product[]>([]);
   const [toast, setToast] = useState("");
   const [isToastVisible, setIsToastVisible] = useState(false);
   const [activeCategory, setActiveCategory] = useState("ВСЕ");
   const [categoryTree, setCategoryTree] = useState<Category[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [showFirstOrderBanner, setShowFirstOrderBanner] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   const showToast = (message: string) => {
@@ -69,36 +68,13 @@ export default function HomePage() {
     })();
   }, [businessId]);
 
-  useEffect(() => {
-    const uid = getWebAppUserId();
-    if (!Number.isFinite(uid) || uid <= 0 || businessId == null) {
-      setShowFirstOrderBanner(false);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const rows = await fetchMyOrders(uid, String(businessId));
-        if (!cancelled) {
-          setShowFirstOrderBanner(rows.length === 0);
-        }
-      } catch {
-        if (!cancelled) {
-          setShowFirstOrderBanner(false);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [businessId]);
-
   const copyPromoCode = async () => {
+    const line = theme.banner.subtitle.trim() || theme.banner.title;
     try {
-      await navigator.clipboard.writeText(FIRST_ORDER_PROMO);
-      showToast("Промокод скопирован");
+      await navigator.clipboard.writeText(line);
+      showToast("Скопировано");
     } catch {
-      showToast(`Промокод: ${FIRST_ORDER_PROMO}`);
+      showToast(line);
     }
   };
 
@@ -136,19 +112,27 @@ export default function HomePage() {
 
   return (
     <div className="home-page">
-      {showFirstOrderBanner && (
-        <div className="home-discount-banner">
+      {theme.banner.enabled && (
+        <div
+          className="home-discount-banner"
+          style={{
+            backgroundColor: theme.cardColor,
+            color: theme.textColor,
+            border: `1px solid ${theme.primaryColor}33`,
+          }}
+        >
           <div className="home-discount-banner__text">
             <span className="home-discount-banner__title">
-              🎁 -10% на первый заказ
+              {theme.banner.title}
             </span>
             <span className="home-discount-banner__promo">
-              Промокод: <strong>{FIRST_ORDER_PROMO}</strong>
+              {theme.banner.subtitle}
             </span>
           </div>
           <button
             type="button"
             className="home-discount-banner__copy"
+            style={{ backgroundColor: theme.primaryColor, color: "#fff" }}
             onClick={() => void copyPromoCode()}
           >
             Копировать
@@ -157,14 +141,31 @@ export default function HomePage() {
       )}
       {/* Premium minimal hero section */}
       <section className="hero">
-        <h1 className="hero-title">{APP_NAME}</h1>
-        <p className="hero-subtitle">одежда</p>
+        {theme.logoUrl ? (
+          <img
+            src={theme.logoUrl}
+            alt=""
+            className="hero-logo"
+            style={{ maxHeight: 48, marginBottom: 8 }}
+          />
+        ) : null}
+        <h1 className="hero-title" style={{ color: theme.textColor }}>
+          {APP_NAME}
+        </h1>
+        <p className="hero-subtitle" style={{ color: theme.textColor }}>
+          одежда
+        </p>
       </section>
       <div className="hero-bottom-spacer" />
       <input
         type="text"
         placeholder="Поиск одежды..."
         className="search-input"
+        style={{
+          backgroundColor: theme.cardColor,
+          color: theme.textColor,
+          borderColor: `${theme.primaryColor}44`,
+        }}
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
       />
@@ -174,6 +175,19 @@ export default function HomePage() {
             key={cat}
             type="button"
             className={activeCategory === cat ? "active" : ""}
+            style={
+              activeCategory === cat
+                ? {
+                    backgroundColor: theme.primaryColor,
+                    color: "#fff",
+                    borderColor: theme.primaryColor,
+                  }
+                : {
+                    backgroundColor: "transparent",
+                    color: theme.textColor,
+                    borderColor: `${theme.textColor}33`,
+                  }
+            }
             onClick={() => setActiveCategory(cat)}
           >
             {cat}

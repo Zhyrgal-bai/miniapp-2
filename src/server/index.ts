@@ -21,9 +21,7 @@ import {
   bot,
   bots,
   getBotForOwner,
-  getDynamicOwnerBot,
   getNotifyTargetChatId,
-  hydrateDynamicStoreBotIfMissing,
   initDynamicStoreBot,
 } from "../bot/bot.js";
 /** Навешивает `attachBotHandlers` на клиентские боты без цикла dynamicBots ↔ bot */
@@ -49,9 +47,17 @@ import {
   mountFinikSettingsRoutes,
   publicApiOrigin,
 } from "./finikMerchant.js";
+import { relayDynamicStoreWebhook as relayDynamicTenantStoreWebhook } from "./storeTelegramWebhookRelay.js";
 import { startSubscriptionMaintenanceScheduler } from "./subscriptionMaintenance.js";
 import { cleanInput, validateKgPhone } from "./orderInputSanitize.js";
-import { businessMiddleware } from "../middleware/business.middleware.js";
+import {
+  applyThemePatchAndValidate,
+  publicBusinessThemeResponse,
+} from "./storeTheme.js";
+import {
+  businessMiddleware,
+  businessSubscriptionBlocked,
+} from "../middleware/business.middleware.js";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -146,7 +152,133 @@ app.use(express.json());
 mountFinikWebhookRoutes(app);
 mountFinikSettingsRoutes(app);
 
+/** Публичная витрина: тема магазина без Telegram (до tenant middleware). */
+app.get("/api/business/:businessId", async (req: Request, res: Response) => {
+  try {
+    const businessId = Number(req.params.businessId);
+    if (!Number.isSafeInteger(businessId) || businessId <= 0) {
+      res.status(400).json({ error: "Invalid business id" });
+      return;
+    }
+    const row = await prisma.business.findUnique({
+      where: { id: businessId },
+      select: {
+        id: true,
+        name: true,
+        themeConfig: true,
+        isActive: true,
+        isBlocked: true,
+        subscriptionStatus: true,
+        subscriptionEndsAt: true,
+        trialEndsAt: true,
+      },
+    });
+    if (row == null) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    const blocked = businessSubscriptionBlocked(
+      {
+        isActive: row.isActive,
+        isBlocked: row.isBlocked,
+        subscriptionStatus: row.subscriptionStatus,
+        trialEndsAt: row.trialEndsAt,
+        subscriptionEndsAt: row.subscriptionEndsAt,
+      },
+      new Date(),
+    );
+    if (blocked) {
+      res.status(403).json({ error: "Store unavailable" });
+      return;
+    }
+    const settings = await prisma.settings.findUnique({
+      where: { businessId },
+      select: { logoUrl: true },
+    });
+    const themed = publicBusinessThemeResponse(row.themeConfig, settings?.logoUrl);
+    res.json({
+      id: row.id,
+      name: row.name,
+      themeConfig: themed.themeConfig,
+    });
+  } catch (e) {
+    console.error("GET /api/business/:id:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 app.use("/api", businessMiddleware);
+
+app.put("/api/business/:businessId/theme", async (req: Request, res: Response) => {
+  try {
+    const bid = Number(req.params.businessId);
+    if (!Number.isSafeInteger(bid) || bid <= 0) {
+      res.status(400).json({ error: "Invalid business id" });
+      return;
+    }
+    if (typeof req.businessId !== "number" || req.businessId !== bid) {
+      res.status(403).json({
+        error: "Укажите тот же магазин в query ?shop=",
+      });
+      return;
+    }
+    const m = req.tenantMembership;
+    if (
+      !m ||
+      (m.role !== MembershipRole.OWNER && m.role !== MembershipRole.ADMIN)
+    ) {
+      res.status(403).json({ error: "Только владелец или админ магазина" });
+      return;
+    }
+
+    const business = await prisma.business.findUnique({
+      where: { id: bid },
+      select: { themeConfig: true },
+    });
+    if (!business) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+
+    const body = req.body as { themeConfig?: unknown };
+    const patch = body.themeConfig ?? body;
+    const result = applyThemePatchAndValidate(business.themeConfig, patch);
+    if (!result.ok) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+
+    const patchTouchesLogo =
+      patch !== null && typeof patch === "object" && "logoUrl" in patch;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.business.update({
+        where: { id: bid },
+        data: { themeConfig: result.themeConfig },
+      });
+      if (patchTouchesLogo) {
+        await tx.settings.upsert({
+          where: { businessId: bid },
+          create: {
+            businessId: bid,
+            logoUrl: result.merged.logoUrl,
+          },
+          update: {
+            logoUrl: result.merged.logoUrl,
+          },
+        });
+      }
+    });
+
+    res.json({
+      ok: true,
+      themeConfig: result.merged,
+    });
+  } catch (e) {
+    console.error("PUT /api/business/:id/theme:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 app.get("/api/me", (req: Request, res: Response) => {
   try {
@@ -323,6 +455,7 @@ function telegramIdFromRequest(req: Request): string | null {
 
 const PUBLIC_BUSINESS_PARSE_ERROR = "Invalid businessId";
 const PUBLIC_BUSINESS_MISSING_ERROR = "Not found";
+const PUBLIC_BUSINESS_UNAVAILABLE_ERROR = "Store unavailable";
 
 function queryParamToTrimmedString(raw: unknown): string {
   if (typeof raw === "string") return raw.trim();
@@ -480,10 +613,21 @@ async function resolveCatalogBusinessId(
   }
   const business = await prisma.business.findUnique({
     where: { id: businessId },
-    select: { id: true },
+    select: {
+      id: true,
+      isActive: true,
+      isBlocked: true,
+      subscriptionStatus: true,
+      trialEndsAt: true,
+      subscriptionEndsAt: true,
+    },
   });
   if (!business) {
     res.status(404).json({ error: PUBLIC_BUSINESS_MISSING_ERROR });
+    return null;
+  }
+  if (businessSubscriptionBlocked(business, new Date())) {
+    res.status(403).json({ error: PUBLIC_BUSINESS_UNAVAILABLE_ERROR });
     return null;
   }
   return business.id;
@@ -560,51 +704,17 @@ app.post("/telegram-webhook", async (req: Request, res: Response) => {
   }
 });
 
-/**
- * SaaS-бот из `activeBots`: на апдейте только `handleUpdate` без `new Telegraf`.
- * Если процесс только что подняли — один раз подтягиваем токен из БД (как при `startAllBots`).
- */
-async function relayDynamicStoreWebhook(
-  req: Request,
-  res: Response,
-  businessId: number
-): Promise<void> {
-  if (!Number.isInteger(businessId) || businessId <= 0) {
-    res.sendStatus(400);
-    return;
-  }
-  let tBot = getDynamicOwnerBot(businessId);
-  if (!tBot) {
-    await hydrateDynamicStoreBotIfMissing(businessId);
-    tBot = getDynamicOwnerBot(businessId);
-  }
-  if (!tBot) {
-    res.sendStatus(404);
-    return;
-  }
-  try {
-    await tBot.handleUpdate(req.body);
-    res.sendStatus(200);
-  } catch (e) {
-    console.error("webhook (dynamic store):", businessId, e);
-    res.sendStatus(500);
-  }
-}
-
-app.post(
-  "/webhook/:businessId",
-  async (req: Request, res: Response) => {
-    const businessId = Number(req.params.businessId);
-    await relayDynamicStoreWebhook(req, res, businessId);
-  }
-);
+app.post("/webhook/:businessId", async (req: Request, res: Response) => {
+  const businessId = Number(req.params.businessId);
+  await relayDynamicTenantStoreWebhook(req, res, businessId);
+});
 
 /** Совместимость со старым URL после `setWebhook`. */
 app.post(
   "/telegram-webhook/owner/:businessId",
   async (req: Request, res: Response) => {
     const businessId = Number(req.params.businessId);
-    await relayDynamicStoreWebhook(req, res, businessId);
+    await relayDynamicTenantStoreWebhook(req, res, businessId);
   }
 );
 

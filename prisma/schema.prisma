@@ -49,6 +49,9 @@ model Business {
 
   isActive Boolean @default(true)
 
+  /// Платформа отключила магазин (ручной блок); вебхук игнорируется, витрина недоступна.
+  isBlocked Boolean @default(false)
+
   subscriptionStatus SubscriptionStatus @default(TRIALING)
 
   billingPlan BillingPlan?
@@ -61,6 +64,9 @@ model Business {
   /// Last day we sent an expiry reminder (rate-limit: at most one reminder batch per calendar day).
   lastNotifiedAt DateTime?
 
+  /// Витрина: цвета, баннер, logoUrl (JSON). Пустой объект = дефолты на сервере/клиенте.
+  themeConfig Json? @default("{}")
+
   createdAt DateTime @default(now())
 
   memberships Membership[]
@@ -70,9 +76,26 @@ model Business {
   settings    Settings?
   promos      Promo[]
   orderItems  OrderItem[]
+  paymentRequests PaymentRequest[]
 
   @@index([isActive])
   @@index([subscriptionStatus])
+  @@index([isBlocked])
+}
+
+/// Ручное подтверждение абонемента магазина (скрин/чек в Telegram владельцем).
+model PaymentRequest {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  photoUrl   String
+  /// 1500 или 5500 если указано у фото (подпись); иначе null — платформа задаёт при approve.
+  amountSom  Int?
+  status     String   @default("pending")
+  createdAt  DateTime @default(now())
+
+  @@index([businessId])
+  @@index([status])
 }
 
 /// Глобальная связка Telegram-пользователя (multi-tenant: один аккаунт — несколько Membership).

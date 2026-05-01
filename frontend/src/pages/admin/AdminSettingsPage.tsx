@@ -1,5 +1,6 @@
 import PaymentDetailsPanel from "../../components/admin/PaymentDetailsPanel";
 import PromoCodesPanel from "../../components/admin/PromoCodesPanel";
+import StoreThemeEditor from "../../components/admin/StoreThemeEditor";
 
 export default function AdminSettingsPage() {
   return (
@@ -7,9 +8,15 @@ export default function AdminSettingsPage() {
       <header className="admin-dash-page__head">
         <h1 className="admin-dash-page__title">Настройки</h1>
         <p className="admin-dash-page__subtitle">
-          Реквизиты для оплаты и промокоды.
+          Витрина, реквизиты для оплаты и промокоды.
         </p>
       </header>
+
+      <section className="admin-dash-section">
+        <div className="admin-dash-card">
+          <StoreThemeEditor />
+        </div>
+      </section>
 
       <section className="admin-dash-section">
         <h2 className="admin-dash-section__title">Товары</h2>

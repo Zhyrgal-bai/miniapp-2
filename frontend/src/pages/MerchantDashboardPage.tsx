@@ -10,6 +10,8 @@ import "./MerchantDashboardPage.css";
 
 function statusRu(row: MerchantBusinessCardDTO): string {
   switch (row.accessState) {
+    case "blocked":
+      return "Заблокирован платформой";
     case "paused":
       return "Магазин выключен";
     case "pay_required":
@@ -22,6 +24,7 @@ function statusRu(row: MerchantBusinessCardDTO): string {
 
 function badgeClass(row: MerchantBusinessCardDTO): string {
   if (row.accessState === "active") return "mdb-card__badge--ok";
+  if (row.accessState === "blocked") return "mdb-card__badge--danger";
   if (row.accessState === "paused") return "mdb-card__badge--muted";
   return "mdb-card__badge--warn";
 }

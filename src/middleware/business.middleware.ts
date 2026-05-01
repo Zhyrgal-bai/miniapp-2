@@ -86,7 +86,20 @@ function businessIdHintFromRequest(req: Request): number | undefined {
   return undefined;
 }
 
-export function businessSubscriptionBlocked(business: Business, now = new Date()): boolean {
+export type BusinessSubscriptionGate = Pick<
+  Business,
+  | "isActive"
+  | "isBlocked"
+  | "subscriptionStatus"
+  | "trialEndsAt"
+  | "subscriptionEndsAt"
+>;
+
+export function businessSubscriptionBlocked(
+  business: BusinessSubscriptionGate,
+  now = new Date(),
+): boolean {
+  if (business.isBlocked) return true;
   if (!business.isActive) return true;
 
   if (

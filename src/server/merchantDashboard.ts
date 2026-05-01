@@ -7,6 +7,7 @@ export type MerchantBusinessCard = {
   id: number;
   name: string;
   isActive: boolean;
+  isBlocked: boolean;
   role: MembershipRole;
   subscriptionStatus: SubscriptionStatus;
   billingPlan: string | null;
@@ -14,8 +15,8 @@ export type MerchantBusinessCard = {
   subscriptionEndsAt: string | null;
   /** Календарных дней до окончания текущего окна (подписка или триал); null если без срока / истёк. */
   daysLeft: number | null;
-  /** active | pay_required | paused — для текстовых бэйджей. */
-  accessState: "active" | "pay_required" | "paused";
+  /** active | blocked | pay_required | paused — для текстовых бэйджей. */
+  accessState: "active" | "blocked" | "pay_required" | "paused";
 };
 
 function calendarWholeDaysAhead(end: Date, now: Date): number | null {
@@ -32,12 +33,16 @@ function calendarWholeDaysAhead(end: Date, now: Date): number | null {
 function summarizeAccess(
   b: {
     isActive: boolean;
+    isBlocked: boolean;
     subscriptionStatus: SubscriptionStatus;
     trialEndsAt: Date | null;
     subscriptionEndsAt: Date | null;
   },
   now: Date
 ): Pick<MerchantBusinessCard, "daysLeft" | "accessState"> {
+  if (b.isBlocked) {
+    return { daysLeft: null, accessState: "blocked" };
+  }
   if (!b.isActive) {
     return { daysLeft: null, accessState: "paused" };
   }
@@ -117,6 +122,7 @@ export async function listMerchantOwnedBusinesses(
       id: b.id,
       name: b.name,
       isActive: b.isActive,
+      isBlocked: b.isBlocked,
       role: m.role,
       subscriptionStatus: b.subscriptionStatus,
       billingPlan: b.billingPlan != null ? String(b.billingPlan) : null,

@@ -9,6 +9,8 @@ import {
   mbankOrderQrImageUrl,
   mbankPaymentQrCaption,
 } from "../server/mbankQrUrl.js";
+import { attachMerchantSaasBillingCommands } from "./merchantSaasBilling.js";
+import { attachPlatformSaasBillingAdmin } from "./platformSaasBillingAdmin.js";
 import {
   attachSaasRegistration,
   handleRegistrationCallbacks,
@@ -421,7 +423,11 @@ function readStartParam(ctx: {
 
 export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
   attachSaasRegistration(tgBot, role);
+  attachPlatformSaasBillingAdmin(tgBot, role);
   attachEnvTenantRoleMiddleware(tgBot, role);
+  if (role.type === "dynamic") {
+    attachMerchantSaasBillingCommands(tgBot, role.businessId);
+  }
 
   tgBot.command("admin", async (ctx) => {
     const tr = (ctx as TenantTelegrafCtx).tenantRole ?? null;

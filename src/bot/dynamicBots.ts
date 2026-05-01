@@ -92,6 +92,13 @@ async function teardownStoreBotSession(businessId: number): Promise<void> {
   }
 }
 
+/** Снять бота из памяти без удаления в Telegram (ручной блок платформы). */
+export async function stopDynamicStoreBotInMemory(
+  businessId: number,
+): Promise<void> {
+  await teardownStoreBotSession(businessId);
+}
+
 export function getDynamicOwnerBot(businessId: number): Telegraf | undefined {
   return activeBots.get(businessId);
 }
@@ -290,7 +297,7 @@ export async function hydrateDynamicStoreBotIfMissing(
   }
 
   const b = await prisma.business.findFirst({
-    where: { id: businessId, isActive: true },
+    where: { id: businessId, isBlocked: false },
     select: { id: true, botToken: true },
   });
   const tok = String(b?.botToken ?? "").trim();
@@ -322,7 +329,7 @@ export async function shutdownDynamicUserBots(): Promise<void> {
 /** Загрузить все клиентские боты из БД при старте сервера. */
 export async function loadDynamicBotsFromDatabase(): Promise<void> {
   const businesses = await prisma.business.findMany({
-    where: { isActive: true },
+    where: { isActive: true, isBlocked: false },
     select: { id: true, botToken: true },
   });
 

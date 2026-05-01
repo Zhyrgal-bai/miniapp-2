@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useTheme } from "../../context/ThemeContext";
 
 const STORAGE_KEY = "miniapp-floating-cart-pos";
 const BTN = 56;
@@ -71,6 +72,7 @@ export default function FloatingCart({
   totalQuantity,
   onOpen,
 }: Props) {
+  const { theme } = useTheme();
   const minYRef = useRef(HEADER_FALLBACK_BOTTOM);
   const [pos, setPos] = useState<Pos>(() => loadPos(HEADER_FALLBACK_BOTTOM));
   const posRef = useRef<Pos>(pos);
@@ -214,7 +216,16 @@ export default function FloatingCart({
     <button
       type="button"
       className="floating-cart cart-float"
-      style={{ left: pos.x, top: pos.y, right: "auto", bottom: "auto" }}
+      style={{
+        left: pos.x,
+        top: pos.y,
+        right: "auto",
+        bottom: "auto",
+        background: theme.primaryColor,
+        backgroundImage: "none",
+        color: "#fff",
+        borderColor: `${theme.primaryColor}99`,
+      }}
       onMouseDown={onMouseDown}
       onTouchStart={onTouchStart}
       onClick={onClick}
