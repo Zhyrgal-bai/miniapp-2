@@ -6,6 +6,7 @@ export type BusinessPublicPayload = {
   id: number;
   name: string;
   themeConfig: ResolvedStoreTheme;
+  templateId: string | null;
 };
 
 export async function fetchBusinessPublic(
@@ -22,7 +23,7 @@ export async function fetchBusinessPublic(
 export async function saveBusinessThemePut(
   businessId: number,
   patch: ThemePatchPayload,
-): Promise<{ themeConfig: ResolvedStoreTheme }> {
+): Promise<{ themeConfig: ResolvedStoreTheme; templateId: string | null }> {
   const userId = getWebAppUserId();
   if (!Number.isFinite(userId) || userId <= 0) {
     throw new Error("Откройте в Telegram Mini App");
@@ -63,5 +64,16 @@ export async function saveBusinessThemePut(
   ) {
     throw new Error("Ответ без themeConfig");
   }
-  return { themeConfig: (body as { themeConfig: ResolvedStoreTheme }).themeConfig };
+  const typed = body as {
+    themeConfig: ResolvedStoreTheme;
+    templateId?: string | null;
+  };
+  const tid =
+    typed.templateId !== undefined && typed.templateId !== null
+      ? String(typed.templateId).trim().toLowerCase()
+      : null;
+  return {
+    themeConfig: typed.themeConfig,
+    templateId: tid,
+  };
 }

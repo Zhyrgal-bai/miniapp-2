@@ -67,6 +67,9 @@ model Business {
   /// Витрина: цвета, баннер, logoUrl (JSON). Пустой объект = дефолты на сервере/клиенте.
   themeConfig Json? @default("{}")
 
+  /// Готовый пресет: red | dark | light | luxury (null = только themeConfig).
+  templateId String?
+
   createdAt DateTime @default(now())
 
   memberships Membership[]

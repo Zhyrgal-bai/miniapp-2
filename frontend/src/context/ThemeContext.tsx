@@ -19,6 +19,8 @@ import { useShop } from "./ShopContext";
 type ThemeCtx = {
   theme: ResolvedStoreTheme;
   serverTheme: ResolvedStoreTheme | null;
+  /** Активный пресет с сервера (red | dark | light | luxury | null). */
+  templateId: string | null;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
@@ -32,6 +34,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const { businessId } = useShop();
   const [serverTheme, setServerTheme] =
     useState<ResolvedStoreTheme | null>(null);
+  const [templateId, setTemplateId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<ResolvedStoreTheme | null>(null);
@@ -40,6 +43,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     if (businessId == null) {
       setServerTheme(null);
+      setTemplateId(null);
       setError(null);
       return;
     }
@@ -53,11 +57,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       if (ac.signal.aborted) return;
       setDraft(null);
       setServerTheme(data.themeConfig);
+      setTemplateId(data.templateId ?? null);
     } catch (e) {
       if (ac.signal.aborted) return;
       console.error("[Theme]", e);
       setError(e instanceof Error ? e.message : "Ошибка темы");
-      setServerTheme({ ...DEFAULT_STORE_THEME, banner: { ...DEFAULT_STORE_THEME.banner } });
+      setServerTheme({
+        ...DEFAULT_STORE_THEME,
+        banner: { ...DEFAULT_STORE_THEME.banner },
+      });
+      setTemplateId(null);
     } finally {
       if (!ac.signal.aborted) setLoading(false);
     }
@@ -79,6 +88,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.style.setProperty("--store-card", theme.cardColor);
     root.style.setProperty("--store-primary", theme.primaryColor);
     root.style.setProperty("--store-text", theme.textColor);
+    root.dataset.storeLayout = theme.layout;
     document.body.style.backgroundColor = theme.bgColor;
     document.body.style.color = theme.textColor;
     return () => {
@@ -86,6 +96,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       root.style.removeProperty("--store-card");
       root.style.removeProperty("--store-primary");
       root.style.removeProperty("--store-text");
+      delete root.dataset.storeLayout;
       document.body.style.backgroundColor = "";
       document.body.style.color = "";
     };
@@ -95,12 +106,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     () => ({
       theme,
       serverTheme,
+      templateId,
       loading,
       error,
       refresh,
       setThemeDraft: setDraft,
     }),
-    [theme, serverTheme, loading, error, refresh],
+    [theme, serverTheme, templateId, loading, error, refresh],
   );
 
   return <ThemeCtx.Provider value={value}>{children}</ThemeCtx.Provider>;

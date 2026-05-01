@@ -110,8 +110,13 @@ export default function HomePage() {
     });
   }, [activeCategory, products, searchQuery]);
 
+  const layoutClass =
+    theme.layout === "modern"
+      ? "home-page home-page--modern"
+      : "home-page home-page--classic";
+
   return (
-    <div className="home-page">
+    <div className={layoutClass}>
       {theme.banner.enabled && (
         <div
           className="home-discount-banner"

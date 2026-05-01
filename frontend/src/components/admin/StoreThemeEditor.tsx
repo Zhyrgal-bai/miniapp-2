@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ResolvedStoreTheme } from "@repo-shared/storeTheme";
+import {
+  TEMPLATES,
+  STORE_TEMPLATE_IDS,
+  type StoreTemplateId,
+} from "../../constants/storeTemplates";
 import { useShop } from "../../context/ShopContext";
 import { useTheme } from "../../context/ThemeContext";
 import * as businessThemeApi from "../../services/businessThemeApi";
@@ -12,10 +17,19 @@ function cloneTheme(t: ResolvedStoreTheme): ResolvedStoreTheme {
   };
 }
 
+const TEMPLATE_LABELS: Record<StoreTemplateId, string> = {
+  red: "Red",
+  dark: "Dark",
+  light: "Light",
+  luxury: "Luxury",
+};
+
 export default function StoreThemeEditor() {
   const { businessId } = useShop();
-  const { serverTheme, theme, setThemeDraft, refresh } = useTheme();
+  const { serverTheme, templateId: serverTemplateId, theme, setThemeDraft, refresh } =
+    useTheme();
   const [local, setLocal] = useState<ResolvedStoreTheme | null>(null);
+  const [localTemplateId, setLocalTemplateId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -26,9 +40,10 @@ export default function StoreThemeEditor() {
   useEffect(() => {
     if (serverTheme) {
       setLocal(cloneTheme(serverTheme));
+      setLocalTemplateId(serverTemplateId ?? null);
       setThemeDraft(null);
     }
-  }, [serverTheme, setThemeDraft]);
+  }, [serverTheme, serverTemplateId, setThemeDraft]);
 
   const effective = local ?? theme;
 
@@ -40,20 +55,34 @@ export default function StoreThemeEditor() {
     [setThemeDraft],
   );
 
+  const applyTemplate = useCallback(
+    (id: StoreTemplateId) => {
+      const src = TEMPLATES[id];
+      pushDraft(cloneTheme({ ...src, banner: { ...src.banner } }));
+      setLocalTemplateId(id);
+      setMsg(null);
+    },
+    [pushDraft],
+  );
+
   const save = async () => {
     if (businessId == null || local == null) return;
     setSaving(true);
     setMsg(null);
     try {
-      const { themeConfig } = await businessThemeApi.saveBusinessThemePut(businessId, {
-        primaryColor: local.primaryColor,
-        bgColor: local.bgColor,
-        cardColor: local.cardColor,
-        textColor: local.textColor,
-        logoUrl: local.logoUrl,
-        banner: local.banner,
-      });
+      const { themeConfig, templateId: savedTid } =
+        await businessThemeApi.saveBusinessThemePut(businessId, {
+          templateId: localTemplateId,
+          primaryColor: local.primaryColor,
+          bgColor: local.bgColor,
+          cardColor: local.cardColor,
+          textColor: local.textColor,
+          layout: local.layout,
+          logoUrl: local.logoUrl,
+          banner: local.banner,
+        });
       setLocal(cloneTheme(themeConfig));
+      setLocalTemplateId(savedTid);
       setThemeDraft(null);
       await refresh();
       setMsg("Сохранено ✓");
@@ -92,18 +121,82 @@ export default function StoreThemeEditor() {
         записать в базу.
       </p>
 
+      <h4 className="admin-theme-subtitle">Шаблоны</h4>
+      <p className="admin-form-hint admin-theme-hint--tight">
+        Один клик — цвета, баннер и макет. Логотип сохранится, если уже был загружен.
+      </p>
+      <div className="admin-theme-templates">
+        {STORE_TEMPLATE_IDS.map((id) => {
+          const tpl = TEMPLATES[id];
+          const active = localTemplateId === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              className={`admin-theme-template-card${active ? " admin-theme-template-card--active" : ""}`}
+              onClick={() => applyTemplate(id)}
+            >
+              <span
+                className="admin-theme-template-card__swatches"
+                aria-hidden
+              >
+                <i style={{ background: tpl.primaryColor }} />
+                <i style={{ background: tpl.bgColor }} />
+                <i style={{ background: tpl.cardColor }} />
+              </span>
+              <span className="admin-theme-template-card__label">
+                {TEMPLATE_LABELS[id]}
+              </span>
+              <span className="admin-theme-template-card__meta">
+                {tpl.layout === "modern" ? "Modern" : "Classic"}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <h4 className="admin-theme-subtitle">Макет</h4>
+      <div className="admin-theme-layout-switch">
+        <button
+          type="button"
+          className={
+            local.layout === "classic"
+              ? "admin-theme-layout-switch__btn admin-theme-layout-switch__btn--on"
+              : "admin-theme-layout-switch__btn"
+          }
+          onClick={() =>
+            pushDraft({ ...local, layout: "classic" })
+          }
+        >
+          Классика
+        </button>
+        <button
+          type="button"
+          className={
+            local.layout === "modern"
+              ? "admin-theme-layout-switch__btn admin-theme-layout-switch__btn--on"
+              : "admin-theme-layout-switch__btn"
+          }
+          onClick={() =>
+            pushDraft({ ...local, layout: "modern" })
+          }
+        >
+          Modern
+        </button>
+      </div>
+
       <div
-        className="admin-theme-preview"
+        className={`admin-theme-preview admin-theme-preview--layout-${effective.layout}`}
         style={{
           backgroundColor: effective.bgColor,
           color: effective.textColor,
-          borderRadius: 12,
+          borderRadius: effective.layout === "modern" ? 20 : 12,
           padding: 16,
           marginBottom: 16,
         }}
       >
         <p style={{ margin: "0 0 8px", fontSize: 13, opacity: 0.85 }}>
-          Предпросмотр
+          Предпросмотр ({effective.layout})
         </p>
         {effective.logoUrl ? (
           <img
@@ -117,7 +210,7 @@ export default function StoreThemeEditor() {
             style={{
               backgroundColor: effective.cardColor,
               padding: 12,
-              borderRadius: 8,
+              borderRadius: effective.layout === "modern" ? 14 : 8,
               marginBottom: 12,
             }}
           >
@@ -133,7 +226,7 @@ export default function StoreThemeEditor() {
             backgroundColor: effective.primaryColor,
             color: "#fff",
             border: "none",
-            borderRadius: 8,
+            borderRadius: effective.layout === "modern" ? 999 : 8,
             padding: "8px 14px",
             fontWeight: 600,
           }}
@@ -144,7 +237,7 @@ export default function StoreThemeEditor() {
           style={{
             marginTop: 12,
             backgroundColor: effective.cardColor,
-            borderRadius: 8,
+            borderRadius: effective.layout === "modern" ? 14 : 8,
             padding: 10,
             fontSize: 13,
           }}
@@ -275,8 +368,8 @@ export default function StoreThemeEditor() {
           className="admin-theme-reset"
           onClick={() => {
             if (serverTheme) {
-              const c = cloneTheme(serverTheme);
-              setLocal(c);
+              setLocal(cloneTheme(serverTheme));
+              setLocalTemplateId(serverTemplateId ?? null);
               setThemeDraft(null);
             }
           }}

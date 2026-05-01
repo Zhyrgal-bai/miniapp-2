@@ -166,6 +166,7 @@ app.get("/api/business/:businessId", async (req: Request, res: Response) => {
         id: true,
         name: true,
         themeConfig: true,
+        templateId: true,
         isActive: true,
         isBlocked: true,
         subscriptionStatus: true,
@@ -195,11 +196,16 @@ app.get("/api/business/:businessId", async (req: Request, res: Response) => {
       where: { businessId },
       select: { logoUrl: true },
     });
-    const themed = publicBusinessThemeResponse(row.themeConfig, settings?.logoUrl);
+    const themed = publicBusinessThemeResponse(
+      row.themeConfig,
+      settings?.logoUrl,
+      row.templateId,
+    );
     res.json({
       id: row.id,
       name: row.name,
       themeConfig: themed.themeConfig,
+      templateId: themed.templateId,
     });
   } catch (e) {
     console.error("GET /api/business/:id:", e);
@@ -233,7 +239,7 @@ app.put("/api/business/:businessId/theme", async (req: Request, res: Response) =
 
     const business = await prisma.business.findUnique({
       where: { id: bid },
-      select: { themeConfig: true },
+      select: { themeConfig: true, templateId: true },
     });
     if (!business) {
       res.status(404).json({ error: "Not found" });
@@ -242,7 +248,11 @@ app.put("/api/business/:businessId/theme", async (req: Request, res: Response) =
 
     const body = req.body as { themeConfig?: unknown };
     const patch = body.themeConfig ?? body;
-    const result = applyThemePatchAndValidate(business.themeConfig, patch);
+    const result = applyThemePatchAndValidate(
+      business.themeConfig,
+      business.templateId,
+      patch,
+    );
     if (!result.ok) {
       res.status(400).json({ error: result.error });
       return;
@@ -254,7 +264,10 @@ app.put("/api/business/:businessId/theme", async (req: Request, res: Response) =
     await prisma.$transaction(async (tx) => {
       await tx.business.update({
         where: { id: bid },
-        data: { themeConfig: result.themeConfig },
+        data: {
+          themeConfig: result.themeConfig,
+          templateId: result.templateId,
+        },
       });
       if (patchTouchesLogo) {
         await tx.settings.upsert({
@@ -273,6 +286,7 @@ app.put("/api/business/:businessId/theme", async (req: Request, res: Response) =
     res.json({
       ok: true,
       themeConfig: result.merged,
+      templateId: result.templateId,
     });
   } catch (e) {
     console.error("PUT /api/business/:id/theme:", e);

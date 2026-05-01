@@ -1,7 +1,14 @@
 .home-page {
   min-height: 100vh;
-  background: linear-gradient(180deg, #3A0000 30%, #1a1220 100%);
   padding: 0 16px;
+}
+
+.home-page--classic {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--store-bg, #0f172a) 82%, transparent) 0%,
+    var(--store-bg, #0f172a) 72%
+  );
 }
 
 /* Первый заказ: скидка */
@@ -179,6 +186,38 @@
 .categories button.active {
   background: rgba(255, 45, 45, 0.2);
   color: #ff2d2d;
+}
+
+/* ===== Макет Modern (пресет + ручной выбор в админке) ===== */
+.home-page--modern {
+  background: transparent;
+  padding: 0 14px 28px;
+}
+
+.home-page--modern .hero-title {
+  font-style: normal;
+  text-transform: none;
+  letter-spacing: 0.03em;
+  text-shadow: none;
+  font-weight: 800;
+}
+
+.home-page--modern .hero-subtitle {
+  opacity: 0.88;
+}
+
+.home-page--modern .search-input {
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--store-primary, #ef4444) 22%, transparent);
+  background: color-mix(in srgb, var(--store-card, #1e293b) 92%, transparent);
+}
+
+.home-page--modern .categories button {
+  border-radius: 999px;
+}
+
+.home-page--modern .home-discount-banner {
+  border-radius: 20px;
 }
 
  /* ввод поиска */  
