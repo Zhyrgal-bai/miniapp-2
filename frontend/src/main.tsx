@@ -7,6 +7,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 import MerchantDashboardPage from "./pages/MerchantDashboardPage";
 import PlatformPage from "./pages/PlatformPage";
 import PlatformAdminPage from "./pages/PlatformAdminPage";
+import RootAppOrPlatform from "./pages/RootAppOrPlatform";
 import "leaflet/dist/leaflet.css";
 import "./index.css";
 
@@ -22,6 +23,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="/merchant" element={<MerchantDashboardPage />} />
             <Route path="/platform" element={<PlatformPage />} />
             <Route path="/platform-admin" element={<PlatformAdminPage />} />
+            <Route path="/" element={<RootAppOrPlatform />} />
             <Route path="*" element={<App />} />
           </Routes>
         </ThemeProvider>
