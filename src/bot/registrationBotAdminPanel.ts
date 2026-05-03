@@ -29,6 +29,52 @@ const CB_STATS = "rpadm_stats";
 const CB_EXPIRED = "rpadm_expired";
 const CB_BACK = "rpadm_back";
 
+/** Reply Keyboard: только для ADMIN_IDS, не путать с текстом от не-админов. */
+export const REGISTRATION_ADMIN_REPLY_KEYBOARD_TEXT = "🛠 Админ панель";
+
+export function registrationAdminReplyKeyboardMarkup(): {
+  keyboard: { text: string }[][];
+  resize_keyboard: boolean;
+  one_time_keyboard: boolean;
+} {
+  return {
+    keyboard: [[{ text: REGISTRATION_ADMIN_REPLY_KEYBOARD_TEXT }]],
+    resize_keyboard: true,
+    one_time_keyboard: false,
+  };
+}
+
+/**
+ * Нажатие reply-кнопки «Админ панель»: та же логика, что /admin.
+ * Не-админ с тем же текстом — глушим (true), чтобы не ушло в сценарии регистрации.
+ */
+export async function tryHandleRegistrationAdminReplyKeyboardButton(
+  ctx: Context,
+): Promise<boolean> {
+  if (ctx.chat?.type !== "private") return false;
+  const msg = ctx.message;
+  if (!msg || !("text" in msg) || typeof msg.text !== "string") return false;
+  const text = msg.text.trim();
+  if (/^админ\s*панель$/iu.test(text) && text !== REGISTRATION_ADMIN_REPLY_KEYBOARD_TEXT) {
+    return true;
+  }
+  if (text !== REGISTRATION_ADMIN_REPLY_KEYBOARD_TEXT) return false;
+
+  const tid = ctx.from?.id;
+  if (tid == null) return false;
+  const tidStr = String(tid);
+  if (!isPlatformAdminUser(tidStr)) {
+    return true;
+  }
+
+  await ctx.reply(" ", {
+    reply_markup: { remove_keyboard: true },
+  });
+
+  await tryHandleRegistrationSuperAdminCommand(ctx);
+  return true;
+}
+
 /** Автовыход неактивной сессии (мс). */
 const ADMIN_PANEL_TTL_MS = 10 * 60 * 1000;
 /** Блокировка ввода пароля после серии ошибок (мс). */
@@ -553,7 +599,9 @@ export async function handleRegistrationSuperAdminCallback(
     } catch {
       /* ignore */
     }
-    await ctx.reply("Вы вышли из админ-панели");
+    await ctx.reply("Вы вышли из админ-панели.", {
+      reply_markup: { remove_keyboard: true },
+    });
     return true;
   }
 

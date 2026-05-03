@@ -18,7 +18,11 @@ import {
   MSG_BOT_ALREADY_REGISTERED,
   precheckBotTokenBeforeRegistrationPersist,
 } from "../server/registrationTokenGate.js";
-import { consumeRegistrationSuperAdminPrivateMessage } from "./registrationBotAdminPanel.js";
+import {
+  consumeRegistrationSuperAdminPrivateMessage,
+  registrationAdminReplyKeyboardMarkup,
+  tryHandleRegistrationAdminReplyKeyboardButton,
+} from "./registrationBotAdminPanel.js";
 
 type BotRole =
   | { type: "env"; botIndex: number }
@@ -97,6 +101,15 @@ function adminTelegramNumericIds(): string[] {
     .split(/[,;]+/)
     .map((s) => s.trim())
     .filter((s) => s !== "");
+}
+
+/** Глобальная платформенная админка (ADMIN_IDS + пароль): Reply Keyboard, не для клиентов. */
+async function sendGlobalAdminReplyKeyboardIfAdmin(ctx: Context): Promise<void> {
+  const tidStr = telegramIdString(ctx);
+  if (tidStr === "" || !adminTelegramNumericIds().includes(tidStr)) return;
+  await ctx.reply("\u2060", {
+    reply_markup: registrationAdminReplyKeyboardMarkup(),
+  });
 }
 
 function parseCallbackId(prefix: string, data: string): number | null {
@@ -229,6 +242,8 @@ async function replyMerchantStoreDashboard(
   await ctx.reply(lines.join("\n"), {
     reply_markup: { inline_keyboard: keyboard },
   });
+
+  await sendGlobalAdminReplyKeyboardIfAdmin(ctx);
 }
 
 async function hasPendingRegistrationForTelegram(
@@ -333,6 +348,9 @@ export function attachSaasRegistration(bot: Telegraf, role: BotRole): void {
   bot.use(async (ctx, next) => {
     try {
       if (ctx.chat?.type === "private") {
+        if (await tryHandleRegistrationAdminReplyKeyboardButton(ctx)) {
+          return;
+        }
         if (await consumeRegistrationSuperAdminPrivateMessage(ctx)) {
           return;
         }
@@ -670,6 +688,7 @@ export async function handleRegistrationStartCommand(
       await ctx.reply(
         "Заявка на рассмотрении — ответ будет в этом чате."
       );
+      await sendGlobalAdminReplyKeyboardIfAdmin(ctx);
       logSaas("rejected_attempt", {
         reason: "already_pending_request",
         telegramUserId: telegramIdStr,
@@ -693,6 +712,7 @@ export async function handleRegistrationStartCommand(
     await ctx.reply(
       "Давайте создадим ваш магазин 🚀\nВведите название магазина."
     );
+    await sendGlobalAdminReplyKeyboardIfAdmin(ctx);
 
     logSaas("registration_started", { telegramUserId: telegramIdStr });
     return true;
