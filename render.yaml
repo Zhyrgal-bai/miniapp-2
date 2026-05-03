@@ -26,3 +26,11 @@ services:
       # Если задать API_URL вручную — имеет приоритет над RENDER_EXTERNAL_URL
       - key: API_URL
         sync: false
+      # Заполните в Dashboard после первого деплоя:
+      # - BOT_TOKEN или BOT_TOKENS (бот регистрации / платформы)
+      # - FRONT_URL — URL минимаркета на Vercel (без / в конце), для кнопок Web App в боте
+      # - ADMIN_IDS / PLATFORM_ADMIN_TELEGRAM_ID — по необходимости
+      - key: BOT_TOKEN
+        sync: false
+      - key: FRONT_URL
+        sync: false

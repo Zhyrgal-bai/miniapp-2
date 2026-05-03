@@ -11,6 +11,15 @@ import {
 } from "./cloudinary.js";
 import { adminUserIdFromRequest } from "./adminAuth.js";
 import { listMerchantOwnedBusinesses } from "./merchantDashboard.js";
+import { listPlatformOwnerBusinesses } from "./platformMyBusinesses.js";
+import { validateAndPersistPlatformRegistration } from "./platformRegisterRequest.js";
+import {
+  approveRegistrationRequestById,
+  isPlatformAdminTelegramId,
+  listPendingRegistrationRequestsForAdmin,
+  rejectRegistrationRequestById,
+} from "./platformAdminService.js";
+import { adminBlockBusiness, adminUnblockBusiness } from "./saasBillingService.js";
 import {
   isAllowedOrderStatusTransition,
   isValidOrderStatus,
@@ -213,6 +222,229 @@ app.get("/api/business/:businessId", async (req: Request, res: Response) => {
   }
 });
 
+/** Платформа (главный бот): до tenant middleware — без привязки к `shop`. */
+function platformTelegramIdFromRequest(req: Request): string | null {
+  const rawXi = req.headers["x-telegram-id"];
+  const xi =
+    typeof rawXi === "string"
+      ? rawXi.trim()
+      : Array.isArray(rawXi) && typeof rawXi[0] === "string"
+        ? rawXi[0].trim()
+        : "";
+  if (/^\d+$/.test(xi)) return xi;
+
+  const raw = req.query.telegramId ?? req.query.userId;
+  const s =
+    typeof raw === "string"
+      ? raw.trim()
+      : Array.isArray(raw) && typeof raw[0] === "string"
+        ? raw[0].trim()
+        : "";
+  return /^\d+$/.test(s) ? s : null;
+}
+
+app.get("/api/platform/my-businesses", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromRequest(req);
+    if (!telegramId) {
+      res.status(400).json({
+        error:
+          "Нужен telegramId: заголовок x-telegram-id или query telegramId / userId",
+      });
+      return;
+    }
+    const rows = await listPlatformOwnerBusinesses(telegramId);
+    res.json(rows);
+  } catch (e) {
+    console.error("GET /api/platform/my-businesses:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post("/api/platform/register-request", async (req: Request, res: Response) => {
+  try {
+    const body = req.body as Record<string, unknown>;
+    const headerTid = (() => {
+      const rawXi = req.headers["x-telegram-id"];
+      const xi =
+        typeof rawXi === "string"
+          ? rawXi.trim()
+          : Array.isArray(rawXi) && typeof rawXi[0] === "string"
+            ? rawXi[0].trim()
+            : "";
+      return /^\d+$/.test(xi) ? xi : null;
+    })();
+
+    const bodyTidRaw = body.telegramId;
+    const bodyTid =
+      typeof bodyTidRaw === "number" && Number.isFinite(bodyTidRaw)
+        ? String(Math.trunc(bodyTidRaw))
+        : typeof bodyTidRaw === "string"
+          ? bodyTidRaw.trim()
+          : "";
+
+    if (headerTid != null && bodyTid !== "" && headerTid !== bodyTid) {
+      res.status(403).json({ error: "Несовпадение telegramId с заголовком" });
+      return;
+    }
+
+    const result = await validateAndPersistPlatformRegistration(body);
+    if (!result.ok) {
+      res.status(result.statusCode).json({ error: result.error });
+      return;
+    }
+    res.status(201).json({ ok: true, id: result.id });
+  } catch (e) {
+    console.error("POST /api/platform/register-request:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.get("/api/platform/admin/requests", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromRequest(req);
+    if (!telegramId) {
+      res.status(400).json({
+        error: "Нужен Telegram id (x-telegram-id или query telegramId / userId)",
+      });
+      return;
+    }
+    if (!isPlatformAdminTelegramId(telegramId)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    const rows = await listPendingRegistrationRequestsForAdmin();
+    res.json(rows);
+  } catch (e) {
+    console.error("GET /api/platform/admin/requests:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post("/api/platform/admin/approve", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromRequest(req);
+    if (!telegramId) {
+      res.status(400).json({ error: "Нужен x-telegram-id" });
+      return;
+    }
+    if (!isPlatformAdminTelegramId(telegramId)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    const requestId = Number((req.body as { requestId?: unknown }).requestId);
+    if (!Number.isInteger(requestId) || requestId <= 0) {
+      res.status(400).json({ error: "Нужен корректный requestId" });
+      return;
+    }
+    const out = await approveRegistrationRequestById(requestId);
+    if (!out.ok) {
+      res.status(out.statusCode).json({ error: out.message });
+      return;
+    }
+    res.json({ ok: true, businessId: out.businessId });
+  } catch (e) {
+    console.error("POST /api/platform/admin/approve:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post("/api/platform/admin/reject", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromRequest(req);
+    if (!telegramId) {
+      res.status(400).json({ error: "Нужен x-telegram-id" });
+      return;
+    }
+    if (!isPlatformAdminTelegramId(telegramId)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    const requestId = Number((req.body as { requestId?: unknown }).requestId);
+    if (!Number.isInteger(requestId) || requestId <= 0) {
+      res.status(400).json({ error: "Нужен корректный requestId" });
+      return;
+    }
+    const out = await rejectRegistrationRequestById(requestId);
+    if (!out.ok) {
+      res.status(out.statusCode).json({ error: out.message });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("POST /api/platform/admin/reject:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post("/api/platform/admin/block", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromRequest(req);
+    if (!telegramId) {
+      res.status(400).json({ error: "Нужен x-telegram-id" });
+      return;
+    }
+    if (!isPlatformAdminTelegramId(telegramId)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    const businessId = Number(
+      (req.body as { businessId?: unknown }).businessId,
+    );
+    if (!Number.isInteger(businessId) || businessId <= 0) {
+      res.status(400).json({ error: "Нужен корректный businessId" });
+      return;
+    }
+    const exists = await prisma.business.findUnique({
+      where: { id: businessId },
+      select: { id: true },
+    });
+    if (!exists) {
+      res.status(404).json({ error: "Магазин не найден" });
+      return;
+    }
+    await adminBlockBusiness(businessId);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("POST /api/platform/admin/block:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post("/api/platform/admin/unblock", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromRequest(req);
+    if (!telegramId) {
+      res.status(400).json({ error: "Нужен x-telegram-id" });
+      return;
+    }
+    if (!isPlatformAdminTelegramId(telegramId)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    const businessId = Number(
+      (req.body as { businessId?: unknown }).businessId,
+    );
+    if (!Number.isInteger(businessId) || businessId <= 0) {
+      res.status(400).json({ error: "Нужен корректный businessId" });
+      return;
+    }
+    const exists = await prisma.business.findUnique({
+      where: { id: businessId },
+      select: { id: true },
+    });
+    if (!exists) {
+      res.status(404).json({ error: "Магазин не найден" });
+      return;
+    }
+    await adminUnblockBusiness(businessId);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("POST /api/platform/admin/unblock:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
 app.use("/api", businessMiddleware);
 
 app.put("/api/business/:businessId/theme", async (req: Request, res: Response) => {
@@ -290,6 +522,68 @@ app.put("/api/business/:businessId/theme", async (req: Request, res: Response) =
     });
   } catch (e) {
     console.error("PUT /api/business/:id/theme:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.put("/api/business/template", async (req: Request, res: Response) => {
+  try {
+    if (typeof req.businessId !== "number") {
+      res.status(400).json({
+        error: "Missing tenant: pass shop or businessId in query",
+      });
+      return;
+    }
+    const bid = req.businessId;
+    const m = req.tenantMembership;
+    if (
+      !m ||
+      (m.role !== MembershipRole.OWNER && m.role !== MembershipRole.ADMIN)
+    ) {
+      res.status(403).json({ error: "Только владелец или админ магазина" });
+      return;
+    }
+
+    const raw = (req.body as { templateId?: unknown }).templateId;
+    if (raw === undefined) {
+      res.status(400).json({ error: "Нужен templateId" });
+      return;
+    }
+
+    const business = await prisma.business.findUnique({
+      where: { id: bid },
+      select: { themeConfig: true, templateId: true },
+    });
+    if (!business) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+
+    const result = applyThemePatchAndValidate(
+      business.themeConfig,
+      business.templateId,
+      { templateId: raw },
+    );
+    if (!result.ok) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+
+    await prisma.business.update({
+      where: { id: bid },
+      data: {
+        themeConfig: result.themeConfig,
+        templateId: result.templateId,
+      },
+    });
+
+    res.json({
+      ok: true,
+      themeConfig: result.merged,
+      templateId: result.templateId,
+    });
+  } catch (e) {
+    console.error("PUT /api/business/template:", e);
     res.status(500).json({ error: "Server error" });
   }
 });

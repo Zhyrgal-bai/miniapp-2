@@ -20,7 +20,8 @@ const PAY_REPLY =
   `💰 Оплата магазина\n\n` +
   `20 дней — ${SAAS_SUBSCRIPTION_PRICE_20_D} сом\n` +
   `30 дней — ${SAAS_SUBSCRIPTION_PRICE_30_D} сом\n\n` +
-  `Отправьте чек после оплаты (в подписи к фото можно указать ${SAAS_SUBSCRIPTION_PRICE_20_D} или ${SAAS_SUBSCRIPTION_PRICE_30_D}).`;
+  `После оплаты отправьте чек.\n\n` +
+  `В подписи к фото можно указать ${SAAS_SUBSCRIPTION_PRICE_20_D} или ${SAAS_SUBSCRIPTION_PRICE_30_D}.`;
 
 /**
  * Экран оплаты подписки SaaS для владельца/админа магазина в клиентском боте тенанта.

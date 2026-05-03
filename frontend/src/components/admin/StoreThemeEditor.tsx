@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { ResolvedStoreTheme } from "@repo-shared/storeTheme";
 import {
   TEMPLATES,
-  STORE_TEMPLATE_IDS,
+  STORE_QUICK_TEMPLATE_IDS,
   type StoreTemplateId,
 } from "../../constants/storeTemplates";
 import { useShop } from "../../context/ShopContext";
@@ -58,11 +58,43 @@ export default function StoreThemeEditor() {
   const applyTemplate = useCallback(
     (id: StoreTemplateId) => {
       const src = TEMPLATES[id];
-      pushDraft(cloneTheme({ ...src, banner: { ...src.banner } }));
+      const logo = local?.logoUrl ?? null;
+      pushDraft(
+        cloneTheme({
+          ...src,
+          logoUrl: logo,
+          banner: { ...src.banner },
+        }),
+      );
       setLocalTemplateId(id);
       setMsg(null);
     },
-    [pushDraft],
+    [pushDraft, local?.logoUrl],
+  );
+
+  const pickTemplateAndPersist = useCallback(
+    async (id: StoreTemplateId) => {
+      if (businessId == null || local == null) return;
+      setSaving(true);
+      setMsg(null);
+      applyTemplate(id);
+      try {
+        const saved = await businessThemeApi.saveBusinessTemplateId(
+          businessId,
+          id,
+        );
+        setLocal(cloneTheme(saved.themeConfig));
+        setLocalTemplateId(saved.templateId);
+        setThemeDraft(null);
+        await refresh();
+        setMsg("Шаблон сохранён ✓");
+      } catch (e) {
+        setMsg(e instanceof Error ? e.message : "Ошибка сохранения");
+      } finally {
+        setSaving(false);
+      }
+    },
+    [applyTemplate, businessId, local, refresh, setThemeDraft],
   );
 
   const save = async () => {
@@ -121,20 +153,52 @@ export default function StoreThemeEditor() {
         записать в базу.
       </p>
 
-      <h4 className="admin-theme-subtitle">Шаблоны</h4>
+      <h4 className="admin-theme-subtitle">🎨 Выбор шаблона</h4>
       <p className="admin-form-hint admin-theme-hint--tight">
-        Один клик — цвета, баннер и макет. Логотип сохранится, если уже был загружен.
+        Нажмите шаблон — тема сразу применится и сохранится в базе (логотип не
+        сбрасывается).
       </p>
-      <div className="admin-theme-templates">
-        {STORE_TEMPLATE_IDS.map((id) => {
+      <div className="admin-theme-templates admin-theme-templates--quick">
+        {STORE_QUICK_TEMPLATE_IDS.map((id) => {
           const tpl = TEMPLATES[id];
           const active = localTemplateId === id;
           return (
             <button
               key={id}
               type="button"
+              disabled={saving}
               className={`admin-theme-template-card${active ? " admin-theme-template-card--active" : ""}`}
-              onClick={() => applyTemplate(id)}
+              onClick={() => void pickTemplateAndPersist(id)}
+            >
+              <span
+                className="admin-theme-template-card__swatches"
+                aria-hidden
+              >
+                <i style={{ background: tpl.primaryColor }} />
+                <i style={{ background: tpl.bgColor }} />
+                <i style={{ background: tpl.cardColor }} />
+              </span>
+              <span className="admin-theme-template-card__label">
+                {TEMPLATE_LABELS[id]}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <h4 className="admin-theme-subtitle">Дополнительно</h4>
+      <p className="admin-form-hint admin-theme-hint--tight">Пресет Luxury.</p>
+      <div className="admin-theme-templates">
+        {(["luxury"] as const).map((id) => {
+          const tpl = TEMPLATES[id];
+          const active = localTemplateId === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              disabled={saving}
+              className={`admin-theme-template-card${active ? " admin-theme-template-card--active" : ""}`}
+              onClick={() => void pickTemplateAndPersist(id)}
             >
               <span
                 className="admin-theme-template-card__swatches"

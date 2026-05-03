@@ -9,6 +9,7 @@ import {
   mbankOrderQrImageUrl,
   mbankPaymentQrCaption,
 } from "../server/mbankQrUrl.js";
+import { attachDynamicMerchantSubscriptionGate } from "./dynamicMerchantSubscriptionGate.js";
 import { attachMerchantSaasBillingCommands } from "./merchantSaasBilling.js";
 import { attachPlatformSaasBillingAdmin } from "./platformSaasBillingAdmin.js";
 import {
@@ -422,6 +423,10 @@ function readStartParam(ctx: {
 }
 
 export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
+  if (role.type === "dynamic") {
+    attachDynamicMerchantSubscriptionGate(tgBot, role.businessId);
+  }
+
   attachSaasRegistration(tgBot, role);
   attachPlatformSaasBillingAdmin(tgBot, role);
   attachEnvTenantRoleMiddleware(tgBot, role);

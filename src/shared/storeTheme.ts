@@ -37,27 +37,13 @@ function normTemplateId(
   return isStoreTemplateId(t) ? t : null;
 }
 
-export const DEFAULT_STORE_THEME: ResolvedStoreTheme = {
-  primaryColor: "#ef4444",
-  bgColor: "#0f172a",
-  cardColor: "#1e293b",
-  textColor: "#ffffff",
-  logoUrl: null,
-  layout: "classic",
-  banner: {
-    enabled: true,
-    title: "-10% на первый заказ",
-    subtitle: "Промокод SHOP10",
-  },
-};
-
 /** Готовые дизайны: цвета, баннер по умолчанию, layout (modern = более «воздушная» витрина). */
 export const TEMPLATES: Record<StoreTemplateId, ResolvedStoreTheme> = {
   red: {
-    primaryColor: "#dc2626",
-    bgColor: "#1c0a0a",
-    cardColor: "#2d1515",
-    textColor: "#fef2f2",
+    primaryColor: "#ef4444",
+    bgColor: "#1a0000",
+    cardColor: "#2a0000",
+    textColor: "#ffffff",
     logoUrl: null,
     layout: "classic",
     banner: {
@@ -67,10 +53,10 @@ export const TEMPLATES: Record<StoreTemplateId, ResolvedStoreTheme> = {
     },
   },
   dark: {
-    primaryColor: "#38bdf8",
-    bgColor: "#020617",
-    cardColor: "#0f172a",
-    textColor: "#e2e8f0",
+    primaryColor: "#6366f1",
+    bgColor: "#0f172a",
+    cardColor: "#1e293b",
+    textColor: "#ffffff",
     logoUrl: null,
     layout: "modern",
     banner: {
@@ -80,10 +66,10 @@ export const TEMPLATES: Record<StoreTemplateId, ResolvedStoreTheme> = {
     },
   },
   light: {
-    primaryColor: "#b91c1c",
-    bgColor: "#f8fafc",
-    cardColor: "#ffffff",
-    textColor: "#0f172a",
+    primaryColor: "#3b82f6",
+    bgColor: "#ffffff",
+    cardColor: "#f1f5f9",
+    textColor: "#000000",
     logoUrl: null,
     layout: "modern",
     banner: {
@@ -105,6 +91,12 @@ export const TEMPLATES: Record<StoreTemplateId, ResolvedStoreTheme> = {
       subtitle: "Промокод GOLD10",
     },
   },
+};
+
+/** Без `templateId` в БД — как в макете: база = шаблон dark. */
+export const DEFAULT_STORE_THEME: ResolvedStoreTheme = {
+  ...TEMPLATES.dark,
+  banner: { ...TEMPLATES.dark.banner },
 };
 
 const HEX6 = /^#([0-9A-Fa-f]{6})$/;
@@ -137,7 +129,7 @@ export function templatePresetResolved(
   templateId: string | null | undefined,
 ): ResolvedStoreTheme {
   const id = normTemplateId(templateId);
-  if (id == null) return cloneResolved(DEFAULT_STORE_THEME);
+  if (id == null) return cloneResolved(TEMPLATES.dark);
   return cloneResolved(TEMPLATES[id]);
 }
 
