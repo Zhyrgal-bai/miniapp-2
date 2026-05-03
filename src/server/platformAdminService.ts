@@ -11,6 +11,7 @@ import {
   initDynamicStoreBot,
 } from "../bot/dynamicBots.js";
 import { prisma } from "./db.js";
+import { isAdmin } from "./adminAuth.js";
 
 function buildApproveUserNotifyMessage(merchantBotUsername: string | null): string {
   let text =
@@ -120,10 +121,13 @@ function platformAdminEnvId(): string | null {
   return /^\d+$/.test(raw) ? raw : null;
 }
 
+/** Доступ к REST `/api/platform/admin/*` и Mini App `/platform-admin`: ADMIN_IDS или legacy PLATFORM_ADMIN_TELEGRAM_ID. */
 export function isPlatformAdminTelegramId(telegramId: string): boolean {
-  const admin = platformAdminEnvId();
-  if (!admin) return false;
-  return telegramId === admin;
+  const tid = telegramId.trim();
+  if (!/^\d+$/.test(tid)) return false;
+  if (isAdmin(tid)) return true;
+  const legacy = platformAdminEnvId();
+  return legacy != null && legacy === tid;
 }
 
 export type PlatformAdminRequestRow = {

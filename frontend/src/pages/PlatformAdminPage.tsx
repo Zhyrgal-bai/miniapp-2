@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { getTelegramWebApp } from "../utils/telegram";
+import { getWebAppUserId, viteAdminIdsAllow } from "../utils/adminAccess";
 import {
   fetchPlatformAdminRequests,
   postPlatformAdminApprove,
   postPlatformAdminReject,
   type PlatformAdminRequestDTO,
 } from "../services/platformAdminApi";
-
-/** Задайте в `frontend/.env`: VITE_PLATFORM_ADMIN_TELEGRAM_ID=<ваш Telegram user id>. */
-const ADMIN_ID = Number(import.meta.env.VITE_PLATFORM_ADMIN_TELEGRAM_ID ?? "");
 
 function statusRu(status: string): string {
   const u = status.toUpperCase();
@@ -18,21 +16,26 @@ function statusRu(status: string): string {
   return status;
 }
 
-/** Админка платформы: только главный ADMIN (не клиентские магазины). */
+function viteAdminListConfigured(): boolean {
+  const raw = import.meta.env.VITE_ADMIN_IDS;
+  return typeof raw === "string" && raw.trim() !== "";
+}
+
+/** Админка платформы (`/platform-admin`): только id из `ADMIN_IDS` (см. `VITE_ADMIN_IDS` при сборке). */
 export default function PlatformAdminPage() {
   const tg = getTelegramWebApp();
   const user = tg?.initDataUnsafe?.user;
   const userId =
     user != null && typeof user.id === "number" && Number.isFinite(user.id)
       ? user.id
-      : NaN;
+      : getWebAppUserId();
 
-  const configured =
-    Number.isFinite(ADMIN_ID) &&
-    ADMIN_ID > 0 &&
-    Number.isSafeInteger(ADMIN_ID);
+  const listConfigured = viteAdminListConfigured();
   const accessAllowed =
-    configured && Number.isFinite(userId) && userId > 0 && userId === ADMIN_ID;
+    listConfigured &&
+    Number.isFinite(userId) &&
+    userId > 0 &&
+    viteAdminIdsAllow();
 
   const [rows, setRows] = useState<PlatformAdminRequestDTO[]>([]);
   const [loading, setLoading] = useState(false);
@@ -40,11 +43,11 @@ export default function PlatformAdminPage() {
   const [actionId, setActionId] = useState<number | null>(null);
 
   const reload = useCallback(async () => {
-    if (!accessAllowed || !configured) return;
+    if (!accessAllowed || !Number.isFinite(userId) || userId <= 0) return;
     setLoading(true);
     setListError(null);
     try {
-      const data = await fetchPlatformAdminRequests(ADMIN_ID);
+      const data = await fetchPlatformAdminRequests(userId);
       setRows(data);
     } catch (e) {
       setListError(e instanceof Error ? e.message : "Ошибка загрузки");
@@ -52,7 +55,7 @@ export default function PlatformAdminPage() {
     } finally {
       setLoading(false);
     }
-  }, [accessAllowed, configured]);
+  }, [accessAllowed, userId]);
 
   useEffect(() => {
     window.Telegram?.WebApp?.ready();
@@ -63,11 +66,11 @@ export default function PlatformAdminPage() {
   const busy = actionId !== null;
 
   async function approve(id: number) {
-    if (!accessAllowed) return;
+    if (!accessAllowed || !Number.isFinite(userId) || userId <= 0) return;
     setActionId(id);
     try {
       await postPlatformAdminApprove({
-        telegramId: ADMIN_ID,
+        telegramId: userId,
         requestId: id,
       });
       await reload();
@@ -79,11 +82,11 @@ export default function PlatformAdminPage() {
   }
 
   async function reject(id: number) {
-    if (!accessAllowed) return;
+    if (!accessAllowed || !Number.isFinite(userId) || userId <= 0) return;
     setActionId(id);
     try {
       await postPlatformAdminReject({
-        telegramId: ADMIN_ID,
+        telegramId: userId,
         requestId: id,
       });
       await reload();
@@ -94,12 +97,14 @@ export default function PlatformAdminPage() {
     }
   }
 
-  if (!configured) {
+  if (!listConfigured) {
     return (
       <div className="min-h-full bg-slate-950 p-6 text-center text-red-300">
-        <p className="font-semibold">Access denied</p>
+        <p className="font-semibold">Нет доступа</p>
         <p className="mt-2 text-sm text-slate-400">
-          Задайте VITE_PLATFORM_ADMIN_TELEGRAM_ID в frontend/.env
+          Для этой страницы задайте в сборке фронта{" "}
+          <span className="font-mono text-slate-300">VITE_ADMIN_IDS</span> — те же
+          числовые id, что и <span className="font-mono">ADMIN_IDS</span> на сервере.
         </p>
       </div>
     );
@@ -108,7 +113,7 @@ export default function PlatformAdminPage() {
   if (!Number.isFinite(userId) || userId <= 0) {
     return (
       <div className="min-h-full bg-slate-950 p-6 text-center text-red-300">
-        <p className="font-semibold">Access denied</p>
+        <p className="font-semibold">Нет доступа</p>
         <p className="mt-2 text-sm text-slate-400">
           Откройте страницу из Telegram Mini App.
         </p>
@@ -119,7 +124,10 @@ export default function PlatformAdminPage() {
   if (!accessAllowed) {
     return (
       <div className="min-h-full bg-slate-950 p-6 text-center text-red-300">
-        <p className="font-semibold">Access denied</p>
+        <p className="font-semibold">Нет доступа</p>
+        <p className="mt-2 text-sm text-slate-400">
+          Раздел только для администраторов платформы.
+        </p>
       </div>
     );
   }

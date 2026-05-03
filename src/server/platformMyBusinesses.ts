@@ -1,6 +1,5 @@
 import { MembershipRole, SubscriptionStatus } from "@prisma/client";
 import { prisma } from "./db.js";
-import { isAdmin } from "./adminAuth.js";
 import {
   classifyWebhookOkError,
   fetchTelegramWebhookInfo,
@@ -100,14 +99,6 @@ async function mapRowsWithWebhook(
   return out;
 }
 
-async function listAllBusinessesSafe(): Promise<PlatformMyBusinessDTO[]> {
-  const rows = await prisma.business.findMany({
-    select: businessSelectForPlatformList,
-    orderBy: { id: "asc" },
-  });
-  return mapRowsWithWebhook(rows);
-}
-
 async function listMemberBusinessesSafe(
   telegramId: string,
 ): Promise<PlatformMyBusinessDTO[]> {
@@ -133,8 +124,8 @@ async function listMemberBusinessesSafe(
 }
 
 /**
- * Мини-платформа `/platform`: ADMIN_IDS видят все Business; иначе — только OWNER/ADMIN.
- * Фильтр только по telegramId с сервера (не доверяем произвольным query без заголовка).
+ * Мини-платформа `/platform`: только магазины, где пользователь — OWNER или ADMIN магазина.
+ * Глобальные ADMIN_IDS не расширяют список (админка — отдельно: бот + `/platform-admin`).
  */
 export async function listPlatformOwnerBusinesses(
   telegramId: string,
@@ -142,8 +133,5 @@ export async function listPlatformOwnerBusinesses(
   const tid = telegramId.trim();
   if (!/^\d+$/.test(tid)) return [];
 
-  if (isAdmin(tid)) {
-    return listAllBusinessesSafe();
-  }
   return listMemberBusinessesSafe(tid);
 }

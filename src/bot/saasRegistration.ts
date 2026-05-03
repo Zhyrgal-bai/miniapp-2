@@ -97,10 +97,18 @@ function normalizeStoreName(raw: string): string {
 function adminTelegramNumericIds(): string[] {
   const raw = process.env.ADMIN_IDS;
   if (!raw) return [];
-  return raw
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const s of raw
     .split(/[,;]+/)
-    .map((s) => s.trim())
-    .filter((s) => s !== "");
+    .map((x) => x.trim())
+    .filter((x) => x !== "")) {
+    if (!seen.has(s)) {
+      seen.add(s);
+      out.push(s);
+    }
+  }
+  return out;
 }
 
 /** Глобальная платформенная админка (ADMIN_IDS + пароль): Reply Keyboard, не для клиентов. */
@@ -239,11 +247,19 @@ async function replyMerchantStoreDashboard(
     { text: "➕ Добавить магазин", callback_data: "saas_new_store" },
   ]);
 
+  const tidStr = telegramIdString(ctx);
+  if (base && adminTelegramNumericIds().includes(tidStr)) {
+    keyboard.push([
+      {
+        text: "🛠 Админ платформы",
+        web_app: { url: `${base}/platform-admin` },
+      },
+    ]);
+  }
+
   await ctx.reply(lines.join("\n"), {
     reply_markup: { inline_keyboard: keyboard },
   });
-
-  await sendGlobalAdminReplyKeyboardIfAdmin(ctx);
 }
 
 async function hasPendingRegistrationForTelegram(
@@ -698,6 +714,7 @@ export async function handleRegistrationStartCommand(
 
     if (memberships.length > 0) {
       await replyMerchantStoreDashboard(ctx, memberships);
+      await sendGlobalAdminReplyKeyboardIfAdmin(ctx);
       logSaas("merchant_dashboard_opened", {
         telegramUserId: telegramIdStr,
         storeCount: memberships.length,
