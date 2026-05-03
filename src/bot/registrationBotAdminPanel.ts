@@ -6,6 +6,11 @@ import {
   SubscriptionStatus,
 } from "@prisma/client";
 import { prisma } from "../server/db.js";
+import {
+  approveMerchantBotTokenChangeById,
+  listPendingMerchantChangeRequests,
+  rejectMerchantBotTokenChangeById,
+} from "../server/platformMerchantChangeService.js";
 import { stopDynamicStoreBotInMemory } from "./dynamicBots.js";
 import type { RegistrationSessionState } from "./saasRegistration.js";
 
@@ -28,6 +33,7 @@ const CB_FIND = "rpadm_find";
 const CB_STATS = "rpadm_stats";
 const CB_EXPIRED = "rpadm_expired";
 const CB_BACK = "rpadm_back";
+const CB_TOKCH_LIST = "rpadm_tokch_list";
 
 /** Reply Keyboard: только для ADMIN_IDS, не путать с текстом от не-админов. */
 export const REGISTRATION_ADMIN_REPLY_KEYBOARD_TEXT = "🛠 Админ панель";
@@ -190,6 +196,7 @@ function adminMainMenuKeyboard() {
       [{ text: "🔍 Найти магазин", callback_data: CB_FIND }],
       [{ text: "📊 Статистика", callback_data: CB_STATS }],
       [{ text: "⚠️ Просроченные", callback_data: CB_EXPIRED }],
+      [{ text: "🔑 Смены токена бота", callback_data: CB_TOKCH_LIST }],
       [{ text: "🚪 Выйти", callback_data: CB_LOGOUT }],
     ],
   };
@@ -565,7 +572,8 @@ export async function handleRegistrationSuperAdminCallback(
   const cq = ctx.callbackQuery;
   if (!cq || !("data" in cq)) return false;
   const raw = cq.data;
-  if (typeof raw !== "string" || !raw.startsWith("rpadm_")) return false;
+  if (typeof raw !== "string") return false;
+  if (!raw.startsWith("rpadm_") && !raw.startsWith("rpchg_")) return false;
 
   const tid = ctx.from?.id;
   if (tid == null || ctx.chat?.type !== "private") {
@@ -723,6 +731,85 @@ export async function handleRegistrationSuperAdminCallback(
     await ctx.reply(lines.join("\n"), {
       reply_markup: { inline_keyboard },
     });
+    return true;
+  }
+
+  if (raw === CB_TOKCH_LIST) {
+    await ctx.answerCbQuery().catch(() => undefined);
+    clearAdminOpsState(ap);
+    try {
+      await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
+    } catch {
+      /* ignore */
+    }
+    const rows = await listPendingMerchantChangeRequests();
+    if (rows.length === 0) {
+      await ctx.reply("Нет ожидающих заявок на смену botToken.", {
+        reply_markup: adminMainMenuKeyboard(),
+      });
+      return true;
+    }
+    const lines: string[] = ["🔑 Заявки на смену токена:"];
+    const inline_keyboard: Array<
+      Array<{ text: string; callback_data: string }>
+    > = [];
+    for (const r of rows) {
+      lines.push(
+        `#${r.id} — магазин #${r.businessId} «${r.storeName}» (от ${r.requesterTelegramId})`,
+      );
+      inline_keyboard.push([
+        { text: `✅ #${r.id}`, callback_data: `rpchg_ap_${r.id}` },
+        { text: `❌ #${r.id}`, callback_data: `rpchg_rj_${r.id}` },
+      ]);
+    }
+    inline_keyboard.push(...navBackMenuKeyboard().inline_keyboard);
+    await ctx.reply(lines.join("\n"), {
+      reply_markup: { inline_keyboard },
+    });
+    return true;
+  }
+
+  if (raw.startsWith("rpchg_ap_")) {
+    const id = Number(raw.slice("rpchg_ap_".length));
+    if (!Number.isInteger(id) || id <= 0) {
+      await ctx.answerCbQuery("Неверный id").catch(() => undefined);
+      return true;
+    }
+    await ctx.answerCbQuery().catch(() => undefined);
+    const out = await approveMerchantBotTokenChangeById(id);
+    try {
+      await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
+    } catch {
+      /* ignore */
+    }
+    await ctx.reply(
+      out.ok
+        ? `✅ Заявка #${id} одобрена, бот перезапущен.`
+        : `❌ Заявка #${id}: ${out.message}`,
+      { reply_markup: adminMainMenuKeyboard() },
+    );
+    return true;
+  }
+
+  if (raw.startsWith("rpchg_rj_")) {
+    const id = Number(raw.slice("rpchg_rj_".length));
+    if (!Number.isInteger(id) || id <= 0) {
+      await ctx.answerCbQuery("Неверный id").catch(() => undefined);
+      return true;
+    }
+    await ctx.answerCbQuery().catch(() => undefined);
+    const out = await rejectMerchantBotTokenChangeById(id);
+    try {
+      await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
+    } catch {
+      /* ignore */
+    }
+    await ctx.reply(
+      out.ok
+        ? `❌ Заявка #${id} отклонена.`
+        : `❌ Заявка #${id}: ${out.message}`,
+      { reply_markup: adminMainMenuKeyboard() },
+    );
     return true;
   }
 

@@ -2,10 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { getTelegramWebApp } from "../utils/telegram";
 import {
   fetchPlatformMyBusinesses,
+  fetchPlatformStoreSettings,
   postPlatformCheckWebhook,
   postPlatformToggleBot,
+  savePlatformStoreSettings,
   submitPlatformRegisterRequest,
   type PlatformMyBusinessDTO,
+  type PlatformStoreSettingsDTO,
 } from "../services/platformApi";
 
 function platformStatusLabel(status: string): string {
@@ -35,6 +38,12 @@ function webhookListLabel(ws: PlatformMyBusinessDTO["webhookStatus"]): string {
     : "Webhook: ❌ ошибка";
 }
 
+function webhookUrlLine(b: PlatformMyBusinessDTO): string {
+  const u = b.webhookUrl;
+  if (u != null && u.trim() !== "") return u.trim();
+  return "URL вебхука не задан или недоступен";
+}
+
 /** Платформа Mini App (главный бот клиенты + позже админ); витрины магазинов не трогаем. */
 export default function PlatformPage() {
   const [businesses, setBusinesses] = useState<PlatformMyBusinessDTO[]>([]);
@@ -54,6 +63,21 @@ export default function PlatformPage() {
   const [pendingByBusiness, setPendingByBusiness] = useState<
     Partial<Record<number, "toggle" | "webhook">>
   >({});
+
+  const [settingsBusinessId, setSettingsBusinessId] = useState<number | null>(
+    null,
+  );
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsErr, setSettingsErr] = useState<string | null>(null);
+  const [settingsOkMsg, setSettingsOkMsg] = useState<string | null>(null);
+  const [settingsSnap, setSettingsSnap] = useState<PlatformStoreSettingsDTO | null>(
+    null,
+  );
+  const [settingsName, setSettingsName] = useState("");
+  const [settingsFinik, setSettingsFinik] = useState("");
+  const [finikTouched, setFinikTouched] = useState(false);
+  const [settingsNewToken, setSettingsNewToken] = useState("");
 
   const load = useCallback(async () => {
     const tg = getTelegramWebApp();
@@ -84,20 +108,66 @@ export default function PlatformPage() {
     }
   }, []);
 
-  useEffect(() => {
-    window.Telegram?.WebApp?.ready();
-    getTelegramWebApp()?.expand?.();
-    void load();
-  }, [load]);
-
   const tgUserId = getTelegramWebApp()?.initDataUnsafe?.user?.id;
-
   const merchantTelegramId =
     typeof tgUserId === "number" &&
     Number.isFinite(tgUserId) &&
     tgUserId > 0
       ? tgUserId
       : NaN;
+
+  useEffect(() => {
+    window.Telegram?.WebApp?.ready();
+    getTelegramWebApp()?.expand?.();
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    if (settingsBusinessId == null) {
+      setSettingsSnap(null);
+      setSettingsErr(null);
+      setSettingsOkMsg(null);
+      setSettingsName("");
+      setSettingsFinik("");
+      setFinikTouched(false);
+      setSettingsNewToken("");
+      return;
+    }
+    if (!Number.isFinite(merchantTelegramId)) {
+      setSettingsErr("Нет данных пользователя Telegram.");
+      setSettingsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setSettingsLoading(true);
+    setSettingsErr(null);
+    setSettingsOkMsg(null);
+    void (async () => {
+      try {
+        const s = await fetchPlatformStoreSettings({
+          telegramId: merchantTelegramId,
+          businessId: settingsBusinessId,
+        });
+        if (cancelled) return;
+        setSettingsSnap(s);
+        setSettingsName(s.name);
+        setSettingsFinik("");
+        setFinikTouched(false);
+        setSettingsNewToken("");
+      } catch (e) {
+        if (!cancelled) {
+          setSettingsErr(
+            e instanceof Error ? e.message : "Не удалось загрузить настройки",
+          );
+        }
+      } finally {
+        if (!cancelled) setSettingsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [settingsBusinessId, merchantTelegramId]);
 
   const setPending = (
     businessId: number,
@@ -217,6 +287,79 @@ export default function PlatformPage() {
     }
   };
 
+  const closeSettingsModal = () => {
+    setSettingsBusinessId(null);
+  };
+
+  const handleSaveSettings = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+    if (
+      !Number.isFinite(merchantTelegramId) ||
+      settingsBusinessId == null ||
+      settingsSnap == null
+    ) {
+      setSettingsErr("Сначала дождитесь загрузки настроек.");
+      return;
+    }
+    const trimmedName = settingsName.trim();
+    const nameChanged = trimmedName !== settingsSnap.name.trim();
+    const newTok = settingsNewToken.replace(/\s/g, "").trim();
+
+    const payload: {
+      telegramId: number;
+      businessId: number;
+      storeName?: string;
+      finikApiKey?: string;
+      newBotToken?: string;
+    } = {
+      telegramId: merchantTelegramId,
+      businessId: settingsBusinessId,
+    };
+    if (nameChanged) payload.storeName = trimmedName;
+    if (finikTouched) payload.finikApiKey = settingsFinik.trim();
+    if (newTok !== "") payload.newBotToken = newTok;
+
+    if (
+      payload.storeName === undefined &&
+      payload.finikApiKey === undefined &&
+      payload.newBotToken === undefined
+    ) {
+      setSettingsErr("Нет изменений для сохранения.");
+      return;
+    }
+
+    setSettingsSaving(true);
+    setSettingsErr(null);
+    setSettingsOkMsg(null);
+    try {
+      const out = await savePlatformStoreSettings(payload);
+      setSettingsSnap({
+        businessId: settingsBusinessId,
+        name: out.name,
+        finikConfigured: out.finikConfigured,
+        pendingBotTokenChange: out.pendingBotTokenChange,
+      });
+      setSettingsName(out.name);
+      setSettingsFinik("");
+      setFinikTouched(false);
+      setSettingsNewToken("");
+      setSettingsOkMsg(
+        out.botTokenChangeRequestId != null
+          ? "Заявка на смену токена отправлена администратору на подтверждение."
+          : "Сохранено.",
+      );
+      setBusinesses((prev) =>
+        prev.map((row) =>
+          row.id === settingsBusinessId ? { ...row, name: out.name } : row,
+        ),
+      );
+    } catch (e) {
+      setSettingsErr(e instanceof Error ? e.message : "Не удалось сохранить");
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
   return (
     <div className="min-h-full bg-slate-950 text-slate-100">
       <div className="mx-auto flex max-w-lg flex-col gap-4 px-4 py-6 pb-28">
@@ -286,6 +429,9 @@ export default function PlatformPage() {
                         <p className="text-sm text-slate-400">
                           {webhookListLabel(b.webhookStatus)}
                         </p>
+                        <p className="break-all font-mono text-xs leading-relaxed text-slate-500">
+                          {webhookUrlLine(b)}
+                        </p>
                         <div className="mt-3 flex flex-wrap gap-2">
                           {b.isActive ? (
                             <button
@@ -318,6 +464,24 @@ export default function PlatformPage() {
                             className="rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:bg-slate-700 disabled:opacity-45"
                           >
                             {webhookBusy ? "Проверка…" : "Проверить webhook"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={
+                              settingsBusinessId === b.id &&
+                              (settingsLoading || settingsSaving)
+                            }
+                            onClick={() => {
+                              setSettingsErr(null);
+                              setSettingsOkMsg(null);
+                              setSettingsBusinessId(b.id);
+                            }}
+                            className="rounded-lg border border-amber-900/60 bg-amber-950/40 px-3 py-2 text-xs font-semibold text-amber-100 transition hover:bg-amber-900/45 disabled:opacity-45"
+                          >
+                            {settingsBusinessId === b.id &&
+                            (settingsLoading || settingsSaving)
+                              ? "…"
+                              : "Настройки"}
                           </button>
                         </div>
                       </div>
@@ -462,6 +626,172 @@ export default function PlatformPage() {
                 {submitting ? "Отправка…" : "Отправить заявку"}
               </button>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {settingsBusinessId != null ? (
+        <div
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 p-4 sm:items-center"
+          role="presentation"
+          onClick={(ev) => {
+            if (ev.target === ev.currentTarget) closeSettingsModal();
+          }}
+        >
+          <div
+            role="dialog"
+            aria-labelledby="platform-settings-title"
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl"
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <h2
+                id="platform-settings-title"
+                className="text-lg font-semibold text-white"
+              >
+                Настройки магазина
+              </h2>
+              <button
+                type="button"
+                className="-mr-1 -mt-1 rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+                onClick={closeSettingsModal}
+                aria-label="Закрыть"
+              >
+                ✕
+              </button>
+            </div>
+
+            {settingsLoading ? (
+              <p className="text-sm text-slate-400">Загрузка…</p>
+            ) : settingsErr != null && settingsSnap == null ? (
+              <p className="text-sm text-red-300" role="alert">
+                {settingsErr}
+              </p>
+            ) : (
+              <form
+                className="flex flex-col gap-4"
+                onSubmit={(e) => void handleSaveSettings(e)}
+              >
+                {settingsSnap?.pendingBotTokenChange ? (
+                  <p
+                    className="rounded-lg border border-amber-900/50 bg-amber-950/35 px-3 py-2 text-sm text-amber-100"
+                    role="status"
+                  >
+                    ⏳ Ожидается подтверждение администратором смены токена бота.
+                  </p>
+                ) : null}
+
+                <div>
+                  <label
+                    htmlFor="platform-settings-name"
+                    className="mb-1 block text-sm text-slate-400"
+                  >
+                    Название магазина
+                  </label>
+                  <input
+                    id="platform-settings-name"
+                    type="text"
+                    required
+                    minLength={2}
+                    maxLength={160}
+                    autoComplete="organization"
+                    disabled={settingsSnap == null}
+                    value={settingsName}
+                    onChange={(e) => setSettingsName(e.target.value)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none ring-emerald-500/50 focus:border-emerald-600 focus:ring-2 disabled:opacity-50"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="platform-settings-token"
+                    className="mb-1 block text-sm text-slate-400"
+                  >
+                    Новый токен бота
+                  </label>
+                  <input
+                    id="platform-settings-token"
+                    type="password"
+                    autoComplete="off"
+                    disabled={settingsSnap == null}
+                    value={settingsNewToken}
+                    onChange={(e) => setSettingsNewToken(e.target.value)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 font-mono text-sm text-white outline-none ring-emerald-500/50 focus:border-emerald-600 focus:ring-2 disabled:opacity-50"
+                  />
+                  <p className="mt-1 text-xs text-slate-500">
+                    Смена токена требует подтверждения администратором. Текущий
+                    токен не отображается.
+                  </p>
+                </div>
+
+                <div>
+                  <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                    <label
+                      htmlFor="platform-settings-finik"
+                      className="block text-sm text-slate-400"
+                    >
+                      Finik API Key
+                    </label>
+                    {settingsSnap?.finikConfigured ? (
+                      <span className="text-xs text-emerald-400/90">
+                        ключ задан
+                      </span>
+                    ) : null}
+                  </div>
+                  <input
+                    id="platform-settings-finik"
+                    type="password"
+                    autoComplete="off"
+                    disabled={settingsSnap == null}
+                    value={settingsFinik}
+                    onChange={(e) => {
+                      setFinikTouched(true);
+                      setSettingsFinik(e.target.value);
+                    }}
+                    placeholder="Введите ключ или сбросьте ниже"
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 font-mono text-sm text-white outline-none ring-emerald-500/50 focus:border-emerald-600 focus:ring-2 disabled:opacity-50"
+                  />
+                  <p className="mt-1 text-xs text-slate-500">
+                    Сохраняется сразу (без подтверждения). Ключ не показывается
+                    повторно.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={settingsSnap == null}
+                    onClick={() => {
+                      setFinikTouched(true);
+                      setSettingsFinik("");
+                    }}
+                    className="mt-2 text-xs font-medium text-amber-300/90 underline decoration-amber-700/80 hover:text-amber-200 disabled:opacity-45"
+                  >
+                    Сбросить ключ Finik
+                  </button>
+                </div>
+
+                {settingsErr ? (
+                  <p className="text-sm text-red-300" role="alert">
+                    {settingsErr}
+                  </p>
+                ) : null}
+                {settingsOkMsg ? (
+                  <p
+                    className="text-sm text-emerald-200/90"
+                    role="status"
+                  >
+                    {settingsOkMsg}
+                  </p>
+                ) : null}
+
+                <button
+                  type="submit"
+                  disabled={
+                    settingsSnap == null || settingsSaving || settingsLoading
+                  }
+                  className="mt-2 w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50"
+                >
+                  {settingsSaving ? "Сохранение…" : "Сохранить"}
+                </button>
+              </form>
+            )}
           </div>
         </div>
       ) : null}

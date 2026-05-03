@@ -8,6 +8,8 @@ export type PlatformMyBusinessDTO = {
   isActive: boolean;
   isBlocked: boolean;
   webhookStatus: "OK" | "ERROR";
+  /** URL вебхука из Telegram (без токена бота). */
+  webhookUrl: string | null;
 };
 
 export async function fetchPlatformMyBusinesses(params: {
@@ -36,6 +38,10 @@ export async function fetchPlatformMyBusinesses(params: {
         : Number(String(x.id ?? "").trim());
     const ws: PlatformMyBusinessDTO["webhookStatus"] =
       x.webhookStatus === "OK" ? "OK" : "ERROR";
+    const wu =
+      typeof x.webhookUrl === "string" && x.webhookUrl.trim() !== ""
+        ? x.webhookUrl.trim()
+        : null;
     return {
       id:
         typeof idNum === "number" &&
@@ -48,9 +54,115 @@ export async function fetchPlatformMyBusinesses(params: {
       isActive: Boolean(x.isActive),
       isBlocked: Boolean(x.isBlocked),
       webhookStatus: ws,
+      webhookUrl: wu,
     };
   });
   return mapped.filter((r) => r.id > 0);
+}
+
+export type PlatformStoreSettingsDTO = {
+  businessId: number;
+  name: string;
+  finikConfigured: boolean;
+  pendingBotTokenChange: boolean;
+};
+
+export async function fetchPlatformStoreSettings(params: {
+  telegramId: number;
+  businessId: number;
+}): Promise<PlatformStoreSettingsDTO> {
+  const tid = String(params.telegramId);
+  const q = new URLSearchParams({
+    businessId: String(params.businessId),
+  });
+  const res = await fetch(
+    apiAbsoluteUrl(`/api/platform/store-settings?${q.toString()}`),
+    {
+      method: "GET",
+      credentials: "omit",
+      headers: { "x-telegram-id": tid },
+    },
+  );
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    businessId?: number;
+    name?: string;
+    finikConfigured?: boolean;
+    pendingBotTokenChange?: boolean;
+  };
+  if (!res.ok) {
+    throw new Error(j.error ?? `HTTP ${res.status}`);
+  }
+  const bid =
+    typeof j.businessId === "number" && Number.isInteger(j.businessId)
+      ? j.businessId
+      : 0;
+  if (bid <= 0) {
+    throw new Error("Некорректный ответ сервера");
+  }
+  return {
+    businessId: bid,
+    name: String(j.name ?? ""),
+    finikConfigured: Boolean(j.finikConfigured),
+    pendingBotTokenChange: Boolean(j.pendingBotTokenChange),
+  };
+}
+
+export type PlatformStoreSettingsSaveResult = {
+  ok: true;
+  name: string;
+  finikConfigured: boolean;
+  pendingBotTokenChange: boolean;
+  botTokenChangeRequestId?: number;
+};
+
+export async function savePlatformStoreSettings(payload: {
+  telegramId: number;
+  businessId: number;
+  storeName?: string;
+  finikApiKey?: string;
+  newBotToken?: string;
+}): Promise<PlatformStoreSettingsSaveResult> {
+  const tid = String(payload.telegramId);
+  const body: Record<string, unknown> = {
+    businessId: payload.businessId,
+  };
+  if (payload.storeName !== undefined) body.storeName = payload.storeName;
+  if (payload.finikApiKey !== undefined) body.finikApiKey = payload.finikApiKey;
+  if (payload.newBotToken !== undefined) body.newBotToken = payload.newBotToken;
+
+  const res = await fetch(apiAbsoluteUrl("/api/platform/store-settings"), {
+    method: "POST",
+    credentials: "omit",
+    headers: {
+      "Content-Type": "application/json",
+      "x-telegram-id": tid,
+    },
+    body: JSON.stringify(body),
+  });
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    ok?: boolean;
+    name?: string;
+    finikConfigured?: boolean;
+    pendingBotTokenChange?: boolean;
+    botTokenChangeRequestId?: number;
+  };
+  if (!res.ok) {
+    throw new Error(j.error ?? `HTTP ${res.status}`);
+  }
+  if (j.ok !== true) {
+    throw new Error(j.error ?? "Некорректный ответ сервера");
+  }
+  return {
+    ok: true,
+    name: String(j.name ?? ""),
+    finikConfigured: Boolean(j.finikConfigured),
+    pendingBotTokenChange: Boolean(j.pendingBotTokenChange),
+    ...(typeof j.botTokenChangeRequestId === "number"
+      ? { botTokenChangeRequestId: j.botTokenChangeRequestId }
+      : {}),
+  };
 }
 
 export async function submitPlatformRegisterRequest(payload: {

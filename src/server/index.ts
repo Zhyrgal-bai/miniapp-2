@@ -16,6 +16,16 @@ import {
   platformCheckWebhookForMerchant,
   platformToggleBotForMerchant,
 } from "./platformMerchantBotControl.js";
+import {
+  approveMerchantBotTokenChangeById,
+  listPendingMerchantChangeRequests,
+  rejectMerchantBotTokenChangeById,
+} from "./platformMerchantChangeService.js";
+import {
+  getPlatformStoreSettingsForMerchant,
+  updatePlatformStoreSettingsForMerchant,
+  type PlatformStoreSettingsUpdateBody,
+} from "./platformMerchantStoreSettings.js";
 import { validateAndPersistPlatformRegistration } from "./platformRegisterRequest.js";
 import {
   approveRegistrationRequestById,
@@ -374,6 +384,78 @@ app.post("/api/platform/toggle-bot", async (req: Request, res: Response) => {
   }
 });
 
+app.get("/api/platform/store-settings", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromTrustedHeader(req);
+    if (!telegramId) {
+      res.status(400).json({
+        error: "Нужен заголовок x-telegram-id с числовым Telegram user id",
+      });
+      return;
+    }
+    const bid = Number((req.query as { businessId?: string }).businessId);
+    if (!Number.isInteger(bid) || bid <= 0) {
+      res.status(400).json({ error: "Нужен query businessId" });
+      return;
+    }
+    const out = await getPlatformStoreSettingsForMerchant({
+      telegramId,
+      businessId: bid,
+    });
+    if (!out.ok) {
+      res.status(out.statusCode).json({ error: out.error });
+      return;
+    }
+    res.json(out.settings);
+  } catch (e) {
+    console.error("GET /api/platform/store-settings:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post("/api/platform/store-settings", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromTrustedHeader(req);
+    if (!telegramId) {
+      res.status(400).json({
+        error: "Нужен заголовок x-telegram-id с числовым Telegram user id",
+      });
+      return;
+    }
+    const reqBody = req.body as { businessId?: unknown };
+    const rawBid = reqBody.businessId;
+    const businessId =
+      typeof rawBid === "number" && Number.isInteger(rawBid)
+        ? rawBid
+        : typeof rawBid === "string"
+          ? Number(rawBid.trim())
+          : NaN;
+    if (!Number.isInteger(businessId) || businessId <= 0) {
+      res.status(400).json({ error: "Нужен корректный businessId" });
+      return;
+    }
+    const raw = req.body as Record<string, unknown>;
+    const settingsBody: PlatformStoreSettingsUpdateBody = {
+      storeName: raw.storeName,
+      finikApiKey: raw.finikApiKey,
+      newBotToken: raw.newBotToken,
+    };
+    const out = await updatePlatformStoreSettingsForMerchant({
+      telegramId,
+      businessId,
+      body: settingsBody,
+    });
+    if (!out.ok) {
+      res.status(out.statusCode).json({ error: out.error });
+      return;
+    }
+    res.json(out);
+  } catch (e) {
+    console.error("POST /api/platform/store-settings:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
 app.post("/api/platform/register-request", async (req: Request, res: Response) => {
   try {
     const body = req.body as Record<string, unknown>;
@@ -557,6 +639,90 @@ app.post("/api/platform/admin/unblock", async (req: Request, res: Response) => {
     res.status(500).json({ error: "Ошибка сервера" });
   }
 });
+
+app.get(
+  "/api/platform/admin/bot-token-changes",
+  async (req: Request, res: Response) => {
+    try {
+      const telegramId = platformTelegramIdFromRequest(req);
+      if (!telegramId) {
+        res.status(400).json({ error: "Нужен x-telegram-id" });
+        return;
+      }
+      if (!isPlatformAdminTelegramId(telegramId)) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+      const rows = await listPendingMerchantChangeRequests();
+      res.json(rows);
+    } catch (e) {
+      console.error("GET /api/platform/admin/bot-token-changes:", e);
+      res.status(500).json({ error: "Ошибка сервера" });
+    }
+  },
+);
+
+app.post(
+  "/api/platform/admin/bot-token-changes/approve",
+  async (req: Request, res: Response) => {
+    try {
+      const telegramId = platformTelegramIdFromRequest(req);
+      if (!telegramId) {
+        res.status(400).json({ error: "Нужен x-telegram-id" });
+        return;
+      }
+      if (!isPlatformAdminTelegramId(telegramId)) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+      const id = Number((req.body as { id?: unknown }).id);
+      if (!Number.isInteger(id) || id <= 0) {
+        res.status(400).json({ error: "Нужен корректный id заявки" });
+        return;
+      }
+      const out = await approveMerchantBotTokenChangeById(id);
+      if (!out.ok) {
+        res.status(out.statusCode).json({ error: out.message });
+        return;
+      }
+      res.json({ ok: true, businessId: out.businessId });
+    } catch (e) {
+      console.error("POST .../bot-token-changes/approve:", e);
+      res.status(500).json({ error: "Ошибка сервера" });
+    }
+  },
+);
+
+app.post(
+  "/api/platform/admin/bot-token-changes/reject",
+  async (req: Request, res: Response) => {
+    try {
+      const telegramId = platformTelegramIdFromRequest(req);
+      if (!telegramId) {
+        res.status(400).json({ error: "Нужен x-telegram-id" });
+        return;
+      }
+      if (!isPlatformAdminTelegramId(telegramId)) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+      const id = Number((req.body as { id?: unknown }).id);
+      if (!Number.isInteger(id) || id <= 0) {
+        res.status(400).json({ error: "Нужен корректный id заявки" });
+        return;
+      }
+      const out = await rejectMerchantBotTokenChangeById(id);
+      if (!out.ok) {
+        res.status(out.statusCode).json({ error: out.message });
+        return;
+      }
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("POST .../bot-token-changes/reject:", e);
+      res.status(500).json({ error: "Ошибка сервера" });
+    }
+  },
+);
 
 app.use("/api", businessMiddleware);
 

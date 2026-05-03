@@ -16,6 +16,8 @@ export type PlatformMyBusinessDTO = {
   isBlocked: boolean;
   /** OK при валидном вебхуке по ответу getWebhookInfo; ERROR иначе. */
   webhookStatus: "OK" | "ERROR";
+  /** URL из getWebhookInfo (без токена); null если не настроен или ошибка API. */
+  webhookUrl: string | null;
 };
 
 /** Внутренний select + botToken только для проб getWebhookInfo, не попадает в DTO. */
@@ -80,6 +82,7 @@ async function mapRowsWithWebhook(
       isActive: r.isActive,
       isBlocked: r.isBlocked,
       webhookStatus,
+      webhookUrl: info.webhookUrl,
     };
   }
 
