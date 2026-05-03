@@ -57,7 +57,7 @@ function normalizeStoreName(raw: string): string {
   return raw.replace(/\s+/g, " ").trim();
 }
 
-/** Копия логики из `saasRegistration.provisionMerchantStoreInTx` — без правок бота. */
+/** Копия логики из `saasRegistration.provisionMerchantStoreInTx`. */
 async function provisionMerchantStoreInTx(
   tx: Prisma.TransactionClient,
   params: {
@@ -65,17 +65,21 @@ async function provisionMerchantStoreInTx(
     botToken: string;
     telegramId: string;
     slugSuffix: string;
+    finikApiKey?: string | null;
   },
 ): Promise<number> {
   const slug = `shop-${params.slugSuffix}`;
   const trialEnd = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
   const botTok = params.botToken.trim();
+  const finikTrimmed = params.finikApiKey?.trim();
+  const useFinik = finikTrimmed != null && finikTrimmed.length > 0;
 
   const business = await tx.business.create({
     data: {
       name: params.name.trim(),
       slug,
       botToken: botTok,
+      finikApiKey: useFinik ? finikTrimmed! : null,
       isActive: true,
       isBlocked: false,
       subscriptionStatus: SubscriptionStatus.TRIALING,
@@ -85,7 +89,10 @@ async function provisionMerchantStoreInTx(
   });
 
   await tx.settings.create({
-    data: { businessId: business.id },
+    data: {
+      businessId: business.id,
+      paymentProvider: useFinik ? "finik" : null,
+    },
   });
 
   const ownerUser = await tx.user.upsert({
@@ -202,6 +209,7 @@ export async function approveRegistrationRequestById(
         botToken: row.botToken.trim(),
         telegramId: row.telegramId,
         slugSuffix: `${requestId}-${Date.now().toString(36)}`,
+        finikApiKey: row.finikApiKey,
       });
 
       await tx.registrationRequest.update({

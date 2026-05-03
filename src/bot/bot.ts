@@ -18,6 +18,10 @@ import {
   handleRegistrationStartCommand,
 } from "./saasRegistration.js";
 import {
+  handleRegistrationSuperAdminCallback,
+  tryHandleRegistrationSuperAdminCommand,
+} from "./registrationBotAdminPanel.js";
+import {
   getDynamicOwnerBot,
   getDynamicTokenForBusiness,
 } from "./dynamicBots.js";
@@ -435,6 +439,14 @@ export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
   }
 
   tgBot.command("admin", async (ctx) => {
+    if (
+      role.type === "env" &&
+      role.botIndex === 0 &&
+      (await tryHandleRegistrationSuperAdminCommand(ctx))
+    ) {
+      return;
+    }
+
     const tr = (ctx as TenantTelegrafCtx).tenantRole ?? null;
     if (!isMerchantBotRole(tr)) {
       await ctx.reply("У вас нет доступа ❌");
@@ -615,6 +627,10 @@ export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
 
       const data = ctx.callbackQuery.data;
       if (!data) return;
+
+      if (await handleRegistrationSuperAdminCallback(ctx)) {
+        return;
+      }
 
       if (await handleRegistrationCallbacks(ctx)) {
         return;

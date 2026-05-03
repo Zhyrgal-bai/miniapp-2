@@ -10,10 +10,15 @@ import {
 } from "@prisma/client";
 import { logPrismaError, prisma } from "../server/db.js";
 import {
-  isValidBotTokenShape,
+  isValidFinikApiKey,
   isValidStoreName,
   validateKgPhone,
 } from "./saasRegistrationValidation.js";
+import {
+  MSG_BOT_ALREADY_REGISTERED,
+  precheckBotTokenBeforeRegistrationPersist,
+} from "../server/registrationTokenGate.js";
+import { consumeRegistrationSuperAdminPrivateMessage } from "./registrationBotAdminPanel.js";
 
 type BotRole =
   | { type: "env"; botIndex: number }
@@ -21,23 +26,39 @@ type BotRole =
 
 const REGISTRATION_COOLDOWN_MS = 10_000;
 
-/** Если `1` — заявка ждёт кнопки админа; иначе магазин создаётся сразу после токена и телефона. */
-function saasRequiresManualApproval(): boolean {
-  return String(process.env.SAAS_MANUAL_APPROVAL ?? "").trim() === "1";
-}
+const SUCCESS_REQUEST_SUBMITTED =
+  "⏳ Заявка отправлена. Ожидайте подтверждения администратора";
 
 /**
  * Состояние онбординга в `ctx.session` (ключ сессии = пользователь в private).
  * Telegraf 4: `import { session } from "telegraf"` (не `telegraf/session`).
  */
 export type RegistrationSessionState = {
-  step?: "name" | "token" | "phone";
+  step?: "name" | "token" | "phone" | "finik";
   /** ms epoch — ограничение частых повторных входов в мастер (/start register) */
   lastAttemptAt?: number;
   data: {
     name?: string;
     token?: string;
     phone?: string;
+    finikApiKey?: string;
+  };
+  /** Скрытая панель /admin (только ADMIN_IDS + пароль), регистрационный бот */
+  adminPanel?: {
+    /** Успешный ввод ADMIN_PANEL_PASSWORD */
+    isAdmin?: boolean;
+    awaitingPassword?: boolean;
+    inputMode?: "disable_id" | "extend_id" | "find_shop";
+    /** После ввода ID — ожидается подтверждение отключения (inline) */
+    pendingDisableBusinessId?: number;
+    /** Одноразовый токен для callback продления подписки */
+    extendConsumeToken?: string;
+    extendPendingBusinessId?: number;
+    /** Последняя активность авторизованного админа (ms epoch); TTL автовыхода */
+    lastActivityAt?: number;
+    passwordAttempts?: number;
+    /** Блокировка ввода пароля до timestamp (ms epoch) */
+    blockedUntil?: number;
   };
 };
 
@@ -223,47 +244,6 @@ async function hasPendingRegistrationForTelegram(
   return p != null;
 }
 
-async function businessHasBotToken(token: string): Promise<boolean> {
-  const b = await prisma.business.findUnique({
-    where: { botToken: token.trim() },
-    select: { id: true },
-  });
-  return b != null;
-}
-
-/** Токен занят активным Business или ожидающей заявкой. */
-async function tokenIsUnavailableForNewRequest(
-  token: string
-): Promise<"business" | "pending" | null> {
-  const trimmed = token.trim();
-  if (await businessHasBotToken(trimmed)) return "business";
-  const pending = await prisma.registrationRequest.findFirst({
-    where: {
-      botToken: trimmed,
-      status: RegistrationStatus.PENDING,
-    },
-    select: { id: true },
-  });
-  if (pending) return "pending";
-  return null;
-}
-
-async function verifyTokenWithTelegram(
-  remoteToken: string
-): Promise<{ ok: true; username: string } | { ok: false }> {
-  const meRes = await fetch(
-    `https://api.telegram.org/bot${encodeURIComponent(remoteToken.trim())}/getMe`
-  );
-  const meJson = (await meRes.json().catch(() => ({}))) as {
-    ok?: boolean;
-    result?: { username?: string };
-  };
-  if (!meRes.ok || !meJson.ok || !meJson.result) {
-    return { ok: false };
-  }
-  return { ok: true, username: String(meJson.result.username ?? "") };
-}
-
 function registrationMarkup(requestId: number) {
   return {
     inline_keyboard: [
@@ -275,7 +255,7 @@ function registrationMarkup(requestId: number) {
   };
 }
 
-/** Business + Settings + OWNER membership (общая транзакция для ручного и авто режима). */
+/** Business + Settings + OWNER membership (после approve админом). */
 async function provisionMerchantStoreInTx(
   tx: Prisma.TransactionClient,
   params: {
@@ -283,17 +263,21 @@ async function provisionMerchantStoreInTx(
     botToken: string;
     telegramId: string;
     slugSuffix: string;
+    finikApiKey?: string | null;
   },
 ): Promise<number> {
   const slug = `shop-${params.slugSuffix}`;
   const trialEnd = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
   const botTok = params.botToken.trim();
+  const finikTrimmed = params.finikApiKey?.trim();
+  const useFinik = finikTrimmed != null && finikTrimmed.length > 0;
 
   const business = await tx.business.create({
     data: {
       name: params.name.trim(),
       slug,
       botToken: botTok,
+      finikApiKey: useFinik ? finikTrimmed! : null,
       isActive: true,
       isBlocked: false,
       subscriptionStatus: SubscriptionStatus.TRIALING,
@@ -303,7 +287,10 @@ async function provisionMerchantStoreInTx(
   });
 
   await tx.settings.create({
-    data: { businessId: business.id },
+    data: {
+      businessId: business.id,
+      paymentProvider: useFinik ? "finik" : null,
+    },
   });
 
   const ownerUser = await tx.user.upsert({
@@ -345,6 +332,20 @@ export function attachSaasRegistration(bot: Telegraf, role: BotRole): void {
 
   bot.use(async (ctx, next) => {
     try {
+      if (ctx.chat?.type === "private") {
+        if (await consumeRegistrationSuperAdminPrivateMessage(ctx)) {
+          return;
+        }
+      }
+      await next();
+    } catch (e) {
+      console.error("registrationSuperAdmin middleware:", e);
+      await next();
+    }
+  });
+
+  bot.use(async (ctx, next) => {
+    try {
       const sess = getRegistrationSession(ctx);
       if (!sess?.step) {
         await next();
@@ -362,8 +363,8 @@ export function attachSaasRegistration(bot: Telegraf, role: BotRole): void {
 }
 
 /**
- * Пошаговая регистрация SaaS (имя → токен → телефон).
- * Возвращает `true`, если сообщение обработано (мастер активен или шаг выполнен).
+ * Пошаговая регистрация SaaS (имя → токен → телефон → Finik).
+ * Всегда только заявка PENDING до ручного approve. Возвращает `true`, если сообщение обработано.
  */
 export async function registrationFlow(
   _bot: Telegraf,
@@ -421,34 +422,14 @@ export async function registrationFlow(
 
   if (sess.step === "token") {
     const tokenTrimmed = clean.replace(/\s/g, "");
-    if (!isValidBotTokenShape(tokenTrimmed)) {
-      await ctx.reply(
-        "Неверный формат токена. Вставьте полный токен от @BotFather (без пробелов)."
-      );
-      return true;
-    }
-    const v = await verifyTokenWithTelegram(tokenTrimmed);
-    if (!v.ok) {
-      await ctx.reply(
-        "Токен не подходит. Скопируйте новый полностью из @BotFather (формат вида 123456:AA…)."
-      );
-      return true;
-    }
-    const tokenBlock = await tokenIsUnavailableForNewRequest(tokenTrimmed);
-    if (tokenBlock === "business") {
-      await ctx.reply("Этот бот уже используется");
+    const gate = await precheckBotTokenBeforeRegistrationPersist(tokenTrimmed);
+    if (!gate.ok) {
+      await ctx.reply(gate.error);
       logSaas("rejected_attempt", {
-        reason: "token_duplicate_business",
-        telegramUserId: telegramIdString(ctx),
-      });
-      return true;
-    }
-    if (tokenBlock === "pending") {
-      await ctx.reply(
-        "Этот токен уже указан в другой заявке на рассмотрении."
-      );
-      logSaas("rejected_attempt", {
-        reason: "token_duplicate_pending_request",
+        reason:
+          gate.error === MSG_BOT_ALREADY_REGISTERED
+            ? "token_already_registered"
+            : "invalid_bot_token",
         telegramUserId: telegramIdString(ctx),
       });
       return true;
@@ -470,9 +451,23 @@ export async function registrationFlow(
       return true;
     }
     sess.data.phone = phone;
+    sess.step = "finik";
+    await ctx.reply("Введите API ключ Finik (онлайн ККМ).");
+    return true;
+  }
+
+  if (sess.step === "finik") {
+    const finikInput = trimmedInput.trim();
+    if (!isValidFinikApiKey(finikInput)) {
+      await ctx.reply(
+        "Введите корректный API-ключ Finik (от 4 до 2048 символов, без переносов строк)."
+      );
+      return true;
+    }
 
     const name = sess.data.name ?? "";
     const token = sess.data.token ?? "";
+    const phone = sess.data.phone ?? "";
 
     try {
       const tid = telegramIdString(ctx);
@@ -484,7 +479,7 @@ export async function registrationFlow(
         },
         select: { id: true },
       });
-      if (duplicatePending && saasRequiresManualApproval()) {
+      if (duplicatePending) {
         await ctx.reply(
           "У вас уже есть заявка на рассмотрении — ответ придёт здесь после проверки."
         );
@@ -499,7 +494,7 @@ export async function registrationFlow(
       if (name === "" || token === "") {
         resetRegistrationWizardFields(ctx);
         await ctx.reply(
-          "Шаги сбросились. Нажмите /start и заново укажите название и токен бота."
+          "Шаги сбросились. Нажмите /start и заново укажите данные магазина."
         );
         logSaas("rejected_attempt", {
           reason: "stale_session_submit",
@@ -508,182 +503,75 @@ export async function registrationFlow(
         return true;
       }
 
-      if (saasRequiresManualApproval()) {
-        const row = await prisma.registrationRequest.create({
-          data: {
-            name,
-            botToken: token,
-            phone,
-            telegramId: tid,
-          },
-        });
-
-        resetRegistrationWizardFields(ctx);
-        logSaas("registration_completed", {
+      const finalGate = await precheckBotTokenBeforeRegistrationPersist(token);
+      if (!finalGate.ok) {
+        await ctx.reply(finalGate.error);
+        logSaas("rejected_attempt", {
+          reason: "token_conflict_before_insert",
           telegramUserId: tid,
-          requestId: row.id,
-          mode: "manual",
         });
-
-        await ctx.reply(
-          [
-            "Заявка принята ✅",
-            `Магазин: «${name}»`,
-            `Телефон: ${phone}`,
-            "",
-            "После одобрения вы сможете открыть витрину через вашего бота из @BotFather.",
-          ].join("\n")
-        );
-
-        const admins = adminTelegramNumericIds();
-        if (admins.length === 0) {
-          console.warn(
-            "[saasRegistration] SAAS_MANUAL_APPROVAL=1, но ADMIN_IDS пуст — заявке некому управлять из Telegram."
-          );
-          await ctx.reply(
-            "Заявка сохранена. Как только её подключат, напишем здесь же."
-          );
-          return true;
-        }
-
-        const lines = [
-          "📩 Новая заявка на магазин",
-          `ID заявки: #${row.id}`,
-          `Название: ${row.name}`,
-          `Телефон: ${row.phone}`,
-          `Telegram пользователя (id): ${row.telegramId}`,
-        ];
-
-        for (const aid of admins) {
-          await _bot.telegram
-            .sendMessage(aid, lines.join("\n"), {
-              reply_markup: registrationMarkup(row.id),
-            })
-            .catch((e: unknown) => {
-              console.error("notify admin:", aid, e);
-            });
-        }
         return true;
       }
 
-      let businessId: number;
-      try {
-        businessId = await prisma.$transaction(async (tx) => {
-          const tok = token.trim();
-          const taken = await tx.business.findUnique({
-            where: { botToken: tok },
-            select: { id: true },
-          });
-          if (taken != null) {
-            throw new Error("SAAS_TOKEN_BUSY");
-          }
-
-          const bid = await provisionMerchantStoreInTx(tx, {
-            name,
-            botToken: tok,
-            telegramId: tid,
-            slugSuffix: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
-          });
-
-          await tx.registrationRequest.create({
-            data: {
-              name,
-              botToken: tok,
-              phone,
-              telegramId: tid,
-              status: RegistrationStatus.APPROVED,
-            },
-          });
-          return bid;
-        });
-      } catch (txErr: unknown) {
-        if (txErr instanceof Error && txErr.message === "SAAS_TOKEN_BUSY") {
-          await ctx.reply(
-            "Этот бот уже занят другим магазином. Создайте нового у @BotFather и пришлите новый токен."
-          );
-          logSaas("rejected_attempt", {
-            reason: "token_race_duplicate",
-            telegramUserId: tid,
-          });
-          return true;
-        }
-        if (
-          txErr instanceof Prisma.PrismaClientKnownRequestError &&
-          txErr.code === "P2002"
-        ) {
-          await ctx.reply(
-            "Этот бот или данные уже используются. Проверьте токен или начните с /start заново."
-          );
-          logSaas("rejected_attempt", {
-            reason: "prisma_unique_conflict",
-            telegramUserId: tid,
-          });
-          return true;
-        }
-        throw txErr;
-      }
-
-      const { launchClientBot } = await import("./launchClientBot.js");
-      const launched = await launchClientBot({
-        id: businessId,
-        botToken: token.trim(),
+      const row = await prisma.registrationRequest.create({
+        data: {
+          name,
+          botToken: token,
+          phone,
+          finikApiKey: finikInput.trim(),
+          telegramId: tid,
+          status: RegistrationStatus.PENDING,
+        },
       });
 
       resetRegistrationWizardFields(ctx);
       logSaas("registration_completed", {
         telegramUserId: tid,
-        businessId,
-        mode: "auto",
+        requestId: row.id,
       });
 
-      const front = merchantMiniAppBaseUrl();
-      const shopQ = encodeURIComponent(String(businessId));
-      const userLines = [
-        `✅ Магазин «${name}» готов.`,
-        "",
-        "Ваш клиентский бот (токен из @BotFather) уже работает.",
-        "Откройте чат с этим ботом и нажмите /start — появится кнопка «Открыть» с вашей витриной Mini App.",
-        "Покупатели пишут тому же боту.",
-      ];
-      if (!launched.ok) {
-        userLines.push("", "Откройте магазин кнопкой ниже или повторите /start у своего бота чуть позже.");
-      }
-
-      await ctx.reply(
-        userLines.join("\n"),
-        front === ""
-          ? undefined
-          : {
-              reply_markup: {
-                inline_keyboard: [
-                  [
-                    {
-                      text: "🛍 Открыть мой магазин",
-                      web_app: { url: `${front}/?shop=${shopQ}` },
-                    },
-                  ],
-                ],
-              },
-            },
-      );
+      await ctx.reply(SUCCESS_REQUEST_SUBMITTED);
 
       const admins = adminTelegramNumericIds();
-      if (admins.length > 0) {
-        const note = [
-          "Новый магазин (автовключение)",
-          `«${name}» · id=${businessId}`,
-          `Владелец: ${tid}`,
-        ].join("\n");
-        for (const aid of admins) {
-          await _bot.telegram.sendMessage(aid, note).catch(() => undefined);
-        }
+      if (admins.length === 0) {
+        console.warn(
+          "[saasRegistration] ADMIN_IDS пуст — заявке в Telegram некому нажать «Одобрить».",
+        );
+        return true;
       }
+
+      const lines = [
+        "📩 Новая заявка на магазин",
+        `ID заявки: #${row.id}`,
+        `Название: ${row.name}`,
+        `Телефон: ${row.phone}`,
+        `Telegram пользователя (id): ${row.telegramId}`,
+        "Finik ККМ: да",
+      ];
+
+      for (const aid of admins) {
+        await _bot.telegram
+          .sendMessage(aid, lines.join("\n"), {
+            reply_markup: registrationMarkup(row.id),
+          })
+          .catch((e: unknown) => {
+            console.error("[saasRegistration] notify admin:", aid, e);
+          });
+      }
+      return true;
     } catch (e: unknown) {
       console.error("registration save:", e);
       logSaas("rejected_attempt", {
         reason: "save_error",
         telegramUserId: telegramIdString(ctx),
       });
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === "P2002"
+      ) {
+        await ctx.reply(MSG_BOT_ALREADY_REGISTERED);
+        return true;
+      }
       await ctx.reply(
         "Сейчас не получилось завершить регистрацию. Попробуйте через минуту или нажмите /start снова."
       );
@@ -780,9 +668,7 @@ export async function handleRegistrationStartCommand(
 
     if (hasPending) {
       await ctx.reply(
-        saasRequiresManualApproval()
-          ? "Заявка на рассмотрении — ответ будет в этом чате."
-          : "По вашему профилю ещё числится проверка. Ожидайте сообщение или напишите в поддержку платформы."
+        "Заявка на рассмотрении — ответ будет в этом чате."
       );
       logSaas("rejected_attempt", {
         reason: "already_pending_request",
@@ -961,10 +847,10 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
       where: { botToken: row.botToken.trim() },
     });
     if (bizInUse) {
-      console.warn(
-        "[saasRegistration] approve blocked: bot token already in Business",
-        { requestId, existingBusinessId: bizInUse.id }
-      );
+      console.warn("[saasRegistration] approve blocked: token already in Business", {
+        requestId,
+        existingBusinessId: bizInUse.id,
+      });
       await ctx.editMessageText(
         "⚠️ Этот токен уже привязан к активному Business."
       );
@@ -990,6 +876,7 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
         botToken: row.botToken.trim(),
         telegramId: row.telegramId,
         slugSuffix: `${requestId}-${Date.now().toString(36)}`,
+        finikApiKey: row.finikApiKey,
       });
 
       await tx.registrationRequest.update({

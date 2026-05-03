@@ -64,6 +64,12 @@ model Business {
   /// Last day we sent an expiry reminder (rate-limit: at most one reminder batch per calendar day).
   lastNotifiedAt DateTime?
 
+  /// Анти-спам: уже отправили напоминание «за 3 дня» для текущего цикла окончания подписки.
+  lastReminder3DaysAt DateTime?
+
+  /// Анти-спам: уже отправили напоминание «за 1 день».
+  lastReminder1DayAt DateTime?
+
   /// Витрина: цвета, баннер, logoUrl (JSON). Пустой объект = дефолты на сервере/клиенте.
   themeConfig Json? @default("{}")
 
@@ -81,6 +87,9 @@ model Business {
   orderItems  OrderItem[]
   paymentRequests PaymentRequest[]
 
+  /// Платежи Finik только за SaaS-подписку (не заказы витрины).
+  subscriptionFinikPayments SubscriptionFinikPayment[]
+
   @@index([isActive])
   @@index([subscriptionStatus])
   @@index([isBlocked])
@@ -96,6 +105,25 @@ model PaymentRequest {
   amountSom  Int?
   status     String   @default("pending")
   createdAt  DateTime @default(now())
+
+  @@index([businessId])
+  @@index([status])
+}
+
+/// Онлайн-оплата подписки через Finik (отдельно от заказов витрины и от PaymentRequest).
+model SubscriptionFinikPayment {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  finikPaymentId String? @unique
+  planDays       Int
+  amountSom      Int
+  payerTelegramId String
+
+  /// pending | completed | failed
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
 
   @@index([businessId])
   @@index([status])
@@ -148,6 +176,9 @@ model Settings {
   other  String?
   card   String?
   qr     String?
+
+  /// онлайн ККМ: `finik` при регистрации с ключом; полная оплата — отдельная интеграция.
+  paymentProvider String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -271,12 +302,35 @@ enum RegistrationStatus {
   REJECTED
 }
 
+/// Журнал опасных действий суперадмина рег-бота (без секретов).
+enum AdminActionType {
+  DELETE_SHOP
+  EXTEND_SUBSCRIPTION
+}
+
+model AdminActionLog {
+  id                Int             @id @default(autoincrement())
+  adminTelegramId   String
+  action            AdminActionType
+  targetBusinessId  Int
+  details           Json            @default("{}")
+  createdAt         DateTime        @default(now())
+
+  @@index([adminTelegramId])
+  @@index([targetBusinessId])
+  @@index([createdAt])
+}
+
 /// Incoming merchant signup requests (admin approves → Business + User created).
 model RegistrationRequest {
   id         Int                  @id @default(autoincrement())
   name       String
   botToken   String
   phone      String
+
+  /// Finik (онлайн ККМ), подставляется в Business.finikApiKey после approve.
+  finikApiKey String?
+
   telegramId String
   status     RegistrationStatus @default(PENDING)
   createdAt  DateTime             @default(now())

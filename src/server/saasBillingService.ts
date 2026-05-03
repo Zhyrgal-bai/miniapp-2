@@ -1,14 +1,19 @@
-import { SubscriptionStatus } from "@prisma/client";
+import { SubscriptionStatus, type Prisma } from "@prisma/client";
 import { prisma } from "./db.js";
+
+type DbClient = Prisma.TransactionClient | typeof prisma;
 import {
   initDynamicStoreBot,
   stopDynamicStoreBotInMemory,
 } from "../bot/dynamicBots.js";
-import { isSubscriptionFullyExpired } from "./subscriptionMaintenance.js";
+import { shouldDeactivateStoreForSubscription } from "./subscriptionMaintenance.js";
 import { notifyPlatformAdminsNewPaymentRequest } from "./saasBillingNotify.js";
 
 export const SAAS_SUBSCRIPTION_PRICE_20_D = 1500;
 export const SAAS_SUBSCRIPTION_PRICE_30_D = 5500;
+
+/** 90-дневный план как 3×30 (синхронизация с автоматическими платежами Finik). */
+export const SAAS_SUBSCRIPTION_PRICE_90_D = SAAS_SUBSCRIPTION_PRICE_30_D * 3;
 
 export const SUBSCRIPTION_EXPIRED_USER_MESSAGE =
   "❌ Subscription expired. Use /pay";
@@ -25,7 +30,7 @@ export async function syncBusinessSubscriptionActivationState(
   const b = await prisma.business.findUnique({ where: { id: businessId } });
   if (b == null || b.isBlocked) return;
 
-  if (!isSubscriptionFullyExpired(b, now)) return;
+  if (!shouldDeactivateStoreForSubscription(b, now)) return;
 
   if (!b.isActive) return;
 
@@ -34,6 +39,8 @@ export async function syncBusinessSubscriptionActivationState(
     data: {
       isActive: false,
       subscriptionStatus: SubscriptionStatus.EXPIRED,
+      lastReminder3DaysAt: null,
+      lastReminder1DayAt: null,
     },
   });
 }
@@ -137,6 +144,61 @@ export async function adminApproveSaasPayment(
   }
 
   return { ok: true };
+}
+
+/** Дни и сумма для планов SaaS (30 / 90); для ручных заявок по-прежнему 20 / 30 дней. */
+export function saasFinikSubscriptionPlanSpec(
+  plan: 30 | 90,
+): { days: number; amountSom: number } {
+  if (plan === 30) return { days: 30, amountSom: SAAS_SUBSCRIPTION_PRICE_30_D };
+  return { days: 90, amountSom: SAAS_SUBSCRIPTION_PRICE_90_D };
+}
+
+/**
+ * Продление подписки на N дней после успешной оплаты Finik.
+ * При `isBlocked` дата продлевается, витрину не включаем (`isActive` остаётся false).
+ */
+export async function extendBusinessSubscriptionAfterFinikPayment(
+  businessId: number,
+  days: number,
+  now = new Date(),
+  tx?: DbClient,
+): Promise<{ botToken: string | null; shouldHydrateBot: boolean } | null> {
+  const db = tx ?? prisma;
+  const b = await db.business.findUnique({
+    where: { id: businessId },
+    select: {
+      subscriptionEndsAt: true,
+      isBlocked: true,
+      botToken: true,
+    },
+  });
+  if (b == null) return null;
+
+  const currentEnd = b.subscriptionEndsAt;
+  const baseStart =
+    currentEnd != null && currentEnd.getTime() > now.getTime()
+      ? currentEnd
+      : now;
+  const subscriptionEndsAt = new Date(baseStart.getTime() + days * MS_DAY);
+
+  const isActive = !b.isBlocked;
+
+  await db.business.update({
+    where: { id: businessId },
+    data: {
+      subscriptionEndsAt,
+      subscriptionStatus: SubscriptionStatus.ACTIVE,
+      isActive,
+      lastReminder3DaysAt: null,
+      lastReminder1DayAt: null,
+    },
+  });
+
+  return {
+    botToken: b.botToken,
+    shouldHydrateBot: isActive,
+  };
 }
 
 export async function adminRejectSaasPayment(

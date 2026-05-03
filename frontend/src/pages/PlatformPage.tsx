@@ -2,23 +2,58 @@ import { useCallback, useEffect, useState } from "react";
 import { getTelegramWebApp } from "../utils/telegram";
 import {
   fetchPlatformMyBusinesses,
+  postPlatformCheckWebhook,
+  postPlatformToggleBot,
   submitPlatformRegisterRequest,
   type PlatformMyBusinessDTO,
 } from "../services/platformApi";
+
+function platformStatusLabel(status: string): string {
+  const map: Record<string, string> = {
+    blocked: "🔒 Заблокирован",
+    inactive: "🔴 Не активен",
+    subscription_expired: "⏳ Подписка истекла",
+    trialing: "🟡 Пробный период",
+    active: "🟢 Активен",
+    past_due: "⚠️ Просрочен платёж",
+    canceled: "⛔ Отменён",
+    expired: "⏹ Истёк",
+  };
+  return map[status] ?? status;
+}
+
+/** Состояние бота для владельца (вкл / выкл / блок). */
+function botRunStatusLabel(b: PlatformMyBusinessDTO): string {
+  if (b.isBlocked) return "⛔ Заблокирован";
+  if (!b.isActive) return "🔴 Отключён";
+  return "🟢 Активен";
+}
+
+function webhookListLabel(ws: PlatformMyBusinessDTO["webhookStatus"]): string {
+  return ws === "OK"
+    ? "Webhook: ✅ OK"
+    : "Webhook: ❌ ошибка";
+}
 
 /** Платформа Mini App (главный бот клиенты + позже админ); витрины магазинов не трогаем. */
 export default function PlatformPage() {
   const [businesses, setBusinesses] = useState<PlatformMyBusinessDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [infoBanner, setInfoBanner] = useState<string | null>(null);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [storeName, setStoreName] = useState("");
   const [botToken, setBotToken] = useState("");
   const [phone, setPhone] = useState("");
+  const [finikApiKey, setFinikApiKey] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successFlash, setSuccessFlash] = useState(false);
+  /** Ряд активных действий по businessId для UX загрузки. */
+  const [pendingByBusiness, setPendingByBusiness] = useState<
+    Partial<Record<number, "toggle" | "webhook">>
+  >({});
 
   const load = useCallback(async () => {
     const tg = getTelegramWebApp();
@@ -37,6 +72,7 @@ export default function PlatformPage() {
 
     setLoading(true);
     setError(null);
+    setInfoBanner(null);
     try {
       const rows = await fetchPlatformMyBusinesses({ telegramId });
       setBusinesses(rows);
@@ -55,6 +91,84 @@ export default function PlatformPage() {
   }, [load]);
 
   const tgUserId = getTelegramWebApp()?.initDataUnsafe?.user?.id;
+
+  const merchantTelegramId =
+    typeof tgUserId === "number" &&
+    Number.isFinite(tgUserId) &&
+    tgUserId > 0
+      ? tgUserId
+      : NaN;
+
+  const setPending = (
+    businessId: number,
+    kind: "toggle" | "webhook",
+    busy: boolean,
+  ) => {
+    setPendingByBusiness((prev) => {
+      const next = { ...prev };
+      if (busy) next[businessId] = kind;
+      else delete next[businessId];
+      return next;
+    });
+  };
+
+  const handleToggleBot = async (b: PlatformMyBusinessDTO) => {
+    if (!Number.isFinite(merchantTelegramId)) {
+      setError("Нет данных пользователя Telegram.");
+      return;
+    }
+    const action = b.isActive ? "disable" : "enable";
+    setError(null);
+    setInfoBanner(null);
+    setPending(b.id, "toggle", true);
+    try {
+      const r = await postPlatformToggleBot({
+        telegramId: merchantTelegramId,
+        businessId: b.id,
+        action,
+      });
+      setBusinesses((prev) =>
+        prev.map((row) =>
+          row.id === b.id ? { ...row, isActive: r.isActive } : row,
+        ),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось изменить бота");
+    } finally {
+      setPending(b.id, "toggle", false);
+    }
+  };
+
+  const handleCheckWebhook = async (b: PlatformMyBusinessDTO) => {
+    if (!Number.isFinite(merchantTelegramId)) {
+      setError("Нет данных пользователя Telegram.");
+      return;
+    }
+    setError(null);
+    setInfoBanner(null);
+    setPending(b.id, "webhook", true);
+    try {
+      const r = await postPlatformCheckWebhook({
+        telegramId: merchantTelegramId,
+        businessId: b.id,
+      });
+      const msgTail =
+        r.lastErrorMessage && r.lastErrorMessage.trim() !== ""
+          ? ` — ${r.lastErrorMessage}`
+          : "";
+      setInfoBanner(`${b.name}: ${r.status === "OK" ? "OK" : "ERROR"}${msgTail}`);
+      setBusinesses((prev) =>
+        prev.map((row) =>
+          row.id === b.id ? { ...row, webhookStatus: r.status } : row,
+        ),
+      );
+    } catch (e) {
+      setInfoBanner(null);
+      setError(e instanceof Error ? e.message : "Не удалось проверить webhook");
+    } finally {
+      setPending(b.id, "webhook", false);
+    }
+  };
 
   const openModal = () => {
     setSubmitError(null);
@@ -86,11 +200,13 @@ export default function PlatformPage() {
         storeName: storeName.trim(),
         botToken: botToken.trim(),
         phone: phone.trim(),
+        finikApiKey: finikApiKey.trim(),
         telegramId: uid,
       });
       setStoreName("");
       setBotToken("");
       setPhone("");
+      setFinikApiKey("");
       setModalOpen(false);
       setSuccessFlash(true);
       window.setTimeout(() => setSuccessFlash(false), 5000);
@@ -115,42 +231,102 @@ export default function PlatformPage() {
             className="rounded-xl border border-emerald-900/60 bg-emerald-950/50 px-4 py-3 text-center text-sm text-emerald-200"
             role="status"
           >
-            Заявка отправлена ✅
+            ⏳ Заявка отправлена. Ожидайте подтверждения администратора
           </p>
         ) : null}
 
         {loading ? (
           <p className="text-sm text-slate-400">Загрузка…</p>
-        ) : error ? (
-          <div
-            className="rounded-xl border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200"
-            role="alert"
-          >
-            {error}
-          </div>
-        ) : businesses.length === 0 ? (
-          <div
-            className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-6 text-center text-sm text-slate-400"
-            role="status"
-          >
-            У вас пока нет магазинов, где вы указаны как владелец.
-          </div>
         ) : (
-          <ul className="flex flex-col gap-3">
-            {businesses.map((b) => (
-              <li
-                key={b.id}
-                className="rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-4 shadow-lg shadow-black/20"
+          <>
+            {error ? (
+              <div
+                className="rounded-xl border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200"
+                role="alert"
               >
-                <div className="flex flex-col gap-2">
-                  <h2 className="text-base font-medium text-white">{b.name}</h2>
-                  <p className="text-sm text-slate-300">
-                    {b.isActive ? "🟢 Активен" : "🔴 Не активен"}
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ul>
+                {error}
+              </div>
+            ) : null}
+            {infoBanner ? (
+              <p
+                className="rounded-xl border border-emerald-900/50 bg-emerald-950/35 px-4 py-3 text-sm text-emerald-100"
+                role="status"
+              >
+                {infoBanner}
+              </p>
+            ) : null}
+            {!error && businesses.length === 0 ? (
+              <div
+                className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-6 text-center text-sm text-slate-400"
+                role="status"
+              >
+                У вас пока нет магазинов, где вы указаны как владелец.
+              </div>
+            ) : null}
+            {businesses.length > 0 ? (
+              <ul className="flex flex-col gap-3">
+                {businesses.map((b) => {
+                  const toggleBusy = pendingByBusiness[b.id] === "toggle";
+                  const webhookBusy = pendingByBusiness[b.id] === "webhook";
+                  return (
+                    <li
+                      key={b.id}
+                      className="rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-4 shadow-lg shadow-black/20"
+                    >
+                      <div className="flex flex-col gap-2">
+                        <h2 className="text-base font-medium text-white">
+                          {b.name}
+                        </h2>
+                        <p className="text-sm font-medium text-slate-100">
+                          {botRunStatusLabel(b)}
+                        </p>
+                        <p className="text-sm text-slate-400">
+                          Подписка: {platformStatusLabel(b.status)}
+                        </p>
+                        <p className="text-sm text-slate-400">
+                          {webhookListLabel(b.webhookStatus)}
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {b.isActive ? (
+                            <button
+                              type="button"
+                              disabled={toggleBusy}
+                              onClick={() => void handleToggleBot(b)}
+                              className="rounded-lg border border-red-900/70 bg-red-950/60 px-3 py-2 text-xs font-semibold text-red-100 transition hover:bg-red-900/70 disabled:opacity-45"
+                            >
+                              {toggleBusy ? "…" : "Выключить"}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={toggleBusy || b.isBlocked}
+                              title={
+                                b.isBlocked
+                                  ? "⛔ Магазин заблокирован администратором"
+                                  : undefined
+                              }
+                              onClick={() => void handleToggleBot(b)}
+                              className="rounded-lg border border-emerald-900/70 bg-emerald-950/50 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-900/55 disabled:opacity-45"
+                            >
+                              {toggleBusy ? "…" : "Включить"}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            disabled={webhookBusy}
+                            onClick={() => void handleCheckWebhook(b)}
+                            className="rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:bg-slate-700 disabled:opacity-45"
+                          >
+                            {webhookBusy ? "Проверка…" : "Проверить webhook"}
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+          </>
         )}
       </div>
 
@@ -253,6 +429,23 @@ export default function PlatformPage() {
                 <p className="mt-1 text-xs text-slate-500">
                   Формат КР: +996 и 9 цифр, или 0 и 9 цифр
                 </p>
+              </div>
+              <div>
+                <label
+                  htmlFor="platform-finik"
+                  className="mb-1 block text-sm text-slate-400"
+                >
+                  API ключ Finik (онлайн ККМ)
+                </label>
+                <input
+                  id="platform-finik"
+                  type="password"
+                  autoComplete="off"
+                  required
+                  value={finikApiKey}
+                  onChange={(e) => setFinikApiKey(e.target.value)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 font-mono text-sm text-white outline-none ring-emerald-500/50 focus:border-emerald-600 focus:ring-2"
+                />
               </div>
 
               {submitError ? (

@@ -123,10 +123,106 @@ export async function createFinikMerchantSession(
 }
 
 /**
+ * Платёж за SaaS-подписку: callback `POST /api/payments/finik-webhook` (не заказ витрины).
+ */
+export async function createFinikSaasSubscriptionSession(
+  business: {
+    id: number;
+    finikApiKey: string | null;
+    finikSecret: string | null;
+  },
+  input: {
+    /** ID строки `SubscriptionFinikPayment` */
+    subscriptionPaymentRowId: number;
+    amountSom: number;
+    currency?: string;
+  },
+): Promise<
+  | { ok: true; paymentId: string; paymentUrl: string }
+  | { ok: false; error: string }
+> {
+  const useMock =
+    process.env.FINIK_USE_MOCK === "1" ||
+    process.env.FINIK_USE_MOCK === "true" ||
+    !business.finikApiKey?.trim() ||
+    !business.finikSecret?.trim();
+
+  if (useMock) {
+    const paymentId = `finik_sub_${Date.now()}_${input.subscriptionPaymentRowId}`;
+    const paymentUrl = `https://pay.finik.kg/?amount=${input.amountSom}&orderId=${encodeURIComponent(paymentId)}`;
+    return { ok: true, paymentId, paymentUrl };
+  }
+
+  const origin = publicApiOrigin();
+  if (!origin) {
+    return {
+      ok: false,
+      error: "Сервер: задайте API_URL (публичный URL) для callback Finik",
+    };
+  }
+
+  const callbackUrl = `${origin}/api/payments/finik-webhook`;
+  const ext = `saas_sub:${input.subscriptionPaymentRowId}`;
+
+  const url = `${finikApiBase()}${finikCreatePaymentsPath()}`;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${business.finikApiKey!.trim()}`,
+        "X-Api-Secret": business.finikSecret!.trim(),
+      },
+      body: JSON.stringify({
+        amount: input.amountSom,
+        currency: input.currency ?? "KGS",
+        order_id: ext,
+        external_id: ext,
+        callback_url: callbackUrl,
+        return_url: callbackUrl,
+      }),
+    });
+
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) {
+      console.error("Finik subscription payment HTTP", res.status, json);
+      return {
+        ok: false,
+        error: "Finik API отклонил запрос (проверьте ключи и URL API)",
+      };
+    }
+
+    const paymentId =
+      (typeof json.payment_id === "string" && json.payment_id) ||
+      (typeof json.id === "string" && json.id) ||
+      (typeof json.paymentId === "string" && json.paymentId) ||
+      "";
+    const paymentUrl =
+      (typeof json.payment_url === "string" && json.payment_url) ||
+      (typeof json.url === "string" && json.url) ||
+      (typeof json.checkout_url === "string" && json.checkout_url) ||
+      "";
+
+    if (!paymentId || !paymentUrl) {
+      console.error("Finik subscription payment: unexpected body", json);
+      return {
+        ok: false,
+        error: "Finik: неверный ответ API (ожидаются payment id и url)",
+      };
+    }
+
+    return { ok: true, paymentId, paymentUrl };
+  } catch (e) {
+    console.error("Finik subscription payment fetch:", e);
+    return { ok: false, error: "Ошибка сети при обращении к Finik" };
+  }
+}
+
+/**
  * Проверка подписи вебхука (если Finik шлёт HMAC в заголовке).
  * Настройте имя заголовка через FINIK_WEBHOOK_SIGNATURE_HEADER.
  */
-function verifyFinikWebhookSignature(
+export function verifyFinikWebhookSignature(
   businessSecret: string | null,
   req: Request,
   rawBody: string

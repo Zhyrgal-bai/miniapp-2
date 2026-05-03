@@ -21,3 +21,10 @@ export function isValidStoreName(raw: string): boolean {
   const n = raw.replace(/\s+/g, " ").trim();
   return n.length >= 2 && n.length <= 160;
 }
+
+/** API-ключ Finik: непустая строка без переводов строк, разумная длина. */
+export function isValidFinikApiKey(raw: string): boolean {
+  const t = String(raw ?? "").trim();
+  if (t.length < 4 || t.length > 2048) return false;
+  return !/[\r\n\0]/.test(t);
+}

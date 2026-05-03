@@ -1,18 +1,21 @@
 import { RegistrationStatus } from "@prisma/client";
 import { prisma } from "./db.js";
 import { cleanInput, validateKgPhone } from "./orderInputSanitize.js";
+import { isValidFinikApiKey } from "../bot/saasRegistrationValidation.js";
+import {
+  MSG_BOT_ALREADY_REGISTERED,
+  precheckBotTokenBeforeRegistrationPersist,
+} from "./registrationTokenGate.js";
 
 export const PLATFORM_STORE_NAME_MIN = 2;
 export const PLATFORM_STORE_NAME_MAX = 160;
-
-/** Типичный формат BotFather: `<bot_id>:<secret>`. */
-const BOT_TOKEN_BASIC_RE = /^\d{6,22}:[A-Za-z0-9_-]{25,}$/;
 
 export type PlatformRegisterBody = {
   storeName?: unknown;
   botToken?: unknown;
   phone?: unknown;
   telegramId?: unknown;
+  finikApiKey?: unknown;
 };
 
 export type PlatformRegisterResult =
@@ -48,12 +51,14 @@ export async function validateAndPersistPlatformRegistration(
   }
 
   const botToken =
-    typeof body.botToken === "string" ? body.botToken.trim() : "";
-  if (!BOT_TOKEN_BASIC_RE.test(botToken)) {
+    typeof body.botToken === "string" ? body.botToken.replace(/\s/g, "").trim() : "";
+  const tokenGate = await precheckBotTokenBeforeRegistrationPersist(botToken);
+  if (!tokenGate.ok) {
     return {
       ok: false,
-      statusCode: 400,
-      error: "Неверный формат токена бота",
+      statusCode:
+        tokenGate.error === MSG_BOT_ALREADY_REGISTERED ? 409 : 400,
+      error: tokenGate.error,
     };
   }
 
@@ -66,6 +71,16 @@ export async function validateAndPersistPlatformRegistration(
     };
   }
 
+  const finikRaw = typeof body.finikApiKey === "string" ? body.finikApiKey : "";
+  if (!isValidFinikApiKey(finikRaw)) {
+    return {
+      ok: false,
+      statusCode: 400,
+      error: "Некорректный API-ключ Finik",
+    };
+  }
+  const finikApiKeyTrimmed = finikRaw.trim();
+
   const telegramId = normalizeTelegramId(body.telegramId);
   if (!telegramId) {
     return {
@@ -75,16 +90,49 @@ export async function validateAndPersistPlatformRegistration(
     };
   }
 
-  const row = await prisma.registrationRequest.create({
-    data: {
-      name: storeRaw,
-      botToken,
-      phone,
+  const pendingSameUser = await prisma.registrationRequest.findFirst({
+    where: {
       telegramId,
       status: RegistrationStatus.PENDING,
     },
     select: { id: true },
   });
+  if (pendingSameUser) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "У вас уже есть заявка на рассмотрении",
+    };
+  }
 
-  return { ok: true, id: row.id };
+  const gateAgain = await precheckBotTokenBeforeRegistrationPersist(botToken);
+  if (!gateAgain.ok) {
+    return {
+      ok: false,
+      statusCode:
+        gateAgain.error === MSG_BOT_ALREADY_REGISTERED ? 409 : 400,
+      error: gateAgain.error,
+    };
+  }
+
+  try {
+    const row = await prisma.registrationRequest.create({
+      data: {
+        name: storeRaw,
+        botToken,
+        phone,
+        finikApiKey: finikApiKeyTrimmed,
+        telegramId,
+        status: RegistrationStatus.PENDING,
+      },
+      select: { id: true },
+    });
+    return { ok: true, id: row.id };
+  } catch {
+    return {
+      ok: false,
+      statusCode: 500,
+      error: "Не удалось сохранить заявку",
+    };
+  }
 }

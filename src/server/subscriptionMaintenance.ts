@@ -1,42 +1,19 @@
 import { MembershipRole, SubscriptionStatus } from "@prisma/client";
 import { prisma } from "./db.js";
 
-function pluralDaysRu(n: number): string {
-  const m = n % 10;
-  const m100 = n % 100;
-  if (m100 >= 11 && m100 <= 14) return "дней";
-  if (m === 1) return "день";
-  if (m >= 2 && m <= 4) return "дня";
-  return "дней";
-}
-
-/** Calendar-day difference: `later` vs `earlier` (same semantics as date-fns `differenceInDays`). */
+/** Calendar-day difference: `later` vs `earlier`. */
 function differenceInCalendarDays(later: Date, earlier: Date): number {
   const utcLater = Date.UTC(
     later.getFullYear(),
     later.getMonth(),
-    later.getDate()
+    later.getDate(),
   );
   const utcEarlier = Date.UTC(
     earlier.getFullYear(),
     earlier.getMonth(),
-    earlier.getDate()
+    earlier.getDate(),
   );
   return Math.round((utcLater - utcEarlier) / 86400000);
-}
-
-function startOfUtcDay(d: Date): Date {
-  return new Date(
-    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
-  );
-}
-
-function alreadyNotifiedToday(
-  lastNotifiedAt: Date | null,
-  now: Date
-): boolean {
-  if (lastNotifiedAt == null) return false;
-  return startOfUtcDay(lastNotifiedAt).getTime() === startOfUtcDay(now).getTime();
 }
 
 /**
@@ -44,7 +21,7 @@ function alreadyNotifiedToday(
  */
 export function isSubscriptionFullyExpired(
   b: { trialEndsAt: Date | null; subscriptionEndsAt: Date | null },
-  now: Date
+  now: Date,
 ): boolean {
   if (b.trialEndsAt == null && b.subscriptionEndsAt == null) {
     return false;
@@ -62,36 +39,48 @@ export function isSubscriptionFullyExpired(
   return true;
 }
 
+/**
+ * Отключить магазин: истёк оплаченный период или нет действующего trial/оплаты.
+ * (Подписка по `subscriptionEndsAt` может истечь при ещё действующем trial — всё равно отключаем по ТЗ.)
+ */
+export function shouldDeactivateStoreForSubscription(
+  b: { trialEndsAt: Date | null; subscriptionEndsAt: Date | null },
+  now: Date,
+): boolean {
+  const subscriptionPast =
+    b.subscriptionEndsAt != null &&
+    b.subscriptionEndsAt.getTime() < now.getTime();
+  return subscriptionPast || isSubscriptionFullyExpired(b, now);
+}
+
 function daysLeftUntil(end: Date | null, now: Date): number | null {
   if (end == null) return null;
   if (end.getTime() <= now.getTime()) return null;
   return differenceInCalendarDays(end, now);
 }
 
-async function findPrimaryOwnerTelegramId(
-  businessId: number
+/** Только владелец магазина (без fallback на ADMIN). */
+async function findBusinessOwnerTelegramId(
+  businessId: number,
 ): Promise<string | null> {
   const owner = await prisma.membership.findFirst({
     where: { businessId, role: MembershipRole.OWNER },
     include: { user: true },
     orderBy: { id: "asc" },
   });
-  if (owner?.user?.telegramId) return owner.user.telegramId;
-  const anyUser = await prisma.membership.findFirst({
-    where: { businessId },
-    include: { user: true },
-    orderBy: { id: "asc" },
-  });
-  return anyUser?.user?.telegramId ?? null;
+  const tid = owner?.user?.telegramId;
+  return typeof tid === "string" && /^\d+$/.test(tid.trim())
+    ? tid.trim()
+    : null;
 }
 
 async function sendTelegramToUser(
   botToken: string,
   telegramUserId: string,
-  text: string
-): Promise<void> {
+  text: string,
+): Promise<boolean> {
   const chatId = Number(telegramUserId);
-  if (!Number.isFinite(chatId) || chatId <= 0) return;
+  if (!Number.isFinite(chatId) || chatId <= 0) return false;
   try {
     const res = await fetch(
       `https://api.telegram.org/bot${encodeURIComponent(botToken)}/sendMessage`,
@@ -99,80 +88,145 @@ async function sendTelegramToUser(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ chat_id: chatId, text }),
-      }
+      },
     );
     const json = (await res.json().catch(() => ({}))) as { ok?: boolean };
     if (!res.ok || json.ok === false) {
-      console.error("subscriptionMaintenance sendMessage failed", res.status, json);
+      console.error(
+        "subscriptionMaintenance sendMessage failed",
+        res.status,
+        json,
+      );
+      return false;
     }
+    return true;
   } catch (e) {
     console.error("subscriptionMaintenance sendMessage:", e);
+    return false;
   }
 }
 
-const REMINDER_DAYS = new Set([3, 1]);
-
 /**
- * Hourly (or configured) pass: reminders at 3 and 1 days before trial/sub end,
- * deactivate expired stores, optional Telegram to owner.
+ * Ежедневный проход: напоминания за 3 и 1 день до `subscriptionEndsAt`, авто-отключение просроченных,
+ * уведомление владельцу. `isBlocked` не трогаем; токен бота только для sendMessage.
  */
-export async function runSubscriptionMaintenanceOnce(now = new Date()): Promise<void> {
-  const businesses = await prisma.business.findMany();
+export async function runSubscriptionMaintenanceOnce(
+  now = new Date(),
+): Promise<void> {
+  const businesses = await prisma.business.findMany({
+    select: {
+      id: true,
+      isActive: true,
+      isBlocked: true,
+      botToken: true,
+      trialEndsAt: true,
+      subscriptionEndsAt: true,
+      lastReminder3DaysAt: true,
+      lastReminder1DayAt: true,
+    },
+  });
 
   for (const b of businesses) {
     if (b.isBlocked) continue;
+
     try {
-      const trialLeft = b.isActive ? daysLeftUntil(b.trialEndsAt, now) : null;
-      const subLeft = b.isActive
-        ? daysLeftUntil(b.subscriptionEndsAt, now)
-        : null;
+      const subEnd = b.subscriptionEndsAt;
 
-      const wantTrialReminder =
-        trialLeft != null && REMINDER_DAYS.has(trialLeft);
-      const wantSubReminder =
-        subLeft != null && REMINDER_DAYS.has(subLeft);
+      let subLeft: number | null = null;
+      if (b.isActive && subEnd != null && subEnd.getTime() > now.getTime()) {
+        subLeft = daysLeftUntil(subEnd, now);
+      }
 
-      if (b.isActive && (wantTrialReminder || wantSubReminder)) {
-        if (!alreadyNotifiedToday(b.lastNotifiedAt, now)) {
-          const parts: string[] = [];
-          const ruDays = (n: number) =>
-            `${n} ${pluralDaysRu(n)}`;
-          if (wantTrialReminder && trialLeft != null) {
-            parts.push(
-              `Ваша подписка истекает через ${ruDays(trialLeft)} (триал).`
-            );
-          }
-          if (wantSubReminder && subLeft != null) {
-            parts.push(
-              `Ваша подписка истекает через ${ruDays(subLeft)} (оплаченный период).`
-            );
-          }
-          const text = parts.join("\n");
-          const tgId = await findPrimaryOwnerTelegramId(b.id);
-          if (tgId) {
-            await sendTelegramToUser(b.botToken, tgId, text);
-          }
+      if (
+        subEnd == null &&
+        (b.lastReminder3DaysAt != null || b.lastReminder1DayAt != null)
+      ) {
+        await prisma.business.update({
+          where: { id: b.id },
+          data: { lastReminder3DaysAt: null, lastReminder1DayAt: null },
+        });
+        b.lastReminder3DaysAt = null;
+        b.lastReminder1DayAt = null;
+      }
+
+      const clear3 =
+        subLeft != null && subLeft > 3 && b.lastReminder3DaysAt != null;
+      const clear1 =
+        subLeft != null && subLeft > 1 && b.lastReminder1DayAt != null;
+      if (clear3 || clear1) {
+        await prisma.business.update({
+          where: { id: b.id },
+          data: {
+            ...(clear3 ? { lastReminder3DaysAt: null } : {}),
+            ...(clear1 ? { lastReminder1DayAt: null } : {}),
+          },
+        });
+        if (clear3) b.lastReminder3DaysAt = null;
+        if (clear1) b.lastReminder1DayAt = null;
+      }
+
+      const ownerTg = await findBusinessOwnerTelegramId(b.id);
+
+      if (
+        b.isActive &&
+        subLeft === 3 &&
+        b.lastReminder3DaysAt == null &&
+        ownerTg
+      ) {
+        const ok = await sendTelegramToUser(
+          b.botToken,
+          ownerTg,
+          "⚠️ Ваша подписка заканчивается через 3 дня",
+        );
+        if (ok) {
           await prisma.business.update({
             where: { id: b.id },
-            data: { lastNotifiedAt: now },
+            data: { lastReminder3DaysAt: now },
           });
+          b.lastReminder3DaysAt = now;
         }
       }
 
-      if (b.isActive && isSubscriptionFullyExpired(b, now)) {
+      if (
+        b.isActive &&
+        subLeft === 1 &&
+        b.lastReminder1DayAt == null &&
+        ownerTg
+      ) {
+        const ok = await sendTelegramToUser(
+          b.botToken,
+          ownerTg,
+          "⚠️ Подписка закончится завтра",
+        );
+        if (ok) {
+          await prisma.business.update({
+            where: { id: b.id },
+            data: { lastReminder1DayAt: now },
+          });
+          b.lastReminder1DayAt = now;
+        }
+      }
+
+      const shouldDeactivate =
+        b.isActive && shouldDeactivateStoreForSubscription(b, now);
+
+      if (shouldDeactivate) {
         await prisma.business.update({
           where: { id: b.id },
           data: {
             isActive: false,
             subscriptionStatus: SubscriptionStatus.EXPIRED,
+            lastReminder3DaysAt: null,
+            lastReminder1DayAt: null,
           },
         });
-        const tgId = await findPrimaryOwnerTelegramId(b.id);
+        const tgId =
+          ownerTg ?? (await findBusinessOwnerTelegramId(b.id));
         if (tgId) {
           await sendTelegramToUser(
             b.botToken,
             tgId,
-            "Ваша подписка истекла. Оплатите для продолжения."
+            "⛔ Подписка истекла. Магазин временно отключён",
           );
         }
         console.log("subscriptionMaintenance: deactivated business", b.id);
@@ -183,24 +237,30 @@ export async function runSubscriptionMaintenanceOnce(now = new Date()): Promise<
   }
 }
 
-const DEFAULT_INTERVAL_MS = 60 * 60 * 1000;
+/** По умолчанию раз в сутки; переопределение: SUBSCRIPTION_CRON_MS (минимум 60 с). */
+const DEFAULT_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 export function startSubscriptionMaintenanceScheduler(): void {
   const raw = process.env.SUBSCRIPTION_CRON_MS;
-  const ms = raw != null && String(raw).trim() !== "" ? Number(raw) : DEFAULT_INTERVAL_MS;
+  const ms =
+    raw != null && String(raw).trim() !== ""
+      ? Number(raw)
+      : DEFAULT_INTERVAL_MS;
   const interval = Number.isFinite(ms) && ms >= 60_000 ? ms : DEFAULT_INTERVAL_MS;
 
   void runSubscriptionMaintenanceOnce().catch((e) =>
-    console.error("subscriptionMaintenance initial run:", e)
+    console.error("subscriptionMaintenance initial run:", e),
   );
 
   setInterval(() => {
     void runSubscriptionMaintenanceOnce().catch((e) =>
-      console.error("subscriptionMaintenance tick:", e)
+      console.error("subscriptionMaintenance tick:", e),
     );
   }, interval);
 
-  console.log(
-    `subscriptionMaintenance: scheduler every ${Math.round(interval / 60000)} min`
-  );
+  const label =
+    interval >= 86_400_000
+      ? `${Math.round(interval / 86_400_000)}× / day (${interval} ms)`
+      : `${Math.round(interval / 60_000)} min`;
+  console.log(`subscriptionMaintenance: scheduler ${label}`);
 }
