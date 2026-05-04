@@ -22,13 +22,33 @@ const envUrl =
 export const API_BASE_URL =
   envUrl !== "" ? normalizeApiRoot(envUrl) : "";
 
+let warnedEmptyApiBase = false;
+
 /**
  * Абсолютный URL эндпоинта (axios с baseURL игнорирует свой baseURL для absolute URL).
  * Используй для путей, которые должны гарантированно попасть на бэкенд.
+ *
+ * Если `VITE_API_URL` не был задан **на сборке** (например Vercel без env),
+ * здесь получится относительный `/api/...` → браузер бьёт в origin фронта, а не в Render → initData/API «не работают».
  */
 export function apiAbsoluteUrl(path: string): string {
   const base = normalizeBaseUrl(API_BASE_URL);
   const p = path.startsWith("/") ? path : `/${path}`;
+  if (
+    base === "" &&
+    !warnedEmptyApiBase &&
+    (path.includes("/api/") ||
+      path === "/categories" ||
+      path.startsWith("/categories/"))
+  ) {
+    warnedEmptyApiBase = true;
+    if (typeof console !== "undefined" && typeof console.error === "function") {
+      console.error(
+        "[api] При сборке не задан VITE_API_URL — запросы идут на текущий хост SPA, сервер Mini App не вызывается. " +
+          "Задайте на Vercel переменную VITE_API_URL = публичный URL API (например https://your-app.onrender.com) без / в конце и пересоберите.",
+      );
+    }
+  }
   return `${base}${p}`;
 }
 
