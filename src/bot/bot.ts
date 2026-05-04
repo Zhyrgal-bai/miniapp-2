@@ -13,7 +13,8 @@ import { attachDynamicMerchantSubscriptionGate } from "./dynamicMerchantSubscrip
 import { attachMerchantSaasBillingCommands } from "./merchantSaasBilling.js";
 import { attachPlatformSaasBillingAdmin } from "./platformSaasBillingAdmin.js";
 import {
-  attachSaasRegistration,
+  attachSaasRegistrationFlows,
+  attachSaasRegistrationSessionBootstrap,
   handleRegistrationCallbacks,
   handleRegistrationStartCommand,
 } from "./saasRegistration.js";
@@ -431,7 +432,7 @@ export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
     attachDynamicMerchantSubscriptionGate(tgBot, role.businessId);
   }
 
-  attachSaasRegistration(tgBot, role);
+  attachSaasRegistrationSessionBootstrap(tgBot, role);
   attachPlatformSaasBillingAdmin(tgBot, role);
   attachEnvTenantRoleMiddleware(tgBot, role);
   if (role.type === "dynamic") {
@@ -616,6 +617,8 @@ export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
       void ctx.reply("Бот подключён ✅");
     }
   });
+
+  attachSaasRegistrationFlows(tgBot, role);
 
   tgBot.on("message", (ctx) => {
     console.log("USER ID:", ctx.from.id);

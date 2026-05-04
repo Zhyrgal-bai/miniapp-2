@@ -53,6 +53,15 @@ export async function adminBlockBusiness(businessId: number): Promise<void> {
   await stopDynamicStoreBotInMemory(businessId);
 }
 
+/** Выключить магазин без `isBlocked` — иначе «🟢 Включить» после «Выкл» невозможен. */
+export async function adminDeactivateBusiness(businessId: number): Promise<void> {
+  await prisma.business.update({
+    where: { id: businessId },
+    data: { isActive: false },
+  });
+  await stopDynamicStoreBotInMemory(businessId);
+}
+
 export async function adminUnblockBusiness(businessId: number): Promise<void> {
   await prisma.business.update({
     where: { id: businessId },

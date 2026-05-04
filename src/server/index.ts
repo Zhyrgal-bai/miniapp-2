@@ -39,6 +39,7 @@ import {
 } from "./platformAdminService.js";
 import {
   adminBlockBusiness,
+  adminDeactivateBusiness,
   adminEnableNonBlockedBusiness,
   adminUnblockBusiness,
 } from "./saasBillingService.js";
@@ -739,7 +740,7 @@ app.post("/api/platform/admin/disable", async (req: Request, res: Response) => {
       res.status(404).json({ error: "Магазин не найден" });
       return;
     }
-    await adminBlockBusiness(businessId);
+    await adminDeactivateBusiness(businessId);
     res.json({ ok: true });
   } catch (e) {
     console.error("POST /api/platform/admin/disable:", e);

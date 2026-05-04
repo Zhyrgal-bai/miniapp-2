@@ -4,6 +4,10 @@ import type { Telegraf } from "telegraf";
 import { prisma } from "../server/db.js";
 import { syncBusinessSubscriptionActivationState } from "../server/saasBillingService.js";
 import { businessSubscriptionBlocked } from "../middleware/business.middleware.js";
+import {
+  isTelegramCancelCommandText,
+  isTelegramStartCommandText,
+} from "./saasRegistration.js";
 
 type TenantTelegrafCtx = Context & {
   tenantRole?: MembershipRole | null;
@@ -27,6 +31,20 @@ function messageTextNormalized(ctx: Context): string | null {
   return m.text.trim().toLowerCase();
 }
 
+/** Оригинальный текст команд (для /start@Bot регистрозависимо в редких клиентах). */
+function messageTextRaw(ctx: Context): string | null {
+  const m = ctx.message;
+  if (
+    m === undefined ||
+    m === null ||
+    !("text" in m) ||
+    typeof m.text !== "string"
+  ) {
+    return null;
+  }
+  return m.text.trim();
+}
+
 function messageHasPhoto(ctx: Context): boolean {
   const m = ctx.message;
   if (
@@ -44,8 +62,8 @@ function messageHasPhoto(ctx: Context): boolean {
 }
 
 /**
- * После синхронизации `isActive` по срокам: блокируем бота, кроме /pay и фото‑чека
- * для владельца/админа в личке.
+ * После синхронизации `isActive` по срокам: блокируем бота, кроме /start, /cancel,
+ * /pay и фото‑чека для владельца/админа в личке.
  */
 export function attachDynamicMerchantSubscriptionGate(
   tgBot: Telegraf<Context>,
@@ -80,13 +98,19 @@ export function attachDynamicMerchantSubscriptionGate(
     const priv = ctx.chat?.type === "private";
 
     const text = messageTextNormalized(ctx);
+    const raw = messageTextRaw(ctx);
     const isPay =
       text !== null &&
       (text.startsWith("/pay ") || text === "/pay" || /^\/pay@/.test(text));
 
+    /** /start и /cancel обязаны проходить — иначе бот «зависает» при просрочке. */
+    const isStartOrCancel =
+      raw !== null &&
+      (isTelegramStartCommandText(raw) || isTelegramCancelCommandText(raw));
+
     const hasPhoto = messageHasPhoto(ctx);
 
-    if (priv && mr && (isPay || hasPhoto)) {
+    if (priv && (isStartOrCancel || (mr && (isPay || hasPhoto)))) {
       await next();
       return;
     }

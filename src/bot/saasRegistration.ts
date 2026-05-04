@@ -29,8 +29,6 @@ type BotRole =
   | { type: "env"; botIndex: number }
   | { type: "dynamic"; businessId: number };
 
-const REGISTRATION_COOLDOWN_MS = 10_000;
-
 const SUCCESS_REQUEST_SUBMITTED =
   "⏳ Заявка отправлена. Ожидайте подтверждения администратора";
 
@@ -40,7 +38,7 @@ const SUCCESS_REQUEST_SUBMITTED =
  */
 export type RegistrationSessionState = {
   step?: "name" | "token" | "phone" | "finik";
-  /** ms epoch — ограничение частых повторных входов в мастер (/start register) */
+  /** ms epoch — только для потоков вроде «добавить магазин» из inline */
   lastAttemptAt?: number;
   data: {
     name?: string;
@@ -228,11 +226,17 @@ function getRegistrationSession(ctx: Context): RegistrationSessionState | undefi
   return s;
 }
 
+/** Сообщение вида /start или /start@BotName (и с параметром). */
+export function isTelegramStartCommandText(text: string): boolean {
+  return /^\/start(?:@[^\s]*)?(?:\s|$)/i.test(text.trim());
+}
+
+export function isTelegramCancelCommandText(text: string): boolean {
+  return /^\/cancel(?:@[^\s]*)?(?:\s|$)/i.test(text.trim());
+}
+
 function resetRegistrationSessionCompletely(ctx: Context): void {
-  if (!("session" in ctx)) return;
-  (ctx as unknown as { session: RegistrationSessionState }).session = {
-    data: {},
-  };
+  (ctx as { session?: RegistrationSessionState }).session = { data: {} };
 }
 
 /** После успешной отправки заявки: только шаг и данные (cooldown сохраняется). */
@@ -459,7 +463,11 @@ async function provisionMerchantStoreInTx(
   return business.id;
 }
 
-export function attachSaasRegistration(bot: Telegraf, role: BotRole): void {
+/** Память сессии + сброс перед /start. Должно идти до `tgBot.start` и до SaaS-хвоста. */
+export function attachSaasRegistrationSessionBootstrap(
+  bot: Telegraf,
+  role: BotRole
+): void {
   if (role.type !== "env" || role.botIndex !== 0) {
     return;
   }
@@ -476,11 +484,49 @@ export function attachSaasRegistration(bot: Telegraf, role: BotRole): void {
     })
   );
 
+  bot.use(async (ctx, next) => {
+    if (ctx.chat?.type === "private" && ctx.from != null) {
+      const c = ctx as { session?: RegistrationSessionState };
+      if (c.session == null || typeof c.session !== "object") {
+        c.session = { data: {} };
+      } else if (!c.session.data || typeof c.session.data !== "object") {
+        c.session.data = {};
+      }
+    }
+    await next();
+  });
+
+  /**
+   * Сброс стейта до registrationFlow/admin reply — параметр /start обрабатывает `tgBot.start`.
+   */
+  bot.use(async (ctx, next) => {
+    if (ctx.chat?.type !== "private") {
+      await next();
+      return;
+    }
+    const msg = ctx.message;
+    const text =
+      msg != null && "text" in msg && typeof msg.text === "string"
+        ? msg.text
+        : "";
+    if (text !== "" && isTelegramStartCommandText(text)) {
+      resetRegistrationSessionCompletely(ctx);
+    }
+    await next();
+  });
+}
+
+/** cancel, админ-сообщения, мастер регистрации — после `tgBot.start`, чтобы /start всегда обрабатывался первым. */
+export function attachSaasRegistrationFlows(bot: Telegraf, role: BotRole): void {
+  if (role.type !== "env" || role.botIndex !== 0) {
+    return;
+  }
+
   bot.command("cancel", async (ctx) => {
     if (ctx.chat?.type !== "private") return;
     resetRegistrationSessionCompletely(ctx);
     try {
-      await ctx.reply("Регистрация сброшена.", {
+      await ctx.reply("❌ Регистрация отменена", {
         reply_markup: { remove_keyboard: true },
       });
     } catch {
@@ -524,6 +570,7 @@ export function attachSaasRegistration(bot: Telegraf, role: BotRole): void {
   });
 }
 
+
 /**
  * Пошаговая регистрация SaaS (имя → токен → телефон → Finik).
  * Всегда только заявка PENDING до ручного approve. Возвращает `true`, если сообщение обработано.
@@ -550,11 +597,12 @@ export async function registrationFlow(
 
   if (
     trimmedInput === "/cancel" ||
+    isTelegramCancelCommandText(trimmedInput) ||
     trimmedInput === "❌ Отменить регистрацию"
   ) {
     resetRegistrationSessionCompletely(ctx);
     try {
-      await ctx.reply("Регистрация отменена.", {
+      await ctx.reply("❌ Регистрация отменена", {
         reply_markup: { remove_keyboard: true },
       });
     } catch {
@@ -565,10 +613,7 @@ export async function registrationFlow(
   }
 
   /** Повторный /start в мастере — не перехватываем: `handleRegistrationStartCommand` сбросит сессию и покажет меню. */
-  if (
-    sess.step !== undefined &&
-    (trimmedInput === "/start" || trimmedInput.startsWith("/start "))
-  ) {
+  if (sess.step !== undefined && isTelegramStartCommandText(trimmedInput)) {
     return false;
   }
 
@@ -796,39 +841,15 @@ export async function handleRegistrationStartCommand(
 
     const telegramIdStr = telegramIdString(ctx);
 
-    let sess = getRegistrationSession(ctx);
-    if (!sess && "session" in ctx) {
-      (ctx as { session: RegistrationSessionState }).session = {
-        data: {},
-      };
-      sess = getRegistrationSession(ctx);
-    }
+    /** Повторный сброс в обработчике (после session-middleware): гарантия «чистого» ctx. */
+    resetRegistrationSessionCompletely(ctx);
 
+    const sess = getRegistrationSession(ctx);
     if (!sess) {
       console.error("[saasRegistration] /start: session missing for private DM", {
         telegramUserId: telegramIdStr,
       });
       await ctx.reply("Откройте чат заново или нажмите /start ещё раз.");
-      return true;
-    }
-
-    /** Сброс анкеты и админ-подсессии: /start всегда выходит из зависших шагов. */
-    resetRegistrationSessionCompletely(ctx);
-    sess = getRegistrationSession(ctx)!;
-
-    const now = Date.now();
-
-    if (
-      sess.lastAttemptAt != null &&
-      now - sess.lastAttemptAt < REGISTRATION_COOLDOWN_MS
-    ) {
-      await ctx.reply(
-        "Слишком часто 🙂 Подождите около 10 секунд и нажмите /start ещё раз."
-      );
-      logSaas("rejected_attempt", {
-        reason: "rate_limit_register_start",
-        telegramUserId: telegramIdStr,
-      });
       return true;
     }
 
@@ -877,7 +898,6 @@ export async function handleRegistrationStartCommand(
       return true;
     }
 
-    sess.lastAttemptAt = now;
     sess.data = {};
     sess.step = "name";
 
