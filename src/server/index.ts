@@ -778,6 +778,66 @@ app.post("/api/platform/admin/enable", async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * Повторно поднять клиентский бот: `setWebhook` + пересоздание Telegraf в памяти.
+ * Нужен, когда витрина «Активна», но апдейты не доходят до процесса.
+ */
+app.post(
+  "/api/platform/admin/restart-dynamic-bot",
+  async (req: Request, res: Response) => {
+    try {
+      const telegramId = platformTelegramIdFromRequest(req);
+      if (!telegramId) {
+        res.status(400).json({ error: "Нужен x-telegram-id" });
+        return;
+      }
+      if (!isPlatformAdminTelegramId(telegramId)) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+      const businessId = Number(
+        (req.body as { businessId?: unknown }).businessId,
+      );
+      if (!Number.isInteger(businessId) || businessId <= 0) {
+        res.status(400).json({ error: "Нужен корректный businessId" });
+        return;
+      }
+      const row = await prisma.business.findUnique({
+        where: { id: businessId },
+        select: { id: true, botToken: true, isBlocked: true },
+      });
+      if (row == null) {
+        res.status(404).json({ error: "Магазин не найден" });
+        return;
+      }
+      if (row.isBlocked) {
+        res.status(400).json({
+          error: "Магазин заблокирован — сначала нажмите «Включить»",
+        });
+        return;
+      }
+      const tok = String(row.botToken ?? "").trim();
+      if (tok === "") {
+        res.status(400).json({ error: "У магазина нет botToken" });
+        return;
+      }
+      try {
+        await initDynamicStoreBot({ businessId: row.id, botToken: tok });
+      } catch (e) {
+        console.error("POST restart-dynamic-bot init failed:", businessId, e);
+        const msg =
+          e instanceof Error ? e.message : "Не удалось перезапустить бота";
+        res.status(502).json({ error: msg });
+        return;
+      }
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("POST /api/platform/admin/restart-dynamic-bot:", e);
+      res.status(500).json({ error: "Ошибка сервера" });
+    }
+  },
+);
+
 app.post("/api/platform/admin/extend", async (req: Request, res: Response) => {
   try {
     const telegramId = platformTelegramIdFromRequest(req);

@@ -13,6 +13,8 @@ import {
   postPlatformAdminExtend,
   postPlatformAdminPurgeBusiness,
   postPlatformAdminReject,
+  postPlatformAdminRestartDynamicBot,
+  postPlatformAdminUnblock,
   type PlatformAdminBusinessDTO,
   type PlatformAdminRequestDTO,
 } from "../services/platformAdminApi";
@@ -241,15 +243,40 @@ export default function PlatformAdminPage() {
     }
   }
 
-  async function enableStore(businessId: number) {
+  async function enableStore(b: Pick<PlatformAdminBusinessDTO, "id" | "isBlocked" | "isActive">) {
     if (accessForbidden || !hasTelegramUser) return;
-    const key = `y-${businessId}`;
+    const key = `y-${b.id}`;
     setBizBusyKey(key);
     setBizSuccessMsg(null);
     try {
-      await postPlatformAdminEnable({ telegramId: userId, businessId });
+      if (b.isBlocked) {
+        await postPlatformAdminUnblock({ telegramId: userId, businessId: b.id });
+        setBizSuccessMsg("Магазин разблокирован и включён");
+      } else if (!b.isActive) {
+        await postPlatformAdminEnable({ telegramId: userId, businessId: b.id });
+        setBizSuccessMsg("Магазин включён");
+      }
       await reloadBusinesses();
-      setBizSuccessMsg("Магазин включён");
+    } catch (e) {
+      if (isForbiddenAdminError(e)) setAccessForbidden(true);
+      else setBizError(e instanceof Error ? e.message : "Ошибка");
+    } finally {
+      setBizBusyKey(null);
+    }
+  }
+
+  async function restartDynamicBot(businessId: number) {
+    if (accessForbidden || !hasTelegramUser) return;
+    const key = `r-${businessId}`;
+    setBizBusyKey(key);
+    setBizSuccessMsg(null);
+    try {
+      await postPlatformAdminRestartDynamicBot({
+        telegramId: userId,
+        businessId,
+      });
+      await reloadBusinesses();
+      setBizSuccessMsg("Клиентский бот перезапущен (webhook обновлён)");
     } catch (e) {
       if (isForbiddenAdminError(e)) setAccessForbidden(true);
       else setBizError(e instanceof Error ? e.message : "Ошибка");
@@ -534,16 +561,32 @@ export default function PlatformAdminPage() {
                         : "URL вебхука не задан или недоступен"}
                     </p>
                     <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-3">
-                      {!b.isActive && !b.isBlocked ? (
+                      {!b.isActive || b.isBlocked ? (
                         <button
                           type="button"
-                          title="Включить магазин"
+                          title={
+                            b.isBlocked
+                              ? "Разблокировать и включить магазин"
+                              : "Включить магазин"
+                          }
                           aria-label="Включить магазин"
                           disabled={bizBusyKey !== null}
-                          onClick={() => void enableStore(b.id)}
+                          onClick={() => void enableStore(b)}
                           className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl bg-[#22C55E] px-3 text-xs font-semibold text-black transition hover:bg-[#16A34A] disabled:pointer-events-none disabled:opacity-45 active:scale-[0.98] sm:px-4 sm:text-sm"
                         >
-                          {bizBusyKey === `y-${b.id}` ? "…" : "🟢 Вкл"}
+                          {bizBusyKey === `y-${b.id}` ? "…" : "🟢 Включить"}
+                        </button>
+                      ) : null}
+                      {b.isActive && !b.isBlocked ? (
+                        <button
+                          type="button"
+                          title="Обновить вебхук и процесс бота на сервере"
+                          aria-label="Перезапуск клиентского бота"
+                          disabled={bizBusyKey !== null}
+                          onClick={() => void restartDynamicBot(b.id)}
+                          className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl border border-sky-500/45 bg-sky-950/35 px-3 text-xs font-semibold text-sky-100 transition hover:border-sky-400/60 hover:bg-sky-950/50 disabled:pointer-events-none disabled:opacity-45 active:scale-[0.98] sm:px-4 sm:text-sm"
+                        >
+                          {bizBusyKey === `r-${b.id}` ? "…" : "🔄 Бот"}
                         </button>
                       ) : null}
                       <button

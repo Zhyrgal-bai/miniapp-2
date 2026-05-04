@@ -144,6 +144,42 @@ export async function postPlatformAdminEnable(params: {
   await throwIfNotOk(res);
 }
 
+export async function postPlatformAdminUnblock(params: {
+  telegramId: number;
+  businessId: number;
+}): Promise<void> {
+  const res = await fetch(apiAbsoluteUrl("/api/platform/admin/unblock"), {
+    method: "POST",
+    credentials: "omit",
+    headers: {
+      ...adminHeaders(params.telegramId),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ businessId: params.businessId }),
+  });
+  await throwIfNotOk(res);
+}
+
+/** Переподключение вебхука и инстанса бота на сервере (магазин активен и не в блокировке). */
+export async function postPlatformAdminRestartDynamicBot(params: {
+  telegramId: number;
+  businessId: number;
+}): Promise<void> {
+  const res = await fetch(
+    apiAbsoluteUrl("/api/platform/admin/restart-dynamic-bot"),
+    {
+      method: "POST",
+      credentials: "omit",
+      headers: {
+        ...adminHeaders(params.telegramId),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ businessId: params.businessId }),
+    },
+  );
+  await throwIfNotOk(res);
+}
+
 export async function postPlatformAdminPurgeBusiness(params: {
   telegramId: number;
   businessId: number;

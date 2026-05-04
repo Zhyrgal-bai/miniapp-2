@@ -477,10 +477,26 @@ export function attachSaasRegistrationSessionBootstrap(
       defaultSession: (): RegistrationSessionState => ({
         data: {},
       }),
-      getSessionKey: (ctx) =>
-        ctx.chat?.type === "private" && ctx.from != null
-          ? `saas_reg:${ctx.from.id}`
-          : undefined,
+      getSessionKey: (ctx) => {
+        const fromId = ctx.from?.id;
+        if (fromId == null) return undefined;
+        /** У callback-кнопок иногда нет ctx.chat без message — иначе сессия теряется. */
+        const chat =
+          ctx.chat ??
+          (ctx.callbackQuery != null &&
+          typeof ctx.callbackQuery === "object" &&
+          "message" in ctx.callbackQuery &&
+          ctx.callbackQuery.message != null &&
+          typeof ctx.callbackQuery.message === "object" &&
+          "chat" in ctx.callbackQuery.message
+            ? (
+                ctx.callbackQuery.message as {
+                  chat?: { type?: string };
+                }
+              ).chat
+            : undefined);
+        return chat?.type === "private" ? `saas_reg:${fromId}` : undefined;
+      },
     })
   );
 
@@ -970,7 +986,9 @@ export async function handleRegistrationCallbacks(
       sess.step = "name";
       sess.data = {};
       sess.lastAttemptAt = Date.now();
-      await ctx.answerCbQuery().catch(() => undefined);
+      await ctx
+        .answerCbQuery("Введите название магазина в сообщении ниже")
+        .catch(() => undefined);
       await ctx.reply(
         "Новый магазин 🚀\nВведите название магазина (оно может отличаться от других ваших магазинов).",
         wizardExtra(ctx),
