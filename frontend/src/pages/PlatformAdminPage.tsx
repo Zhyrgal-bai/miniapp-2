@@ -56,7 +56,7 @@ function adminShopRunBadge(b: PlatformAdminBusinessDTO): {
 } {
   if (b.isBlocked) {
     return {
-      label: "Заблокирован",
+      label: "⛔ Заблокирован",
       className:
         "shrink-0 rounded-full border border-yellow-500/25 bg-yellow-500/10 px-2 py-0.5 text-[11px] font-medium text-yellow-400",
     };
@@ -153,6 +153,14 @@ export default function PlatformAdminPage() {
   }, [reload]);
 
   useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "auto";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  useEffect(() => {
     void reloadBusinesses();
   }, [reloadBusinesses]);
 
@@ -241,7 +249,7 @@ export default function PlatformAdminPage() {
     try {
       await postPlatformAdminEnable({ telegramId: userId, businessId });
       await reloadBusinesses();
-      setBizSuccessMsg("✅ Магазин включён");
+      setBizSuccessMsg("Магазин включён");
     } catch (e) {
       if (isForbiddenAdminError(e)) setAccessForbidden(true);
       else setBizError(e instanceof Error ? e.message : "Ошибка");
@@ -320,8 +328,8 @@ export default function PlatformAdminPage() {
   }
 
   return (
-    <div className={`${archa.pageRoot} pb-14`}>
-      <div className={`${archa.shellAdmin} space-y-12`}>
+    <div className={`${archa.pageRoot} min-h-screen pb-20`}>
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 pb-24 pt-7 sm:px-6">
         <ArchaHeader
           subtitle="Платформа"
           secondLine="Заявки и магазины · только администратор"
@@ -477,7 +485,6 @@ export default function PlatformAdminPage() {
                     key={b.id}
                     initial={{ opacity: 0, y: 14 }}
                     animate={{ opacity: 1, y: 0 }}
-                    whileHover={{ scale: 1.02 }}
                     transition={{
                       duration: 0.28,
                       delay: index * 0.03,
@@ -534,9 +541,9 @@ export default function PlatformAdminPage() {
                           aria-label="Включить магазин"
                           disabled={bizBusyKey !== null}
                           onClick={() => void enableStore(b.id)}
-                          className={archa.btnIconSuccess}
+                          className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-[#22C55E] px-4 text-sm font-semibold text-black transition hover:bg-[#16A34A] disabled:pointer-events-none disabled:opacity-45 active:scale-[0.98]"
                         >
-                          {bizBusyKey === `y-${b.id}` ? "…" : "▶"}
+                          {bizBusyKey === `y-${b.id}` ? "…" : "🟢 Включить"}
                         </button>
                       ) : null}
                       <button

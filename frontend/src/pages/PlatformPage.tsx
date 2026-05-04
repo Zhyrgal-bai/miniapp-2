@@ -226,6 +226,14 @@ export default function PlatformPage() {
   }, [load]);
 
   useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "auto";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  useEffect(() => {
     onboardingZeroStoresRef.current =
       !onboardingDone && !loading && !error && businesses.length === 0;
   }, [onboardingDone, loading, error, businesses.length]);
@@ -535,18 +543,21 @@ export default function PlatformPage() {
     }
   };
 
-  const showBottomCreateBar =
-    !loading && (businesses.length > 0 || error != null);
-
   const showOnboardingLayer =
     onboardingBaseOk &&
     (businesses.length === 0 || onboardingStep === "success");
 
+  /** Нижний «Создать» — всегда после загрузки, кроме полноэкранного онбординга (чтобы не дублировать с оверлеем). */
+  const showBottomCreateBar = !loading && !showOnboardingLayer;
+
   return (
-    <div className={archa.pageRoot}>
-      <div
-        className={`${archa.shellMerchant} ${showBottomCreateBar ? "pb-28" : "pb-12"}`}
-      >
+    <>
+      <div className={`${archa.pageRoot} min-h-screen pb-20`}>
+        <div
+          className={`mx-auto flex w-full max-w-lg flex-col gap-4 px-4 pt-7 sm:px-5 ${
+            showBottomCreateBar ? "pb-32" : "pb-24"
+          }`}
+        >
         <ArchaHeader subtitle="Управляйте своими магазинами" />
 
         {platformAdminAccess === "yes" ? (
@@ -644,7 +655,6 @@ export default function PlatformPage() {
                       key={b.id}
                       initial={{ opacity: 0, y: 14 }}
                       animate={{ opacity: 1, y: 0 }}
-                      whileHover={{ scale: 1.02 }}
                       transition={{
                         duration: 0.3,
                         delay: index * 0.05,
@@ -725,19 +735,19 @@ export default function PlatformPage() {
                               >
                                 {toggleBusy ? "…" : "Отключить"}
                               </button>
+                            ) : b.isBlocked ? (
+                              <span className="inline-flex h-10 items-center text-sm font-semibold text-yellow-400">
+                                ⛔ Заблокирован
+                              </span>
                             ) : (
                               <button
                                 type="button"
-                                disabled={toggleBusy || b.isBlocked}
-                                title={
-                                  b.isBlocked
-                                    ? "⛔ Магазин заблокирован администратором"
-                                    : undefined
-                                }
+                                disabled={toggleBusy}
+                                title="Включить магазин"
                                 onClick={() => void handleToggleBot(b)}
-                                className="inline-flex items-center justify-center rounded-xl border border-[#22C55E]/35 bg-[#22C55E]/10 px-3 py-2 text-xs font-semibold text-[#BBF7D0] transition duration-200 hover:bg-[#22C55E]/18 disabled:pointer-events-none disabled:opacity-45 active:scale-[0.98]"
+                                className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-[#22C55E] px-4 text-sm font-semibold text-black transition hover:bg-[#16A34A] disabled:pointer-events-none disabled:opacity-45 active:scale-[0.98]"
                               >
-                                {toggleBusy ? "…" : "Включить"}
+                                {toggleBusy ? "…" : "🟢 Включить"}
                               </button>
                             )}
                             <button
@@ -758,6 +768,7 @@ export default function PlatformPage() {
             ) : null}
           </>
         )}
+        </div>
       </div>
 
       {showBottomCreateBar ? (
@@ -937,7 +948,7 @@ export default function PlatformPage() {
         {modalOpen ? (
           <motion.div
             key="platform-register-modal"
-            className="fixed inset-0 z-50 flex justify-center bg-[#0B0F14]"
+            className="fixed inset-0 z-50 flex min-h-0 max-h-[100dvh] flex-col overflow-hidden bg-[#0B0F14] [height:100dvh]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -948,7 +959,7 @@ export default function PlatformPage() {
             aria-describedby="platform-register-desc"
           >
             <motion.div
-              className="flex h-full w-full flex-col gap-[16px]"
+              className="flex min-h-0 flex-1 flex-col gap-[16px]"
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
@@ -981,10 +992,13 @@ export default function PlatformPage() {
               </header>
 
               <form
-                className="flex min-h-[0] flex-1 flex-col overflow-hidden"
+                className="flex min-h-0 min-w-0 flex-1 flex-col"
                 onSubmit={handleSubmit}
               >
-                <div className="min-h-[0] flex-1 overflow-y-auto overscroll-y-contain px-[16px] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+                <div
+                  className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-y-contain px-[16px] pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                >
                   <div className="mx-auto flex w-full max-w-[28rem] flex-col gap-[16px]">
                     <div className="flex flex-col gap-[16px] rounded-[16px] border border-[rgba(255,255,255,0.06)] bg-[#111827] p-[16px] shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
                       <div className="flex flex-col gap-[8px] text-center">
@@ -1292,6 +1306,6 @@ export default function PlatformPage() {
           </motion.div>
         ) : null}
       </AnimatePresence>
-    </div>
+    </>
   );
 }
