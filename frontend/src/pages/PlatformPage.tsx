@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { getTelegramWebApp } from "../utils/telegram";
@@ -385,9 +386,19 @@ export default function PlatformPage() {
     }
   };
 
-  const openCreateForm = () => {
+  const closeCreateForm = useCallback(() => {
+    setOpenCreate(false);
+    setSubmitError(null);
+  }, []);
+
+  const openCreateForm = useCallback(() => {
     setSubmitError(null);
     setSuccessFlash(false);
+    try {
+      getTelegramWebApp()?.expand?.();
+    } catch {
+      /* ignore */
+    }
     try {
       (
         getTelegramWebApp() as
@@ -398,7 +409,7 @@ export default function PlatformPage() {
       /* ignore */
     }
     setOpenCreate(true);
-  };
+  }, []);
 
   const markOnboardingComplete = useCallback(() => {
     if (typeof window !== "undefined") {
@@ -408,10 +419,44 @@ export default function PlatformPage() {
     setOnboardingStep(1);
   }, []);
 
-  const closeCreateForm = () => {
-    setOpenCreate(false);
-    setSubmitError(null);
-  };
+  /** В TG WebApp форма может оказаться «под» слоями родителя #root — монтируем в body и даём системную Back. */
+  useEffect(() => {
+    const tg = getTelegramWebApp();
+    type Bb = {
+      BackButton?: {
+        show: () => void;
+        hide: () => void;
+        onClick: (fn: () => void) => void;
+        offClick: (fn: () => void) => void;
+      };
+    };
+
+    if (!openCreate || !tg) return;
+
+    tg.expand?.();
+    const bb = (tg as Bb).BackButton;
+    const backOk =
+      bb != null &&
+      typeof bb.show === "function" &&
+      typeof bb.hide === "function" &&
+      typeof bb.onClick === "function" &&
+      typeof bb.offClick === "function";
+    if (backOk) {
+      bb.show();
+      bb.onClick(closeCreateForm);
+    }
+
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      if (backOk) {
+        bb.offClick(closeCreateForm);
+        bb.hide();
+      }
+    };
+  }, [openCreate, closeCreateForm]);
 
   const handleSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault();
@@ -971,27 +1016,29 @@ export default function PlatformPage() {
         ) : null}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {openCreate ? (
+      {typeof document !== "undefined"
+        ? createPortal(
+            <AnimatePresence>
+              {openCreate ? (
           <motion.div
             key="platform-register-modal"
-            className="fixed inset-0 z-[100] flex min-h-0 max-h-[100dvh] flex-col overflow-hidden bg-[#0B0F14] [height:100dvh]"
-            initial={{ opacity: 0 }}
+            className="fixed inset-0 flex min-h-0 flex-col overflow-hidden bg-[#05080d] shadow-[inset_0_3px_0_0_#22c55e]"
+            style={{
+              zIndex: 2147483000,
+              minHeight: "100%",
+              height: "100dvh",
+              maxHeight: "100dvh",
+            }}
+            initial={false}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.12 }}
             role="dialog"
             aria-modal="true"
             aria-labelledby="platform-register-title"
             aria-describedby="platform-register-desc"
           >
-            <motion.div
-              className="flex min-h-0 flex-1 flex-col gap-[16px]"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 8 }}
-              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            >
+            <div className="flex min-h-0 flex-1 flex-col gap-[16px]">
               <header className="flex shrink-0 items-center gap-[12px] px-[16px] pt-[16px] pb-[8px]">
                 <img
                   src="/674440574_18101674030793392_828162833995675842_n.jpg"
@@ -1127,10 +1174,13 @@ export default function PlatformPage() {
                   </div>
                 </div>
               </form>
-            </motion.div>
+            </div>
           </motion.div>
-        ) : null}
-      </AnimatePresence>
+              ) : null}
+            </AnimatePresence>,
+            document.body,
+          )
+        : null}
 
       <AnimatePresence>
         {settingsBusinessId != null ? (
