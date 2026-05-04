@@ -43,16 +43,24 @@ export function encrypt(plainText: string): string {
   );
 }
 
+/** BOM/пробелы; ciphertext с префиксом `enc:v1:` любого регистра приводится к каноническому виду перед разбором. */
+function normalizeCiphertextPrefix(sRaw: string): string {
+  const s = sRaw.replace(/^\ufeff+/u, "").trim();
+  const low = s.toLowerCase();
+  if (!low.startsWith(PREFIX.toLowerCase())) return s;
+  return PREFIX + s.slice(PREFIX.length);
+}
+
 /** Расшифровка значения из БД; legacy plain text возвращается как есть. */
 export function decrypt(storedCipher: string): string {
-  const s = String(storedCipher ?? "").trim();
-  if (s === "") return "";
-  if (!s.startsWith(PREFIX)) {
-    return s;
+  const sNorm = normalizeCiphertextPrefix(String(storedCipher ?? "").trim());
+  if (sNorm === "") return "";
+  if (!sNorm.startsWith(PREFIX)) {
+    return sNorm;
   }
   const secret = requireSecretKey();
   const key = deriveKey(secret);
-  const rest = s.slice(PREFIX.length);
+  const rest = sNorm.slice(PREFIX.length);
   const dot = rest.indexOf(".");
   if (dot < 0) {
     throw new Error("invalid encrypted token format");
@@ -72,7 +80,10 @@ export function decrypt(storedCipher: string): string {
 }
 
 export function isEncryptedTokenFormat(stored: string): boolean {
-  return String(stored ?? "").trim().startsWith(PREFIX);
+  const s = String(stored ?? "")
+    .replace(/^\ufeff+/u, "")
+    .trimStart();
+  return s.toLowerCase().startsWith(PREFIX.toLowerCase());
 }
 
 export function botTokenSecretKeyConfigured(): boolean {

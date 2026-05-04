@@ -26,13 +26,29 @@ function prodLikeEnv(): boolean {
   return typeof r === "string" && r.trim() !== "";
 }
 
-/** Plain token из столбца Business.botToken (decrypt или legacy). */
+function normalizeStoredInput(stored: string | null | undefined): string {
+  return String(stored ?? "")
+    .replace(/^\ufeff+/u, "")
+    .trim();
+}
+
+/**
+ * Plain token из столбца Business.botToken: `enc:v1:…` → расшифровка, иначе legacy plain.
+ * В validateTelegramInitData всегда передаётся только расшифрованная строка.
+ */
 export function plainBotTokenFromStored(stored: string | null | undefined): string {
-  const raw = String(stored ?? "").trim();
+  const raw = normalizeStoredInput(stored);
   if (raw === "") return "";
   try {
     if (isEncryptedTokenFormat(raw)) {
-      return decrypt(raw).trim();
+      const realToken = decrypt(raw).trim().replace(/^[\uFEFF\s]+/, "");
+      if (
+        process.env.TELEGRAM_INIT_DEBUG === "1" &&
+        realToken !== ""
+      ) {
+        console.log("Using token:", realToken.slice(0, 10));
+      }
+      return realToken;
     }
     return raw;
   } catch (e) {
