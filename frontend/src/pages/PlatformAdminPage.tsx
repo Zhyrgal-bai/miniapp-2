@@ -79,12 +79,7 @@ function adminShopRunBadge(b: PlatformAdminBusinessDTO): {
 
 /** Mini App `/platform-admin`: доступ решает только сервер (`ADMIN_IDS` + 403). */
 export default function PlatformAdminPage() {
-  const tg = getTelegramWebApp();
-  const user = tg?.initDataUnsafe?.user;
-  const userId =
-    user != null && typeof user.id === "number" && Number.isFinite(user.id)
-      ? user.id
-      : getWebAppUserId();
+  const userId = getWebAppUserId();
 
   const hasTelegramUser = Number.isFinite(userId) && userId > 0;
 

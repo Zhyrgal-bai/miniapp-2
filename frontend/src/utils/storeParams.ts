@@ -13,6 +13,18 @@ function isLikelyMiniAppEnv(): boolean {
   return Boolean(window.Telegram?.WebApp);
 }
 
+function startParamFromSignedInitData(): string | undefined {
+  const raw = window.Telegram?.WebApp?.initData?.trim() ?? "";
+  if (raw === "") return undefined;
+  try {
+    const p = new URLSearchParams(raw);
+    const sp = p.get("start_param")?.trim();
+    return sp || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** `startapp=shop_12` или `startapp=12` в Mini App. */
 function shopFromTelegramStartParam(raw: string | undefined): string | undefined {
   if (!raw) return undefined;
@@ -36,9 +48,7 @@ export function readShopIdString(): string | undefined {
   const tgFromQuery = shopFromTelegramStartParam(
     sp.get("tgWebAppStartParam") ?? undefined,
   );
-  const tgInit = shopFromTelegramStartParam(
-    window.Telegram?.WebApp?.initDataUnsafe?.start_param,
-  );
+  const tgInit = shopFromTelegramStartParam(startParamFromSignedInitData());
 
   const id = urlShop ?? tgFromQuery ?? tgInit;
 

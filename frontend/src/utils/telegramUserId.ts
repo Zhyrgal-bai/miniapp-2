@@ -1,4 +1,4 @@
-/** Разбор `user` из подписанной строки `initData` (если initDataUnsafe.user ещё недоступен). */
+/** Разбор `user` из подписанной строки `initData` (официальный WebApp.initData). */
 export function parseTelegramUserIdFromInitData(initData?: string): number {
   if (typeof initData !== "string" || initData.trim() === "") return NaN;
   try {
@@ -19,19 +19,15 @@ export function parseTelegramUserIdFromInitData(initData?: string): number {
   }
 }
 
+/** Только подписанный `initData` (без initDataUnsafe). */
 export function resolveMerchantTelegramUserId(
   tg?: TelegramWebApp | null,
 ): number {
   if (tg == null) return NaN;
-  const unsafe = tg.initDataUnsafe?.user?.id;
-  if (typeof unsafe === "number" && Number.isFinite(unsafe) && unsafe > 0) {
-    return unsafe;
-  }
-  const fromInit = parseTelegramUserIdFromInitData(tg.initData);
-  return fromInit;
+  return parseTelegramUserIdFromInitData(tg.initData);
 }
 
-/** Telegram Mini App: числовой user id из `initDataUnsafe` или из `initData`. */
+/** Telegram Mini App: числовой user.id из строки `initData`. */
 export function getWebAppUserId(): number {
   if (typeof window === "undefined") return 0;
 

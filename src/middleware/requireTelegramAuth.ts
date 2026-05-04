@@ -10,6 +10,21 @@ import {
 
 const HEADER = "x-telegram-init-data";
 
+function shouldLogTelegramAuthDebug(): boolean {
+  return (
+    process.env.TELEGRAM_INIT_DEBUG === "1" ||
+    process.env.NODE_ENV !== "production"
+  );
+}
+
+/** Пустой initData без проверки: только локальная разработка или SKIP_TELEGRAM_WEBAPP_AUTH=1 + DEV_TELEGRAM_USER_ID */
+function emptyInitDataBypassAllowed(): boolean {
+  return (
+    process.env.NODE_ENV !== "production" ||
+    process.env.SKIP_TELEGRAM_WEBAPP_AUTH === "1"
+  );
+}
+
 function headerInitData(req: Request): string {
   const raw = req.headers[HEADER];
   const s =
@@ -33,10 +48,30 @@ export async function requireTelegramAuth(
 ): Promise<void> {
   try {
     const initData = headerInitData(req);
+
+    if (shouldLogTelegramAuthDebug()) {
+      console.log(
+        initData === ""
+          ? "[telegram-auth] initData: (empty)"
+          : `[telegram-auth] initData length=${initData.length}`,
+      );
+    }
+
     if (initData === "") {
+      if (emptyInitDataBypassAllowed()) {
+        const tid = process.env.DEV_TELEGRAM_USER_ID?.trim();
+        if (tid !== undefined && /^\d+$/.test(tid)) {
+          console.warn(
+            "[telegram-auth] DEV: без initData используется DEV_TELEGRAM_USER_ID (не использовать в проде без крайней необходимости)",
+          );
+          req.platformTelegramId = tid;
+          next();
+          return;
+        }
+      }
       res.status(401).json({
         error:
-          "Нужен заголовок x-telegram-init-data (WebApp initData)",
+          "Нужен заголовок x-telegram-init-data — откройте Mini App из Telegram (или задайте DEV_TELEGRAM_USER_ID в режиме разработки)",
       });
       return;
     }
@@ -54,6 +89,7 @@ export async function requireTelegramAuth(
 
     for (const t of envToks) {
       if (validateTelegramInitData(initData, t)) {
+        logHashOk(req);
         return acceptInitData(req, res, next, initData);
       }
     }
@@ -65,6 +101,7 @@ export async function requireTelegramAuth(
       });
       const plain = row != null ? plainBotTokenFromStored(row.botToken) : "";
       if (plain !== "" && validateTelegramInitData(initData, plain)) {
+        logHashOk(req);
         return acceptInitData(req, res, next, initData);
       }
     }
@@ -78,6 +115,7 @@ export async function requireTelegramAuth(
       for (const r of rows) {
         const plain = plainBotTokenFromStored(r.botToken);
         if (plain !== "" && validateTelegramInitData(initData, plain)) {
+          logHashOk(req);
           return acceptInitData(req, res, next, initData);
         }
       }
@@ -93,6 +131,16 @@ export async function requireTelegramAuth(
     });
   } catch (e) {
     next(e);
+  }
+}
+
+function logHashOk(req: Request): void {
+  if (process.env.TELEGRAM_INIT_DEBUG === "1") {
+    console.log(
+      "[telegram-auth] initData hash OK",
+      req.method,
+      req.path ?? req.url,
+    );
   }
 }
 
