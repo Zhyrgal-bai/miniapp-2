@@ -64,7 +64,8 @@ import {
 } from "../bot/bot.js";
 /** Навешивает `attachBotHandlers` на клиентские боты без цикла dynamicBots ↔ bot */
 import "../bot/registerDynamicBrain.js";
-import { startAllBots } from "../bot/botManager.js";
+import { launchClientBot } from "../bot/launchClientBot.js";
+import { registerDynamicBotsGracefulShutdownOnce } from "../bot/botManager.js";
 import {
   encryptedBotTokenRow,
   hashBotTokenSha256Hex,
@@ -595,8 +596,12 @@ app.post("/api/platform/admin/approve", async (req: Request, res: Response) => {
     }
     res.json({ ok: true, businessId: out.businessId });
   } catch (e) {
-    console.error("POST /api/platform/admin/approve:", e);
-    res.status(500).json({ error: "Ошибка сервера" });
+    console.error("APPROVE ERROR:", e);
+    if (e instanceof Error && e.stack) {
+      console.error(e.stack);
+    }
+    const message = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ error: "approve_failed", message });
   }
 });
 
@@ -3183,6 +3188,38 @@ process.on("unhandledRejection", (reason) => {
   console.error("UNHANDLED PROMISE:", reason);
 });
 
+function safePlainBotTokenForBootstrap(raw: string | null | undefined): string {
+  try {
+    return plainBotTokenFromStored(raw);
+  } catch (e: unknown) {
+    console.error("[bootstrapBots] token decrypt skip:", e);
+    return "";
+  }
+}
+
+async function bootstrapBots(): Promise<void> {
+  const businesses = await prisma.business.findMany({
+    where: { isActive: true, isBlocked: false },
+    select: { id: true, botToken: true },
+  });
+
+  for (const b of businesses) {
+    try {
+      const token = safePlainBotTokenForBootstrap(b.botToken);
+      if (token === "") continue;
+      const out = await launchClientBot(b);
+      if (out.ok) {
+        console.log("Bot started:", b.id);
+      } else {
+        console.error("Bot start error:", b.id, out.error);
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("Bot start error:", b.id, msg);
+    }
+  }
+}
+
 // ================== START SERVER ==================
 const PORT = process.env.PORT || 3000;
 
@@ -3212,10 +3249,11 @@ void (async () => {
       );
     }
     try {
-      await startAllBots();
+      await bootstrapBots();
+      registerDynamicBotsGracefulShutdownOnce();
       console.log("[botManager] Dynamic store bots registered from database");
     } catch (e) {
-      console.error("startAllBots:", e);
+      console.error("bootstrapBots:", e);
     }
     try {
       startSubscriptionMaintenanceScheduler();

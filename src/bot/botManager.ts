@@ -27,6 +27,11 @@ export async function startAllBots(): Promise<Map<number, Telegraf>> {
   return activeBots;
 }
 
+/** Если боты поднимаются вручную из `index` (bootstrapBots), всё равно один раз навешиваем SIGINT/SIGTERM. */
+export function registerDynamicBotsGracefulShutdownOnce(): void {
+  registerGracefulShutdownOnce();
+}
+
 function registerGracefulShutdownOnce(): void {
   if (shutdownHooksRegistered) return;
   shutdownHooksRegistered = true;
