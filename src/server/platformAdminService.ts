@@ -7,9 +7,9 @@ import {
   SubscriptionStatus,
 } from "@prisma/client";
 import { bot as mainTelegrafBot } from "../bot/bot.js";
+import { launchClientBot } from "../bot/launchClientBot.js";
 import {
   getDynamicOwnerBot,
-  initDynamicStoreBot,
   stopDynamicStoreBotInMemory,
 } from "../bot/dynamicBots.js";
 import { prisma } from "./db.js";
@@ -18,6 +18,7 @@ import {
   plainBotTokenFromStored,
   hashBotTokenSha256Hex,
 } from "./businessBotToken.js";
+import { isEncryptedTokenFormat } from "./botTokenCrypto.js";
 import { isAdmin } from "./adminAuth.js";
 import { mapRowsWithWebhook } from "./platformMyBusinesses.js";
 
@@ -262,30 +263,74 @@ export async function approveRegistrationRequestById(
     };
   }
 
-  const botTokenTrimmed = row.botToken.trim();
+  console.log("=== APPROVE START ===");
+  console.log("BUSINESS CREATED:", businessId);
 
+  const bizFromDb = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { id: true, botToken: true },
+  });
+  const storedToken = bizFromDb?.botToken ?? "";
+  console.log(
+    "TOKEN BEFORE DECRYPT:",
+    `${String(storedToken).slice(0, 24)}…(len=${String(storedToken).length})`,
+  );
+
+  let tokenPlain = "";
   try {
-    const started = await initDynamicStoreBot({
+    tokenPlain = plainBotTokenFromStored(storedToken);
+  } catch (de: unknown) {
+    console.error(
+      "[platformAdmin] approve: TOKEN DECRYPT EXCEPTION:",
       businessId,
-      botToken: botTokenTrimmed,
-    });
-    const merchantUsername =
-      typeof started.username === "string"
-        ? started.username.trim().replace(/^@/, "") || null
-        : null;
+      de,
+    );
+  }
+  console.log(
+    "TOKEN AFTER DECRYPT:",
+    tokenPlain === ""
+      ? "(empty)"
+      : `${tokenPlain.slice(0, 10)}…(len=${tokenPlain.length})`,
+  );
+  if (!tokenPlain || isEncryptedTokenFormat(tokenPlain.trim())) {
+    console.error(
+      "[platformAdmin] approve: token empty or still ciphertext-shaped after decrypt",
+      businessId,
+    );
+  }
 
-    if (!getDynamicOwnerBot(businessId)) {
+  console.log("LAUNCH BOT...");
+  let merchantUsername: string | null = null;
+  try {
+    const launched =
+      bizFromDb == null ? null : await launchClientBot(bizFromDb);
+    if (launched == null) {
+      console.error("[platformAdmin] approve: Business row missing", businessId);
+    } else if (!launched.ok) {
       console.error(
-        "[platformAdmin] approve: no bot in memory after initDynamicStoreBot",
+        "[platformAdmin] approve: launchClientBot failed:",
         businessId,
+        launched.error,
       );
+    } else {
+      merchantUsername =
+        typeof launched.username === "string"
+          ? launched.username.trim().replace(/^@/, "") || null
+          : null;
+
+      if (!getDynamicOwnerBot(businessId)) {
+        console.error(
+          "[platformAdmin] approve: no bot in memory after launchClientBot",
+          businessId,
+        );
+      }
     }
 
     const telegramId = row.telegramId.trim();
     await notifyRegistrationApprovedUser(telegramId, merchantUsername);
   } catch (err: unknown) {
     console.error(
-      "[platformAdmin] approve: initDynamicStoreBot / setWebhook:",
+      "[platformAdmin] approve: launchClientBot / setWebhook:",
       businessId,
       err,
     );

@@ -3,6 +3,7 @@ import type { MembershipRole } from "@prisma/client";
 import { Telegraf } from "telegraf";
 import type { Context } from "telegraf";
 import { plainBotTokenFromStored } from "../server/businessBotToken.js";
+import { isEncryptedTokenFormat } from "../server/botTokenCrypto.js";
 import { prisma } from "../server/db.js";
 import { telegramSetWebhookOnApi } from "../server/telegramWebhookSecurity.js";
 
@@ -186,9 +187,25 @@ export async function registerDynamicUserBot(user: {
   businessId: number;
   botToken: string;
 }): Promise<RegisterDynamicBotResult> {
-  const token = String(user.botToken).trim();
+  let token: string;
+  try {
+    token = plainBotTokenFromStored(user.botToken).trim();
+  } catch (e: unknown) {
+    console.error(
+      "registerDynamicUserBot: token decrypt failed:",
+      user.businessId,
+      e,
+    );
+    throw e;
+  }
   if (!token) {
     throw new Error("empty bot token");
+  }
+  if (isEncryptedTokenFormat(token)) {
+    const msg =
+      "bot_token_still_encrypted_after_plainBotTokenFromStored (decrypt/key mismatch)";
+    console.error("[registerDynamicUserBot]", msg, user.businessId);
+    throw new Error(msg);
   }
 
   const persistent = activeBots.get(user.businessId);
@@ -201,14 +218,18 @@ export async function registerDynamicUserBot(user: {
           publicApiBase,
           user.businessId,
         );
+        console.log("SETTING WEBHOOK...");
+        console.log("WEBHOOK URL:", url);
         await telegramSetWebhookOnApi(persistent.telegram, url);
       }
       const info = await persistent.telegram.getMe();
+      console.log("BOT ALIVE:", info.username);
       return {
         username: String(info.username ?? ""),
         id: Number(info.id),
       };
     } catch (e: unknown) {
+      console.error("WEBHOOK ERROR:", e);
       console.error(
         "[dynamicBots] Persistent bot failed (re-register):",
         user.businessId,
@@ -239,6 +260,8 @@ export async function registerDynamicUserBot(user: {
     );
     throw new Error("bot token already in use by another store");
   }
+
+  console.log("CREATING BOT INSTANCE");
 
   let tg: Telegraf;
   try {
@@ -275,14 +298,26 @@ export async function registerDynamicUserBot(user: {
   if (publicApiBase) {
     const url = await dynamicWebhookAbsoluteUrl(publicApiBase, user.businessId);
     try {
+      console.log("SETTING WEBHOOK...");
+      console.log("WEBHOOK URL:", url);
       await telegramSetWebhookOnApi(tg.telegram, url);
-    } catch (e) {
+      const alive = await tg.telegram.getMe();
+      console.log("BOT ALIVE:", alive.username);
+    } catch (e: unknown) {
+      console.error("WEBHOOK ERROR:", e);
       console.error("Dynamic setWebhook error:", user.businessId, e);
+      throw e;
     }
   } else {
     console.warn(
       "[dynamicBots] Публичный URL не задан (API_URL / RENDER_EXTERNAL_URL / BASE_URL) — бот в памяти без webhook; задайте переменную для продакшена",
     );
+    try {
+      const alive = await tg.telegram.getMe();
+      console.log("BOT ALIVE (no webhook URL in env):", alive.username);
+    } catch (e: unknown) {
+      console.error("BOT getMe failed (no webhook URL):", user.businessId, e);
+    }
   }
 
   /*

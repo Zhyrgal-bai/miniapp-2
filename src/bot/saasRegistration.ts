@@ -11,7 +11,9 @@ import {
 import {
   encryptedBotTokenRow,
   hashBotTokenSha256Hex,
+  plainBotTokenFromStored,
 } from "../server/businessBotToken.js";
+import { isEncryptedTokenFormat } from "../server/botTokenCrypto.js";
 import { logPrismaError, prisma } from "../server/db.js";
 import {
   isValidFinikApiKey,
@@ -1087,6 +1089,7 @@ async function handleRejectFlow(ctx: Context, requestId: number): Promise<void> 
 
 async function handleApproveFlow(ctx: Context, requestId: number): Promise<void> {
   try {
+    console.log("=== APPROVE START ===");
     const row = await prisma.registrationRequest.findUnique({
       where: { id: requestId },
     });
@@ -1138,12 +1141,42 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
       });
     });
 
+    console.log("BUSINESS CREATED:", businessId);
+
+    const bizFromDb = await prisma.business.findUnique({
+      where: { id: businessId },
+      select: { id: true, botToken: true },
+    });
+    const storedToken = bizFromDb?.botToken ?? "";
+    console.log("TOKEN BEFORE DECRYPT:", `${String(storedToken).slice(0, 24)}…(len=${String(storedToken).length})`);
+
+    let tokenPlain: string;
+    try {
+      tokenPlain = plainBotTokenFromStored(storedToken);
+    } catch (de: unknown) {
+      console.error("APPROVE: decrypt exception:", businessId, de);
+      tokenPlain = "";
+    }
+    console.log(
+      "TOKEN AFTER DECRYPT:",
+      tokenPlain === ""
+        ? "(empty)"
+        : `${tokenPlain.slice(0, 10)}…(len=${tokenPlain.length})`,
+    );
+    if (!tokenPlain || isEncryptedTokenFormat(tokenPlain.trim())) {
+      console.error(
+        "APPROVE: token empty or still enc-shaped after decrypt; businessId=",
+        businessId,
+      );
+    }
+
+    console.log("LAUNCH BOT...");
     const { launchClientBot } = await import("./launchClientBot.js");
     let botUsername = "";
-    const launched = await launchClientBot({
-      id: businessId,
-      botToken: row.botToken.trim(),
-    });
+    const launched =
+      bizFromDb == null
+        ? ({ ok: false, error: "Business row missing" } as const)
+        : await launchClientBot(bizFromDb);
     if (launched.ok) {
       botUsername = launched.username;
     }
