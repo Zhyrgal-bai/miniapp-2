@@ -8,6 +8,16 @@ export type PlatformAdminRequestDTO = {
   createdAt: string;
 };
 
+export type PlatformAdminBusinessDTO = {
+  id: number;
+  name: string;
+  isActive: boolean;
+  isBlocked: boolean;
+  subscriptionStatus: string;
+  subscriptionEndsAt: string | null;
+  trialEndsAt: string | null;
+};
+
 function adminHeaders(telegramId: number): HeadersInit {
   return { "x-telegram-id": String(telegramId) };
 }
@@ -73,4 +83,76 @@ export async function postPlatformAdminReject(params: {
     const j = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(j.error ?? `HTTP ${res.status}`);
   }
+}
+
+export async function fetchPlatformAdminBusinesses(params: {
+  telegramId: number;
+  search?: string;
+}): Promise<PlatformAdminBusinessDTO[]> {
+  const tid = encodeURIComponent(String(params.telegramId));
+  const q =
+    params.search != null && params.search.trim() !== ""
+      ? `&search=${encodeURIComponent(params.search.trim().slice(0, 128))}`
+      : "";
+  const res = await fetch(
+    apiAbsoluteUrl(`/api/platform/admin/businesses?telegramId=${tid}${q}`),
+    {
+      method: "GET",
+      credentials: "omit",
+      headers: adminHeaders(params.telegramId),
+    },
+  );
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(j.error ?? `HTTP ${res.status}`);
+  }
+  const data = (await res.json()) as unknown;
+  return Array.isArray(data) ? (data as PlatformAdminBusinessDTO[]) : [];
+}
+
+export async function postPlatformAdminDisable(params: {
+  telegramId: number;
+  businessId: number;
+}): Promise<void> {
+  const res = await fetch(apiAbsoluteUrl("/api/platform/admin/disable"), {
+    method: "POST",
+    credentials: "omit",
+    headers: {
+      ...adminHeaders(params.telegramId),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ businessId: params.businessId }),
+  });
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(j.error ?? `HTTP ${res.status}`);
+  }
+}
+
+export async function postPlatformAdminExtend(params: {
+  telegramId: number;
+  businessId: number;
+  days: 30 | 90;
+}): Promise<{ subscriptionEndsAt: string }> {
+  const res = await fetch(apiAbsoluteUrl("/api/platform/admin/extend"), {
+    method: "POST",
+    credentials: "omit",
+    headers: {
+      ...adminHeaders(params.telegramId),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      businessId: params.businessId,
+      days: params.days,
+    }),
+  });
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(j.error ?? `HTTP ${res.status}`);
+  }
+  const data = (await res.json()) as { subscriptionEndsAt?: string };
+  if (typeof data.subscriptionEndsAt !== "string") {
+    throw new Error("Некорректный ответ сервера");
+  }
+  return { subscriptionEndsAt: data.subscriptionEndsAt };
 }

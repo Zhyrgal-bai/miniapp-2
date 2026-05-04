@@ -29,7 +29,9 @@ import {
 import { validateAndPersistPlatformRegistration } from "./platformRegisterRequest.js";
 import {
   approveRegistrationRequestById,
+  extendBusinessSubscriptionAdmin,
   isPlatformAdminTelegramId,
+  listBusinessesForPlatformAdmin,
   listPendingRegistrationRequestsForAdmin,
   rejectRegistrationRequestById,
 } from "./platformAdminService.js";
@@ -636,6 +638,101 @@ app.post("/api/platform/admin/unblock", async (req: Request, res: Response) => {
     res.json({ ok: true });
   } catch (e) {
     console.error("POST /api/platform/admin/unblock:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.get("/api/platform/admin/businesses", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromRequest(req);
+    if (!telegramId) {
+      res.status(400).json({
+        error: "Нужен Telegram id (x-telegram-id или query telegramId / userId)",
+      });
+      return;
+    }
+    if (!isPlatformAdminTelegramId(telegramId)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    const rawQ = req.query.search ?? req.query.q;
+    const search =
+      typeof rawQ === "string"
+        ? rawQ
+        : Array.isArray(rawQ) && typeof rawQ[0] === "string"
+          ? rawQ[0]
+          : undefined;
+    const rows = await listBusinessesForPlatformAdmin(search);
+    res.json(rows);
+  } catch (e) {
+    console.error("GET /api/platform/admin/businesses:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post("/api/platform/admin/disable", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromRequest(req);
+    if (!telegramId) {
+      res.status(400).json({ error: "Нужен x-telegram-id" });
+      return;
+    }
+    if (!isPlatformAdminTelegramId(telegramId)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    const businessId = Number(
+      (req.body as { businessId?: unknown }).businessId,
+    );
+    if (!Number.isInteger(businessId) || businessId <= 0) {
+      res.status(400).json({ error: "Нужен корректный businessId" });
+      return;
+    }
+    const exists = await prisma.business.findUnique({
+      where: { id: businessId },
+      select: { id: true },
+    });
+    if (!exists) {
+      res.status(404).json({ error: "Магазин не найден" });
+      return;
+    }
+    await adminBlockBusiness(businessId);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("POST /api/platform/admin/disable:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post("/api/platform/admin/extend", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromRequest(req);
+    if (!telegramId) {
+      res.status(400).json({ error: "Нужен x-telegram-id" });
+      return;
+    }
+    if (!isPlatformAdminTelegramId(telegramId)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    const body = req.body as { businessId?: unknown; days?: unknown };
+    const businessId = Number(body.businessId);
+    const daysRaw = Number(body.days);
+    const days = daysRaw === 30 || daysRaw === 90 ? daysRaw : null;
+    if (!Number.isInteger(businessId) || businessId <= 0 || days == null) {
+      res
+        .status(400)
+        .json({ error: "Нужны businessId и days: 30 или 90" });
+      return;
+    }
+    const out = await extendBusinessSubscriptionAdmin(businessId, days);
+    if (!out.ok) {
+      res.status(out.statusCode).json({ error: out.message });
+      return;
+    }
+    res.json({ ok: true, subscriptionEndsAt: out.subscriptionEndsAt });
+  } catch (e) {
+    console.error("POST /api/platform/admin/extend:", e);
     res.status(500).json({ error: "Ошибка сервера" });
   }
 });

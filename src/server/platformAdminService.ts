@@ -310,3 +310,101 @@ export async function rejectRegistrationRequestById(
 
   return { ok: true };
 }
+
+const MS_DAY = 24 * 60 * 60 * 1000;
+
+/** Публичный список магазинов для Mini App `/platform-admin` (без `botToken`). */
+export type PlatformAdminBusinessRow = {
+  id: number;
+  name: string;
+  isActive: boolean;
+  isBlocked: boolean;
+  subscriptionStatus: string;
+  subscriptionEndsAt: string | null;
+  trialEndsAt: string | null;
+};
+
+export async function listBusinessesForPlatformAdmin(
+  searchRaw?: string,
+): Promise<PlatformAdminBusinessRow[]> {
+  const q = (searchRaw ?? "").trim().slice(0, 128);
+  let where: Prisma.BusinessWhereInput = {};
+  if (q !== "") {
+    if (/^\d+$/.test(q)) {
+      const id = Number(q);
+      if (!Number.isInteger(id) || id <= 0) {
+        return [];
+      }
+      where = { id };
+    } else {
+      where = { name: { contains: q, mode: "insensitive" } };
+    }
+  }
+
+  const rows = await prisma.business.findMany({
+    where,
+    orderBy: { id: "asc" },
+    take: q === "" ? 400 : 80,
+    select: {
+      id: true,
+      name: true,
+      isActive: true,
+      isBlocked: true,
+      subscriptionStatus: true,
+      subscriptionEndsAt: true,
+      trialEndsAt: true,
+    },
+  });
+
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    isActive: r.isActive,
+    isBlocked: r.isBlocked,
+    subscriptionStatus: r.subscriptionStatus,
+    subscriptionEndsAt: r.subscriptionEndsAt?.toISOString() ?? null,
+    trialEndsAt: r.trialEndsAt?.toISOString() ?? null,
+  }));
+}
+
+export type ExtendBusinessOutcome =
+  | { ok: true; subscriptionEndsAt: string }
+  | { ok: false; statusCode: number; message: string };
+
+export async function extendBusinessSubscriptionAdmin(
+  businessId: number,
+  days: 30 | 90,
+): Promise<ExtendBusinessOutcome> {
+  if (!Number.isInteger(businessId) || businessId <= 0) {
+    return { ok: false, statusCode: 400, message: "Неверный businessId" };
+  }
+  if (days !== 30 && days !== 90) {
+    return { ok: false, statusCode: 400, message: "Нужно 30 или 90 дней" };
+  }
+
+  const row = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { id: true, subscriptionEndsAt: true },
+  });
+  if (!row) {
+    return { ok: false, statusCode: 404, message: "Магазин не найден" };
+  }
+
+  const now = Date.now();
+  const base =
+    row.subscriptionEndsAt != null &&
+    row.subscriptionEndsAt.getTime() > now
+      ? row.subscriptionEndsAt
+      : new Date(now);
+  const next = new Date(base.getTime() + days * MS_DAY);
+
+  await prisma.business.update({
+    where: { id: businessId },
+    data: {
+      subscriptionStatus: SubscriptionStatus.ACTIVE,
+      subscriptionEndsAt: next,
+    },
+  });
+
+  return { ok: true, subscriptionEndsAt: next.toISOString() };
+}

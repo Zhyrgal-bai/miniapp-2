@@ -31,6 +31,8 @@ interface TelegramWebApp {
 
 interface ImportMetaEnv {
   readonly VITE_ADMIN_IDS?: string;
+  /** Один Telegram user id платформенного админа (альтернатива списку `VITE_ADMIN_IDS`). */
+  readonly VITE_PLATFORM_ADMIN_TELEGRAM_ID?: string;
   /** Public backend base URL (same value as `API_URL` on the server). */
   readonly VITE_API_URL?: string;
   /** Short brand / store name in header and hero. */

@@ -111,13 +111,24 @@ function adminTelegramNumericIds(): string[] {
   return out;
 }
 
-/** Глобальная платформенная админка (ADMIN_IDS + пароль): Reply Keyboard, не для клиентов. */
-async function sendGlobalAdminReplyKeyboardIfAdmin(ctx: Context): Promise<void> {
+/** Reply Keyboard «🛠 Админ панель» только для ADMIN_IDS (второй аргумент `ctx.reply`). */
+function adminReplyKeyboardExtraIfAdmin(
+  ctx: Context,
+):
+  | { reply_markup: ReturnType<typeof registrationAdminReplyKeyboardMarkup> }
+  | undefined {
   const tidStr = telegramIdString(ctx);
-  if (tidStr === "" || !adminTelegramNumericIds().includes(tidStr)) return;
-  await ctx.reply("\u2060", {
-    reply_markup: registrationAdminReplyKeyboardMarkup(),
-  });
+  if (tidStr === "" || !adminTelegramNumericIds().includes(tidStr)) return undefined;
+  return { reply_markup: registrationAdminReplyKeyboardMarkup() };
+}
+
+/**
+ * Отдельное сообщение с Reply Keyboard после inline-сообщения (нельзя совместить в одном sendMessage).
+ */
+async function sendGlobalAdminReplyKeyboardIfAdmin(ctx: Context): Promise<void> {
+  const extra = adminReplyKeyboardExtraIfAdmin(ctx);
+  if (!extra) return;
+  await ctx.reply("\u2060", extra);
 }
 
 function parseCallbackId(prefix: string, data: string): number | null {
@@ -246,16 +257,6 @@ async function replyMerchantStoreDashboard(
   keyboard.push([
     { text: "➕ Добавить магазин", callback_data: "saas_new_store" },
   ]);
-
-  const tidStr = telegramIdString(ctx);
-  if (base && adminTelegramNumericIds().includes(tidStr)) {
-    keyboard.push([
-      {
-        text: "🛠 Админ платформы",
-        web_app: { url: `${base}/platform-admin` },
-      },
-    ]);
-  }
 
   await ctx.reply(lines.join("\n"), {
     reply_markup: { inline_keyboard: keyboard },
@@ -702,9 +703,9 @@ export async function handleRegistrationStartCommand(
 
     if (hasPending) {
       await ctx.reply(
-        "Заявка на рассмотрении — ответ будет в этом чате."
+        "Заявка на рассмотрении — ответ будет в этом чате.",
+        adminReplyKeyboardExtraIfAdmin(ctx),
       );
-      await sendGlobalAdminReplyKeyboardIfAdmin(ctx);
       logSaas("rejected_attempt", {
         reason: "already_pending_request",
         telegramUserId: telegramIdStr,
@@ -727,9 +728,9 @@ export async function handleRegistrationStartCommand(
     sess.step = "name";
 
     await ctx.reply(
-      "Давайте создадим ваш магазин 🚀\nВведите название магазина."
+      "Давайте создадим ваш магазин 🚀\nВведите название магазина.",
+      adminReplyKeyboardExtraIfAdmin(ctx),
     );
-    await sendGlobalAdminReplyKeyboardIfAdmin(ctx);
 
     logSaas("registration_started", { telegramUserId: telegramIdStr });
     return true;
