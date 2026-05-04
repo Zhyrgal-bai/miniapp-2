@@ -33,6 +33,12 @@ services:
       # - ADMIN_IDS / PLATFORM_ADMIN_TELEGRAM_ID — по необходимости
       # - TELEGRAM_WEBHOOK_SECRET (production): тот же secret_token в setWebhook + заголовок X-Telegram-Bot-Api-Secret-Token
       # - BOT_TOKEN_SECRET_KEY (production): AES-256 шифрование Business.botToken в БД (≥32 символа)
+      # Multi-bot Mini App: перебор токенов магазинов в БД для проверки initData (по умолчанию вкл. в коде; =0 откл.)
+      - key: WEBAPP_VALIDATE_INITDATA_SCAN_STORE_BOTS
+        value: "1"
+      # Подробные логи проверки initData (первые 10 символов токена на попытку); на проде при спаме отключите.
+      - key: TELEGRAM_INIT_DEBUG
+        value: "1"
       - key: TELEGRAM_WEBHOOK_SECRET
         sync: false
       - key: BOT_TOKEN_SECRET_KEY

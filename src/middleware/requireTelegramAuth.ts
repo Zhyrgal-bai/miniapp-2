@@ -17,6 +17,13 @@ function shouldLogTelegramAuthDebug(): boolean {
   );
 }
 
+/** По умолчанию включён; отключить: WEBAPP_VALIDATE_INITDATA_SCAN_STORE_BOTS=0 */
+function shouldScanStoreBotsForInitData(): boolean {
+  const v = process.env.WEBAPP_VALIDATE_INITDATA_SCAN_STORE_BOTS?.trim();
+  if (v === "0" || v === "false" || v === "off") return false;
+  return true;
+}
+
 /** Пустой initData без проверки: только локальная разработка или SKIP_TELEGRAM_WEBAPP_AUTH=1 + DEV_TELEGRAM_USER_ID */
 function emptyInitDataBypassAllowed(): boolean {
   return (
@@ -36,10 +43,32 @@ function headerInitData(req: Request): string {
   return s;
 }
 
+function logCheckingToken(plainToken: string): void {
+  if (!shouldLogTelegramAuthDebug()) return;
+  console.log("Checking token:", plainToken.slice(0, 10));
+}
+
 /**
- * Авторизация Mini App: подпись `initData` от Telegram, user id только из `user.id`.
- * Перебираются все токены из env; при `start_param` с id магазина — токен этого Business из БД.
- * 401 — нет заголовка; 403 — битая подпись; 500 — невозможно проверить (нет токенов в env и нет start_param).
+ * true — ответ уже отправлен (next или ошибка acceptInitData).
+ */
+function tryValidateInitDataWithToken(
+  initData: string,
+  plainToken: string,
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): boolean {
+  if (plainToken.trim() === "") return false;
+  logCheckingToken(plainToken);
+  if (!validateTelegramInitData(initData, plainToken)) return false;
+  logHashOk(req);
+  acceptInitData(req, res, next, initData);
+  return true;
+}
+
+/**
+ * Mini App: multi-bot initData.
+ * Порядок: start_param → Business.botToken → BOT_TOKENS/env → скан магазинов в БД (по умолчанию вкл.).
  */
 export async function requireTelegramAuth(
   req: Request,
@@ -78,20 +107,16 @@ export async function requireTelegramAuth(
 
     const envToks = envCandidateBotTokensForWebAppInit();
     const businessIdHint = parseBusinessIdFromWebAppStartParam(initData);
+    const scanOn = shouldScanStoreBotsForInitData();
 
-    if (envToks.length === 0 && businessIdHint == null) {
+    const canTrySomething =
+      businessIdHint != null || envToks.length > 0 || scanOn;
+    if (!canTrySomething) {
       res.status(500).json({
         error:
-          "Сервер: задайте BOT_TOKEN / BOT_TOKENS / PLATFORM_WEBAPP_BOT_TOKEN или откройте приложение со ссылкой startapp с id магазина",
+          "Сервер: задайте BOT_TOKEN / BOT_TOKENS / PLATFORM_WEBAPP_BOT_TOKEN, либо start_param с id магазина, либо включите скан БД (WEBAPP_VALIDATE_INITDATA_SCAN_STORE_BOTS не 0)",
       });
       return;
-    }
-
-    for (const t of envToks) {
-      if (validateTelegramInitData(initData, t)) {
-        logHashOk(req);
-        return acceptInitData(req, res, next, initData);
-      }
     }
 
     if (businessIdHint != null) {
@@ -100,13 +125,18 @@ export async function requireTelegramAuth(
         select: { botToken: true },
       });
       const plain = row != null ? plainBotTokenFromStored(row.botToken) : "";
-      if (plain !== "" && validateTelegramInitData(initData, plain)) {
-        logHashOk(req);
-        return acceptInitData(req, res, next, initData);
+      if (tryValidateInitDataWithToken(initData, plain, req, res, next)) {
+        return;
       }
     }
 
-    if (process.env.WEBAPP_VALIDATE_INITDATA_SCAN_STORE_BOTS === "1") {
+    for (const t of envToks) {
+      if (tryValidateInitDataWithToken(initData, t, req, res, next)) {
+        return;
+      }
+    }
+
+    if (scanOn) {
       const rows = await prisma.business.findMany({
         select: { botToken: true },
         orderBy: { id: "desc" },
@@ -114,9 +144,8 @@ export async function requireTelegramAuth(
       });
       for (const r of rows) {
         const plain = plainBotTokenFromStored(r.botToken);
-        if (plain !== "" && validateTelegramInitData(initData, plain)) {
-          logHashOk(req);
-          return acceptInitData(req, res, next, initData);
+        if (tryValidateInitDataWithToken(initData, plain, req, res, next)) {
+          return;
         }
       }
     }
@@ -135,7 +164,7 @@ export async function requireTelegramAuth(
 }
 
 function logHashOk(req: Request): void {
-  if (process.env.TELEGRAM_INIT_DEBUG === "1") {
+  if (shouldLogTelegramAuthDebug()) {
     console.log(
       "[telegram-auth] initData hash OK",
       req.method,
