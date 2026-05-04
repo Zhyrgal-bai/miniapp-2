@@ -78,7 +78,7 @@ function secretKeyForWebApp(botToken: string): Buffer {
 function buildDataCheckString(params: URLSearchParams): string {
   const pairs: Array<[string, string]> = [];
   for (const key of [...new Set([...params.keys()])]) {
-    if (key === "hash" || key === "signature") continue;
+    if (key === "hash") continue;
     const v = params.get(key);
     if (v == null) continue;
     pairs.push([key, v]);
