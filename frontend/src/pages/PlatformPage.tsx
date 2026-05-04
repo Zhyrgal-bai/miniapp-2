@@ -13,10 +13,11 @@ import {
   postPlatformToggleBot,
   postPlatformUpdateFinik,
   savePlatformStoreSettings,
-  submitPlatformRegisterRequest,
   type PlatformMyBusinessDTO,
   type PlatformStoreSettingsDTO,
 } from "../services/platformApi";
+import { MERCHANT_REGISTER_SENT_KEY } from "./MerchantRegisterPage";
+import "./MerchantPage.css";
 
 function platformStatusLabel(status: string): string {
   const map: Record<string, string> = {
@@ -144,12 +145,6 @@ export default function PlatformPage() {
   const [error, setError] = useState<string | null>(null);
   const [infoBanner, setInfoBanner] = useState<string | null>(null);
 
-  const [openCreate, setOpenCreate] = useState(false);
-  const [storeName, setStoreName] = useState("");
-  const [botToken, setBotToken] = useState("");
-  const [phone, setPhone] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const [successFlash, setSuccessFlash] = useState(false);
   /** Ряд активных действий по businessId для UX загрузки. */
   const [pendingByBusiness, setPendingByBusiness] = useState<
@@ -220,7 +215,30 @@ export default function PlatformPage() {
   useEffect(() => {
     window.Telegram?.WebApp?.ready();
     getTelegramWebApp()?.expand?.();
+    try {
+      sessionStorage.removeItem("miniapp-active-shop");
+    } catch {
+      /* ignore */
+    }
+    let flashTimer: ReturnType<typeof window.setTimeout> | undefined;
+    try {
+      if (
+        sessionStorage.getItem(MERCHANT_REGISTER_SENT_KEY) === "1"
+      ) {
+        sessionStorage.removeItem(MERCHANT_REGISTER_SENT_KEY);
+        setSuccessFlash(true);
+        if (!readOnboardingCompleted()) {
+          setOnboardingStep("success");
+        }
+        flashTimer = window.setTimeout(() => setSuccessFlash(false), 8000);
+      }
+    } catch {
+      /* ignore */
+    }
     void loadBusinesses();
+    return () => {
+      if (flashTimer != null) window.clearTimeout(flashTimer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- явная загрузка при входе (/merchant), как load() в ТЗ
   }, []);
 
@@ -385,14 +403,7 @@ export default function PlatformPage() {
     }
   };
 
-  const closeCreateForm = useCallback(() => {
-    setOpenCreate(false);
-    setSubmitError(null);
-  }, []);
-
-  const openCreateForm = useCallback(() => {
-    setSubmitError(null);
-    setSuccessFlash(false);
+  const goToMerchantRegister = useCallback(() => {
     try {
       getTelegramWebApp()?.expand?.();
     } catch {
@@ -407,8 +418,8 @@ export default function PlatformPage() {
     } catch {
       /* ignore */
     }
-    setOpenCreate(true);
-  }, []);
+    navigate("/merchant/register");
+  }, [navigate]);
 
   const markOnboardingComplete = useCallback(() => {
     if (typeof window !== "undefined") {
@@ -418,48 +429,9 @@ export default function PlatformPage() {
     setOnboardingStep(1);
   }, []);
 
-  /** В TG WebApp форма может оказаться «под» слоями родителя #root — монтируем в body и даём системную Back. */
-  useEffect(() => {
-    const tg = getTelegramWebApp();
-    type Bb = {
-      BackButton?: {
-        show: () => void;
-        hide: () => void;
-        onClick: (fn: () => void) => void;
-        offClick: (fn: () => void) => void;
-      };
-    };
-
-    if (!openCreate || !tg) return;
-
-    tg.expand?.();
-    const bb = (tg as Bb).BackButton;
-    const backOk =
-      bb != null &&
-      typeof bb.show === "function" &&
-      typeof bb.hide === "function" &&
-      typeof bb.onClick === "function" &&
-      typeof bb.offClick === "function";
-    if (backOk) {
-      bb.show();
-      bb.onClick(closeCreateForm);
-    }
-
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      if (backOk) {
-        bb.offClick(closeCreateForm);
-        bb.hide();
-      }
-    };
-  }, [openCreate, closeCreateForm]);
-
-  /** Fallback: нижняя зелёная кнопка Telegram — если клики по UI не доходят. */
-  const openCreateHandlerRef = useRef(openCreateForm);
-  openCreateHandlerRef.current = openCreateForm;
+  /** Fallback: нижняя зелёная кнопка Telegram — открывает отдельный маршрут с формой. */
+  const openCreateHandlerRef = useRef(goToMerchantRegister);
+  openCreateHandlerRef.current = goToMerchantRegister;
   useEffect(() => {
     const tg = getTelegramWebApp();
     type Mb = {
@@ -475,7 +447,6 @@ export default function PlatformPage() {
     const mb = (tg as Mb).MainButton;
     if (
       loading ||
-      openCreate ||
       businesses.length > 0 ||
       tg == null ||
       mb == null ||
@@ -518,47 +489,7 @@ export default function PlatformPage() {
         /* ignore */
       }
     };
-  }, [loading, openCreate, businesses.length]);
-
-  const handleSubmit = async (ev: React.FormEvent) => {
-    ev.preventDefault();
-    const uid =
-      Number.isFinite(merchantTelegramId) && merchantTelegramId > 0
-        ? merchantTelegramId
-        : resolveMerchantTelegramUserId(getTelegramWebApp());
-
-    if (!Number.isFinite(uid) || uid <= 0) {
-      setSubmitError("Нет данных пользователя Telegram. Откройте из Mini App.");
-      return;
-    }
-
-    setSubmitting(true);
-    setSubmitError(null);
-    try {
-      await submitPlatformRegisterRequest({
-        storeName: storeName.trim(),
-        botToken: botToken.trim(),
-        phone: phone.trim(),
-        telegramId: uid,
-      });
-      setStoreName("");
-      setBotToken("");
-      setPhone("");
-      setOpenCreate(false);
-      if (onboardingZeroStoresRef.current) {
-        setOnboardingStep("success");
-        setSuccessFlash(false);
-      } else {
-        setSuccessFlash(true);
-        window.setTimeout(() => setSuccessFlash(false), 5000);
-        void loadBusinesses();
-      }
-    } catch (e) {
-      setSubmitError(e instanceof Error ? e.message : "Не удалось отправить");
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  }, [loading, businesses.length]);
 
   const closeSettingsModal = () => {
     setSettingsBusinessId(null);
@@ -658,10 +589,8 @@ export default function PlatformPage() {
     }
   };
 
-  /** При открытой форме оверлей убираем — иначе в TG WebView клики «Создать» могут не доходить. */
   const showOnboardingLayer =
     onboardingBaseOk &&
-    !openCreate &&
     (businesses.length === 0 || onboardingStep === "success");
 
   /** Нижний «Создать» — всегда после загрузки, кроме полноэкранного онбординга (чтобы не дублировать с оверлеем). */
@@ -669,31 +598,32 @@ export default function PlatformPage() {
 
   return (
     <>
-      <div className={`${archa.pageRoot} min-h-screen pb-20`}>
+      <div className="mp-page">
         <div
-          className={`mx-auto flex w-full max-w-lg flex-col gap-4 px-4 pt-7 sm:px-5 ${
-            showBottomCreateBar ? "pb-32" : "pb-24"
-          }`}
+          className={`mp-shell ${showBottomCreateBar ? "mp-shell--dock" : ""}`}
         >
-        <ArchaHeader subtitle="Управляйте своими магазинами" />
+          <ArchaHeader
+            className="mp-top-header"
+            subtitle="Управляйте своими магазинами"
+          />
 
         {platformAdminAccess === "yes" ? (
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.05 }}
-            className={`${archa.cardGlass} border-[#22C55E]/15 px-4 py-4`}
+            className="mp-panel mp-panel--admin px-4 py-4"
             role="region"
             aria-label="Панель администратора платформы"
           >
-            <p className="text-sm leading-relaxed text-[#9CA3AF]">
+            <p className="mp-muted leading-relaxed">
               Заявки на регистрацию, все магазины, подписки, отключение ботов —
               только для администратора платформы.
             </p>
             <button
               type="button"
               onClick={() => navigate("/platform-admin")}
-              className={`${archa.btnPrimary} mt-3`}
+              className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg mt-3"
             >
               Админ-панель платформы
             </button>
@@ -701,17 +631,14 @@ export default function PlatformPage() {
         ) : null}
 
         {successFlash ? (
-          <p
-            className="rounded-2xl border border-[#22C55E]/25 bg-[#22C55E]/10 px-4 py-3 text-center text-sm text-[#86EFAC] shadow-inner backdrop-blur-md"
-            role="status"
-          >
+          <p className="mp-flash mp-flash--ok" role="status">
             ⏳ Заявка отправлена. Ожидайте подтверждения администратора
           </p>
         ) : null}
 
         {loading ? (
           <motion.p
-            className={`text-sm ${archa.textMuted}`}
+            className="mp-muted"
             initial={{ opacity: 0.4 }}
             animate={{ opacity: [0.4, 1, 0.4] }}
             transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
@@ -721,33 +648,27 @@ export default function PlatformPage() {
         ) : (
           <>
             {error ? (
-              <div
-                className="rounded-2xl border border-red-500/25 bg-red-950/30 px-4 py-3 text-sm text-red-200 backdrop-blur-md"
-                role="alert"
-              >
+              <div className="mp-flash mp-flash--err text-left" role="alert">
                 {error}
               </div>
             ) : null}
             {infoBanner ? (
-              <p
-                className="rounded-2xl border border-[#22C55E]/20 bg-[#111827]/80 px-4 py-3 text-sm text-[#BBF7D0] backdrop-blur-md"
-                role="status"
-              >
+              <p className="mp-flash mp-flash--info text-left" role="status">
                 {infoBanner}
               </p>
             ) : null}
             {!error && businesses.length === 0 ? (
               <motion.div
-                className={`${archa.cardGlass} px-6 py-12 text-center`}
+                className="mp-panel mp-panel--empty"
                 role="status"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
               >
-                <p className="text-lg font-semibold text-[#E5E7EB]">
+                <p className="text-lg font-semibold text-white">
                   У вас пока нет магазинов
                 </p>
-                <p className="mt-2 text-sm text-[#9CA3AF]">
+                <p className="mt-2 text-base leading-relaxed text-slate-400">
                   Заявка после одобрения появится в списке. Нажмите «Создать» ниже
                   или откройте форму снизу экрана.
                 </p>
@@ -756,9 +677,9 @@ export default function PlatformPage() {
                   onClick={(ev) => {
                     ev.preventDefault();
                     ev.stopPropagation();
-                    openCreateForm();
+                    goToMerchantRegister();
                   }}
-                  className={`${archa.btnPrimary} mt-8 touch-manipulation`}
+                  className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg mt-8"
                 >
                   ➕ Создать
                 </button>
@@ -782,24 +703,20 @@ export default function PlatformPage() {
                         delay: index * 0.05,
                         ease: [0.22, 1, 0.36, 1],
                       }}
-                      className={`group ${archa.cardGlass} ${archa.cardGlassHover} p-4 sm:p-5`}
+                      className="mp-panel mp-store group"
                     >
                       <div className="flex gap-3">
-                        <div
-                          className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0B0F14]/80 shadow-inner transition duration-300 group-hover:border-[#22C55E]/30"
-                          aria-hidden
-                        >
+                        <div className="mp-store-avatar" aria-hidden>
                           <img
                             src="/674440574_18101674030793392_828162833995675842_n.jpg"
                             alt=""
-                            className="h-10 w-10 object-cover opacity-90"
                           />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h2 className="truncate text-lg font-bold tracking-tight text-[#E5E7EB]">
+                          <h2 className="truncate text-lg font-bold tracking-tight text-white">
                             {b.name}
                           </h2>
-                          <p className="mt-0.5 font-mono text-[11px] text-[#9CA3AF]">
+                          <p className="mt-0.5 font-mono text-[11px] text-slate-400">
                             id {b.id}
                           </p>
                           <div className="mt-3 flex flex-wrap gap-2">
@@ -813,7 +730,7 @@ export default function PlatformPage() {
                               {whBadge.label}
                             </span>
                           </div>
-                          <p className="mt-2 break-all font-mono text-[11px] leading-snug text-[#9CA3AF]/90">
+                          <p className="mt-2 break-all font-mono text-[11px] leading-snug text-slate-400">
                             {webhookUrlLine(b)}
                           </p>
                           <div className="mt-4 flex flex-col gap-2.5 sm:flex-row sm:items-stretch">
@@ -824,7 +741,7 @@ export default function PlatformPage() {
                                   `/?shop=${encodeURIComponent(String(b.id))}`,
                                 )
                               }
-                              className={archa.btnPrimarySm}
+                              className="mp-btn mp-btn--primary mp-btn--sm min-w-0"
                             >
                               Открыть магазин
                             </button>
@@ -839,7 +756,7 @@ export default function PlatformPage() {
                                 setSettingsOkMsg(null);
                                 setSettingsBusinessId(b.id);
                               }}
-                              className={`${archa.btnSecondary} sm:min-w-[8.5rem]`}
+                              className="mp-btn mp-btn--secondary mp-btn--sm min-w-0 sm:min-w-[8.5rem]"
                             >
                               {settingsBusinessId === b.id &&
                               (settingsLoading || settingsSaving)
@@ -853,7 +770,7 @@ export default function PlatformPage() {
                                 type="button"
                                 disabled={toggleBusy}
                                 onClick={() => void handleToggleBot(b)}
-                                className={archa.btnDanger}
+                                className="mp-btn mp-btn--danger"
                               >
                                 {toggleBusy ? "…" : "Отключить"}
                               </button>
@@ -867,7 +784,7 @@ export default function PlatformPage() {
                                 disabled={toggleBusy}
                                 title="Включить магазин"
                                 onClick={() => void handleToggleBot(b)}
-                                className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-[#22C55E] px-4 text-sm font-semibold text-black transition hover:bg-[#16A34A] disabled:pointer-events-none disabled:opacity-45 active:scale-[0.98]"
+                                className="mp-btn mp-btn-enable"
                               >
                                 {toggleBusy ? "…" : "🟢 Включить"}
                               </button>
@@ -876,7 +793,7 @@ export default function PlatformPage() {
                               type="button"
                               disabled={webhookBusy}
                               onClick={() => void handleCheckWebhook(b)}
-                              className={archa.btnGhost}
+                              className="mp-btn mp-btn--ghost"
                             >
                               {webhookBusy ? "Проверка…" : "Проверить webhook"}
                             </button>
@@ -894,16 +811,16 @@ export default function PlatformPage() {
       </div>
 
       {showBottomCreateBar ? (
-        <div className={`${archa.bottomDock} relative z-[49] p-4 sm:p-5`}>
-          <div className="mx-auto max-w-lg">
+        <div className="mp-dock relative z-[49]">
+          <div className="mp-dock-inner">
             <button
               type="button"
               onClick={(ev) => {
                 ev.preventDefault();
                 ev.stopPropagation();
-                openCreateForm();
+                goToMerchantRegister();
               }}
-              className={`${archa.btnPrimary} touch-manipulation`}
+              className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg"
             >
               ➕ Создать магазин
             </button>
@@ -917,7 +834,7 @@ export default function PlatformPage() {
             <motion.div
               key="merchant-onboarding-backdrop"
               aria-hidden
-              className="fixed inset-0 z-[48] bg-[#0B0F14]/88 backdrop-blur-md"
+              className="mp-onboard-backdrop fixed inset-0 z-[48]"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -936,7 +853,7 @@ export default function PlatformPage() {
               transition={{ duration: 0.2 }}
             >
             <motion.div
-              className="pointer-events-auto w-full max-w-lg rounded-3xl border border-white/[0.07] bg-[#111827]/95 p-6 shadow-2xl shadow-black/60 backdrop-blur-xl sm:p-8"
+              className="mp-onboard-card pointer-events-auto w-full max-w-lg"
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 16 }}
@@ -956,14 +873,14 @@ export default function PlatformPage() {
                       <h2 className="text-2xl font-bold tracking-tight text-white">
                         🚀 Добро пожаловать
                       </h2>
-                      <p className="mt-3 text-base leading-relaxed text-slate-300">
+                      <p className="mp-onboard-muted mt-3 text-base leading-relaxed">
                         Создайте свой Telegram-магазин за 1 минуту
                       </p>
                     </div>
                     <button
                       type="button"
                       onClick={() => setOnboardingStep(2)}
-                      className={`${archa.btnPrimary} py-4 text-base`}
+                      className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg"
                     >
                       👉 Начать
                     </button>
@@ -981,14 +898,14 @@ export default function PlatformPage() {
                     <h2 className="text-xl font-bold text-white">
                       Как подключить бота
                     </h2>
-                    <ol className="list-decimal space-y-3 pl-5 text-base leading-relaxed text-slate-300">
+                    <ol className="mp-onboard-muted list-decimal space-y-3 pl-5 text-base leading-relaxed">
                       <li>
                         Создайте бота в{" "}
                         <a
                           href="https://t.me/BotFather"
                           target="_blank"
                           rel="noreferrer"
-                          className="font-medium text-[#4ADE80] underline decoration-[#22C55E]/50 underline-offset-2 hover:text-[#86EFAC]"
+                          className="mp-onboarding-link"
                         >
                           @BotFather
                         </a>
@@ -999,7 +916,7 @@ export default function PlatformPage() {
                     <button
                       type="button"
                       onClick={() => setOnboardingStep(3)}
-                      className={`${archa.btnPrimary} py-4 text-base`}
+                      className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg"
                     >
                       👉 Понятно
                     </button>
@@ -1017,7 +934,7 @@ export default function PlatformPage() {
                     <h2 className="text-xl font-bold text-white">
                       Создайте свой первый магазин
                     </h2>
-                    <p className="text-sm text-slate-400">
+                    <p className="mp-onboard-soft">
                       Нажмите ниже — откроется форма заявки. После проверки
                       администратором магазин появится в списке.
                     </p>
@@ -1026,9 +943,9 @@ export default function PlatformPage() {
                       onClick={(ev) => {
                         ev.preventDefault();
                         ev.stopPropagation();
-                        openCreateForm();
+                        goToMerchantRegister();
                       }}
-                      className={`${archa.btnPrimary} touch-manipulation py-4 text-base`}
+                      className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg"
                     >
                       ➕ Создать магазин
                     </button>
@@ -1047,7 +964,7 @@ export default function PlatformPage() {
                       <h2 className="text-2xl font-bold text-white">
                         ✅ Магазин создан
                       </h2>
-                      <p className="mt-3 text-base leading-relaxed text-slate-300">
+                      <p className="mp-onboard-muted mt-3 text-base leading-relaxed">
                         👉 Откройте его или настройте
                       </p>
                     </div>
@@ -1061,7 +978,7 @@ export default function PlatformPage() {
                               `/?shop=${encodeURIComponent(String(businesses[0].id))}`,
                             );
                           }}
-                          className={`${archa.btnPrimary} py-4 text-base`}
+                          className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg"
                         >
                           Открыть магазин
                         </button>
@@ -1074,8 +991,8 @@ export default function PlatformPage() {
                         }}
                         className={
                           businesses[0] != null
-                            ? `${archa.btnSecondary} w-full py-4 text-base`
-                            : `${archa.btnPrimary} py-4 text-base`
+                            ? "mp-btn mp-btn--secondary mp-btn--block mp-btn--lg"
+                            : "mp-btn mp-btn--primary mp-btn--block mp-btn--lg"
                         }
                       >
                         Готово
@@ -1089,158 +1006,6 @@ export default function PlatformPage() {
           </>
         ) : null}
       </AnimatePresence>
-
-      {openCreate ? (
-          <div
-            className="fixed inset-0 flex min-h-0 flex-col overflow-x-hidden overflow-y-auto bg-[#05080d] shadow-[inset_0_3px_0_0_#22c55e]"
-            style={{
-              zIndex: 2147483000,
-              minHeight: "100%",
-              height: "100dvh",
-              maxHeight: "100dvh",
-            }}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="platform-register-title"
-            aria-describedby="platform-register-desc"
-          >
-            <div className="flex min-h-0 flex-1 flex-col gap-[16px]">
-              <header className="flex shrink-0 items-center gap-[12px] px-[16px] pt-[16px] pb-[8px]">
-                <img
-                  src="/674440574_18101674030793392_828162833995675842_n.jpg"
-                  alt="ARCHA"
-                  width={40}
-                  height={40}
-                  className="h-[40px] w-[40px] shrink-0 rounded-[12px] border border-[rgba(255,255,255,0.06)] object-cover shadow-[0_4px_14px_rgba(0,0,0,0.35)]"
-                />
-                <div className="flex min-w-[0] flex-1 flex-col gap-[8px]">
-                  <p className="text-[18px] font-[700] leading-[1.25] text-[#E5E7EB]">
-                    ARCHA
-                  </p>
-                  <p className="text-[14px] leading-[1.375] text-[#9CA3AF]">
-                    Магазин в Telegram
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={closeCreateForm}
-                  className="shrink-0 rounded-[9999px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.06)] px-[12px] py-[8px] text-[14px] font-[500] text-[#D1D5DB] transition active:bg-[rgba(255,255,255,0.12)]"
-                  aria-label="Закрыть"
-                >
-                  Закрыть
-                </button>
-              </header>
-
-              <form
-                className="flex min-h-0 min-w-0 flex-1 flex-col"
-                onSubmit={handleSubmit}
-              >
-                <div
-                  className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-y-contain px-[16px] pb-[max(1.5rem,env(safe-area-inset-bottom))]"
-                  style={{ WebkitOverflowScrolling: "touch" }}
-                >
-                  <div className="mx-auto flex w-full max-w-[28rem] flex-col gap-[16px]">
-                    <div className="flex flex-col gap-[16px] rounded-[16px] border border-[rgba(255,255,255,0.06)] bg-[#111827] p-[16px] shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
-                      <div className="flex flex-col gap-[8px] text-center">
-                        <h2
-                          id="platform-register-title"
-                          className="text-[20px] font-[600] text-[#E5E7EB]"
-                        >
-                          Создание магазина
-                        </h2>
-                        <p
-                          id="platform-register-desc"
-                          className="text-[14px] leading-[1.625] text-[#9CA3AF]"
-                        >
-                          Заполните поля — заявка уйдёт на проверку
-                        </p>
-                      </div>
-
-                      <div className="flex flex-col gap-[4px]">
-                        <label
-                          htmlFor="platform-store-name"
-                          className="text-left text-[14px] text-[#9CA3AF]"
-                        >
-                          Название
-                        </label>
-                        <input
-                          id="platform-store-name"
-                          type="text"
-                          required
-                          minLength={2}
-                          maxLength={160}
-                          autoComplete="organization"
-                          placeholder="Например: Archa Store"
-                          value={storeName}
-                          onChange={(e) => setStoreName(e.target.value)}
-                          className="w-full rounded-[12px] border border-[rgba(255,255,255,0.06)] bg-[#0F172A] px-[16px] py-[12px] text-[16px] text-white shadow-[0_1px_3px_rgba(0,0,0,0.25)] outline-none placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#22C55E] focus:ring-offset-2 focus:ring-offset-[#111827] disabled:opacity-50"
-                        />
-                      </div>
-
-                      <div className="flex flex-col gap-[4px]">
-                        <label
-                          htmlFor="platform-bot-token"
-                          className="text-left text-[14px] text-[#9CA3AF]"
-                        >
-                          Токен бота
-                        </label>
-                        <input
-                          id="platform-bot-token"
-                          type="password"
-                          autoComplete="off"
-                          required
-                          placeholder="От BotFather"
-                          value={botToken}
-                          onChange={(e) => setBotToken(e.target.value)}
-                          className="w-full rounded-[12px] border border-[rgba(255,255,255,0.06)] bg-[#0F172A] px-[16px] py-[12px] font-[ui-monospace,SFMono-Regular,Menlo,monospace] text-[16px] text-white shadow-[0_1px_3px_rgba(0,0,0,0.25)] outline-none placeholder:font-[inherit] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#22C55E] focus:ring-offset-2 focus:ring-offset-[#111827] disabled:opacity-50"
-                        />
-                      </div>
-
-                      <div className="flex flex-col gap-[4px]">
-                        <label
-                          htmlFor="platform-phone"
-                          className="text-left text-[14px] text-[#9CA3AF]"
-                        >
-                          Телефон
-                        </label>
-                        <input
-                          id="platform-phone"
-                          type="tel"
-                          required
-                          inputMode="tel"
-                          placeholder="+996…"
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
-                          className="w-full rounded-[12px] border border-[rgba(255,255,255,0.06)] bg-[#0F172A] px-[16px] py-[12px] text-[16px] text-white shadow-[0_1px_3px_rgba(0,0,0,0.25)] outline-none placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#22C55E] focus:ring-offset-2 focus:ring-offset-[#111827] disabled:opacity-50"
-                        />
-                        <p className="text-[12px] leading-[1.5] text-[#6B7280]">
-                          +996 и 9 цифр или 0 и 9 цифр
-                        </p>
-                      </div>
-
-                      {submitError ? (
-                        <p
-                          className="text-center text-[14px] leading-[1.625] text-[#fca5a5]"
-                          role="alert"
-                        >
-                          {submitError}
-                        </p>
-                      ) : null}
-
-                      <button
-                        type="submit"
-                        disabled={submitting}
-                        className="flex h-[48px] w-full touch-manipulation items-center justify-center rounded-[12px] bg-[#22C55E] text-[16px] font-[600] text-[#0B0F14] disabled:pointer-events-none disabled:opacity-[0.45] active:scale-[0.98]"
-                      >
-                        {submitting ? "Отправка…" : "Отправить заявку"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </form>
-            </div>
-          </div>
-      ) : null}
 
       <AnimatePresence>
         {settingsBusinessId != null ? (
@@ -1259,7 +1024,7 @@ export default function PlatformPage() {
             <motion.div
               role="dialog"
               aria-labelledby="platform-settings-title"
-              className={archa.modalCard}
+              className={`${archa.modalCard} mp-settings-modal-card`}
               initial={{ opacity: 0, scale: 0.94, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 12 }}
@@ -1268,7 +1033,7 @@ export default function PlatformPage() {
             <div className="mb-4 flex items-start justify-between gap-3">
               <h2
                 id="platform-settings-title"
-                className="text-lg font-semibold text-[#E5E7EB]"
+                className="text-lg font-semibold text-white"
               >
                 Настройки магазина
               </h2>
@@ -1283,7 +1048,7 @@ export default function PlatformPage() {
             </div>
 
             {settingsLoading ? (
-              <p className={`text-sm ${archa.textMuted}`}>Загрузка…</p>
+              <p className="mp-muted text-sm">Загрузка…</p>
             ) : settingsErr != null && settingsSnap == null ? (
               <p className="text-sm text-red-300" role="alert">
                 {settingsErr}
@@ -1305,7 +1070,7 @@ export default function PlatformPage() {
                 <div>
                   <label
                     htmlFor="platform-settings-name"
-                    className={`mb-1 block text-sm ${archa.textMuted}`}
+                    className="mp-muted mb-1 block text-sm"
                   >
                     Название магазина
                   </label>
@@ -1326,7 +1091,7 @@ export default function PlatformPage() {
                 <div>
                   <label
                     htmlFor="platform-settings-token"
-                    className={`mb-1 block text-sm ${archa.textMuted}`}
+                    className="mp-muted mb-1 block text-sm"
                   >
                     Новый токен бота
                   </label>
@@ -1339,13 +1104,13 @@ export default function PlatformPage() {
                     onChange={(e) => setSettingsNewToken(e.target.value)}
                     className={`${archa.input} font-mono`}
                   />
-                  <p className={`mt-1 text-xs ${archa.textMuted}`}>
+                  <p className="mp-muted mt-1 text-xs">
                     Смена токена требует подтверждения администратором. Текущий
                     токен не отображается.
                   </p>
                 </div>
 
-                <div className={`${archa.cardGlass} border-white/[0.05] p-4`}>
+                <div className="mp-settings-slab">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-sm font-semibold tracking-tight text-white">
                       💳 Finik
@@ -1370,7 +1135,7 @@ export default function PlatformPage() {
                   </p>
                   <label
                     htmlFor="platform-settings-finik-draft"
-                    className={`mb-1 mt-3 block text-xs font-medium ${archa.textMuted}`}
+                    className="mp-muted mb-1 mt-3 block text-xs font-medium"
                   >
                     Новый API ключ Finik
                   </label>
@@ -1388,7 +1153,7 @@ export default function PlatformPage() {
                     placeholder="Вставьте ключ"
                     className={`${archa.input} font-mono`}
                   />
-                  <p className={`mt-1.5 text-[11px] leading-relaxed ${archa.textMuted}`}>
+                  <p className="mp-muted mt-1.5 text-[11px] leading-relaxed">
                     Оставьте поле пустым и нажмите «Сохранить», чтобы отключить
                     Finik. Ключ на сервер не возвращается.
                   </p>
@@ -1408,7 +1173,7 @@ export default function PlatformPage() {
                       settingsSnap == null || finikSaving || settingsLoading
                     }
                     onClick={() => void handleSaveFinik()}
-                    className={`${archa.btnPrimary} mt-3`}
+                    className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg mt-3"
                   >
                     {finikSaving ? "Сохранение…" : "Сохранить"}
                   </button>
@@ -1433,7 +1198,7 @@ export default function PlatformPage() {
                   disabled={
                     settingsSnap == null || settingsSaving || settingsLoading
                   }
-                  className={`${archa.btnPrimary} mt-1`}
+                  className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg mt-1"
                 >
                   {settingsSaving ? "Сохранение…" : "Сохранить"}
                 </button>

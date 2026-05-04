@@ -3,15 +3,20 @@ import { motion } from "framer-motion";
 type ArchaHeaderProps = {
   subtitle: string;
   secondLine?: string;
+  className?: string;
 };
 
-export function ArchaHeader({ subtitle, secondLine }: ArchaHeaderProps) {
+export function ArchaHeader({
+  subtitle,
+  secondLine,
+  className,
+}: ArchaHeaderProps) {
   return (
     <motion.header
       initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-      className="flex items-start gap-3 sm:gap-4"
+      className={`flex items-start gap-3 sm:gap-4 ${className ?? ""}`}
     >
       <div className="relative shrink-0">
         <img
