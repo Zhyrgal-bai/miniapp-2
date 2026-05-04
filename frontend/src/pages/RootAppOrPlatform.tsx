@@ -3,13 +3,13 @@ import App from "../App";
 import { readShopIdString } from "../utils/storeParams";
 
 /**
- * Главный бот / регистрация: открытие Mini App без `?shop=` → панель `/platform`.
- * Витрина магазина: при `?shop=` / `?businessId=` / start_param — обычный `App`.
+ * Без `?shop=` (витрина) — открываем панель клиента `/merchant`.
+ * С `?shop=` — обычное приложение магазина.
  */
 export default function RootAppOrPlatform() {
   const shop = readShopIdString();
   if (shop) {
     return <App />;
   }
-  return <Navigate to="/platform" replace />;
+  return <Navigate to="/merchant" replace />;
 }

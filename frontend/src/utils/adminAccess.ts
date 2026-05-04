@@ -18,36 +18,6 @@ export function viteAdminIdsAllow(): boolean {
   return ADMIN_IDS.length > 0 && ADMIN_IDS.includes(userId);
 }
 
-/** Заданы ли переменные для гейта `/platform-admin` при сборке фронта. */
-export function platformAdminEnvConfigured(): boolean {
-  const raw = import.meta.env.VITE_ADMIN_IDS;
-  const single = String(
-    import.meta.env.VITE_PLATFORM_ADMIN_TELEGRAM_ID ?? "",
-  ).trim();
-  const listOk = typeof raw === "string" && raw.trim() !== "";
-  const singleOk = /^\d+$/.test(single);
-  return listOk || singleOk;
-}
-
-/**
- * Локальный гейт Mini App (сервер всё равно проверяет `ADMIN_IDS` и `PLATFORM_ADMIN_TELEGRAM_ID`).
- * Совпадает с `isPlatformAdminTelegramId` на бэкенде при синхронных env.
- */
-export function platformAdminMiniAppGate(telegramUserId: number): boolean {
-  if (!Number.isFinite(telegramUserId) || telegramUserId <= 0) return false;
-  const single = String(
-    import.meta.env.VITE_PLATFORM_ADMIN_TELEGRAM_ID ?? "",
-  ).trim();
-  if (/^\d+$/.test(single) && single === String(telegramUserId)) return true;
-  const rawAdminIds = import.meta.env.VITE_ADMIN_IDS;
-  if (!rawAdminIds?.trim()) return false;
-  const ADMIN_IDS: number[] = rawAdminIds
-    .split(/[,;]+/)
-    .map((id) => Number(id.trim()))
-    .filter((n) => Number.isFinite(n));
-  return ADMIN_IDS.includes(telegramUserId);
-}
-
 /**
  * Админку Mini App показываем только по роли OWNER/ADMIN из GET /api/me (бэкенд валидирует).
  */

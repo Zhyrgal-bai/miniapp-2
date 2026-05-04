@@ -56,7 +56,7 @@ export function computePlatformBusinessStatus(b: {
   }
 }
 
-async function mapRowsWithWebhook(
+export async function mapRowsWithWebhook(
   rows: Array<{
     id: number;
     name: string;
@@ -124,7 +124,7 @@ async function listMemberBusinessesSafe(
 }
 
 /**
- * Мини-платформа `/platform`: только магазины, где пользователь — OWNER или ADMIN магазина.
+ * Мини-платформа `/merchant` (клиент): только магазины, где пользователь — OWNER или ADMIN магазина.
  * Глобальные ADMIN_IDS не расширяют список (админка — отдельно: бот + `/platform-admin`).
  */
 export async function listPlatformOwnerBusinesses(

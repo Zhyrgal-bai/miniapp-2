@@ -13,13 +13,27 @@ export type PlatformAdminBusinessDTO = {
   name: string;
   isActive: boolean;
   isBlocked: boolean;
+  status: string;
   subscriptionStatus: string;
   subscriptionEndsAt: string | null;
   trialEndsAt: string | null;
+  webhookStatus: "OK" | "ERROR";
+  webhookUrl: string | null;
 };
 
 function adminHeaders(telegramId: number): HeadersInit {
   return { "x-telegram-id": String(telegramId) };
+}
+
+async function throwIfNotOk(res: Response): Promise<void> {
+  if (res.status === 403) {
+    const err = new Error("Нет доступа");
+    (err as Error & { status: number }).status = 403;
+    throw err;
+  }
+  if (res.ok) return;
+  const j = (await res.json().catch(() => ({}))) as { error?: string };
+  throw new Error(j.error ?? `HTTP ${res.status}`);
 }
 
 export async function fetchPlatformAdminRequests(
@@ -34,10 +48,7 @@ export async function fetchPlatformAdminRequests(
       headers: adminHeaders(telegramId),
     },
   );
-  if (!res.ok) {
-    const j = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(j.error ?? `HTTP ${res.status}`);
-  }
+  await throwIfNotOk(res);
   const data = (await res.json()) as unknown;
   return Array.isArray(data) ? data : [];
 }
@@ -55,10 +66,7 @@ export async function postPlatformAdminApprove(params: {
     },
     body: JSON.stringify({ requestId: params.requestId }),
   });
-  if (!res.ok) {
-    const j = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(j.error ?? `HTTP ${res.status}`);
-  }
+  await throwIfNotOk(res);
   const data = (await res.json()) as { businessId?: number };
   if (typeof data.businessId !== "number") {
     throw new Error("Некорректный ответ сервера");
@@ -79,10 +87,7 @@ export async function postPlatformAdminReject(params: {
     },
     body: JSON.stringify({ requestId: params.requestId }),
   });
-  if (!res.ok) {
-    const j = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(j.error ?? `HTTP ${res.status}`);
-  }
+  await throwIfNotOk(res);
 }
 
 export async function fetchPlatformAdminBusinesses(params: {
@@ -102,10 +107,7 @@ export async function fetchPlatformAdminBusinesses(params: {
       headers: adminHeaders(params.telegramId),
     },
   );
-  if (!res.ok) {
-    const j = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(j.error ?? `HTTP ${res.status}`);
-  }
+  await throwIfNotOk(res);
   const data = (await res.json()) as unknown;
   return Array.isArray(data) ? (data as PlatformAdminBusinessDTO[]) : [];
 }
@@ -123,10 +125,7 @@ export async function postPlatformAdminDisable(params: {
     },
     body: JSON.stringify({ businessId: params.businessId }),
   });
-  if (!res.ok) {
-    const j = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(j.error ?? `HTTP ${res.status}`);
-  }
+  await throwIfNotOk(res);
 }
 
 export async function postPlatformAdminExtend(params: {
@@ -146,10 +145,7 @@ export async function postPlatformAdminExtend(params: {
       days: params.days,
     }),
   });
-  if (!res.ok) {
-    const j = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(j.error ?? `HTTP ${res.status}`);
-  }
+  await throwIfNotOk(res);
   const data = (await res.json()) as { subscriptionEndsAt?: string };
   if (typeof data.subscriptionEndsAt !== "string") {
     throw new Error("Некорректный ответ сервера");

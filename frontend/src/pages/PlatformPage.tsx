@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { getTelegramWebApp } from "../utils/telegram";
 import {
   fetchPlatformMyBusinesses,
@@ -44,8 +45,9 @@ function webhookUrlLine(b: PlatformMyBusinessDTO): string {
   return "URL вебхука не задан или недоступен";
 }
 
-/** Платформа Mini App (главный бот клиенты + позже админ); витрины магазинов не трогаем. */
+/** Панель клиента Mini App: маршрут `/merchant` (витрины по-прежнему `/?shop=ID`). */
 export default function PlatformPage() {
+  const navigate = useNavigate();
   const [businesses, setBusinesses] = useState<PlatformMyBusinessDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -365,8 +367,11 @@ export default function PlatformPage() {
       <div className="mx-auto flex max-w-lg flex-col gap-4 px-4 py-6 pb-28">
         <header>
           <h1 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">
-            🚀 Мои магазины
+            🚀 Личный кабинет
           </h1>
+          <p className="mt-1 text-sm text-slate-400">
+            Магазины, подписка и настройки (/merchant)
+          </p>
         </header>
 
         {successFlash ? (
@@ -433,6 +438,17 @@ export default function PlatformPage() {
                           {webhookUrlLine(b)}
                         </p>
                         <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              navigate(
+                                `/?shop=${encodeURIComponent(String(b.id))}`,
+                              )
+                            }
+                            className="rounded-lg border border-sky-800/70 bg-sky-950/50 px-3 py-2 text-xs font-semibold text-sky-100 transition hover:bg-sky-900/55"
+                          >
+                            Открыть
+                          </button>
                           {b.isActive ? (
                             <button
                               type="button"

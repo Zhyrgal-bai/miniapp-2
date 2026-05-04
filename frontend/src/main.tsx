@@ -1,11 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import App from "./App";
 import { ShopProvider } from "./context/ShopContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import MerchantDashboardPage from "./pages/MerchantDashboardPage";
-import PlatformPage from "./pages/PlatformPage";
 import PlatformAdminPage from "./pages/PlatformAdminPage";
 import RootAppOrPlatform from "./pages/RootAppOrPlatform";
 import "leaflet/dist/leaflet.css";
@@ -21,7 +20,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <ThemeProvider>
           <Routes>
             <Route path="/merchant" element={<MerchantDashboardPage />} />
-            <Route path="/platform" element={<PlatformPage />} />
+            <Route
+              path="/platform"
+              element={<Navigate to="/merchant" replace />}
+            />
             <Route path="/platform-admin" element={<PlatformAdminPage />} />
             <Route path="/" element={<RootAppOrPlatform />} />
             <Route path="*" element={<App />} />
@@ -29,5 +31,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         </ThemeProvider>
       </ShopProvider>
     </BrowserRouter>
-  </React.StrictMode>
+  </React.StrictMode>,
 );

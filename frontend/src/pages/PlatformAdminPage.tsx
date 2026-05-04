@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { getTelegramWebApp } from "../utils/telegram";
-import {
-  getWebAppUserId,
-  platformAdminEnvConfigured,
-  platformAdminMiniAppGate,
-} from "../utils/adminAccess";
+import { getWebAppUserId } from "../utils/adminAccess";
 import {
   fetchPlatformAdminBusinesses,
   fetchPlatformAdminRequests,
@@ -24,10 +20,36 @@ function statusRu(status: string): string {
   return status;
 }
 
+function platformStatusRu(status: string): string {
+  const map: Record<string, string> = {
+    blocked: "🔒 Заблокирован",
+    inactive: "🔴 Не активен",
+    subscription_expired: "⏳ Подписка истекла",
+    trialing: "🟡 Пробный период",
+    active: "🟢 Активен",
+    past_due: "⚠️ Просрочен платёж",
+    canceled: "⛔ Отменён",
+    expired: "⏹ Истёк",
+  };
+  return map[status] ?? status;
+}
+
 function businessStatusLabel(b: PlatformAdminBusinessDTO): string {
   if (b.isBlocked) return "заблокирован";
   if (!b.isActive) return "неактивен";
-  return b.subscriptionStatus;
+  return platformStatusRu(b.status);
+}
+
+function webhookListLabel(ws: PlatformAdminBusinessDTO["webhookStatus"]): string {
+  return ws === "OK" ? "Webhook: ✅ OK" : "Webhook: ❌ ошибка";
+}
+
+function isForbiddenAdminError(e: unknown): boolean {
+  return (
+    e instanceof Error &&
+    ((e as Error & { status?: number }).status === 403 ||
+      e.message === "Нет доступа")
+  );
 }
 
 function formatIsoDate(iso: string | null): string {
@@ -43,7 +65,7 @@ function formatIsoDate(iso: string | null): string {
   }
 }
 
-/** Mini App `/platform-admin`: гейт по `VITE_PLATFORM_ADMIN_TELEGRAM_ID` или `VITE_ADMIN_IDS` (как `ADMIN_IDS` на сервере). */
+/** Mini App `/platform-admin`: доступ решает только сервер (`ADMIN_IDS` + 403). */
 export default function PlatformAdminPage() {
   const tg = getTelegramWebApp();
   const user = tg?.initDataUnsafe?.user;
@@ -52,13 +74,9 @@ export default function PlatformAdminPage() {
       ? user.id
       : getWebAppUserId();
 
-  const envOk = platformAdminEnvConfigured();
-  const accessAllowed =
-    envOk &&
-    Number.isFinite(userId) &&
-    userId > 0 &&
-    platformAdminMiniAppGate(userId);
+  const hasTelegramUser = Number.isFinite(userId) && userId > 0;
 
+  const [accessForbidden, setAccessForbidden] = useState(false);
   const [rows, setRows] = useState<PlatformAdminRequestDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
@@ -74,22 +92,28 @@ export default function PlatformAdminPage() {
   const [bizBusyKey, setBizBusyKey] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
-    if (!accessAllowed || !Number.isFinite(userId) || userId <= 0) return;
+    if (!hasTelegramUser) return;
     setLoading(true);
     setListError(null);
     try {
       const data = await fetchPlatformAdminRequests(userId);
       setRows(data);
+      setAccessForbidden(false);
     } catch (e) {
-      setListError(e instanceof Error ? e.message : "Ошибка загрузки");
-      setRows([]);
+      if (isForbiddenAdminError(e)) {
+        setAccessForbidden(true);
+        setRows([]);
+      } else {
+        setListError(e instanceof Error ? e.message : "Ошибка загрузки");
+        setRows([]);
+      }
     } finally {
       setLoading(false);
     }
-  }, [accessAllowed, userId]);
+  }, [hasTelegramUser, userId]);
 
   const reloadBusinesses = useCallback(async () => {
-    if (!accessAllowed || !Number.isFinite(userId) || userId <= 0) return;
+    if (!hasTelegramUser || accessForbidden) return;
     setBizLoading(true);
     setBizError(null);
     try {
@@ -99,12 +123,17 @@ export default function PlatformAdminPage() {
       });
       setBusinesses(data);
     } catch (e) {
-      setBizError(e instanceof Error ? e.message : "Ошибка загрузки");
-      setBusinesses([]);
+      if (isForbiddenAdminError(e)) {
+        setAccessForbidden(true);
+        setBusinesses([]);
+      } else {
+        setBizError(e instanceof Error ? e.message : "Ошибка загрузки");
+        setBusinesses([]);
+      }
     } finally {
       setBizLoading(false);
     }
-  }, [accessAllowed, userId, searchApplied]);
+  }, [hasTelegramUser, accessForbidden, userId, searchApplied]);
 
   useEffect(() => {
     window.Telegram?.WebApp?.ready();
@@ -119,7 +148,7 @@ export default function PlatformAdminPage() {
   const busy = actionId !== null;
 
   async function approve(id: number) {
-    if (!accessAllowed || !Number.isFinite(userId) || userId <= 0) return;
+    if (accessForbidden || !hasTelegramUser) return;
     setActionId(id);
     try {
       await postPlatformAdminApprove({
@@ -128,14 +157,15 @@ export default function PlatformAdminPage() {
       });
       await reload();
     } catch (e) {
-      setListError(e instanceof Error ? e.message : "Ошибка одобрения");
+      if (isForbiddenAdminError(e)) setAccessForbidden(true);
+      else setListError(e instanceof Error ? e.message : "Ошибка одобрения");
     } finally {
       setActionId(null);
     }
   }
 
   async function reject(id: number) {
-    if (!accessAllowed || !Number.isFinite(userId) || userId <= 0) return;
+    if (accessForbidden || !hasTelegramUser) return;
     setActionId(id);
     try {
       await postPlatformAdminReject({
@@ -144,7 +174,8 @@ export default function PlatformAdminPage() {
       });
       await reload();
     } catch (e) {
-      setListError(e instanceof Error ? e.message : "Ошибка отклонения");
+      if (isForbiddenAdminError(e)) setAccessForbidden(true);
+      else setListError(e instanceof Error ? e.message : "Ошибка отклонения");
     } finally {
       setActionId(null);
     }
@@ -160,7 +191,7 @@ export default function PlatformAdminPage() {
   }
 
   async function disableStore(businessId: number) {
-    if (!accessAllowed || !Number.isFinite(userId) || userId <= 0) return;
+    if (accessForbidden || !hasTelegramUser) return;
     if (!window.confirm(`Отключить магазин #${businessId}?`)) return;
     const key = `d-${businessId}`;
     setBizBusyKey(key);
@@ -168,46 +199,29 @@ export default function PlatformAdminPage() {
       await postPlatformAdminDisable({ telegramId: userId, businessId });
       await reloadBusinesses();
     } catch (e) {
-      setBizError(e instanceof Error ? e.message : "Ошибка");
+      if (isForbiddenAdminError(e)) setAccessForbidden(true);
+      else setBizError(e instanceof Error ? e.message : "Ошибка");
     } finally {
       setBizBusyKey(null);
     }
   }
 
   async function extendStore(businessId: number, days: 30 | 90) {
-    if (!accessAllowed || !Number.isFinite(userId) || userId <= 0) return;
+    if (accessForbidden || !hasTelegramUser) return;
     const key = `e-${businessId}-${days}`;
     setBizBusyKey(key);
     try {
       await postPlatformAdminExtend({ telegramId: userId, businessId, days });
       await reloadBusinesses();
     } catch (e) {
-      setBizError(e instanceof Error ? e.message : "Ошибка");
+      if (isForbiddenAdminError(e)) setAccessForbidden(true);
+      else setBizError(e instanceof Error ? e.message : "Ошибка");
     } finally {
       setBizBusyKey(null);
     }
   }
 
-  if (!envOk) {
-    return (
-      <div className="min-h-full bg-slate-950 p-6 text-center text-red-300">
-        <p className="font-semibold">⛔ Нет доступа</p>
-        <p className="mt-2 text-sm text-slate-400">
-          Задайте при сборке фронта{" "}
-          <span className="font-mono text-slate-300">
-            VITE_PLATFORM_ADMIN_TELEGRAM_ID
-          </span>{" "}
-          или список{" "}
-          <span className="font-mono text-slate-300">VITE_ADMIN_IDS</span> — те
-          же id, что <span className="font-mono text-slate-300">ADMIN_IDS</span>{" "}
-          / <span className="font-mono text-slate-300">PLATFORM_ADMIN_TELEGRAM_ID</span>{" "}
-          на сервере.
-        </p>
-      </div>
-    );
-  }
-
-  if (!Number.isFinite(userId) || userId <= 0) {
+  if (!hasTelegramUser) {
     return (
       <div className="min-h-full bg-slate-950 p-6 text-center text-red-300">
         <p className="font-semibold">⛔ Нет доступа</p>
@@ -218,12 +232,12 @@ export default function PlatformAdminPage() {
     );
   }
 
-  if (!accessAllowed) {
+  if (accessForbidden) {
     return (
       <div className="min-h-full bg-slate-950 p-6 text-center text-red-300">
-        <p className="font-semibold">⛔ Нет доступа</p>
+        <p className="font-semibold">Нет доступа</p>
         <p className="mt-2 text-sm text-slate-400">
-          Раздел только для администратора платформы.
+          Раздел только для администратора платформы (проверка на сервере).
         </p>
       </div>
     );
@@ -391,6 +405,23 @@ export default function PlatformAdminPage() {
                     <span className="text-slate-300">
                       {formatIsoDate(b.subscriptionEndsAt)}
                     </span>
+                    {b.trialEndsAt != null ? (
+                      <>
+                        {" · "}
+                        триал:{" "}
+                        <span className="text-slate-300">
+                          {formatIsoDate(b.trialEndsAt)}
+                        </span>
+                      </>
+                    ) : null}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {webhookListLabel(b.webhookStatus)}
+                  </p>
+                  <p className="mt-0.5 break-all font-mono text-[11px] leading-relaxed text-slate-600">
+                    {b.webhookUrl != null && b.webhookUrl.trim() !== ""
+                      ? b.webhookUrl.trim()
+                      : "URL вебхука не задан или недоступен"}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button

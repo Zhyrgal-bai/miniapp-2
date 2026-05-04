@@ -169,8 +169,10 @@ function logStartHandlerError(err: unknown, label: string): void {
   logPrismaError(`saasRegistration:${label}`, err);
 }
 
+/** Публичный HTTPS-корень Mini App (без финального `/`). */
 function merchantMiniAppBaseUrl(): string {
   return (
+    process.env.MINI_APP_URL ||
     process.env.FRONTEND_URL ||
     process.env.FRONT_URL ||
     process.env.PUBLIC_URL ||
@@ -178,6 +180,18 @@ function merchantMiniAppBaseUrl(): string {
   )
     .trim()
     .replace(/\/$/, "");
+}
+
+function miniAppMerchantCabinetUrl(): string | null {
+  const base = merchantMiniAppBaseUrl();
+  if (base === "") return null;
+  return `${base}/merchant`;
+}
+
+function miniAppPlatformAdminUrl(): string | null {
+  const base = merchantMiniAppBaseUrl();
+  if (base === "") return null;
+  return `${base}/platform-admin`;
 }
 
 /** Магазины, где пользователь — OWNER или ADMIN. */
@@ -246,17 +260,28 @@ async function replyMerchantStoreDashboard(
         { text: "📦 Заказы", web_app: { url: ordersUrl } },
       ]);
     }
-    keyboard.push([
-      {
-        text: "📊 Кабинет (подписки)",
-        web_app: { url: `${base}/merchant` },
-      },
-    ]);
+    const cabinetUrl = miniAppMerchantCabinetUrl();
+    if (cabinetUrl != null) {
+      keyboard.push([
+        {
+          text: "📊 Кабинет (подписки)",
+          web_app: { url: cabinetUrl },
+        },
+      ]);
+    }
   }
 
   keyboard.push([
     { text: "➕ Добавить магазин", callback_data: "saas_new_store" },
   ]);
+
+  const tidStr = telegramIdString(ctx);
+  const adminUrl = miniAppPlatformAdminUrl();
+  if (base && adminUrl != null && adminTelegramNumericIds().includes(tidStr)) {
+    keyboard.push([
+      { text: "🛠 Админ панель", web_app: { url: adminUrl } },
+    ]);
+  }
 
   await ctx.reply(lines.join("\n"), {
     reply_markup: { inline_keyboard: keyboard },
@@ -715,7 +740,6 @@ export async function handleRegistrationStartCommand(
 
     if (memberships.length > 0) {
       await replyMerchantStoreDashboard(ctx, memberships);
-      await sendGlobalAdminReplyKeyboardIfAdmin(ctx);
       logSaas("merchant_dashboard_opened", {
         telegramUserId: telegramIdStr,
         storeCount: memberships.length,
@@ -947,14 +971,7 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
       { reply_markup: { inline_keyboard: [] } }
     );
 
-    const front = (
-      process.env.FRONTEND_URL ||
-      process.env.FRONT_URL ||
-      process.env.PUBLIC_URL ||
-      ""
-    )
-      .trim()
-      .replace(/\/$/, "");
+    const front = merchantMiniAppBaseUrl();
     const tgUrl =
       front !== ""
         ? `${front}/?shop=${encodeURIComponent(String(businessId))}`

@@ -12,6 +12,7 @@ import {
 } from "../bot/dynamicBots.js";
 import { prisma } from "./db.js";
 import { isAdmin } from "./adminAuth.js";
+import { mapRowsWithWebhook } from "./platformMyBusinesses.js";
 
 function buildApproveUserNotifyMessage(merchantBotUsername: string | null): string {
   let text =
@@ -116,18 +117,14 @@ async function provisionMerchantStoreInTx(
   return business.id;
 }
 
-function platformAdminEnvId(): string | null {
-  const raw = String(process.env.PLATFORM_ADMIN_TELEGRAM_ID ?? "").trim();
-  return /^\d+$/.test(raw) ? raw : null;
-}
-
-/** Доступ к REST `/api/platform/admin/*` и Mini App `/platform-admin`: ADMIN_IDS или legacy PLATFORM_ADMIN_TELEGRAM_ID. */
+/**
+ * Доступ к REST `/api/platform/admin/*`: только `ADMIN_IDS` на сервере
+ * (не доверяем фронту; legacy `PLATFORM_ADMIN_TELEGRAM_ID` не используется).
+ */
 export function isPlatformAdminTelegramId(telegramId: string): boolean {
   const tid = telegramId.trim();
   if (!/^\d+$/.test(tid)) return false;
-  if (isAdmin(tid)) return true;
-  const legacy = platformAdminEnvId();
-  return legacy != null && legacy === tid;
+  return isAdmin(tid);
 }
 
 export type PlatformAdminRequestRow = {
@@ -313,15 +310,19 @@ export async function rejectRegistrationRequestById(
 
 const MS_DAY = 24 * 60 * 60 * 1000;
 
-/** Публичный список магазинов для Mini App `/platform-admin` (без `botToken`). */
+/** Публичный список магазинов для Mini App `/platform-admin` (без `botToken` в JSON). */
 export type PlatformAdminBusinessRow = {
   id: number;
   name: string;
   isActive: boolean;
   isBlocked: boolean;
+  /** Сводный статус (как в кабинете клиента). */
+  status: string;
   subscriptionStatus: string;
   subscriptionEndsAt: string | null;
   trialEndsAt: string | null;
+  webhookStatus: "OK" | "ERROR";
+  webhookUrl: string | null;
 };
 
 export async function listBusinessesForPlatformAdmin(
@@ -353,18 +354,27 @@ export async function listBusinessesForPlatformAdmin(
       subscriptionStatus: true,
       subscriptionEndsAt: true,
       trialEndsAt: true,
+      botToken: true,
     },
   });
 
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    isActive: r.isActive,
-    isBlocked: r.isBlocked,
-    subscriptionStatus: r.subscriptionStatus,
-    subscriptionEndsAt: r.subscriptionEndsAt?.toISOString() ?? null,
-    trialEndsAt: r.trialEndsAt?.toISOString() ?? null,
-  }));
+  const probed = await mapRowsWithWebhook(rows);
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  return probed.map((p) => {
+    const r = byId.get(p.id);
+    return {
+      id: p.id,
+      name: p.name,
+      isActive: p.isActive,
+      isBlocked: p.isBlocked,
+      status: p.status,
+      subscriptionStatus: String(r?.subscriptionStatus ?? ""),
+      subscriptionEndsAt: r?.subscriptionEndsAt?.toISOString() ?? null,
+      trialEndsAt: r?.trialEndsAt?.toISOString() ?? null,
+      webhookStatus: p.webhookStatus,
+      webhookUrl: p.webhookUrl,
+    };
+  });
 }
 
 export type ExtendBusinessOutcome =
