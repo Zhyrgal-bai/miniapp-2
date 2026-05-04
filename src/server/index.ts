@@ -595,13 +595,13 @@ app.post("/api/platform/admin/approve", async (req: Request, res: Response) => {
       return;
     }
     res.json({ ok: true, businessId: out.businessId });
-  } catch (e) {
-    console.error("APPROVE ERROR:", e);
-    if (e instanceof Error && e.stack) {
-      console.error(e.stack);
-    }
-    const message = e instanceof Error ? e.message : String(e);
-    res.status(500).json({ error: "approve_failed", message });
+  } catch (error: any) {
+    console.error("APPROVE ERROR FULL:", error);
+    if (error?.stack) console.error(error.stack);
+    res.status(500).json({
+      error: "approve_failed",
+      message: error?.message || "unknown",
+    });
   }
 });
 
