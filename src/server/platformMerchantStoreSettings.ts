@@ -1,4 +1,5 @@
 import { prisma } from "./db.js";
+import { merchantStoreEntitled } from "./subscriptionAccess.js";
 import { isValidFinikApiKey } from "../bot/saasRegistrationValidation.js";
 import { platformMerchantOwnsBusiness } from "./platformMerchantAccess.js";
 import {
@@ -92,6 +93,20 @@ export async function updatePlatformStoreSettingsForMerchant(input: {
   );
   if (!allowed) {
     return { ok: false, statusCode: 403, error: "Нет доступа к этому магазину" };
+  }
+
+  const entitledRow = await prisma.business.findUnique({
+    where: { id: input.businessId },
+    select: {
+      isBlocked: true,
+      isActive: true,
+      subscriptionStatus: true,
+      trialEndsAt: true,
+      subscriptionEndsAt: true,
+    },
+  });
+  if (!entitledRow || !merchantStoreEntitled(entitledRow)) {
+    return { ok: false, statusCode: 403, error: "Подписка не активна" };
   }
 
   const rawName = input.body.storeName;
@@ -215,6 +230,20 @@ export async function updatePlatformFinikForMerchant(input: {
   );
   if (!allowed) {
     return { ok: false, statusCode: 403, error: "Нет доступа к этому магазину" };
+  }
+
+  const entitledRow = await prisma.business.findUnique({
+    where: { id: input.businessId },
+    select: {
+      isBlocked: true,
+      isActive: true,
+      subscriptionStatus: true,
+      trialEndsAt: true,
+      subscriptionEndsAt: true,
+    },
+  });
+  if (!entitledRow || !merchantStoreEntitled(entitledRow)) {
+    return { ok: false, statusCode: 403, error: "Подписка не активна" };
   }
 
   const raw = input.finikApiKey;

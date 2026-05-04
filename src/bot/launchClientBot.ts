@@ -1,5 +1,6 @@
 import type { Business } from "@prisma/client";
 import type { Telegraf } from "telegraf";
+import { plainBotTokenFromStored } from "../server/businessBotToken.js";
 import {
   activeBots,
   initDynamicStoreBot,
@@ -21,7 +22,7 @@ export type LaunchClientBotResult =
 export async function launchClientBot(
   business: Pick<Business, "id" | "botToken">
 ): Promise<LaunchClientBotResult> {
-  const token = String(business.botToken ?? "").trim();
+  const token = plainBotTokenFromStored(business.botToken);
   if (!token) {
     return { ok: false, error: "У магазина нет botToken" };
   }

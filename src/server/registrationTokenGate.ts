@@ -3,6 +3,7 @@ import { prisma } from "./db.js";
 import {
   isValidBotTokenShape,
 } from "../bot/saasRegistrationValidation.js";
+import { hashBotTokenSha256Hex } from "./businessBotToken.js";
 
 /** Сообщения согласованы с Mini App / Telegram (без утечки токена в ответ). */
 export const MSG_INVALID_BOT_TOKEN =
@@ -26,10 +27,14 @@ export async function botTokenBlockedForNewRegistration(
   tokenTrimmed: string,
 ): Promise<boolean> {
   const trimmed = tokenTrimmed.trim();
-  const inBusiness = await prisma.business.findUnique({
-    where: { botToken: trimmed },
-    select: { id: true },
-  });
+  const hash = hashBotTokenSha256Hex(trimmed);
+  const inBusiness =
+    hash !== ""
+      ? await prisma.business.findUnique({
+          where: { botTokenHash: hash },
+          select: { id: true },
+        })
+      : null;
   if (inBusiness) return true;
   const pendingReq = await prisma.registrationRequest.findFirst({
     where: {

@@ -1,4 +1,5 @@
 import { SubscriptionStatus, type Prisma } from "@prisma/client";
+import { plainBotTokenFromStored } from "./businessBotToken.js";
 import { prisma } from "./db.js";
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
@@ -6,7 +7,10 @@ import {
   initDynamicStoreBot,
   stopDynamicStoreBotInMemory,
 } from "../bot/dynamicBots.js";
-import { shouldDeactivateStoreForSubscription } from "./subscriptionMaintenance.js";
+import {
+  hasValidPaidOrTrialWindow,
+  isSubscriptionActive,
+} from "./subscriptionAccess.js";
 import { notifyPlatformAdminsNewPaymentRequest } from "./saasBillingNotify.js";
 
 export const SAAS_SUBSCRIPTION_PRICE_20_D = 1500;
@@ -27,12 +31,20 @@ export async function syncBusinessSubscriptionActivationState(
   businessId: number,
   now = new Date(),
 ): Promise<void> {
-  const b = await prisma.business.findUnique({ where: { id: businessId } });
-  if (b == null || b.isBlocked) return;
+  const b = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: {
+      id: true,
+      isBlocked: true,
+      isActive: true,
+      subscriptionStatus: true,
+      trialEndsAt: true,
+      subscriptionEndsAt: true,
+    },
+  });
+  if (b == null || b.isBlocked || !b.isActive) return;
 
-  if (!shouldDeactivateStoreForSubscription(b, now)) return;
-
-  if (!b.isActive) return;
+  if (hasValidPaidOrTrialWindow(b, now)) return;
 
   await prisma.business.update({
     where: { id: businessId },
@@ -65,14 +77,22 @@ export async function adminDeactivateBusiness(businessId: number): Promise<void>
 export async function adminUnblockBusiness(businessId: number): Promise<void> {
   await prisma.business.update({
     where: { id: businessId },
-    data: { isBlocked: false, isActive: true },
+    data: { isBlocked: false },
   });
   const b = await prisma.business.findUnique({
     where: { id: businessId },
-    select: { id: true, botToken: true },
+    select: {
+      id: true,
+      botToken: true,
+      isBlocked: true,
+      isActive: true,
+      subscriptionStatus: true,
+      trialEndsAt: true,
+      subscriptionEndsAt: true,
+    },
   });
-  const tok = String(b?.botToken ?? "").trim();
-  if (b != null && tok) {
+  const tok = plainBotTokenFromStored(b?.botToken);
+  if (b != null && tok && isSubscriptionActive(b)) {
     try {
       await initDynamicStoreBot({ businessId: b.id, botToken: tok });
     } catch (e) {
@@ -92,7 +112,15 @@ export async function adminEnableNonBlockedBusiness(
 > {
   const b = await prisma.business.findUnique({
     where: { id: businessId },
-    select: { id: true, isBlocked: true, botToken: true },
+    select: {
+      id: true,
+      isBlocked: true,
+      botToken: true,
+      isActive: true,
+      subscriptionStatus: true,
+      trialEndsAt: true,
+      subscriptionEndsAt: true,
+    },
   });
   if (b == null) {
     return { ok: false, statusCode: 404, error: "Магазин не найден" };
@@ -105,11 +133,18 @@ export async function adminEnableNonBlockedBusiness(
         "Нельзя включить заблокированный магазин. Сначала снимите блокировку.",
     };
   }
+  if (!hasValidPaidOrTrialWindow(b)) {
+    return {
+      ok: false,
+      statusCode: 403,
+      error: "Подписка не активна",
+    };
+  }
   await prisma.business.update({
     where: { id: businessId },
     data: { isActive: true },
   });
-  const tok = String(b.botToken ?? "").trim();
+  const tok = plainBotTokenFromStored(b.botToken);
   if (tok) {
     try {
       await initDynamicStoreBot({ businessId: b.id, botToken: tok });
@@ -179,7 +214,7 @@ export async function adminApproveSaasPayment(
     }),
   ]);
 
-  const tok = String(pr.business.botToken ?? "").trim();
+  const tok = plainBotTokenFromStored(pr.business.botToken);
   if (tok) {
     try {
       await initDynamicStoreBot({
@@ -248,7 +283,7 @@ export async function extendBusinessSubscriptionAfterFinikPayment(
   });
 
   return {
-    botToken: b.botToken,
+    botToken: plainBotTokenFromStored(b.botToken),
     shouldHydrateBot: isActive,
   };
 }

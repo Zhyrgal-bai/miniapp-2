@@ -1,6 +1,6 @@
 import { MembershipRole, SubscriptionStatus } from "@prisma/client";
 import { prisma } from "./db.js";
-import { isSubscriptionFullyExpired } from "./subscriptionMaintenance.js";
+import { hasValidPaidOrTrialWindow } from "./subscriptionAccess.js";
 
 /** Публичный JSON для Mini App «мои магазины». */
 export type MerchantBusinessCard = {
@@ -43,6 +43,12 @@ function summarizeAccess(
   if (b.isBlocked) {
     return { daysLeft: null, accessState: "blocked" };
   }
+
+  const entitled = hasValidPaidOrTrialWindow(b, now);
+  if (!entitled) {
+    return { daysLeft: null, accessState: "pay_required" };
+  }
+
   if (!b.isActive) {
     return { daysLeft: null, accessState: "paused" };
   }
@@ -60,35 +66,7 @@ function summarizeAccess(
     daysLeft = calendarWholeDaysAhead(b.trialEndsAt, now);
   }
 
-  const noAnchors =
-    b.trialEndsAt == null && b.subscriptionEndsAt == null;
-
-  /** Окно триала/оплаты ещё жива или срок не задан (= безлимит). */
-  if (paidFuture || trialFuture || noAnchors) {
-    return {
-      daysLeft: noAnchors ? null : daysLeft,
-      accessState: "active",
-    };
-  }
-
-  const statusBlocked =
-    b.subscriptionStatus === SubscriptionStatus.EXPIRED ||
-    b.subscriptionStatus === SubscriptionStatus.CANCELED ||
-    b.subscriptionStatus === SubscriptionStatus.PAST_DUE;
-
-  const windowDead = isSubscriptionFullyExpired(
-    {
-      trialEndsAt: b.trialEndsAt,
-      subscriptionEndsAt: b.subscriptionEndsAt,
-    },
-    now
-  );
-
-  if (!statusBlocked && !windowDead) {
-    return { daysLeft: null, accessState: "active" };
-  }
-
-  return { daysLeft: null, accessState: "pay_required" };
+  return { daysLeft, accessState: "active" };
 }
 
 /** Магазины, которыми владеет пользователь Telegram (OWNER/ADMIN после SaaS). */

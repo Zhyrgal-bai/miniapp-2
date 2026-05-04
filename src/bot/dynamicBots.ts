@@ -1,7 +1,10 @@
+import crypto from "node:crypto";
 import type { MembershipRole } from "@prisma/client";
 import { Telegraf } from "telegraf";
 import type { Context } from "telegraf";
+import { plainBotTokenFromStored } from "../server/businessBotToken.js";
 import { prisma } from "../server/db.js";
+import { telegramSetWebhookOnApi } from "../server/telegramWebhookSecurity.js";
 
 /**
  * Мульти-тенант: один процесс Node, много клиентских ботов (по `Business.id`).
@@ -55,14 +58,44 @@ function publicWebhookBaseUrl(): string {
   return base.replace(/\/$/, "");
 }
 
-/** Относительный путь webhook в Express: `POST {API_URL}/webhook/:businessId`. */
-export function dynamicWebhookPathForBusiness(businessId: number): string {
-  return `/webhook/${businessId}`;
+async function ensureWebhookRouteToken(businessId: number): Promise<string> {
+  const row = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { webhookRouteToken: true },
+  });
+  const existing = row?.webhookRouteToken?.trim();
+  if (existing) return existing;
+
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const token = crypto.randomBytes(16).toString("hex");
+    try {
+      await prisma.business.update({
+        where: { id: businessId },
+        data: { webhookRouteToken: token },
+      });
+      return token;
+    } catch {
+      /* возможная коллизия или гонка */
+    }
+  }
+  throw new Error("webhook_route_token_alloc_failed");
 }
 
-function dynamicWebhookAbsoluteUrl(publicApiBase: string, businessId: number): string {
+/** Относительный путь: `POST {API_URL}/webhook/<случайный_токен>`. */
+export async function dynamicWebhookPathForBusiness(
+  businessId: number,
+): Promise<string> {
+  const slug = await ensureWebhookRouteToken(businessId);
+  return `/webhook/${slug}`;
+}
+
+async function dynamicWebhookAbsoluteUrl(
+  publicApiBase: string,
+  businessId: number,
+): Promise<string> {
   const base = publicApiBase.trim().replace(/\/$/, "");
-  return `${base}${dynamicWebhookPathForBusiness(businessId)}`;
+  const path = await dynamicWebhookPathForBusiness(businessId);
+  return `${base}${path}`;
 }
 
 async function teardownStoreBotSession(businessId: number): Promise<void> {
@@ -147,7 +180,7 @@ function attachTenantContext(tgBot: Telegraf, businessId: number): void {
 /**
  * Подключение бота магазина по токену.
  * Экземпляры хранятся в `activeBots` и переиспользуются: при том же токене middleware не дублируется.
- * Webhook: `POST {PUBLIC_URL}/webhook/{businessId}` (старый путь `/telegram-webhook/owner/...` тоже поддерживается).
+ * Webhook: `POST {PUBLIC_URL}/webhook/<секретный_токен_из_БД>`.
  */
 export async function registerDynamicUserBot(user: {
   businessId: number;
@@ -164,13 +197,11 @@ export async function registerDynamicUserBot(user: {
     const publicApiBase = publicWebhookBaseUrl();
     try {
       if (publicApiBase) {
-        const url = dynamicWebhookAbsoluteUrl(publicApiBase, user.businessId);
-        await persistent.telegram.setWebhook(url);
-        console.log(
-          "[dynamicBots] Reuse persistent bot, webhook:",
+        const url = await dynamicWebhookAbsoluteUrl(
+          publicApiBase,
           user.businessId,
-          url,
         );
+        await telegramSetWebhookOnApi(persistent.telegram, url);
       }
       const info = await persistent.telegram.getMe();
       return {
@@ -242,17 +273,9 @@ export async function registerDynamicUserBot(user: {
 
   const publicApiBase = publicWebhookBaseUrl();
   if (publicApiBase) {
-    const url = dynamicWebhookAbsoluteUrl(publicApiBase, user.businessId);
+    const url = await dynamicWebhookAbsoluteUrl(publicApiBase, user.businessId);
     try {
-      await tg.telegram.setWebhook(url);
-      const uname = String(meJson.result.username ?? "");
-      console.log(
-        "[dynamicBots] Bot instance mapped to business:",
-        user.businessId,
-        uname !== "" ? `@${uname}` : "(no username)",
-        "webhook:",
-        url,
-      );
+      await telegramSetWebhookOnApi(tg.telegram, url);
     } catch (e) {
       console.error("Dynamic setWebhook error:", user.businessId, e);
     }
@@ -300,7 +323,7 @@ export async function hydrateDynamicStoreBotIfMissing(
     where: { id: businessId, isBlocked: false },
     select: { id: true, botToken: true },
   });
-  const tok = String(b?.botToken ?? "").trim();
+  const tok = plainBotTokenFromStored(b?.botToken);
   if (b == null || !tok) {
     return false;
   }
@@ -334,7 +357,7 @@ export async function loadDynamicBotsFromDatabase(): Promise<void> {
   });
 
   for (const business of businesses) {
-    const tok = String(business.botToken ?? "").trim();
+    const tok = plainBotTokenFromStored(business.botToken);
     if (!tok) continue;
 
     try {

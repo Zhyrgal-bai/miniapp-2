@@ -1,17 +1,26 @@
 import { MembershipRole, PrismaClient } from "@prisma/client";
+import { encryptedBotTokenRow } from "../src/server/businessBotToken.js";
 
 const prisma = new PrismaClient();
 
 const CATEGORY_NAMES = ["Верх", "Низ", "Аксессуары"] as const;
 
+const SEED_SLUG = "seed-store";
+const SEED_BOT_TOKEN = "seed-bot-token-placeholder";
+
 async function main() {
+  const tok = encryptedBotTokenRow(SEED_BOT_TOKEN);
   const biz = await prisma.business.upsert({
-    where: { botToken: "seed-bot-token-placeholder" },
-    update: {},
+    where: { slug: SEED_SLUG },
+    update: {
+      botToken: tok.botToken,
+      botTokenHash: tok.botTokenHash,
+    },
     create: {
       name: "Seed Store",
-      botToken: "seed-bot-token-placeholder",
-      slug: "seed-store",
+      botToken: tok.botToken,
+      botTokenHash: tok.botTokenHash,
+      slug: SEED_SLUG,
       trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
     },
   });

@@ -1,8 +1,10 @@
 import type { NextFunction, Request, Response } from "express";
 import type { Business, Membership, User } from "@prisma/client";
-import { SubscriptionStatus } from "@prisma/client";
 import { prisma } from "../server/db.js";
-import { isSubscriptionFullyExpired } from "../server/subscriptionMaintenance.js";
+import {
+  type SubscriptionGateFields,
+  isSubscriptionActive,
+} from "../server/subscriptionAccess.js";
 
 declare global {
   namespace Express {
@@ -86,46 +88,13 @@ function businessIdHintFromRequest(req: Request): number | undefined {
   return undefined;
 }
 
-export type BusinessSubscriptionGate = Pick<
-  Business,
-  | "isActive"
-  | "isBlocked"
-  | "subscriptionStatus"
-  | "trialEndsAt"
-  | "subscriptionEndsAt"
->;
+export type BusinessSubscriptionGate = SubscriptionGateFields;
 
 export function businessSubscriptionBlocked(
   business: BusinessSubscriptionGate,
   now = new Date(),
 ): boolean {
-  if (business.isBlocked) return true;
-  if (!business.isActive) return true;
-
-  if (
-    business.subscriptionStatus === SubscriptionStatus.EXPIRED ||
-    business.subscriptionStatus === SubscriptionStatus.CANCELED
-  ) {
-    return true;
-  }
-
-  if (business.subscriptionStatus === SubscriptionStatus.PAST_DUE) {
-    return true;
-  }
-
-  if (
-    isSubscriptionFullyExpired(
-      {
-        trialEndsAt: business.trialEndsAt,
-        subscriptionEndsAt: business.subscriptionEndsAt,
-      },
-      now,
-    )
-  ) {
-    return true;
-  }
-
-  return false;
+  return !isSubscriptionActive(business, now);
 }
 
 /**
@@ -162,7 +131,7 @@ export async function businessMiddleware(
         return;
       }
       if (businessSubscriptionBlocked(business)) {
-        res.status(403).json({ error: "Subscription expired" });
+        res.status(403).json({ error: "Подписка не активна" });
         return;
       }
 
@@ -211,7 +180,7 @@ export async function businessMiddleware(
 
     const only = memberships[0]!;
     if (businessSubscriptionBlocked(only.business)) {
-      res.status(403).json({ error: "Subscription expired" });
+      res.status(403).json({ error: "Подписка не активна" });
       return;
     }
 

@@ -15,12 +15,8 @@ export const getTelegramUser = (): TelegramWebAppUser | null => {
   const tg = getTelegramWebApp();
 
   if (!tg) {
-    console.log("NO TELEGRAM");
     return null;
   }
-
-  console.log("INIT DATA:", tg.initData);
-  console.log("INIT DATA UNSAFE:", tg.initDataUnsafe);
 
   return tg.initDataUnsafe?.user ?? null;
 };

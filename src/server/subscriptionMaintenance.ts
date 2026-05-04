@@ -1,5 +1,7 @@
 import { MembershipRole, SubscriptionStatus } from "@prisma/client";
+import { plainBotTokenFromStored } from "./businessBotToken.js";
 import { prisma } from "./db.js";
+import { hasValidPaidOrTrialWindow } from "./subscriptionAccess.js";
 
 /** Calendar-day difference: `later` vs `earlier`. */
 function differenceInCalendarDays(later: Date, earlier: Date): number {
@@ -119,6 +121,7 @@ export async function runSubscriptionMaintenanceOnce(
       isActive: true,
       isBlocked: true,
       botToken: true,
+      subscriptionStatus: true,
       trialEndsAt: true,
       subscriptionEndsAt: true,
       lastReminder3DaysAt: true,
@@ -130,6 +133,7 @@ export async function runSubscriptionMaintenanceOnce(
     if (b.isBlocked) continue;
 
     try {
+      const plainTok = plainBotTokenFromStored(b.botToken);
       const subEnd = b.subscriptionEndsAt;
 
       let subLeft: number | null = null;
@@ -174,7 +178,7 @@ export async function runSubscriptionMaintenanceOnce(
         ownerTg
       ) {
         const ok = await sendTelegramToUser(
-          b.botToken,
+          plainTok,
           ownerTg,
           "⚠️ Ваша подписка заканчивается через 3 дня",
         );
@@ -194,7 +198,7 @@ export async function runSubscriptionMaintenanceOnce(
         ownerTg
       ) {
         const ok = await sendTelegramToUser(
-          b.botToken,
+          plainTok,
           ownerTg,
           "⚠️ Подписка закончится завтра",
         );
@@ -208,7 +212,15 @@ export async function runSubscriptionMaintenanceOnce(
       }
 
       const shouldDeactivate =
-        b.isActive && shouldDeactivateStoreForSubscription(b, now);
+        b.isActive &&
+        !hasValidPaidOrTrialWindow(
+          {
+            subscriptionStatus: b.subscriptionStatus,
+            trialEndsAt: b.trialEndsAt,
+            subscriptionEndsAt: b.subscriptionEndsAt,
+          },
+          now,
+        );
 
       if (shouldDeactivate) {
         await prisma.business.update({
@@ -224,7 +236,7 @@ export async function runSubscriptionMaintenanceOnce(
           ownerTg ?? (await findBusinessOwnerTelegramId(b.id));
         if (tgId) {
           await sendTelegramToUser(
-            b.botToken,
+            plainTok,
             tgId,
             "⛔ Подписка истекла. Магазин временно отключён",
           );
@@ -237,8 +249,8 @@ export async function runSubscriptionMaintenanceOnce(
   }
 }
 
-/** По умолчанию раз в сутки; переопределение: SUBSCRIPTION_CRON_MS (минимум 60 с). */
-const DEFAULT_INTERVAL_MS = 24 * 60 * 60 * 1000;
+/** По умолчанию раз в час; переопределение: SUBSCRIPTION_CRON_MS (минимум 60 с). */
+const DEFAULT_INTERVAL_MS = 60 * 60 * 1000;
 
 export function startSubscriptionMaintenanceScheduler(): void {
   const raw = process.env.SUBSCRIPTION_CRON_MS;

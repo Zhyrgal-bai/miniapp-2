@@ -40,8 +40,14 @@ model Business {
 
   slug String? @unique
 
-  /// Telegram bot token from @BotFather (one active bot per storefront).
-  botToken String @unique
+  /// Telegram bot: AES-256-GCM (enc:v1:...) или временно plain в локальном dev без ключа.
+  botToken String
+
+  /// SHA-256(hex) от plain-токена — уникальность и антидубликаты.
+  botTokenHash String @unique
+
+  /// Сегмент URL вебхука Telegram: случайный токен, путь вида webhook/<token>.
+  webhookRouteToken String? @unique
 
   /// Finik: ключи мерчанта — средства идут клиенту (не на платформу). Не выдавать клиентскому UI в GET.
   finikApiKey  String?
@@ -137,6 +143,9 @@ model User {
 
   telegramId String @unique
   name       String?
+
+  /// После первого выданного trial новые магазины этого аккаунта без trial до оплаты.
+  hasUsedTrial Boolean @default(false)
 
   memberships Membership[]
   orders      Order[]     @relation("OrderBuyer")

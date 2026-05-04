@@ -1,4 +1,5 @@
 import { apiAbsoluteUrl } from "./api";
+import { telegramWebAppInitDataHeader } from "../utils/telegramInitDataHeader";
 
 export type PlatformMyBusinessDTO = {
   id: number;
@@ -7,6 +8,7 @@ export type PlatformMyBusinessDTO = {
   status: string;
   isActive: boolean;
   isBlocked: boolean;
+  subscriptionActive: boolean;
   webhookStatus: "OK" | "ERROR";
   /** URL вебхука из Telegram (без токена бота). */
   webhookUrl: string | null;
@@ -15,11 +17,11 @@ export type PlatformMyBusinessDTO = {
 export async function fetchPlatformMyBusinesses(params: {
   telegramId: number;
 }): Promise<PlatformMyBusinessDTO[]> {
-  const tid = String(params.telegramId);
+  void params.telegramId;
   const res = await fetch(apiAbsoluteUrl("/api/platform/my-businesses"), {
     method: "GET",
     credentials: "omit",
-    headers: { "x-telegram-id": tid },
+    headers: { ...telegramWebAppInitDataHeader() },
   });
   if (!res.ok) {
     const j = (await res.json().catch(() => ({}))) as { error?: string };
@@ -53,6 +55,10 @@ export async function fetchPlatformMyBusinesses(params: {
       status: String(x.status ?? ""),
       isActive: Boolean(x.isActive),
       isBlocked: Boolean(x.isBlocked),
+      subscriptionActive:
+        typeof x.subscriptionActive === "boolean"
+          ? x.subscriptionActive
+          : Boolean(x.isActive) && !Boolean(x.isBlocked),
       webhookStatus: ws,
       webhookUrl: wu,
     };
@@ -71,7 +77,7 @@ export async function fetchPlatformStoreSettings(params: {
   telegramId: number;
   businessId: number;
 }): Promise<PlatformStoreSettingsDTO> {
-  const tid = String(params.telegramId);
+  void params.telegramId;
   const q = new URLSearchParams({
     businessId: String(params.businessId),
   });
@@ -80,7 +86,7 @@ export async function fetchPlatformStoreSettings(params: {
     {
       method: "GET",
       credentials: "omit",
-      headers: { "x-telegram-id": tid },
+      headers: { ...telegramWebAppInitDataHeader() },
     },
   );
   const j = (await res.json().catch(() => ({}))) as {
@@ -122,7 +128,7 @@ export async function savePlatformStoreSettings(payload: {
   storeName?: string;
   newBotToken?: string;
 }): Promise<PlatformStoreSettingsSaveResult> {
-  const tid = String(payload.telegramId);
+  void payload.telegramId;
   const body: Record<string, unknown> = {
     businessId: payload.businessId,
   };
@@ -134,7 +140,7 @@ export async function savePlatformStoreSettings(payload: {
     credentials: "omit",
     headers: {
       "Content-Type": "application/json",
-      "x-telegram-id": tid,
+      ...telegramWebAppInitDataHeader(),
     },
     body: JSON.stringify(body),
   });
@@ -168,13 +174,13 @@ export async function postPlatformUpdateFinik(payload: {
   businessId: number;
   finikApiKey: string;
 }): Promise<{ ok: true; finikConfigured: boolean }> {
-  const tid = String(payload.telegramId);
+  void payload.telegramId;
   const res = await fetch(apiAbsoluteUrl("/api/platform/update-finik"), {
     method: "POST",
     credentials: "omit",
     headers: {
       "Content-Type": "application/json",
-      "x-telegram-id": tid,
+      ...telegramWebAppInitDataHeader(),
     },
     body: JSON.stringify({
       businessId: payload.businessId,
@@ -201,13 +207,13 @@ export async function submitPlatformRegisterRequest(payload: {
   phone: string;
   telegramId: number;
 }): Promise<void> {
-  const tid = String(payload.telegramId);
+  void payload.telegramId;
   const res = await fetch(apiAbsoluteUrl("/api/platform/register-request"), {
     method: "POST",
     credentials: "omit",
     headers: {
       "Content-Type": "application/json",
-      "x-telegram-id": tid,
+      ...telegramWebAppInitDataHeader(),
     },
     body: JSON.stringify({
       storeName: payload.storeName,
@@ -226,13 +232,13 @@ export async function postPlatformCheckWebhook(params: {
   telegramId: number;
   businessId: number;
 }): Promise<{ status: "OK" | "ERROR"; lastErrorMessage: string | null }> {
-  const tid = String(params.telegramId);
+  void params.telegramId;
   const res = await fetch(apiAbsoluteUrl("/api/platform/check-webhook"), {
     method: "POST",
     credentials: "omit",
     headers: {
       "Content-Type": "application/json",
-      "x-telegram-id": tid,
+      ...telegramWebAppInitDataHeader(),
     },
     body: JSON.stringify({ businessId: params.businessId }),
   });
@@ -260,13 +266,13 @@ export async function postPlatformToggleBot(params: {
   businessId: number;
   action: "enable" | "disable";
 }): Promise<{ ok: boolean; isActive: boolean }> {
-  const tid = String(params.telegramId);
+  void params.telegramId;
   const res = await fetch(apiAbsoluteUrl("/api/platform/toggle-bot"), {
     method: "POST",
     credentials: "omit",
     headers: {
       "Content-Type": "application/json",
-      "x-telegram-id": tid,
+      ...telegramWebAppInitDataHeader(),
     },
     body: JSON.stringify({
       businessId: params.businessId,

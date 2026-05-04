@@ -1,4 +1,5 @@
 import { apiAbsoluteUrl } from "./api";
+import { telegramWebAppInitDataHeader } from "../utils/telegramInitDataHeader";
 
 export type PlatformAdminRequestDTO = {
   id: number;
@@ -21,8 +22,9 @@ export type PlatformAdminBusinessDTO = {
   webhookUrl: string | null;
 };
 
-function adminHeaders(telegramId: number): HeadersInit {
-  return { "x-telegram-id": String(telegramId) };
+function adminHeaders(_telegramId: number): HeadersInit {
+  void _telegramId;
+  return telegramWebAppInitDataHeader();
 }
 
 async function throwIfNotOk(res: Response): Promise<void> {

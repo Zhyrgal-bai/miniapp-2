@@ -68,4 +68,12 @@ export function logPrismaError(context: string, err: unknown): void {
  */
 export async function connectDatabase(): Promise<void> {
   await prisma.$connect();
+  try {
+    const { encryptPlainBusinessBotTokensAtRest } = await import(
+      "./businessBotToken.js"
+    );
+    await encryptPlainBusinessBotTokensAtRest();
+  } catch (e) {
+    logPrismaError("encryptPlainBusinessBotTokensAtRest", e);
+  }
 }

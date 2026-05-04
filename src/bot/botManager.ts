@@ -11,8 +11,8 @@ let shutdownHooksRegistered = false;
  * Менеджер клиентских ботов (multi-tenant).
  * Карта синхронизирована с `dynamicBots.ts` (`activeBots` — один объект).
  *
- * Продакшен: входящие обновления приходят на `POST …/webhook/:businessId`
- * (алиас: `…/telegram-webhook/owner/:businessId`).
+ * Продакшен: апдейты — `POST …/webhook/<webhookRouteToken>` + проверки secret/rate-limit;
+ * временный алиас `…/telegram-webhook/owner/:businessId`.
  * после `setWebhook`. `bot.launch()` (long polling) не используется — иначе дубль с вебхуком.
  */
 export { activeBots };

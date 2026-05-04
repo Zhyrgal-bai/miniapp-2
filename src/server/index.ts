@@ -27,6 +27,12 @@ import {
   updatePlatformStoreSettingsForMerchant,
   type PlatformStoreSettingsUpdateBody,
 } from "./platformMerchantStoreSettings.js";
+import {
+  formatZodApiError,
+  platformCheckWebhookBodySchema,
+  platformRegisterRequestShape,
+  platformToggleBotBodySchema,
+} from "./platformRouteBodySchemas.js";
 import { validateAndPersistPlatformRegistration } from "./platformRegisterRequest.js";
 import {
   approveRegistrationRequestById,
@@ -59,6 +65,11 @@ import {
 /** Навешивает `attachBotHandlers` на клиентские боты без цикла dynamicBots ↔ bot */
 import "../bot/registerDynamicBrain.js";
 import { startAllBots } from "../bot/botManager.js";
+import {
+  encryptedBotTokenRow,
+  hashBotTokenSha256Hex,
+  plainBotTokenFromStored,
+} from "./businessBotToken.js";
 import { connectDatabase, logPrismaError, prisma } from "./db.js";
 import {
   clearPaymentFieldByRowId,
@@ -81,6 +92,8 @@ import {
 } from "./finikMerchant.js";
 import { mountSubscriptionFinikPaymentRoutes } from "./subscriptionFinikPayments.js";
 import { relayDynamicStoreWebhook as relayDynamicTenantStoreWebhook } from "./storeTelegramWebhookRelay.js";
+import { telegramWebhookGate, telegramSetWebhookOnApi } from "./telegramWebhookSecurity.js";
+import { resolveBusinessIdFromWebhookSlug } from "./webhookTenantResolve.js";
 import { startSubscriptionMaintenanceScheduler } from "./subscriptionMaintenance.js";
 import { cleanInput, validateKgPhone } from "./orderInputSanitize.js";
 import {
@@ -91,6 +104,11 @@ import {
   businessMiddleware,
   businessSubscriptionBlocked,
 } from "../middleware/business.middleware.js";
+import { apiSafeErrorHandler } from "../middleware/apiErrorHandler.js";
+import { apiLimiter, strictLimiter } from "../middleware/apiRateLimits.js";
+import { jsonBodyLimits } from "../middleware/jsonBodyLimits.js";
+import { requireNonEmptyJsonBody } from "../middleware/requireNonEmptyJsonBody.js";
+import { requireTelegramAuth } from "../middleware/requireTelegramAuth.js";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -168,6 +186,8 @@ async function computeOrderTotalFromBody(
 }
 
 const app = express();
+/** Корректный client IP за прокси (Render / nginx) для rate limit вебхука */
+app.set("trust proxy", 1);
 
 app.use(
   cors({
@@ -177,11 +197,14 @@ app.use(
       "Content-Type",
       "Authorization",
       "x-telegram-id",
+      "x-telegram-init-data",
       "x-business-id",
     ],
   })
 );
-app.use(express.json());
+app.use(jsonBodyLimits);
+app.use("/api/", apiLimiter);
+app.use("/api/platform", requireTelegramAuth);
 mountFinikWebhookRoutes(app);
 mountFinikSettingsRoutes(app);
 mountSubscriptionFinikPaymentRoutes(app);
@@ -247,44 +270,18 @@ app.get("/api/business/:businessId", async (req: Request, res: Response) => {
   }
 });
 
-/** Платформа (главный бот): до tenant middleware — без привязки к `shop`. */
-function platformTelegramIdFromRequest(req: Request): string | null {
-  const rawXi = req.headers["x-telegram-id"];
-  const xi =
-    typeof rawXi === "string"
-      ? rawXi.trim()
-      : Array.isArray(rawXi) && typeof rawXi[0] === "string"
-        ? rawXi[0].trim()
-        : "";
-  if (/^\d+$/.test(xi)) return xi;
-
-  const raw = req.query.telegramId ?? req.query.userId;
-  const s =
-    typeof raw === "string"
-      ? raw.trim()
-      : Array.isArray(raw) && typeof raw[0] === "string"
-        ? raw[0].trim()
-        : "";
-  return /^\d+$/.test(s) ? s : null;
-}
-
-function platformTelegramIdFromTrustedHeader(req: Request): string | null {
-  const rawXi = req.headers["x-telegram-id"];
-  const xi =
-    typeof rawXi === "string"
-      ? rawXi.trim()
-      : Array.isArray(rawXi) && typeof rawXi[0] === "string"
-        ? rawXi[0].trim()
-        : "";
-  return /^\d+$/.test(xi) ? xi : null;
+/** Платформа Mini App: user id только из подписанного initData (`requireTelegramAuth`). */
+function platformTelegramIdFromWebApp(req: Request): string | null {
+  const id = req.platformTelegramId;
+  return typeof id === "string" && /^\d+$/.test(id) ? id : null;
 }
 
 app.get("/api/platform/my-businesses", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromTrustedHeader(req);
+    const telegramId = platformTelegramIdFromWebApp(req);
     if (!telegramId) {
-      res.status(400).json({
-        error: "Нужен заголовок x-telegram-id с числовым Telegram user id",
+      res.status(500).json({
+        error: "Внутренняя ошибка авторизации Mini App",
       });
       return;
     }
@@ -298,7 +295,7 @@ app.get("/api/platform/my-businesses", async (req: Request, res: Response) => {
           : "";
     if (/^\d+$/.test(queryTid) && queryTid !== telegramId) {
       res.status(403).json({
-        error: "Несовпадение telegramId в запросе с заголовком",
+        error: "Несовпадение telegramId в запросе с данными авторизации Telegram",
       });
       return;
     }
@@ -311,26 +308,25 @@ app.get("/api/platform/my-businesses", async (req: Request, res: Response) => {
   }
 });
 
-app.post("/api/platform/check-webhook", async (req: Request, res: Response) => {
+app.post(
+  "/api/platform/check-webhook",
+  strictLimiter,
+  requireNonEmptyJsonBody,
+  async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromTrustedHeader(req);
+    const telegramId = platformTelegramIdFromWebApp(req);
     if (!telegramId) {
-      res.status(400).json({
-        error: "Нужен заголовок x-telegram-id с числовым Telegram user id",
+      res.status(500).json({
+        error: "Внутренняя ошибка авторизации Mini App",
       });
       return;
     }
-    const raw = (req.body as { businessId?: unknown })?.businessId;
-    const businessId =
-      typeof raw === "number" && Number.isInteger(raw)
-        ? raw
-        : typeof raw === "string"
-          ? Number(raw.trim())
-          : NaN;
-    if (!Number.isInteger(businessId) || businessId <= 0) {
-      res.status(400).json({ error: "Нужен корректный businessId" });
+    const parsedBw = platformCheckWebhookBodySchema.safeParse(req.body);
+    if (!parsedBw.success) {
+      res.status(400).json({ error: formatZodApiError(parsedBw.error) });
       return;
     }
+    const { businessId } = parsedBw.data;
 
     const r = await platformCheckWebhookForMerchant({
       telegramId,
@@ -350,37 +346,30 @@ app.post("/api/platform/check-webhook", async (req: Request, res: Response) => {
   }
 });
 
-app.post("/api/platform/toggle-bot", async (req: Request, res: Response) => {
+app.post(
+  "/api/platform/toggle-bot",
+  strictLimiter,
+  requireNonEmptyJsonBody,
+  async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromTrustedHeader(req);
+    const telegramId = platformTelegramIdFromWebApp(req);
     if (!telegramId) {
-      res.status(400).json({
-        error: "Нужен заголовок x-telegram-id с числовым Telegram user id",
+      res.status(500).json({
+        error: "Внутренняя ошибка авторизации Mini App",
       });
       return;
     }
-    const body = req.body as { businessId?: unknown; action?: unknown };
-    const rawBid = body.businessId;
-    const businessId =
-      typeof rawBid === "number" && Number.isInteger(rawBid)
-        ? rawBid
-        : typeof rawBid === "string"
-          ? Number(rawBid.trim())
-          : NaN;
-    if (!Number.isInteger(businessId) || businessId <= 0) {
-      res.status(400).json({ error: "Нужен корректный businessId" });
+    const parsedTb = platformToggleBotBodySchema.safeParse(req.body);
+    if (!parsedTb.success) {
+      res.status(400).json({ error: formatZodApiError(parsedTb.error) });
       return;
     }
-    const act = typeof body.action === "string" ? body.action.trim() : "";
-    if (act !== "enable" && act !== "disable") {
-      res.status(400).json({ error: "action должен быть enable или disable" });
-      return;
-    }
+    const { businessId, action } = parsedTb.data;
 
     const r = await platformToggleBotForMerchant({
       telegramId,
       businessId,
-      action: act,
+      action,
     });
     if (!r.ok) {
       res.status(r.status).json({ error: r.error });
@@ -395,10 +384,10 @@ app.post("/api/platform/toggle-bot", async (req: Request, res: Response) => {
 
 app.get("/api/platform/store-settings", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromTrustedHeader(req);
+    const telegramId = platformTelegramIdFromWebApp(req);
     if (!telegramId) {
-      res.status(400).json({
-        error: "Нужен заголовок x-telegram-id с числовым Telegram user id",
+      res.status(500).json({
+        error: "Внутренняя ошибка авторизации Mini App",
       });
       return;
     }
@@ -424,10 +413,10 @@ app.get("/api/platform/store-settings", async (req: Request, res: Response) => {
 
 app.post("/api/platform/store-settings", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromTrustedHeader(req);
+    const telegramId = platformTelegramIdFromWebApp(req);
     if (!telegramId) {
-      res.status(400).json({
-        error: "Нужен заголовок x-telegram-id с числовым Telegram user id",
+      res.status(500).json({
+        error: "Внутренняя ошибка авторизации Mini App",
       });
       return;
     }
@@ -467,10 +456,10 @@ app.post("/api/platform/store-settings", async (req: Request, res: Response) => 
 
 app.post("/api/platform/update-finik", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromTrustedHeader(req);
+    const telegramId = platformTelegramIdFromWebApp(req);
     if (!telegramId) {
-      res.status(400).json({
-        error: "Нужен заголовок x-telegram-id с числовым Telegram user id",
+      res.status(500).json({
+        error: "Внутренняя ошибка авторизации Mini App",
       });
       return;
     }
@@ -502,34 +491,44 @@ app.post("/api/platform/update-finik", async (req: Request, res: Response) => {
   }
 });
 
-app.post("/api/platform/register-request", async (req: Request, res: Response) => {
+app.post(
+  "/api/platform/register-request",
+  strictLimiter,
+  requireNonEmptyJsonBody,
+  async (req: Request, res: Response) => {
   try {
-    const body = req.body as Record<string, unknown>;
-    const headerTid = (() => {
-      const rawXi = req.headers["x-telegram-id"];
-      const xi =
-        typeof rawXi === "string"
-          ? rawXi.trim()
-          : Array.isArray(rawXi) && typeof rawXi[0] === "string"
-            ? rawXi[0].trim()
-            : "";
-      return /^\d+$/.test(xi) ? xi : null;
-    })();
-
-    const bodyTidRaw = body.telegramId;
+    const authTid = platformTelegramIdFromWebApp(req);
+    if (!authTid) {
+      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
+      return;
+    }
+    const shaped = platformRegisterRequestShape.safeParse(req.body);
+    if (!shaped.success) {
+      res.status(400).json({ error: formatZodApiError(shaped.error) });
+      return;
+    }
+    const bodyTidRaw = shaped.data.telegramId;
     const bodyTid =
       typeof bodyTidRaw === "number" && Number.isFinite(bodyTidRaw)
         ? String(Math.trunc(bodyTidRaw))
         : typeof bodyTidRaw === "string"
-          ? bodyTidRaw.trim()
+          ? bodyTidRaw.replace(/\s/g, "").trim()
           : "";
 
-    if (headerTid != null && bodyTid !== "" && headerTid !== bodyTid) {
-      res.status(403).json({ error: "Несовпадение telegramId с заголовком" });
+    if (bodyTid !== "" && bodyTid !== authTid) {
+      res.status(403).json({
+        error: "Несовпадение telegramId в теле запроса с подписанными данными Telegram",
+      });
       return;
     }
 
-    const result = await validateAndPersistPlatformRegistration(body);
+    const result = await validateAndPersistPlatformRegistration({
+      storeName: shaped.data.storeName,
+      botToken: shaped.data.botToken,
+      phone: shaped.data.phone,
+      finikApiKey: shaped.data.finikApiKey,
+      telegramId: authTid,
+    });
     if (!result.ok) {
       res.status(result.statusCode).json({ error: result.error });
       return;
@@ -543,10 +542,21 @@ app.post("/api/platform/register-request", async (req: Request, res: Response) =
 
 app.get("/api/platform/admin/requests", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromRequest(req);
+    const telegramId = platformTelegramIdFromWebApp(req);
     if (!telegramId) {
-      res.status(400).json({
-        error: "Нужен Telegram id (x-telegram-id или query telegramId / userId)",
+      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
+      return;
+    }
+    const rawQ = req.query.telegramId ?? req.query.userId;
+    const queryTid =
+      typeof rawQ === "string"
+        ? rawQ.trim()
+        : Array.isArray(rawQ) && typeof rawQ[0] === "string"
+          ? rawQ[0].trim()
+          : "";
+    if (/^\d+$/.test(queryTid) && queryTid !== telegramId) {
+      res.status(403).json({
+        error: "Несовпадение telegramId в query с данными авторизации Telegram",
       });
       return;
     }
@@ -564,9 +574,9 @@ app.get("/api/platform/admin/requests", async (req: Request, res: Response) => {
 
 app.post("/api/platform/admin/approve", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromRequest(req);
+    const telegramId = platformTelegramIdFromWebApp(req);
     if (!telegramId) {
-      res.status(400).json({ error: "Нужен x-telegram-id" });
+      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
       return;
     }
     if (!isPlatformAdminTelegramId(telegramId)) {
@@ -592,9 +602,9 @@ app.post("/api/platform/admin/approve", async (req: Request, res: Response) => {
 
 app.post("/api/platform/admin/reject", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromRequest(req);
+    const telegramId = platformTelegramIdFromWebApp(req);
     if (!telegramId) {
-      res.status(400).json({ error: "Нужен x-telegram-id" });
+      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
       return;
     }
     if (!isPlatformAdminTelegramId(telegramId)) {
@@ -620,9 +630,9 @@ app.post("/api/platform/admin/reject", async (req: Request, res: Response) => {
 
 app.post("/api/platform/admin/block", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromRequest(req);
+    const telegramId = platformTelegramIdFromWebApp(req);
     if (!telegramId) {
-      res.status(400).json({ error: "Нужен x-telegram-id" });
+      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
       return;
     }
     if (!isPlatformAdminTelegramId(telegramId)) {
@@ -654,9 +664,9 @@ app.post("/api/platform/admin/block", async (req: Request, res: Response) => {
 
 app.post("/api/platform/admin/unblock", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromRequest(req);
+    const telegramId = platformTelegramIdFromWebApp(req);
     if (!telegramId) {
-      res.status(400).json({ error: "Нужен x-telegram-id" });
+      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
       return;
     }
     if (!isPlatformAdminTelegramId(telegramId)) {
@@ -688,10 +698,21 @@ app.post("/api/platform/admin/unblock", async (req: Request, res: Response) => {
 
 app.get("/api/platform/admin/businesses", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromRequest(req);
+    const telegramId = platformTelegramIdFromWebApp(req);
     if (!telegramId) {
-      res.status(400).json({
-        error: "Нужен Telegram id (x-telegram-id или query telegramId / userId)",
+      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
+      return;
+    }
+    const rawQl = req.query.telegramId ?? req.query.userId;
+    const queryTidAdmin =
+      typeof rawQl === "string"
+        ? rawQl.trim()
+        : Array.isArray(rawQl) && typeof rawQl[0] === "string"
+          ? rawQl[0].trim()
+          : "";
+    if (/^\d+$/.test(queryTidAdmin) && queryTidAdmin !== telegramId) {
+      res.status(403).json({
+        error: "Несовпадение telegramId в query с данными авторизации Telegram",
       });
       return;
     }
@@ -716,9 +737,9 @@ app.get("/api/platform/admin/businesses", async (req: Request, res: Response) =>
 
 app.post("/api/platform/admin/disable", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromRequest(req);
+    const telegramId = platformTelegramIdFromWebApp(req);
     if (!telegramId) {
-      res.status(400).json({ error: "Нужен x-telegram-id" });
+      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
       return;
     }
     if (!isPlatformAdminTelegramId(telegramId)) {
@@ -750,9 +771,9 @@ app.post("/api/platform/admin/disable", async (req: Request, res: Response) => {
 
 app.post("/api/platform/admin/enable", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromRequest(req);
+    const telegramId = platformTelegramIdFromWebApp(req);
     if (!telegramId) {
-      res.status(400).json({ error: "Нужен x-telegram-id" });
+      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
       return;
     }
     if (!isPlatformAdminTelegramId(telegramId)) {
@@ -786,9 +807,9 @@ app.post(
   "/api/platform/admin/restart-dynamic-bot",
   async (req: Request, res: Response) => {
     try {
-      const telegramId = platformTelegramIdFromRequest(req);
+      const telegramId = platformTelegramIdFromWebApp(req);
       if (!telegramId) {
-        res.status(400).json({ error: "Нужен x-telegram-id" });
+        res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
         return;
       }
       if (!isPlatformAdminTelegramId(telegramId)) {
@@ -816,7 +837,7 @@ app.post(
         });
         return;
       }
-      const tok = String(row.botToken ?? "").trim();
+      const tok = plainBotTokenFromStored(row.botToken);
       if (tok === "") {
         res.status(400).json({ error: "У магазина нет botToken" });
         return;
@@ -840,9 +861,9 @@ app.post(
 
 app.post("/api/platform/admin/extend", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromRequest(req);
+    const telegramId = platformTelegramIdFromWebApp(req);
     if (!telegramId) {
-      res.status(400).json({ error: "Нужен x-telegram-id" });
+      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
       return;
     }
     if (!isPlatformAdminTelegramId(telegramId)) {
@@ -873,9 +894,9 @@ app.post("/api/platform/admin/extend", async (req: Request, res: Response) => {
 
 app.post("/api/platform/admin/purge-business", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromRequest(req);
+    const telegramId = platformTelegramIdFromWebApp(req);
     if (!telegramId) {
-      res.status(400).json({ error: "Нужен x-telegram-id" });
+      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
       return;
     }
     if (!isPlatformAdminTelegramId(telegramId)) {
@@ -908,9 +929,9 @@ app.get(
   "/api/platform/admin/bot-token-changes",
   async (req: Request, res: Response) => {
     try {
-      const telegramId = platformTelegramIdFromRequest(req);
+      const telegramId = platformTelegramIdFromWebApp(req);
       if (!telegramId) {
-        res.status(400).json({ error: "Нужен x-telegram-id" });
+        res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
         return;
       }
       if (!isPlatformAdminTelegramId(telegramId)) {
@@ -930,9 +951,9 @@ app.post(
   "/api/platform/admin/bot-token-changes/approve",
   async (req: Request, res: Response) => {
     try {
-      const telegramId = platformTelegramIdFromRequest(req);
+      const telegramId = platformTelegramIdFromWebApp(req);
       if (!telegramId) {
-        res.status(400).json({ error: "Нужен x-telegram-id" });
+        res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
         return;
       }
       if (!isPlatformAdminTelegramId(telegramId)) {
@@ -961,9 +982,9 @@ app.post(
   "/api/platform/admin/bot-token-changes/reject",
   async (req: Request, res: Response) => {
     try {
-      const telegramId = platformTelegramIdFromRequest(req);
+      const telegramId = platformTelegramIdFromWebApp(req);
       if (!telegramId) {
-        res.status(400).json({ error: "Нужен x-telegram-id" });
+        res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
         return;
       }
       if (!isPlatformAdminTelegramId(telegramId)) {
@@ -1306,7 +1327,7 @@ function telegramIdFromRequest(req: Request): string | null {
 
 const PUBLIC_BUSINESS_PARSE_ERROR = "Invalid businessId";
 const PUBLIC_BUSINESS_MISSING_ERROR = "Not found";
-const PUBLIC_BUSINESS_UNAVAILABLE_ERROR = "Store unavailable";
+const PUBLIC_BUSINESS_UNAVAILABLE_ERROR = "Подписка не активна";
 
 function queryParamToTrimmedString(raw: unknown): string {
   if (typeof raw === "string") return raw.trim();
@@ -1522,6 +1543,7 @@ const publicApiBase = publicApiOrigin();
 
 app.post(
   "/telegram-webhook/:botIndex",
+  telegramWebhookGate,
   async (req: Request, res: Response) => {
     const idx = Number(req.params.botIndex);
     if (!Number.isInteger(idx) || idx < 0 || idx >= bots.length) {
@@ -1535,38 +1557,64 @@ app.post(
       await tBot.handleUpdate(req.body);
       return res.sendStatus(200);
     } catch (e) {
-      console.error("telegram-webhook:", idx, e);
+      console.error(
+        "telegram-webhook handler error:",
+        idx,
+        e instanceof Error ? e.message : String(e),
+      );
       return res.sendStatus(500);
     }
   }
 );
 
 /** Старые деплои с одним ботом: тот же обработчик, что бот[0]. */
-app.post("/telegram-webhook", async (req: Request, res: Response) => {
-  if (!bots[0]) {
-    return res.sendStatus(503);
+app.post(
+  "/telegram-webhook",
+  telegramWebhookGate,
+  async (req: Request, res: Response) => {
+    if (!bots[0]) {
+      return res.sendStatus(503);
+    }
+    try {
+      await bots[0].handleUpdate(req.body);
+      return res.sendStatus(200);
+    } catch (e) {
+      console.error(
+        "telegram-webhook (legacy) handler error:",
+        e instanceof Error ? e.message : String(e),
+      );
+      return res.sendStatus(500);
+    }
   }
-  try {
-    await bots[0].handleUpdate(req.body);
-    return res.sendStatus(200);
-  } catch (e) {
-    console.error("telegram-webhook (legacy):", e);
-    return res.sendStatus(500);
-  }
-});
+);
 
-app.post("/webhook/:businessId", async (req: Request, res: Response) => {
-  const businessId = Number(req.params.businessId);
-  await relayDynamicTenantStoreWebhook(req, res, businessId);
-});
+/** Tenant store bots: путь вида `/webhook/<случайный_32_hex>` (или legacy числовой при флаге). */
+app.post(
+  "/webhook/:webhookSlug",
+  telegramWebhookGate,
+  async (req: Request, res: Response) => {
+    const slug = String(req.params.webhookSlug ?? "").trim();
+    const businessId = await resolveBusinessIdFromWebhookSlug(slug);
+    if (businessId == null) {
+      res.sendStatus(404);
+      return;
+    }
+    await relayDynamicTenantStoreWebhook(req, res, businessId);
+  },
+);
 
-/** Совместимость со старым URL после `setWebhook`. */
+/** Совместимость: старые URL с числовым id в пути. */
 app.post(
   "/telegram-webhook/owner/:businessId",
+  telegramWebhookGate,
   async (req: Request, res: Response) => {
     const businessId = Number(req.params.businessId);
+    if (!Number.isInteger(businessId) || businessId <= 0) {
+      res.sendStatus(404);
+      return;
+    }
     await relayDynamicTenantStoreWebhook(req, res, businessId);
-  }
+  },
 );
 
 /** Сохранить токен @BotFather и зарегистрировать бота (вебхук + /start). */
@@ -1593,7 +1641,7 @@ app.post("/connect-bot", async (req: Request, res: Response) => {
         .status(403)
         .json({ error: "Нет доступа к управлению ботом этого магазина" });
     }
-    const token = String(body.botToken ?? "").trim();
+    const token = String(body.botToken ?? "").replace(/\s/g, "").trim();
     if (!token) {
       return res.status(400).json({ error: "Вставьте токен бота" });
     }
@@ -1610,7 +1658,10 @@ app.post("/connect-bot", async (req: Request, res: Response) => {
     }
 
     const conflict = await prisma.business.findFirst({
-      where: { botToken: token, NOT: { id: businessId } },
+      where: {
+        botTokenHash: hashBotTokenSha256Hex(token),
+        NOT: { id: businessId },
+      },
     });
     if (conflict) {
       return res
@@ -1620,7 +1671,7 @@ app.post("/connect-bot", async (req: Request, res: Response) => {
 
     await prisma.business.update({
       where: { id: businessId },
-      data: { botToken: token },
+      data: encryptedBotTokenRow(token),
     });
 
     await initDynamicStoreBot({ businessId, botToken: token });
@@ -1739,7 +1790,6 @@ app.post(
   "/upload",
   upload.single("file"),
   async (req: Request, res: Response) => {
-    console.log("UPLOAD DATA:", req.body);
     const m = await requireMerchantStaff(req, res);
     if (!m) return;
     try {
@@ -1768,7 +1818,6 @@ app.post(
   "/products/upload-images",
   upload.array("files", 15),
   async (req: Request, res: Response) => {
-    console.log("UPLOAD-IMAGES DATA:", req.body);
     const m = await requireMerchantStaff(req, res);
     if (!m) return;
     try {
@@ -1867,7 +1916,6 @@ app.post("/payment", async (req: Request, res: Response) => {
   try {
     const merchant = await requireMerchantStaff(req, res);
     if (!merchant) return;
-    console.log("PAYMENT SAVE:", req.body);
     const saved = await upsertPaymentSettings(
       prisma,
       merchant.businessId,
@@ -1967,7 +2015,6 @@ app.post("/promo", async (req: Request, res: Response) => {
   try {
     const merchant = await requireMerchantStaff(req, res);
     if (!merchant) return;
-    console.log("PROMO SAVE:", req.body);
     const body = req.body as {
       code?: unknown;
       discount?: unknown;
@@ -2097,7 +2144,6 @@ app.post("/products", async (req: Request, res: Response) => {
   try {
     const merchant = await requireMerchantStaff(req, res);
     if (!merchant) return;
-    console.log("PRODUCT CREATE DATA:", req.body);
     const body = req.body as {
       name?: unknown;
       price?: unknown;
@@ -2235,7 +2281,6 @@ async function performOrderStatusUpdate(
 
 app.post("/order/status", async (req: Request, res: Response) => {
   try {
-    console.log("ORDER STATUS DATA:", req.body);
     const merchant = await requireMerchantStaff(req, res);
     if (!merchant) return;
 
@@ -2413,7 +2458,6 @@ app.post("/analytics", async (req: Request, res: Response) => {
   try {
     const merchant = await requireMerchantStaff(req, res);
     if (!merchant) return;
-    console.log("ANALYTICS DATA:", req.body);
     const orders = await prisma.order.findMany({
       where: { businessId: merchant.businessId },
     });
@@ -3012,7 +3056,6 @@ app.put("/products/:id", async (req: Request, res: Response) => {
   try {
     const merchant = await requireMerchantStaff(req, res);
     if (!merchant) return;
-    console.log("PRODUCT UPDATE DATA:", req.body);
     const body = req.body as {
       name?: unknown;
       price?: unknown;
@@ -3129,6 +3172,8 @@ app.delete("/products/:id", async (req: Request, res: Response) => {
   }
 });
 
+app.use(apiSafeErrorHandler);
+
 // ================== GLOBAL PROCESS ERRORS ==================
 process.on("uncaughtException", (err) => {
   console.error("UNCAUGHT ERROR:", err);
@@ -3157,10 +3202,9 @@ void (async () => {
     if (publicApiBase && bots.length > 0) {
       for (let i = 0; i < bots.length; i++) {
         const url = `${publicApiBase}/telegram-webhook/${i}`;
-        void bots[i]!.telegram
-          .setWebhook(url)
-          .then(() => console.log("Webhook set:", url))
-          .catch((err) => console.error("Webhook error:", i, err));
+        void telegramSetWebhookOnApi(bots[i]!.telegram, url).catch((err: unknown) =>
+          console.error("Static bot setWebhook error:", i, err),
+        );
       }
     } else if (bots.length > 0) {
       console.log(

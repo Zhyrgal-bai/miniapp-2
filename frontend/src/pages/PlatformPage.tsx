@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { getTelegramWebApp } from "../utils/telegram";
@@ -43,21 +44,18 @@ function botRunBadge(b: PlatformMyBusinessDTO): { label: string; className: stri
   if (b.isBlocked) {
     return {
       label: "⛔ Заблокирован",
-      className:
-        "rounded-full border border-yellow-500/25 bg-yellow-500/10 px-2.5 py-0.5 text-xs font-medium text-yellow-400",
+      className: "mp-tag mp-tag--run-blocked",
     };
   }
   if (!b.isActive) {
     return {
       label: "🔴 Отключён",
-      className:
-        "rounded-full border border-red-500/25 bg-red-500/10 px-2.5 py-0.5 text-xs font-medium text-red-400",
+      className: "mp-tag mp-tag--run-off",
     };
   }
   return {
     label: "🟢 Активен",
-    className:
-      "rounded-full border border-green-500/25 bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-400",
+    className: "mp-tag mp-tag--run-ok",
   };
 }
 
@@ -66,49 +64,42 @@ function subscriptionBadge(status: string): { label: string; className: string }
   if (s === "trialing") {
     return {
       label: "Trial",
-      className:
-        "rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-300",
+      className: "mp-tag mp-tag--sub-trial",
     };
   }
   if (s === "active") {
     return {
       label: "Active",
-      className:
-        "rounded-full border border-[#22C55E]/30 bg-[#22C55E]/10 px-2.5 py-0.5 text-xs font-medium text-[#4ADE80]",
+      className: "mp-tag mp-tag--sub-active",
     };
   }
   if (s === "inactive") {
     return {
       label: "Inactive",
-      className:
-        "rounded-full border border-slate-500/30 bg-slate-500/10 px-2.5 py-0.5 text-xs font-medium text-slate-400",
+      className: "mp-tag mp-tag--sub-muted",
     };
   }
   if (s === "subscription_expired" || s === "expired") {
     return {
       label: "Expired",
-      className:
-        "rounded-full border border-slate-500/30 bg-slate-500/10 px-2.5 py-0.5 text-xs font-medium text-slate-400",
+      className: "mp-tag mp-tag--sub-muted",
     };
   }
   if (s === "past_due") {
     return {
       label: "Past due",
-      className:
-        "rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-300",
+      className: "mp-tag mp-tag--sub-warn",
     };
   }
   if (s === "canceled") {
     return {
       label: "Canceled",
-      className:
-        "rounded-full border border-slate-600/40 bg-slate-600/15 px-2.5 py-0.5 text-xs font-medium text-slate-400",
+      className: "mp-tag mp-tag--sub-muted",
     };
   }
   return {
     label: platformStatusLabel(status),
-    className:
-      "rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-xs font-medium text-slate-300",
+    className: "mp-tag mp-tag--sub-muted",
   };
 }
 
@@ -125,15 +116,13 @@ function webhookBadge(ws: PlatformMyBusinessDTO["webhookStatus"]): {
 } {
   if (ws === "OK") {
     return {
-      label: "✔ работает",
-      className:
-        "rounded-full border border-green-500/25 bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-400",
+      label: "✔ Webhook OK",
+      className: "mp-tag mp-tag--hook-ok",
     };
   }
   return {
-    label: "❌ ошибка",
-    className:
-      "rounded-full border border-red-500/25 bg-red-500/10 px-2.5 py-0.5 text-xs font-medium text-red-400",
+    label: "❌ Webhook",
+    className: "mp-tag mp-tag--hook-bad",
   };
 }
 
@@ -686,13 +675,14 @@ export default function PlatformPage() {
               </motion.div>
             ) : null}
             {businesses.length > 0 ? (
-              <ul className="flex flex-col gap-4">
+              <ul className="mp-store-list">
                 {businesses.map((b, index) => {
                   const toggleBusy = pendingByBusiness[b.id] === "toggle";
                   const webhookBusy = pendingByBusiness[b.id] === "webhook";
                   const runBadge = botRunBadge(b);
                   const subBadge = subscriptionBadge(b.status);
                   const whBadge = webhookBadge(b.webhookStatus);
+                  const subLocked = !b.subscriptionActive;
                   return (
                     <motion.li
                       key={b.id}
@@ -719,7 +709,7 @@ export default function PlatformPage() {
                           <p className="mt-0.5 font-mono text-[11px] text-slate-400">
                             id {b.id}
                           </p>
-                          <div className="mt-3 flex flex-wrap gap-2">
+                          <div className="mp-tag-row">
                             <span className={runBadge.className}>
                               {runBadge.label}
                             </span>
@@ -730,28 +720,48 @@ export default function PlatformPage() {
                               {whBadge.label}
                             </span>
                           </div>
-                          <p className="mt-2 break-all font-mono text-[11px] leading-snug text-slate-400">
-                            {webhookUrlLine(b)}
-                          </p>
-                          <div className="mt-4 flex flex-col gap-2.5 sm:flex-row sm:items-stretch">
+                          <div className="mp-webhook-block">
+                            <div className="mp-webhook-label">
+                              Вебхук Telegram
+                            </div>
+                            <div className="mp-webhook-url">
+                              {webhookUrlLine(b)}
+                            </div>
+                          </div>
+                          {!b.isBlocked && subLocked ? (
+                            <p className="mt-3 text-sm font-semibold text-amber-200/95">
+                              Оплатите подписку — без действующего периода функции
+                              магазина недоступны.
+                            </p>
+                          ) : null}
+                          <div className="mp-store-actions-primary">
                             <button
                               type="button"
+                              disabled={subLocked}
                               onClick={() =>
                                 navigate(
                                   `/?shop=${encodeURIComponent(String(b.id))}`,
                                 )
                               }
                               className="mp-btn mp-btn--primary mp-btn--sm min-w-0"
+                              title={
+                                subLocked
+                                  ? "Оплатите подписку"
+                                  : undefined
+                              }
                             >
                               Открыть магазин
                             </button>
                             <button
                               type="button"
                               disabled={
-                                settingsBusinessId === b.id &&
-                                (settingsLoading || settingsSaving)
+                                subLocked ||
+                                (settingsBusinessId === b.id &&
+                                  (settingsLoading || settingsSaving))
                               }
-                              onClick={() => {
+                              onClick={(ev) => {
+                                ev.preventDefault();
+                                ev.stopPropagation();
                                 setSettingsErr(null);
                                 setSettingsOkMsg(null);
                                 setSettingsBusinessId(b.id);
@@ -764,36 +774,54 @@ export default function PlatformPage() {
                                 : "Настройки"}
                             </button>
                           </div>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {b.isActive ? (
+                          <div className="mp-store-actions-secondary">
+                            {platformAdminAccess === "yes" &&
+                            b.isActive &&
+                            !b.isBlocked ? (
                               <button
                                 type="button"
-                                disabled={toggleBusy}
+                                disabled={toggleBusy || subLocked}
                                 onClick={() => void handleToggleBot(b)}
-                                className="mp-btn mp-btn--danger"
+                                className="mp-btn mp-btn--danger mp-btn-wide-mobile"
+                                title={
+                                  subLocked
+                                    ? "Оплатите подписку"
+                                    : undefined
+                                }
                               >
-                                {toggleBusy ? "…" : "Отключить"}
+                                {toggleBusy ? "…" : "Отключить бота"}
                               </button>
-                            ) : b.isBlocked ? (
-                              <span className="inline-flex h-10 items-center text-sm font-semibold text-yellow-400">
+                            ) : null}
+                            {!b.isActive && b.isBlocked ? (
+                              <span className="inline-flex min-h-[2.5rem] items-center text-sm font-semibold text-yellow-300">
                                 ⛔ Заблокирован
                               </span>
-                            ) : (
+                            ) : null}
+                            {!b.isActive && !b.isBlocked ? (
                               <button
                                 type="button"
-                                disabled={toggleBusy}
-                                title="Включить магазин"
+                                disabled={toggleBusy || subLocked}
+                                title={
+                                  subLocked
+                                    ? "Оплатите подписку"
+                                    : "Включить магазин"
+                                }
                                 onClick={() => void handleToggleBot(b)}
-                                className="mp-btn mp-btn-enable"
+                                className="mp-btn mp-btn-enable mp-btn-wide-mobile"
                               >
                                 {toggleBusy ? "…" : "🟢 Включить"}
                               </button>
-                            )}
+                            ) : null}
                             <button
                               type="button"
-                              disabled={webhookBusy}
+                              disabled={webhookBusy || subLocked}
+                              title={
+                                subLocked
+                                  ? "Оплатите подписку"
+                                  : undefined
+                              }
                               onClick={() => void handleCheckWebhook(b)}
-                              className="mp-btn mp-btn--ghost"
+                              className="mp-btn mp-btn--ghost mp-btn-wide-mobile"
                             >
                               {webhookBusy ? "Проверка…" : "Проверить webhook"}
                             </button>
@@ -1007,29 +1035,35 @@ export default function PlatformPage() {
         ) : null}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {settingsBusinessId != null ? (
-          <motion.div
-            key="platform-settings-modal"
-            className={archa.modalBackdropElevated}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.22 }}
-            role="presentation"
-            onClick={(ev) => {
-              if (ev.target === ev.currentTarget) closeSettingsModal();
-            }}
-          >
-            <motion.div
-              role="dialog"
-              aria-labelledby="platform-settings-title"
-              className={`${archa.modalCard} mp-settings-modal-card`}
-              initial={{ opacity: 0, scale: 0.94, y: 16 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 12 }}
-              transition={{ type: "spring", damping: 26, stiffness: 340 }}
-            >
+      {typeof document !== "undefined"
+        ? createPortal(
+            <AnimatePresence>
+              {settingsBusinessId != null ? (
+                <motion.div
+                  key="platform-settings-modal"
+                  className="mp-settings-backdrop"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.22 }}
+                  role="presentation"
+                  onClick={(ev) => {
+                    if (ev.target === ev.currentTarget) closeSettingsModal();
+                  }}
+                >
+                  <motion.div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="platform-settings-title"
+                    className="mp-settings-dialog-shell"
+                    initial={{ opacity: 0, scale: 0.94, y: 16 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.96, y: 12 }}
+                    transition={{ type: "spring", damping: 26, stiffness: 340 }}
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                    }}
+                  >
             <div className="mb-4 flex items-start justify-between gap-3">
               <h2
                 id="platform-settings-title"
@@ -1204,10 +1238,13 @@ export default function PlatformPage() {
                 </button>
               </form>
             )}
-            </motion.div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+                  </motion.div>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>,
+            document.body,
+          )
+        : null}
     </>
   );
 }

@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import { plainBotTokenFromStored } from "./businessBotToken.js";
 import { prisma } from "./db.js";
 import {
   createFinikSaasSubscriptionSession,
@@ -341,7 +342,7 @@ export function mountSubscriptionFinikPaymentRoutes(app: Express): void {
           }
         }
 
-        const tok = String(business.botToken ?? "").trim();
+        const tok = plainBotTokenFromStored(business.botToken);
         if (tok) {
           void sendOwnerPaymentSuccessNotice(tok, subRow.payerTelegramId);
         }

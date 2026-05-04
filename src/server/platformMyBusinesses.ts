@@ -1,5 +1,7 @@
 import { MembershipRole, SubscriptionStatus } from "@prisma/client";
+import { plainBotTokenFromStored } from "./businessBotToken.js";
 import { prisma } from "./db.js";
+import { merchantStoreEntitled } from "./subscriptionAccess.js";
 import {
   classifyWebhookOkError,
   fetchTelegramWebhookInfo,
@@ -13,6 +15,8 @@ export type PlatformMyBusinessDTO = {
   status: string;
   isActive: boolean;
   isBlocked: boolean;
+  /** Есть действующее окно оплаты/trial и магазин не в ручном бане. */
+  subscriptionActive: boolean;
   /** OK при валидном вебхуке по ответу getWebhookInfo; ERROR иначе. */
   webhookStatus: "OK" | "ERROR";
   /** URL из getWebhookInfo (без токена); null если не настроен или ошибка API. */
@@ -26,6 +30,7 @@ const businessSelectForPlatformList = {
   isActive: true,
   isBlocked: true,
   subscriptionStatus: true,
+  trialEndsAt: true,
   subscriptionEndsAt: true,
   botToken: true,
 } as const;
@@ -63,23 +68,29 @@ export async function mapRowsWithWebhook(
     isActive: boolean;
     isBlocked: boolean;
     subscriptionStatus: SubscriptionStatus;
+    trialEndsAt: Date | null;
     subscriptionEndsAt: Date | null;
     botToken: string | null;
   }>,
 ): Promise<PlatformMyBusinessDTO[]> {
   const limit = Math.min(rows.length || 1, 8);
+  const now = new Date();
 
   /** Ограниченная параллельность, чтобы не забивать Telegram при большом списке. */
   async function probeAt(i: number): Promise<PlatformMyBusinessDTO> {
     const r = rows[i]!;
-    const info = await fetchTelegramWebhookInfo(String(r.botToken ?? ""));
+    const info = await fetchTelegramWebhookInfo(
+      plainBotTokenFromStored(r.botToken),
+    );
     const webhookStatus = classifyWebhookOkError(info);
+    const subscriptionActive = merchantStoreEntitled(r, now);
     return {
       id: r.id,
       name: r.name,
       status: computePlatformBusinessStatus(r),
       isActive: r.isActive,
       isBlocked: r.isBlocked,
+      subscriptionActive,
       webhookStatus,
       webhookUrl: info.webhookUrl,
     };

@@ -1,3 +1,8 @@
+import {
+  encryptedBotTokenRow,
+  hashBotTokenSha256Hex,
+  plainBotTokenFromStored,
+} from "./businessBotToken.js";
 import { prisma } from "./db.js";
 import { bot as mainTelegrafBot } from "../bot/bot.js";
 import {
@@ -114,7 +119,7 @@ export async function createMerchantBotTokenChangeRequest(input: {
   if (business == null) {
     return { ok: false, statusCode: 404, error: "Магазин не найден" };
   }
-  if (business.botToken.trim() === token) {
+  if (plainBotTokenFromStored(business.botToken) === token) {
     return {
       ok: false,
       statusCode: 400,
@@ -210,7 +215,10 @@ export async function approveMerchantBotTokenChangeById(
 
   const newTok = row.newBotToken.trim();
   const conflict = await prisma.business.findFirst({
-    where: { botToken: newTok, NOT: { id: row.businessId } },
+    where: {
+      botTokenHash: hashBotTokenSha256Hex(newTok),
+      NOT: { id: row.businessId },
+    },
     select: { id: true },
   });
   if (conflict) {
@@ -227,7 +235,7 @@ export async function approveMerchantBotTokenChangeById(
     await prisma.$transaction([
       prisma.business.update({
         where: { id: row.businessId },
-        data: { botToken: newTok },
+        data: encryptedBotTokenRow(newTok),
       }),
       prisma.merchantChangeRequest.update({
         where: { id: requestId },

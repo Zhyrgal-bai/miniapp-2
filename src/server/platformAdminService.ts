@@ -13,6 +13,11 @@ import {
   stopDynamicStoreBotInMemory,
 } from "../bot/dynamicBots.js";
 import { prisma } from "./db.js";
+import {
+  encryptedBotTokenRow,
+  plainBotTokenFromStored,
+  hashBotTokenSha256Hex,
+} from "./businessBotToken.js";
 import { isAdmin } from "./adminAuth.js";
 import { mapRowsWithWebhook } from "./platformMyBusinesses.js";
 
@@ -73,31 +78,10 @@ async function provisionMerchantStoreInTx(
   },
 ): Promise<number> {
   const slug = `shop-${params.slugSuffix}`;
-  const trialEnd = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
   const botTok = params.botToken.trim();
+  const tokenFields = encryptedBotTokenRow(botTok);
   const finikTrimmed = params.finikApiKey?.trim();
   const useFinik = finikTrimmed != null && finikTrimmed.length > 0;
-
-  const business = await tx.business.create({
-    data: {
-      name: params.name.trim(),
-      slug,
-      botToken: botTok,
-      finikApiKey: useFinik ? finikTrimmed! : null,
-      isActive: true,
-      isBlocked: false,
-      subscriptionStatus: SubscriptionStatus.TRIALING,
-      billingPlan: BillingPlan.FREE,
-      trialEndsAt: trialEnd,
-    },
-  });
-
-  await tx.settings.create({
-    data: {
-      businessId: business.id,
-      paymentProvider: useFinik ? "finik" : null,
-    },
-  });
 
   const ownerUser = await tx.user.upsert({
     where: { telegramId: params.telegramId },
@@ -105,6 +89,44 @@ async function provisionMerchantStoreInTx(
     create: {
       telegramId: params.telegramId,
       name: normalizeStoreName(params.name),
+    },
+    select: { id: true, hasUsedTrial: true },
+  });
+
+  const giveTrial = !ownerUser.hasUsedTrial;
+  const trialEnd = giveTrial
+    ? new Date(Date.now() + 10 * 24 * 60 * 60 * 1000)
+    : null;
+
+  const business = await tx.business.create({
+    data: {
+      name: params.name.trim(),
+      slug,
+      botToken: tokenFields.botToken,
+      botTokenHash: tokenFields.botTokenHash,
+      finikApiKey: useFinik ? finikTrimmed! : null,
+      isActive: giveTrial,
+      isBlocked: false,
+      subscriptionStatus: giveTrial
+        ? SubscriptionStatus.TRIALING
+        : SubscriptionStatus.EXPIRED,
+      billingPlan: BillingPlan.FREE,
+      trialEndsAt: trialEnd,
+      subscriptionEndsAt: null,
+    },
+  });
+
+  if (giveTrial) {
+    await tx.user.update({
+      where: { id: ownerUser.id },
+      data: { hasUsedTrial: true },
+    });
+  }
+
+  await tx.settings.create({
+    data: {
+      businessId: business.id,
+      paymentProvider: useFinik ? "finik" : null,
     },
   });
 
@@ -120,8 +142,8 @@ async function provisionMerchantStoreInTx(
 }
 
 /**
- * Доступ к REST `/api/platform/admin/*`: только `ADMIN_IDS` на сервере
- * (не доверяем фронту; legacy `PLATFORM_ADMIN_TELEGRAM_ID` не используется).
+ * Доступ к REST `/api/platform/admin/*`: после `requireTelegramAuth` (WebApp initData)
+ * telegram id проверяется по `ADMIN_IDS` на сервере.
  */
 export function isPlatformAdminTelegramId(telegramId: string): boolean {
   const tid = telegramId.trim();
@@ -183,8 +205,9 @@ export async function approveRegistrationRequestById(
     };
   }
 
+  const tokenHash = hashBotTokenSha256Hex(row.botToken.trim());
   const tokenInUse = await prisma.business.findUnique({
-    where: { botToken: row.botToken.trim() },
+    where: { botTokenHash: tokenHash },
     select: { id: true },
   });
   if (tokenInUse) {
@@ -200,7 +223,7 @@ export async function approveRegistrationRequestById(
   try {
     businessId = await prisma.$transaction(async (tx) => {
       const conflict = await tx.business.findUnique({
-        where: { botToken: row.botToken.trim() },
+        where: { botTokenHash: tokenHash },
         select: { id: true },
       });
       if (conflict) {
@@ -251,19 +274,11 @@ export async function approveRegistrationRequestById(
         ? started.username.trim().replace(/^@/, "") || null
         : null;
 
-    const storeBot = getDynamicOwnerBot(businessId);
-    if (!storeBot) {
+    if (!getDynamicOwnerBot(businessId)) {
       console.error(
         "[platformAdmin] approve: no bot in memory after initDynamicStoreBot",
         businessId,
       );
-    } else {
-      const base = String(process.env.BASE_URL ?? "").trim().replace(/\/$/, "");
-      if (base !== "") {
-        const webhookUrl = `${base}/webhook/${businessId}`;
-        await storeBot.telegram.setWebhook(webhookUrl);
-      }
-      console.log("Bot started:", businessId);
     }
 
     const telegramId = row.telegramId.trim();
@@ -450,7 +465,7 @@ export async function purgeBusinessCompletelyForPlatformAdmin(
     return { ok: false, statusCode: 404, message: "Магазин не найден" };
   }
 
-  const botTokTrim = biz.botToken.trim();
+  const requestPlainTok = plainBotTokenFromStored(biz.botToken);
 
   await stopDynamicStoreBotInMemory(businessId);
 
@@ -469,7 +484,7 @@ export async function purgeBusinessCompletelyForPlatformAdmin(
         where: { targetBusinessId: businessId },
       });
       await tx.registrationRequest.deleteMany({
-        where: { botToken: botTokTrim },
+        where: { botToken: requestPlainTok },
       });
       await tx.business.delete({ where: { id: businessId } });
     });

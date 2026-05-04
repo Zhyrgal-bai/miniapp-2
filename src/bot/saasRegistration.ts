@@ -8,6 +8,10 @@ import {
   RegistrationStatus,
   SubscriptionStatus,
 } from "@prisma/client";
+import {
+  encryptedBotTokenRow,
+  hashBotTokenSha256Hex,
+} from "../server/businessBotToken.js";
 import { logPrismaError, prisma } from "../server/db.js";
 import {
   isValidFinikApiKey,
@@ -417,31 +421,10 @@ async function provisionMerchantStoreInTx(
   },
 ): Promise<number> {
   const slug = `shop-${params.slugSuffix}`;
-  const trialEnd = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
   const botTok = params.botToken.trim();
+  const tokRow = encryptedBotTokenRow(botTok);
   const finikTrimmed = params.finikApiKey?.trim();
   const useFinik = finikTrimmed != null && finikTrimmed.length > 0;
-
-  const business = await tx.business.create({
-    data: {
-      name: params.name.trim(),
-      slug,
-      botToken: botTok,
-      finikApiKey: useFinik ? finikTrimmed! : null,
-      isActive: true,
-      isBlocked: false,
-      subscriptionStatus: SubscriptionStatus.TRIALING,
-      billingPlan: BillingPlan.FREE,
-      trialEndsAt: trialEnd,
-    },
-  });
-
-  await tx.settings.create({
-    data: {
-      businessId: business.id,
-      paymentProvider: useFinik ? "finik" : null,
-    },
-  });
 
   const ownerUser = await tx.user.upsert({
     where: { telegramId: params.telegramId },
@@ -449,6 +432,44 @@ async function provisionMerchantStoreInTx(
     create: {
       telegramId: params.telegramId,
       name: normalizeStoreName(params.name),
+    },
+    select: { id: true, hasUsedTrial: true },
+  });
+
+  const giveTrial = !ownerUser.hasUsedTrial;
+  const trialEnd = giveTrial
+    ? new Date(Date.now() + 10 * 24 * 60 * 60 * 1000)
+    : null;
+
+  const business = await tx.business.create({
+    data: {
+      name: params.name.trim(),
+      slug,
+      botToken: tokRow.botToken,
+      botTokenHash: tokRow.botTokenHash,
+      finikApiKey: useFinik ? finikTrimmed! : null,
+      isActive: giveTrial,
+      isBlocked: false,
+      subscriptionStatus: giveTrial
+        ? SubscriptionStatus.TRIALING
+        : SubscriptionStatus.EXPIRED,
+      billingPlan: BillingPlan.FREE,
+      trialEndsAt: trialEnd,
+      subscriptionEndsAt: null,
+    },
+  });
+
+  if (giveTrial) {
+    await tx.user.update({
+      where: { id: ownerUser.id },
+      data: { hasUsedTrial: true },
+    });
+  }
+
+  await tx.settings.create({
+    data: {
+      businessId: business.id,
+      paymentProvider: useFinik ? "finik" : null,
     },
   });
 
@@ -1074,8 +1095,9 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
       return;
     }
 
+    const rh = hashBotTokenSha256Hex(row.botToken.trim());
     const bizInUse = await prisma.business.findUnique({
-      where: { botToken: row.botToken.trim() },
+      where: { botTokenHash: rh },
     });
     if (bizInUse) {
       console.warn("[saasRegistration] approve blocked: token already in Business", {
@@ -1096,7 +1118,7 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
 
     await prisma.$transaction(async (tx) => {
       const tokenConflict = await tx.business.findUnique({
-        where: { botToken: row.botToken.trim() },
+        where: { botTokenHash: rh },
         select: { id: true },
       });
       if (tokenConflict) {
