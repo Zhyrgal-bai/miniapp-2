@@ -48,6 +48,19 @@ function logCheckingToken(plainToken: string): void {
   console.log("Checking token:", plainToken.slice(0, 10));
 }
 
+/** Не роняем весь запрос, если один из магазинов в БД с битым ciphertext/ключом. */
+function safePlainBotTokenFromStored(raw: string | null | undefined): string {
+  try {
+    return plainBotTokenFromStored(raw);
+  } catch (e) {
+    console.warn(
+      "[telegram-auth] пропуск токена магазина (дешифрование/формат):",
+      e instanceof Error ? e.message : String(e),
+    );
+    return "";
+  }
+}
+
 /**
  * true — ответ уже отправлен (next или ошибка acceptInitData).
  */
@@ -124,7 +137,8 @@ export async function requireTelegramAuth(
         where: { id: businessIdHint },
         select: { botToken: true },
       });
-      const plain = row != null ? plainBotTokenFromStored(row.botToken) : "";
+      const plain =
+        row != null ? safePlainBotTokenFromStored(row.botToken) : "";
       if (tryValidateInitDataWithToken(initData, plain, req, res, next)) {
         return;
       }
@@ -143,11 +157,29 @@ export async function requireTelegramAuth(
         take: 1000,
       });
       for (const r of rows) {
-        const plain = plainBotTokenFromStored(r.botToken);
+        const plain = safePlainBotTokenFromStored(r.botToken);
         if (tryValidateInitDataWithToken(initData, plain, req, res, next)) {
           return;
         }
       }
+    }
+
+    if (shouldLogTelegramAuthDebug()) {
+      let hasHexHash = false;
+      try {
+        const h =
+          new URLSearchParams(initData).get("hash")?.trim() ?? "";
+        hasHexHash = /^[0-9a-f]{64}$/i.test(h);
+      } catch {
+        /* ignore */
+      }
+      console.warn(
+        "[telegram-auth] все проверки подписи не прошли: hasHash=%s envTokens=%s startParamBizId=%s scan=%s",
+        hasHexHash,
+        envToks.length,
+        businessIdHint ?? "none",
+        scanOn,
+      );
     }
 
     console.warn(

@@ -175,11 +175,39 @@ export default function PlatformPage() {
     setInfoBanner(null);
     try {
       let telegramId = NaN;
-      for (let attempt = 0; attempt < 36; attempt++) {
-        telegramId = resolveMerchantTelegramUserId(getTelegramWebApp());
-        console.log("[PlatformPage] telegramId", telegramId, attempt);
-        if (Number.isFinite(telegramId) && telegramId > 0) break;
-        await new Promise((r) => setTimeout(r, 110));
+      let lastInitLen = 0;
+      for (let attempt = 0; attempt < 50; attempt++) {
+        const tg = getTelegramWebApp();
+        const initSigned =
+          typeof tg?.initData === "string" ? tg.initData.trim() : "";
+        lastInitLen = initSigned.length;
+        telegramId = resolveMerchantTelegramUserId(tg);
+        if (
+          initSigned.length > 20 &&
+          Number.isFinite(telegramId) &&
+          telegramId > 0
+        ) {
+          break;
+        }
+        console.log("[PlatformPage] awaiting initData/user", {
+          telegramId,
+          attempt,
+          initDataLen: lastInitLen,
+        });
+        await new Promise((r) => setTimeout(r, 120));
+      }
+
+      const tgFinal = getTelegramWebApp();
+      const signed =
+        typeof tgFinal?.initData === "string" ? tgFinal.initData.trim() : "";
+
+      if (signed === "") {
+        setMerchantTelegramId(NaN);
+        setError(
+          "Нет данных Mini App из Telegram (initData пустой). Откройте приложение кнопкой Web App из бота, не по прямой ссылке браузера.",
+        );
+        setBusinesses([]);
+        return;
       }
 
       if (!Number.isFinite(telegramId) || telegramId <= 0) {
