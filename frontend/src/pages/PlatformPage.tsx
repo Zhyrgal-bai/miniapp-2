@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { getTelegramWebApp } from "../utils/telegram";
+import { resolveMerchantTelegramUserId } from "../utils/telegramUserId";
 import { ArchaHeader } from "../components/archa/ArchaHeader";
 import { archa } from "../components/archa/archaUi";
 import { fetchPlatformAdminRequests } from "../services/platformAdminApi";
@@ -143,7 +144,7 @@ export default function PlatformPage() {
   const [error, setError] = useState<string | null>(null);
   const [infoBanner, setInfoBanner] = useState<string | null>(null);
 
-  const [modalOpen, setModalOpen] = useState(false);
+  const [openCreate, setOpenCreate] = useState(false);
   const [storeName, setStoreName] = useState("");
   const [botToken, setBotToken] = useState("");
   const [phone, setPhone] = useState("");
@@ -182,28 +183,33 @@ export default function PlatformPage() {
   const onboardingZeroStoresRef = useRef(false);
   const prevZeroStores = useRef(false);
 
-  const load = useCallback(async () => {
-    const tg = getTelegramWebApp();
-    const user = tg?.initDataUnsafe?.user;
-    const telegramId =
-      user != null && typeof user.id === "number" && Number.isFinite(user.id)
-        ? user.id
-        : NaN;
+  const [merchantTelegramId, setMerchantTelegramId] = useState<number>(NaN);
 
-    if (!Number.isFinite(telegramId) || telegramId <= 0) {
-      setError("Откройте приложение из Telegram Mini App.");
-      setBusinesses([]);
-      setLoading(false);
-      return;
-    }
-
+  const loadBusinesses = useCallback(async () => {
     setLoading(true);
     setError(null);
     setInfoBanner(null);
     try {
+      let telegramId = NaN;
+      for (let attempt = 0; attempt < 36; attempt++) {
+        telegramId = resolveMerchantTelegramUserId(getTelegramWebApp());
+        console.log("[PlatformPage] telegramId", telegramId, attempt);
+        if (Number.isFinite(telegramId) && telegramId > 0) break;
+        await new Promise((r) => setTimeout(r, 110));
+      }
+
+      if (!Number.isFinite(telegramId) || telegramId <= 0) {
+        setMerchantTelegramId(NaN);
+        setError("Откройте приложение из Telegram Mini App.");
+        setBusinesses([]);
+        return;
+      }
+
+      setMerchantTelegramId(telegramId);
       const rows = await fetchPlatformMyBusinesses({ telegramId });
       setBusinesses(rows);
     } catch (e) {
+      setMerchantTelegramId(NaN);
       setError(e instanceof Error ? e.message : "Не удалось загрузить");
       setBusinesses([]);
     } finally {
@@ -211,19 +217,12 @@ export default function PlatformPage() {
     }
   }, []);
 
-  const tgUserId = getTelegramWebApp()?.initDataUnsafe?.user?.id;
-  const merchantTelegramId =
-    typeof tgUserId === "number" &&
-    Number.isFinite(tgUserId) &&
-    tgUserId > 0
-      ? tgUserId
-      : NaN;
-
   useEffect(() => {
     window.Telegram?.WebApp?.ready();
     getTelegramWebApp()?.expand?.();
-    void load();
-  }, [load]);
+    void loadBusinesses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- явная загрузка при входе (/merchant), как load() в ТЗ
+  }, []);
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -246,8 +245,8 @@ export default function PlatformPage() {
   }, [onboardingBaseOk, businesses.length]);
 
   useEffect(() => {
-    if (!Number.isFinite(merchantTelegramId)) {
-      setPlatformAdminAccess("no");
+    if (!Number.isFinite(merchantTelegramId) || merchantTelegramId <= 0) {
+      setPlatformAdminAccess("unknown");
       return;
     }
     let cancelled = false;
@@ -386,10 +385,10 @@ export default function PlatformPage() {
     }
   };
 
-  const openModal = () => {
+  const openCreateForm = () => {
     setSubmitError(null);
     setSuccessFlash(false);
-    setModalOpen(true);
+    setOpenCreate(true);
   };
 
   const markOnboardingComplete = useCallback(() => {
@@ -400,19 +399,19 @@ export default function PlatformPage() {
     setOnboardingStep(1);
   }, []);
 
-  const closeModal = () => {
-    setModalOpen(false);
+  const closeCreateForm = () => {
+    setOpenCreate(false);
     setSubmitError(null);
   };
 
   const handleSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     const uid =
-      typeof tgUserId === "number" && Number.isFinite(tgUserId) && tgUserId > 0
-        ? tgUserId
-        : NaN;
+      Number.isFinite(merchantTelegramId) && merchantTelegramId > 0
+        ? merchantTelegramId
+        : resolveMerchantTelegramUserId(getTelegramWebApp());
 
-    if (!Number.isFinite(uid)) {
+    if (!Number.isFinite(uid) || uid <= 0) {
       setSubmitError("Нет данных пользователя Telegram. Откройте из Mini App.");
       return;
     }
@@ -429,14 +428,14 @@ export default function PlatformPage() {
       setStoreName("");
       setBotToken("");
       setPhone("");
-      setModalOpen(false);
+      setOpenCreate(false);
       if (onboardingZeroStoresRef.current) {
         setOnboardingStep("success");
         setSuccessFlash(false);
       } else {
         setSuccessFlash(true);
         window.setTimeout(() => setSuccessFlash(false), 5000);
-        void load();
+        void loadBusinesses();
       }
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : "Не удалось отправить");
@@ -628,14 +627,15 @@ export default function PlatformPage() {
                 transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
               >
                 <p className="text-lg font-semibold text-[#E5E7EB]">
-                  🚀 Создайте свой первый магазин
+                  У вас пока нет магазинов
                 </p>
                 <p className="mt-2 text-sm text-[#9CA3AF]">
-                  Заявка — после одобрения магазин появится в списке.
+                  Заявка после одобрения появится в списке. Нажмите «Создать» ниже
+                  или откройте форму снизу экрана.
                 </p>
                 <button
                   type="button"
-                  onClick={openModal}
+                  onClick={openCreateForm}
                   className={`${archa.btnPrimary} mt-8`}
                 >
                   ➕ Создать
@@ -772,9 +772,13 @@ export default function PlatformPage() {
       </div>
 
       {showBottomCreateBar ? (
-        <div className={`${archa.bottomDock} p-4 sm:p-5`}>
+        <div className={`${archa.bottomDock} relative z-[49] p-4 sm:p-5`}>
           <div className="mx-auto max-w-lg">
-            <button type="button" onClick={openModal} className={archa.btnPrimary}>
+            <button
+              type="button"
+              onClick={openCreateForm}
+              className={archa.btnPrimary}
+            >
               ➕ Создать магазин
             </button>
           </div>
@@ -785,7 +789,7 @@ export default function PlatformPage() {
         {showOnboardingLayer ? (
           <motion.div
             key="merchant-onboarding"
-            className="fixed inset-0 z-[48] flex items-end justify-center bg-[#0B0F14]/88 p-4 backdrop-blur-md sm:items-center"
+            className="pointer-events-none fixed inset-0 z-[48] flex items-end justify-center bg-[#0B0F14]/88 p-4 backdrop-blur-md sm:items-center"
             role="dialog"
             aria-modal="true"
             aria-label="Знакомство с кабинетом"
@@ -795,7 +799,7 @@ export default function PlatformPage() {
             transition={{ duration: 0.28 }}
           >
             <motion.div
-              className="mb-2 w-full max-w-lg rounded-3xl border border-white/[0.07] bg-[#111827]/95 p-6 shadow-2xl shadow-black/60 backdrop-blur-xl sm:mb-0 sm:p-8"
+              className="pointer-events-auto mb-2 w-full max-w-lg rounded-3xl border border-white/[0.07] bg-[#111827]/95 p-6 shadow-2xl shadow-black/60 backdrop-blur-xl sm:mb-0 sm:p-8"
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 16 }}
@@ -882,7 +886,7 @@ export default function PlatformPage() {
                     </p>
                     <button
                       type="button"
-                      onClick={openModal}
+                      onClick={openCreateForm}
                       className={`${archa.btnPrimary} py-4 text-base`}
                     >
                       ➕ Создать магазин
@@ -925,7 +929,7 @@ export default function PlatformPage() {
                         type="button"
                         onClick={() => {
                           markOnboardingComplete();
-                          void load();
+                          void loadBusinesses();
                         }}
                         className={
                           businesses[0] != null
@@ -945,7 +949,7 @@ export default function PlatformPage() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {modalOpen ? (
+        {openCreate ? (
           <motion.div
             key="platform-register-modal"
             className="fixed inset-0 z-50 flex min-h-0 max-h-[100dvh] flex-col overflow-hidden bg-[#0B0F14] [height:100dvh]"
@@ -983,7 +987,7 @@ export default function PlatformPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={closeModal}
+                  onClick={closeCreateForm}
                   className="shrink-0 rounded-[9999px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.06)] px-[12px] py-[8px] text-[14px] font-[500] text-[#D1D5DB] transition active:bg-[rgba(255,255,255,0.12)]"
                   aria-label="Закрыть"
                 >

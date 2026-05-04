@@ -20,6 +20,7 @@ import {
 } from "../server/registrationTokenGate.js";
 import {
   consumeRegistrationSuperAdminPrivateMessage,
+  REGISTRATION_ADMIN_REPLY_KEYBOARD_TEXT,
   registrationAdminReplyKeyboardMarkup,
   tryHandleRegistrationAdminReplyKeyboardButton,
 } from "./registrationBotAdminPanel.js";
@@ -122,6 +123,87 @@ function adminReplyKeyboardExtraIfAdmin(
   return { reply_markup: registrationAdminReplyKeyboardMarkup() };
 }
 
+/** Reply Keyboard во время мастера регистрации: отмена + для ADMIN_IDS строка админ-панели. */
+function registrationWizardReplyMarkup(ctx: Context): {
+  keyboard: { text: string }[][];
+  resize_keyboard: boolean;
+  one_time_keyboard?: boolean;
+} {
+  const tidStr = telegramIdString(ctx);
+  const isAdmin =
+    tidStr !== "" && adminTelegramNumericIds().includes(tidStr);
+  const cancelRow = [{ text: "❌ Отменить регистрацию" }];
+  const rows = isAdmin
+    ? [cancelRow, [{ text: REGISTRATION_ADMIN_REPLY_KEYBOARD_TEXT }]]
+    : [cancelRow];
+  return { keyboard: rows, resize_keyboard: true, one_time_keyboard: false };
+}
+
+function wizardExtra(ctx: Context): {
+  reply_markup: ReturnType<typeof registrationWizardReplyMarkup>;
+} {
+  return { reply_markup: registrationWizardReplyMarkup(ctx) };
+}
+
+async function removeReplyKeyboardStub(ctx: Context): Promise<void> {
+  try {
+    await ctx.reply("\u2060", { reply_markup: { remove_keyboard: true } });
+  } catch {
+    /* ignore */
+  }
+}
+
+/** После /cancel или сброса мастера: меню как после /start (без входа в анкету). */
+async function replyAfterRegistrationExit(ctx: Context): Promise<void> {
+  const telegramIdStr = telegramIdString(ctx);
+  if (telegramIdStr === "") return;
+
+  let memberships: MerchantMembershipRow[];
+  try {
+    memberships = await findMerchantMembershipsForTelegram(telegramIdStr);
+  } catch (dbErr: unknown) {
+    logStartHandlerError(dbErr, "replyAfterRegistrationExit: memberships");
+    await ctx.reply(
+      "Не удалось загрузить данные. Попробуйте /start.",
+      adminReplyKeyboardExtraIfAdmin(ctx),
+    );
+    return;
+  }
+
+  let hasPending: boolean;
+  try {
+    hasPending = await hasPendingRegistrationForTelegram(telegramIdStr);
+  } catch (dbErr: unknown) {
+    logStartHandlerError(dbErr, "replyAfterRegistrationExit: pending");
+    await ctx.reply(
+      "Не удалось загрузить данные. Попробуйте /start.",
+      adminReplyKeyboardExtraIfAdmin(ctx),
+    );
+    return;
+  }
+
+  if (hasPending) {
+    await removeReplyKeyboardStub(ctx);
+    await ctx.reply(
+      "Заявка на рассмотрении — ответ будет в этом чате.",
+      adminReplyKeyboardExtraIfAdmin(ctx),
+    );
+    return;
+  }
+
+  if (memberships.length > 0) {
+    await removeReplyKeyboardStub(ctx);
+    await replyMerchantStoreDashboard(ctx, memberships);
+    return;
+  }
+
+  await removeReplyKeyboardStub(ctx);
+  await ctx.reply(
+    "Можно начать заново: отправьте /start — создадим магазин.\n\nКоманда /cancel в любой момент сбрасывает анкету.",
+    adminReplyKeyboardExtraIfAdmin(ctx),
+  );
+}
+
 /**
  * Отдельное сообщение с Reply Keyboard после inline-сообщения (нельзя совместить в одном sendMessage).
  */
@@ -144,6 +226,13 @@ function getRegistrationSession(ctx: Context): RegistrationSessionState | undefi
   if (!s) return undefined;
   if (!s.data || typeof s.data !== "object") s.data = {};
   return s;
+}
+
+function resetRegistrationSessionCompletely(ctx: Context): void {
+  if (!("session" in ctx)) return;
+  (ctx as unknown as { session: RegistrationSessionState }).session = {
+    data: {},
+  };
 }
 
 /** После успешной отправки заявки: только шаг и данные (cooldown сохраняется). */
@@ -387,6 +476,19 @@ export function attachSaasRegistration(bot: Telegraf, role: BotRole): void {
     })
   );
 
+  bot.command("cancel", async (ctx) => {
+    if (ctx.chat?.type !== "private") return;
+    resetRegistrationSessionCompletely(ctx);
+    try {
+      await ctx.reply("Регистрация сброшена.", {
+        reply_markup: { remove_keyboard: true },
+      });
+    } catch {
+      /* ignore */
+    }
+    await replyAfterRegistrationExit(ctx);
+  });
+
   bot.use(async (ctx, next) => {
     try {
       if (ctx.chat?.type === "private") {
@@ -445,7 +547,24 @@ export async function registrationFlow(
   if (rawText === null) return false;
 
   const trimmedInput = rawText.trim();
-  /** Повторный /start в мастере — отдаём команду общему `bot.start()`, чтобы ответить «уже регистрируетесь». */
+
+  if (
+    trimmedInput === "/cancel" ||
+    trimmedInput === "❌ Отменить регистрацию"
+  ) {
+    resetRegistrationSessionCompletely(ctx);
+    try {
+      await ctx.reply("Регистрация отменена.", {
+        reply_markup: { remove_keyboard: true },
+      });
+    } catch {
+      /* ignore */
+    }
+    await replyAfterRegistrationExit(ctx);
+    return true;
+  }
+
+  /** Повторный /start в мастере — не перехватываем: `handleRegistrationStartCommand` сбросит сессию и покажет меню. */
   if (
     sess.step !== undefined &&
     (trimmedInput === "/start" || trimmedInput.startsWith("/start "))
@@ -454,7 +573,7 @@ export async function registrationFlow(
   }
 
   if (trimmedInput === "") {
-    await ctx.reply("Пожалуйста, введите непустой текст.");
+    await ctx.reply("Пожалуйста, введите непустой текст.", wizardExtra(ctx));
     return true;
   }
 
@@ -468,14 +587,16 @@ export async function registrationFlow(
   if (sess.step === "name") {
     if (!isValidStoreName(clean)) {
       await ctx.reply(
-        "Введите название магазина (от 2 до 160 символов, не только пробелы)."
+        "Введите название магазина (от 2 до 160 символов, не только пробелы).",
+        wizardExtra(ctx),
       );
       return true;
     }
     sess.data.name = clean.slice(0, 160);
     sess.step = "token";
     await ctx.reply(
-      "Введите токен бота от @BotFather (выглядит как `123456:ABC...`):"
+      "Введите токен бота от @BotFather (выглядит как `123456:ABC...`):",
+      wizardExtra(ctx),
     );
     return true;
   }
@@ -484,7 +605,7 @@ export async function registrationFlow(
     const tokenTrimmed = clean.replace(/\s/g, "");
     const gate = await precheckBotTokenBeforeRegistrationPersist(tokenTrimmed);
     if (!gate.ok) {
-      await ctx.reply(gate.error);
+      await ctx.reply(gate.error, wizardExtra(ctx));
       logSaas("rejected_attempt", {
         reason:
           gate.error === MSG_BOT_ALREADY_REGISTERED
@@ -497,7 +618,8 @@ export async function registrationFlow(
     sess.data.token = tokenTrimmed;
     sess.step = "phone";
     await ctx.reply(
-      "Введите номер телефона (формат KG: +996XXXXXXXXX или 0XXXXXXXXX)."
+      "Введите номер телефона (формат KG: +996XXXXXXXXX или 0XXXXXXXXX).",
+      wizardExtra(ctx),
     );
     return true;
   }
@@ -506,13 +628,14 @@ export async function registrationFlow(
     const phone = clean.trim();
     if (!validateKgPhone(phone)) {
       await ctx.reply(
-        "Неверный формат номера. Пример: +996501234567 или 0700123456"
+        "Неверный формат номера. Пример: +996501234567 или 0700123456",
+        wizardExtra(ctx),
       );
       return true;
     }
     sess.data.phone = phone;
     sess.step = "finik";
-    await ctx.reply("Введите API ключ Finik (онлайн ККМ).");
+    await ctx.reply("Введите API ключ Finik (онлайн ККМ).", wizardExtra(ctx));
     return true;
   }
 
@@ -520,7 +643,8 @@ export async function registrationFlow(
     const finikInput = trimmedInput.trim();
     if (!isValidFinikApiKey(finikInput)) {
       await ctx.reply(
-        "Введите корректный API-ключ Finik (от 4 до 2048 символов, без переносов строк)."
+        "Введите корректный API-ключ Finik (от 4 до 2048 символов, без переносов строк).",
+        wizardExtra(ctx),
       );
       return true;
     }
@@ -541,7 +665,8 @@ export async function registrationFlow(
       });
       if (duplicatePending) {
         await ctx.reply(
-          "У вас уже есть заявка на рассмотрении — ответ придёт здесь после проверки."
+          "У вас уже есть заявка на рассмотрении — ответ придёт здесь после проверки.",
+          { reply_markup: { remove_keyboard: true } },
         );
         resetRegistrationWizardFields(ctx);
         logSaas("rejected_attempt", {
@@ -554,7 +679,8 @@ export async function registrationFlow(
       if (name === "" || token === "") {
         resetRegistrationWizardFields(ctx);
         await ctx.reply(
-          "Шаги сбросились. Нажмите /start и заново укажите данные магазина."
+          "Шаги сбросились. Нажмите /start и заново укажите данные магазина.",
+          { reply_markup: { remove_keyboard: true } },
         );
         logSaas("rejected_attempt", {
           reason: "stale_session_submit",
@@ -565,7 +691,7 @@ export async function registrationFlow(
 
       const finalGate = await precheckBotTokenBeforeRegistrationPersist(token);
       if (!finalGate.ok) {
-        await ctx.reply(finalGate.error);
+        await ctx.reply(finalGate.error, wizardExtra(ctx));
         logSaas("rejected_attempt", {
           reason: "token_conflict_before_insert",
           telegramUserId: tid,
@@ -590,7 +716,9 @@ export async function registrationFlow(
         requestId: row.id,
       });
 
-      await ctx.reply(SUCCESS_REQUEST_SUBMITTED);
+      await ctx.reply(SUCCESS_REQUEST_SUBMITTED, {
+        reply_markup: { remove_keyboard: true },
+      });
 
       const admins = adminTelegramNumericIds();
       if (admins.length === 0) {
@@ -629,11 +757,12 @@ export async function registrationFlow(
         e instanceof Prisma.PrismaClientKnownRequestError &&
         e.code === "P2002"
       ) {
-        await ctx.reply(MSG_BOT_ALREADY_REGISTERED);
+        await ctx.reply(MSG_BOT_ALREADY_REGISTERED, wizardExtra(ctx));
         return true;
       }
       await ctx.reply(
-        "Сейчас не получилось завершить регистрацию. Попробуйте через минуту или нажмите /start снова."
+        "Сейчас не получилось завершить регистрацию. Попробуйте через минуту или нажмите /start снова.",
+        wizardExtra(ctx),
       );
     }
     return true;
@@ -683,10 +812,9 @@ export async function handleRegistrationStartCommand(
       return true;
     }
 
-    if (sess.step) {
-      await ctx.reply("Вы уже заполняете анкету магазина — продолжите ответами в этом чате.");
-      return true;
-    }
+    /** Сброс анкеты и админ-подсессии: /start всегда выходит из зависших шагов. */
+    resetRegistrationSessionCompletely(ctx);
+    sess = getRegistrationSession(ctx)!;
 
     const now = Date.now();
 
@@ -727,6 +855,7 @@ export async function handleRegistrationStartCommand(
     }
 
     if (hasPending) {
+      await removeReplyKeyboardStub(ctx);
       await ctx.reply(
         "Заявка на рассмотрении — ответ будет в этом чате.",
         adminReplyKeyboardExtraIfAdmin(ctx),
@@ -739,6 +868,7 @@ export async function handleRegistrationStartCommand(
     }
 
     if (memberships.length > 0) {
+      await removeReplyKeyboardStub(ctx);
       await replyMerchantStoreDashboard(ctx, memberships);
       logSaas("merchant_dashboard_opened", {
         telegramUserId: telegramIdStr,
@@ -753,7 +883,7 @@ export async function handleRegistrationStartCommand(
 
     await ctx.reply(
       "Давайте создадим ваш магазин 🚀\nВведите название магазина.",
-      adminReplyKeyboardExtraIfAdmin(ctx),
+      wizardExtra(ctx),
     );
 
     logSaas("registration_started", { telegramUserId: telegramIdStr });
@@ -822,7 +952,8 @@ export async function handleRegistrationCallbacks(
       sess.lastAttemptAt = Date.now();
       await ctx.answerCbQuery().catch(() => undefined);
       await ctx.reply(
-        "Новый магазин 🚀\nВведите название магазина (оно может отличаться от других ваших магазинов)."
+        "Новый магазин 🚀\nВведите название магазина (оно может отличаться от других ваших магазинов).",
+        wizardExtra(ctx),
       );
       logSaas("registration_started", {
         telegramUserId: tid,

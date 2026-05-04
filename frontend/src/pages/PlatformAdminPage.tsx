@@ -533,7 +533,7 @@ export default function PlatformAdminPage() {
                         ? b.webhookUrl.trim()
                         : "URL вебхука не задан или недоступен"}
                     </p>
-                    <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-white/[0.06] pt-3">
+                    <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-3">
                       {!b.isActive && !b.isBlocked ? (
                         <button
                           type="button"
@@ -541,28 +541,28 @@ export default function PlatformAdminPage() {
                           aria-label="Включить магазин"
                           disabled={bizBusyKey !== null}
                           onClick={() => void enableStore(b.id)}
-                          className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-[#22C55E] px-4 text-sm font-semibold text-black transition hover:bg-[#16A34A] disabled:pointer-events-none disabled:opacity-45 active:scale-[0.98]"
+                          className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl bg-[#22C55E] px-3 text-xs font-semibold text-black transition hover:bg-[#16A34A] disabled:pointer-events-none disabled:opacity-45 active:scale-[0.98] sm:px-4 sm:text-sm"
                         >
-                          {bizBusyKey === `y-${b.id}` ? "…" : "🟢 Включить"}
+                          {bizBusyKey === `y-${b.id}` ? "…" : "🟢 Вкл"}
                         </button>
                       ) : null}
                       <button
                         type="button"
-                        title="Отключить (блокировка)"
+                        title="Отключить магазин"
                         aria-label="Отключить магазин"
                         disabled={bizBusyKey !== null}
                         onClick={() => void disableStore(b.id)}
-                        className={archa.btnIconDanger}
+                        className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl border border-red-500/40 bg-red-950/40 px-3 text-xs font-semibold text-red-200 transition hover:border-red-400/55 hover:bg-red-950/55 disabled:pointer-events-none disabled:opacity-45 active:scale-[0.98] sm:px-4 sm:text-sm"
                       >
-                        {bizBusyKey === `d-${b.id}` ? "…" : "⏻"}
+                        {bizBusyKey === `d-${b.id}` ? "…" : "🔴 Выкл"}
                       </button>
                       <button
                         type="button"
-                        title="Удалить из БД"
+                        title="Удалить из БД навсегда"
                         aria-label="Удалить магазин из базы"
                         disabled={bizBusyKey !== null}
                         onClick={() => void purgeStore(b.id)}
-                        className={archa.btnIconDanger}
+                        className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl border border-[#9CA3AF]/35 bg-[#111827]/70 px-3 text-xs font-semibold text-[#E5E7EB] transition hover:border-red-400/35 hover:bg-red-950/25 hover:text-red-200 disabled:pointer-events-none disabled:opacity-45 active:scale-[0.98] sm:px-4 sm:text-sm"
                       >
                         {bizBusyKey === `p-${b.id}` ? "…" : "🗑"}
                       </button>
@@ -572,13 +572,9 @@ export default function PlatformAdminPage() {
                         aria-label="Плюс 30 дней подписки"
                         disabled={bizBusyKey !== null}
                         onClick={() => void extendStore(b.id, 30)}
-                        className={archa.btnIcon}
+                        className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.12] bg-[#111827]/80 px-3 text-xs font-semibold tabular-nums text-[#E5E7EB] transition hover:border-[#22C55E]/40 hover:bg-[#111827] disabled:pointer-events-none disabled:opacity-45 active:scale-[0.98] sm:px-4 sm:text-sm"
                       >
-                        {bizBusyKey === `e-${b.id}-30` ? "…" : (
-                          <span className="text-xs font-semibold tabular-nums">
-                            +30
-                          </span>
-                        )}
+                        {bizBusyKey === `e-${b.id}-30` ? "…" : "+30"}
                       </button>
                       <button
                         type="button"
@@ -586,13 +582,9 @@ export default function PlatformAdminPage() {
                         aria-label="Плюс 90 дней подписки"
                         disabled={bizBusyKey !== null}
                         onClick={() => void extendStore(b.id, 90)}
-                        className={archa.btnIcon}
+                        className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.12] bg-[#111827]/80 px-3 text-xs font-semibold tabular-nums text-[#E5E7EB] transition hover:border-[#22C55E]/40 hover:bg-[#111827] disabled:pointer-events-none disabled:opacity-45 active:scale-[0.98] sm:px-4 sm:text-sm"
                       >
-                        {bizBusyKey === `e-${b.id}-90` ? "…" : (
-                          <span className="text-xs font-semibold tabular-nums">
-                            +90
-                          </span>
-                        )}
+                        {bizBusyKey === `e-${b.id}-90` ? "…" : "+90"}
                       </button>
                     </div>
                   </motion.li>
