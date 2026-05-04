@@ -93,8 +93,12 @@ import {
 } from "./finikMerchant.js";
 import { mountSubscriptionFinikPaymentRoutes } from "./subscriptionFinikPayments.js";
 import { relayDynamicStoreWebhook as relayDynamicTenantStoreWebhook } from "./storeTelegramWebhookRelay.js";
-import { telegramWebhookGate, telegramSetWebhookOnApi } from "./telegramWebhookSecurity.js";
-import { resolveBusinessIdFromWebhookSlug } from "./webhookTenantResolve.js";
+import {
+  isHexWebhookSlug,
+  legacyNumericWebhookPathEnabled,
+  telegramSetWebhookOnApi,
+  telegramWebhookGate,
+} from "./telegramWebhookSecurity.js";
 import { startSubscriptionMaintenanceScheduler } from "./subscriptionMaintenance.js";
 import { cleanInput, validateKgPhone } from "./orderInputSanitize.js";
 import {
@@ -204,6 +208,20 @@ app.use(
   })
 );
 app.use(jsonBodyLimits);
+/** Диагностика: телеграм-вебхуки без тела или с 403/404 в gate — видно ли запрос вообще. */
+app.use((req: Request, _res: Response, next: () => void) => {
+  const p =
+    typeof req.path === "string" && req.path !== ""
+      ? req.path
+      : new URL(req.url, "http://localhost").pathname;
+  if (
+    p.startsWith("/webhook") ||
+    p.startsWith("/telegram-webhook")
+  ) {
+    console.log("INCOMING:", req.method, req.originalUrl ?? req.url);
+  }
+  next();
+});
 app.use("/api/", apiLimiter);
 app.use("/api/platform", requireTelegramAuth);
 mountFinikWebhookRoutes(app);
@@ -1593,13 +1611,44 @@ app.post(
   }
 );
 
-/** Tenant store bots: путь вида `/webhook/<случайный_32_hex>` (или legacy числовой при флаге). */
+/**
+ * Tenant store bots: Telegram `setWebhook` → `POST {API_URL}/webhook/<business.webhookRouteToken>`.
+ * Должен совпадать с сегментом в `dynamicWebhookPathForBusiness` (`/webhook/${webhookRouteToken}`).
+ */
 app.post(
-  "/webhook/:webhookSlug",
+  "/webhook/:webhookRouteToken",
   telegramWebhookGate,
   async (req: Request, res: Response) => {
-    const slug = String(req.params.webhookSlug ?? "").trim();
-    const businessId = await resolveBusinessIdFromWebhookSlug(slug);
+    const webhookRouteToken = String(req.params.webhookRouteToken ?? "").trim();
+    console.log("WEBHOOK HIT:", req.params);
+    console.log("BODY:", req.body);
+
+    let businessId: number | null = null;
+
+    if (isHexWebhookSlug(webhookRouteToken)) {
+      const business = await prisma.business.findUnique({
+        where: { webhookRouteToken },
+        select: { id: true },
+      });
+      businessId = business?.id ?? null;
+    } else if (
+      legacyNumericWebhookPathEnabled() &&
+      /^\d+$/.test(webhookRouteToken)
+    ) {
+      const id = Number(webhookRouteToken);
+      businessId =
+        Number.isInteger(id) && id > 0 ? id : null;
+    }
+
+    console.log(
+      "[webhook] slug → business:",
+      webhookRouteToken.length >= 10
+        ? `${webhookRouteToken.slice(0, 10)}…`
+        : webhookRouteToken,
+      "businessId:",
+      businessId,
+    );
+
     if (businessId == null) {
       res.sendStatus(404);
       return;

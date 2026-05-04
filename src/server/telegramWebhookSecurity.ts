@@ -133,6 +133,9 @@ export function telegramWebhookGate(
     const gotRaw = req.get("X-Telegram-Bot-Api-Secret-Token");
     const got = typeof gotRaw === "string" ? gotRaw.trim() : "";
     if (!got || !constantTimeEqual(got, expected)) {
+      console.warn(
+        "[webhook gate] X-Telegram-Bot-Api-Secret-Token missing or mismatch (check TELEGRAM_WEBHOOK_SECRET vs setWebhook)",
+      );
       res.sendStatus(403);
       return;
     }
@@ -140,7 +143,7 @@ export function telegramWebhookGate(
 
   const why = validateTelegramUpdatePayload(req.body);
   if (why) {
-    console.error("[webhook] invalid update payload:", why);
+    console.error("[webhook gate] invalid update payload:", why);
     res.sendStatus(400);
     return;
   }

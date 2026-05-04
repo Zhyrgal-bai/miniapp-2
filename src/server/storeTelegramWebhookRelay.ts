@@ -3,6 +3,10 @@ import {
   getDynamicOwnerBot,
   hydrateDynamicStoreBotIfMissing,
 } from "../bot/dynamicBots.js";
+import {
+  isTelegramCancelCommandText,
+  isTelegramStartCommandText,
+} from "../bot/saasRegistration.js";
 import { plainBotTokenFromStored } from "./businessBotToken.js";
 import { prisma } from "./db.js";
 import { syncBusinessSubscriptionActivationState } from "./saasBillingService.js";
@@ -17,8 +21,9 @@ function webhookUpdateIsStartOrCancelCommandOnly(body: unknown): boolean {
   const msg = u.message as Record<string, unknown> | undefined;
   if (!msg || typeof msg !== "object") return false;
   const text = typeof msg.text === "string" ? msg.text.trim() : "";
-  if (/^\/start(?:@\w+)?(?:\s|$)/i.test(text)) return true;
-  if (/^\/cancel(?:@\w+)?(?:\s|$)/i.test(text)) return true;
+  /** Те же правила, что `dynamicMerchantSubscriptionGate` + Telegraf `command("start")`. */
+  if (isTelegramStartCommandText(text)) return true;
+  if (isTelegramCancelCommandText(text)) return true;
   return false;
 }
 
