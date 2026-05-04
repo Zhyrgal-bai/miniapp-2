@@ -128,6 +128,22 @@ export async function postPlatformAdminDisable(params: {
   await throwIfNotOk(res);
 }
 
+export async function postPlatformAdminEnable(params: {
+  telegramId: number;
+  businessId: number;
+}): Promise<void> {
+  const res = await fetch(apiAbsoluteUrl("/api/platform/admin/enable"), {
+    method: "POST",
+    credentials: "omit",
+    headers: {
+      ...adminHeaders(params.telegramId),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ businessId: params.businessId }),
+  });
+  await throwIfNotOk(res);
+}
+
 export async function postPlatformAdminPurgeBusiness(params: {
   telegramId: number;
   businessId: number;

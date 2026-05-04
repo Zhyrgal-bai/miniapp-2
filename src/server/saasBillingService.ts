@@ -72,6 +72,49 @@ export async function adminUnblockBusiness(businessId: number): Promise<void> {
   }
 }
 
+/**
+ * Включить витрину (`isActive`), если магазин не в ручной блокировке.
+ * Для истёкшей подписки без `isBlocked` — обратное «выключению» по подписке.
+ */
+export async function adminEnableNonBlockedBusiness(
+  businessId: number,
+): Promise<
+  { ok: true } | { ok: false; statusCode: number; error: string }
+> {
+  const b = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { id: true, isBlocked: true, botToken: true },
+  });
+  if (b == null) {
+    return { ok: false, statusCode: 404, error: "Магазин не найден" };
+  }
+  if (b.isBlocked) {
+    return {
+      ok: false,
+      statusCode: 400,
+      error:
+        "Нельзя включить заблокированный магазин. Сначала снимите блокировку.",
+    };
+  }
+  await prisma.business.update({
+    where: { id: businessId },
+    data: { isActive: true },
+  });
+  const tok = String(b.botToken ?? "").trim();
+  if (tok) {
+    try {
+      await initDynamicStoreBot({ businessId: b.id, botToken: tok });
+    } catch (e) {
+      console.error(
+        "[saasBillingService] adminEnableNonBlockedBusiness init bot failed:",
+        b.id,
+        e,
+      );
+    }
+  }
+  return { ok: true };
+}
+
 export async function adminApproveSaasPayment(
   paymentRequestId: number,
   forcedAmountSom?: number,

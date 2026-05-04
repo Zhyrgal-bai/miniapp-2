@@ -71,15 +71,19 @@ export async function validateAndPersistPlatformRegistration(
     };
   }
 
-  const finikRaw = typeof body.finikApiKey === "string" ? body.finikApiKey : "";
-  if (!isValidFinikApiKey(finikRaw)) {
-    return {
-      ok: false,
-      statusCode: 400,
-      error: "Некорректный API-ключ Finik",
-    };
+  const finikRaw =
+    typeof body.finikApiKey === "string" ? body.finikApiKey.trim() : "";
+  let finikApiKeyToStore: string | null = null;
+  if (finikRaw !== "") {
+    if (!isValidFinikApiKey(finikRaw)) {
+      return {
+        ok: false,
+        statusCode: 400,
+        error: "Некорректный API-ключ Finik",
+      };
+    }
+    finikApiKeyToStore = finikRaw;
   }
-  const finikApiKeyTrimmed = finikRaw.trim();
 
   const telegramId = normalizeTelegramId(body.telegramId);
   if (!telegramId) {
@@ -121,7 +125,7 @@ export async function validateAndPersistPlatformRegistration(
         name: storeRaw,
         botToken,
         phone,
-        finikApiKey: finikApiKeyTrimmed,
+        finikApiKey: finikApiKeyToStore,
         telegramId,
         status: RegistrationStatus.PENDING,
       },

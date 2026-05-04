@@ -23,6 +23,7 @@ import {
 } from "./platformMerchantChangeService.js";
 import {
   getPlatformStoreSettingsForMerchant,
+  updatePlatformFinikForMerchant,
   updatePlatformStoreSettingsForMerchant,
   type PlatformStoreSettingsUpdateBody,
 } from "./platformMerchantStoreSettings.js";
@@ -36,7 +37,11 @@ import {
   purgeBusinessCompletelyForPlatformAdmin,
   rejectRegistrationRequestById,
 } from "./platformAdminService.js";
-import { adminBlockBusiness, adminUnblockBusiness } from "./saasBillingService.js";
+import {
+  adminBlockBusiness,
+  adminEnableNonBlockedBusiness,
+  adminUnblockBusiness,
+} from "./saasBillingService.js";
 import {
   isAllowedOrderStatusTransition,
   isValidOrderStatus,
@@ -459,6 +464,43 @@ app.post("/api/platform/store-settings", async (req: Request, res: Response) => 
   }
 });
 
+app.post("/api/platform/update-finik", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromTrustedHeader(req);
+    if (!telegramId) {
+      res.status(400).json({
+        error: "Нужен заголовок x-telegram-id с числовым Telegram user id",
+      });
+      return;
+    }
+    const reqBody = req.body as { businessId?: unknown; finikApiKey?: unknown };
+    const rawBid = reqBody.businessId;
+    const businessId =
+      typeof rawBid === "number" && Number.isInteger(rawBid)
+        ? rawBid
+        : typeof rawBid === "string"
+          ? Number(rawBid.trim())
+          : NaN;
+    if (!Number.isInteger(businessId) || businessId <= 0) {
+      res.status(400).json({ error: "Нужен корректный businessId" });
+      return;
+    }
+    const out = await updatePlatformFinikForMerchant({
+      telegramId,
+      businessId,
+      finikApiKey: reqBody.finikApiKey,
+    });
+    if (!out.ok) {
+      res.status(out.statusCode).json({ error: out.error });
+      return;
+    }
+    res.json({ ok: true, finikConfigured: out.finikConfigured });
+  } catch (e) {
+    console.error("POST /api/platform/update-finik:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
 app.post("/api/platform/register-request", async (req: Request, res: Response) => {
   try {
     const body = req.body as Record<string, unknown>;
@@ -701,6 +743,36 @@ app.post("/api/platform/admin/disable", async (req: Request, res: Response) => {
     res.json({ ok: true });
   } catch (e) {
     console.error("POST /api/platform/admin/disable:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post("/api/platform/admin/enable", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromRequest(req);
+    if (!telegramId) {
+      res.status(400).json({ error: "Нужен x-telegram-id" });
+      return;
+    }
+    if (!isPlatformAdminTelegramId(telegramId)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    const businessId = Number(
+      (req.body as { businessId?: unknown }).businessId,
+    );
+    if (!Number.isInteger(businessId) || businessId <= 0) {
+      res.status(400).json({ error: "Нужен корректный businessId" });
+      return;
+    }
+    const out = await adminEnableNonBlockedBusiness(businessId);
+    if (!out.ok) {
+      res.status(out.statusCode).json({ error: out.error });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("POST /api/platform/admin/enable:", e);
     res.status(500).json({ error: "Ошибка сервера" });
   }
 });

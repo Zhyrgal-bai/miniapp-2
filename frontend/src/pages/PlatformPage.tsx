@@ -2,12 +2,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { getTelegramWebApp } from "../utils/telegram";
+import { ArchaHeader } from "../components/archa/ArchaHeader";
+import { archa } from "../components/archa/archaUi";
 import { fetchPlatformAdminRequests } from "../services/platformAdminApi";
 import {
   fetchPlatformMyBusinesses,
   fetchPlatformStoreSettings,
   postPlatformCheckWebhook,
   postPlatformToggleBot,
+  postPlatformUpdateFinik,
   savePlatformStoreSettings,
   submitPlatformRegisterRequest,
   type PlatformMyBusinessDTO,
@@ -39,7 +42,7 @@ function botRunBadge(b: PlatformMyBusinessDTO): { label: string; className: stri
     return {
       label: "⛔ Заблокирован",
       className:
-        "rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-400",
+        "rounded-full border border-yellow-500/25 bg-yellow-500/10 px-2.5 py-0.5 text-xs font-medium text-yellow-400",
     };
   }
   if (!b.isActive) {
@@ -144,7 +147,6 @@ export default function PlatformPage() {
   const [storeName, setStoreName] = useState("");
   const [botToken, setBotToken] = useState("");
   const [phone, setPhone] = useState("");
-  const [finikApiKey, setFinikApiKey] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successFlash, setSuccessFlash] = useState(false);
@@ -164,8 +166,10 @@ export default function PlatformPage() {
     null,
   );
   const [settingsName, setSettingsName] = useState("");
-  const [settingsFinik, setSettingsFinik] = useState("");
-  const [finikTouched, setFinikTouched] = useState(false);
+  const [finikDraft, setFinikDraft] = useState("");
+  const [finikSaving, setFinikSaving] = useState(false);
+  const [finikMsg, setFinikMsg] = useState<string | null>(null);
+  const [finikErr, setFinikErr] = useState<string | null>(null);
   const [settingsNewToken, setSettingsNewToken] = useState("");
   /** Сервер: только ADMIN_IDS видит админку (пробуем лёгкий GET заявок). */
   const [platformAdminAccess, setPlatformAdminAccess] = useState<
@@ -259,8 +263,10 @@ export default function PlatformPage() {
       setSettingsErr(null);
       setSettingsOkMsg(null);
       setSettingsName("");
-      setSettingsFinik("");
-      setFinikTouched(false);
+      setFinikDraft("");
+      setFinikSaving(false);
+      setFinikMsg(null);
+      setFinikErr(null);
       setSettingsNewToken("");
       return;
     }
@@ -282,8 +288,9 @@ export default function PlatformPage() {
         if (cancelled) return;
         setSettingsSnap(s);
         setSettingsName(s.name);
-        setSettingsFinik("");
-        setFinikTouched(false);
+        setFinikDraft("");
+        setFinikMsg(null);
+        setFinikErr(null);
         setSettingsNewToken("");
       } catch (e) {
         if (!cancelled) {
@@ -409,13 +416,11 @@ export default function PlatformPage() {
         storeName: storeName.trim(),
         botToken: botToken.trim(),
         phone: phone.trim(),
-        finikApiKey: finikApiKey.trim(),
         telegramId: uid,
       });
       setStoreName("");
       setBotToken("");
       setPhone("");
-      setFinikApiKey("");
       setModalOpen(false);
       if (onboardingZeroStoresRef.current) {
         setOnboardingStep("success");
@@ -436,6 +441,39 @@ export default function PlatformPage() {
     setSettingsBusinessId(null);
   };
 
+  const handleSaveFinik = async () => {
+    if (!Number.isFinite(merchantTelegramId) || settingsBusinessId == null) {
+      setFinikErr("Нет данных пользователя Telegram.");
+      return;
+    }
+    setFinikSaving(true);
+    setFinikErr(null);
+    setFinikMsg(null);
+    try {
+      const out = await postPlatformUpdateFinik({
+        telegramId: merchantTelegramId,
+        businessId: settingsBusinessId,
+        finikApiKey: finikDraft.trim(),
+      });
+      if (settingsSnap != null) {
+        setSettingsSnap({
+          ...settingsSnap,
+          finikConfigured: out.finikConfigured,
+        });
+      }
+      setFinikDraft("");
+      setFinikMsg(
+        out.finikConfigured
+          ? "Finik сохранён. Ключ не отображается повторно."
+          : "Finik отключён.",
+      );
+    } catch (e) {
+      setFinikErr(e instanceof Error ? e.message : "Не удалось сохранить");
+    } finally {
+      setFinikSaving(false);
+    }
+  };
+
   const handleSaveSettings = async (ev: React.FormEvent) => {
     ev.preventDefault();
     if (
@@ -454,21 +492,15 @@ export default function PlatformPage() {
       telegramId: number;
       businessId: number;
       storeName?: string;
-      finikApiKey?: string;
       newBotToken?: string;
     } = {
       telegramId: merchantTelegramId,
       businessId: settingsBusinessId,
     };
     if (nameChanged) payload.storeName = trimmedName;
-    if (finikTouched) payload.finikApiKey = settingsFinik.trim();
     if (newTok !== "") payload.newBotToken = newTok;
 
-    if (
-      payload.storeName === undefined &&
-      payload.finikApiKey === undefined &&
-      payload.newBotToken === undefined
-    ) {
+    if (payload.storeName === undefined && payload.newBotToken === undefined) {
       setSettingsErr("Нет изменений для сохранения.");
       return;
     }
@@ -485,8 +517,6 @@ export default function PlatformPage() {
         pendingBotTokenChange: out.pendingBotTokenChange,
       });
       setSettingsName(out.name);
-      setSettingsFinik("");
-      setFinikTouched(false);
       setSettingsNewToken("");
       setSettingsOkMsg(
         out.botTokenChangeRequestId != null
@@ -513,41 +543,33 @@ export default function PlatformPage() {
     (businesses.length === 0 || onboardingStep === "success");
 
   return (
-    <div className="min-h-full bg-gradient-to-b from-[#0B1220] to-[#0F172A] text-slate-100">
+    <div className={archa.pageRoot}>
       <div
-        className={`mx-auto flex max-w-lg flex-col gap-4 px-4 py-6 ${showBottomCreateBar ? "pb-28" : "pb-10"}`}
+        className={`${archa.shellMerchant} ${showBottomCreateBar ? "pb-28" : "pb-12"}`}
       >
-        <motion.header
-          initial={{ opacity: 0, y: -6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-        >
-          <h1 className="text-2xl font-bold tracking-tight text-white sm:text-[1.65rem]">
-            🚀 Личный кабинет
-          </h1>
-          <p className="mt-1.5 text-sm text-slate-400">
-            Управляйте своими магазинами
-          </p>
-        </motion.header>
+        <ArchaHeader subtitle="Управляйте своими магазинами" />
 
         {platformAdminAccess === "yes" ? (
-          <div
-            className="rounded-2xl border border-violet-500/20 bg-violet-950/25 px-4 py-3 shadow-lg shadow-black/20 backdrop-blur-xl"
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.05 }}
+            className={`${archa.cardGlass} border-[#22C55E]/15 px-4 py-4`}
             role="region"
             aria-label="Панель администратора платформы"
           >
-            <p className="text-sm text-violet-100/95">
+            <p className="text-sm leading-relaxed text-[#9CA3AF]">
               Заявки на регистрацию, все магазины, подписки, отключение ботов —
               только для администратора платформы.
             </p>
             <button
               type="button"
               onClick={() => navigate("/platform-admin")}
-              className="mt-3 w-full rounded-xl bg-violet-600 px-3 py-2.5 text-center text-sm font-semibold text-white shadow-md shadow-violet-950/40 transition hover:bg-violet-500 active:bg-violet-700"
+              className={`${archa.btnPrimary} mt-3`}
             >
-              🛠 Админ панель платформы
+              Админ-панель платформы
             </button>
-          </div>
+          </motion.div>
         ) : null}
 
         {successFlash ? (
@@ -561,7 +583,7 @@ export default function PlatformPage() {
 
         {loading ? (
           <motion.p
-            className="text-sm text-slate-500"
+            className={`text-sm ${archa.textMuted}`}
             initial={{ opacity: 0.4 }}
             animate={{ opacity: [0.4, 1, 0.4] }}
             transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
@@ -572,7 +594,7 @@ export default function PlatformPage() {
           <>
             {error ? (
               <div
-                className="rounded-2xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-200 backdrop-blur-md"
+                className="rounded-2xl border border-red-500/25 bg-red-950/30 px-4 py-3 text-sm text-red-200 backdrop-blur-md"
                 role="alert"
               >
                 {error}
@@ -580,7 +602,7 @@ export default function PlatformPage() {
             ) : null}
             {infoBanner ? (
               <p
-                className="rounded-2xl border border-[#22C55E]/20 bg-white/[0.04] px-4 py-3 text-sm text-[#BBF7D0] backdrop-blur-md"
+                className="rounded-2xl border border-[#22C55E]/20 bg-[#111827]/80 px-4 py-3 text-sm text-[#BBF7D0] backdrop-blur-md"
                 role="status"
               >
                 {infoBanner}
@@ -588,24 +610,24 @@ export default function PlatformPage() {
             ) : null}
             {!error && businesses.length === 0 ? (
               <motion.div
-                className="rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-10 text-center shadow-xl shadow-black/30 backdrop-blur-xl"
+                className={`${archa.cardGlass} px-6 py-12 text-center`}
                 role="status"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
               >
-                <p className="text-lg font-semibold text-white">
-                  🚀 У вас пока нет магазинов
+                <p className="text-lg font-semibold text-[#E5E7EB]">
+                  🚀 Создайте свой первый магазин
                 </p>
-                <p className="mt-2 text-sm text-slate-400">
-                  Создайте заявку — после одобрения магазин появится здесь.
+                <p className="mt-2 text-sm text-[#9CA3AF]">
+                  Заявка — после одобрения магазин появится в списке.
                 </p>
                 <button
                   type="button"
                   onClick={openModal}
-                  className="mt-6 w-full rounded-2xl bg-[#22C55E] px-4 py-3.5 text-center text-sm font-semibold text-[#052e16] shadow-lg shadow-[#22C55E]/25 transition hover:bg-[#4ADE80] active:scale-[0.99]"
+                  className={`${archa.btnPrimary} mt-8`}
                 >
-                  ➕ Создать магазин
+                  ➕ Создать
                 </button>
               </motion.div>
             ) : null}
@@ -620,27 +642,32 @@ export default function PlatformPage() {
                   return (
                     <motion.li
                       key={b.id}
-                      initial={{ opacity: 0, y: 12 }}
+                      initial={{ opacity: 0, y: 14 }}
                       animate={{ opacity: 1, y: 0 }}
+                      whileHover={{ scale: 1.02 }}
                       transition={{
                         duration: 0.3,
                         delay: index * 0.05,
                         ease: [0.22, 1, 0.36, 1],
                       }}
-                      className="group rounded-2xl border border-white/10 bg-white/[0.04] p-4 shadow-xl shadow-black/40 backdrop-blur-xl transition-[border-color,background-color,box-shadow] duration-300 hover:border-white/15 hover:bg-white/[0.06] hover:shadow-[0_20px_50px_-12px_rgba(0,0,0,0.45)]"
+                      className={`group ${archa.cardGlass} ${archa.cardGlassHover} p-4 sm:p-5`}
                     >
                       <div className="flex gap-3">
                         <div
-                          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] text-2xl text-slate-200 transition group-hover:border-[#22C55E]/25 group-hover:bg-[#22C55E]/5"
+                          className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0B0F14]/80 shadow-inner transition duration-300 group-hover:border-[#22C55E]/30"
                           aria-hidden
                         >
-                          🏪
+                          <img
+                            src="/674440574_18101674030793392_828162833995675842_n.jpg"
+                            alt=""
+                            className="h-10 w-10 object-cover opacity-90"
+                          />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h2 className="truncate text-lg font-bold tracking-tight text-white">
+                          <h2 className="truncate text-lg font-bold tracking-tight text-[#E5E7EB]">
                             {b.name}
                           </h2>
-                          <p className="mt-0.5 font-mono text-[11px] text-slate-500">
+                          <p className="mt-0.5 font-mono text-[11px] text-[#9CA3AF]">
                             id {b.id}
                           </p>
                           <div className="mt-3 flex flex-wrap gap-2">
@@ -654,10 +681,10 @@ export default function PlatformPage() {
                               {whBadge.label}
                             </span>
                           </div>
-                          <p className="mt-2 break-all font-mono text-[11px] leading-snug text-slate-500">
+                          <p className="mt-2 break-all font-mono text-[11px] leading-snug text-[#9CA3AF]/90">
                             {webhookUrlLine(b)}
                           </p>
-                          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                          <div className="mt-4 flex flex-col gap-2.5 sm:flex-row sm:items-stretch">
                             <button
                               type="button"
                               onClick={() =>
@@ -665,7 +692,7 @@ export default function PlatformPage() {
                                   `/?shop=${encodeURIComponent(String(b.id))}`,
                                 )
                               }
-                              className="flex-1 rounded-2xl bg-[#22C55E] px-4 py-3 text-center text-sm font-semibold text-[#052e16] shadow-lg shadow-[#22C55E]/20 transition hover:bg-[#4ADE80] active:scale-[0.99]"
+                              className={archa.btnPrimarySm}
                             >
                               Открыть магазин
                             </button>
@@ -680,7 +707,7 @@ export default function PlatformPage() {
                                 setSettingsOkMsg(null);
                                 setSettingsBusinessId(b.id);
                               }}
-                              className="rounded-2xl border border-white/15 bg-white/[0.03] px-4 py-3 text-center text-sm font-semibold text-slate-100 backdrop-blur-sm transition hover:border-white/25 hover:bg-white/[0.07] disabled:opacity-45 sm:min-w-[8.5rem]"
+                              className={`${archa.btnSecondary} sm:min-w-[8.5rem]`}
                             >
                               {settingsBusinessId === b.id &&
                               (settingsLoading || settingsSaving)
@@ -694,9 +721,9 @@ export default function PlatformPage() {
                                 type="button"
                                 disabled={toggleBusy}
                                 onClick={() => void handleToggleBot(b)}
-                                className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-200 transition hover:bg-red-500/15 disabled:opacity-45"
+                                className={archa.btnDanger}
                               >
-                                {toggleBusy ? "…" : "Выключить"}
+                                {toggleBusy ? "…" : "Отключить"}
                               </button>
                             ) : (
                               <button
@@ -708,7 +735,7 @@ export default function PlatformPage() {
                                     : undefined
                                 }
                                 onClick={() => void handleToggleBot(b)}
-                                className="rounded-xl border border-[#22C55E]/35 bg-[#22C55E]/10 px-3 py-2 text-xs font-semibold text-[#BBF7D0] transition hover:bg-[#22C55E]/15 disabled:opacity-45"
+                                className="inline-flex items-center justify-center rounded-xl border border-[#22C55E]/35 bg-[#22C55E]/10 px-3 py-2 text-xs font-semibold text-[#BBF7D0] transition duration-200 hover:bg-[#22C55E]/18 disabled:pointer-events-none disabled:opacity-45 active:scale-[0.98]"
                               >
                                 {toggleBusy ? "…" : "Включить"}
                               </button>
@@ -717,7 +744,7 @@ export default function PlatformPage() {
                               type="button"
                               disabled={webhookBusy}
                               onClick={() => void handleCheckWebhook(b)}
-                              className="rounded-xl border border-white/12 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-white/20 hover:bg-white/[0.07] disabled:opacity-45"
+                              className={archa.btnGhost}
                             >
                               {webhookBusy ? "Проверка…" : "Проверить webhook"}
                             </button>
@@ -734,13 +761,9 @@ export default function PlatformPage() {
       </div>
 
       {showBottomCreateBar ? (
-        <div className="fixed bottom-0 left-0 right-0 border-t border-white/10 bg-[#0B1220]/85 p-4 backdrop-blur-xl sm:p-6">
+        <div className={`${archa.bottomDock} p-4 sm:p-5`}>
           <div className="mx-auto max-w-lg">
-            <button
-              type="button"
-              onClick={openModal}
-              className="w-full rounded-2xl bg-[#22C55E] px-4 py-3.5 text-center text-sm font-semibold text-[#052e16] shadow-lg shadow-[#22C55E]/20 transition hover:bg-[#4ADE80] active:scale-[0.99]"
-            >
+            <button type="button" onClick={openModal} className={archa.btnPrimary}>
               ➕ Создать магазин
             </button>
           </div>
@@ -751,7 +774,7 @@ export default function PlatformPage() {
         {showOnboardingLayer ? (
           <motion.div
             key="merchant-onboarding"
-            className="fixed inset-0 z-[48] flex items-end justify-center bg-black/75 p-4 backdrop-blur-md sm:items-center"
+            className="fixed inset-0 z-[48] flex items-end justify-center bg-[#0B0F14]/88 p-4 backdrop-blur-md sm:items-center"
             role="dialog"
             aria-modal="true"
             aria-label="Знакомство с кабинетом"
@@ -761,7 +784,7 @@ export default function PlatformPage() {
             transition={{ duration: 0.28 }}
           >
             <motion.div
-              className="mb-2 w-full max-w-lg rounded-3xl border border-white/10 bg-[#0B1220]/92 p-6 shadow-2xl shadow-black/50 backdrop-blur-xl sm:mb-0 sm:p-8"
+              className="mb-2 w-full max-w-lg rounded-3xl border border-white/[0.07] bg-[#111827]/95 p-6 shadow-2xl shadow-black/60 backdrop-blur-xl sm:mb-0 sm:p-8"
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 16 }}
@@ -788,7 +811,7 @@ export default function PlatformPage() {
                     <button
                       type="button"
                       onClick={() => setOnboardingStep(2)}
-                      className="w-full rounded-2xl bg-[#22C55E] px-4 py-4 text-center text-base font-semibold text-[#052e16] shadow-lg shadow-[#22C55E]/25 transition hover:bg-[#4ADE80] active:scale-[0.99]"
+                      className={`${archa.btnPrimary} py-4 text-base`}
                     >
                       👉 Начать
                     </button>
@@ -824,7 +847,7 @@ export default function PlatformPage() {
                     <button
                       type="button"
                       onClick={() => setOnboardingStep(3)}
-                      className="w-full rounded-2xl bg-[#22C55E] px-4 py-4 text-center text-base font-semibold text-[#052e16] shadow-lg shadow-[#22C55E]/25 transition hover:bg-[#4ADE80] active:scale-[0.99]"
+                      className={`${archa.btnPrimary} py-4 text-base`}
                     >
                       👉 Понятно
                     </button>
@@ -849,7 +872,7 @@ export default function PlatformPage() {
                     <button
                       type="button"
                       onClick={openModal}
-                      className="w-full rounded-2xl bg-[#22C55E] px-4 py-4 text-center text-base font-semibold text-[#052e16] shadow-lg shadow-[#22C55E]/25 transition hover:bg-[#4ADE80] active:scale-[0.99]"
+                      className={`${archa.btnPrimary} py-4 text-base`}
                     >
                       ➕ Создать магазин
                     </button>
@@ -882,7 +905,7 @@ export default function PlatformPage() {
                               `/?shop=${encodeURIComponent(String(businesses[0].id))}`,
                             );
                           }}
-                          className="w-full rounded-2xl bg-[#22C55E] px-4 py-4 text-center text-base font-semibold text-[#052e16] shadow-lg shadow-[#22C55E]/25 transition hover:bg-[#4ADE80] active:scale-[0.99]"
+                          className={`${archa.btnPrimary} py-4 text-base`}
                         >
                           Открыть магазин
                         </button>
@@ -895,8 +918,8 @@ export default function PlatformPage() {
                         }}
                         className={
                           businesses[0] != null
-                            ? "w-full rounded-2xl border border-white/15 bg-white/[0.05] px-4 py-4 text-center text-base font-semibold text-white backdrop-blur-sm transition hover:border-white/25 hover:bg-white/[0.08] active:scale-[0.99]"
-                            : "w-full rounded-2xl bg-[#22C55E] px-4 py-4 text-center text-base font-semibold text-[#052e16] shadow-lg shadow-[#22C55E]/25 transition hover:bg-[#4ADE80] active:scale-[0.99]"
+                            ? `${archa.btnSecondary} w-full py-4 text-base`
+                            : `${archa.btnPrimary} py-4 text-base`
                         }
                       >
                         Готово
@@ -910,153 +933,197 @@ export default function PlatformPage() {
         ) : null}
       </AnimatePresence>
 
-      {modalOpen ? (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 sm:items-center"
-          role="presentation"
-          onClick={(ev) => {
-            if (ev.target === ev.currentTarget) closeModal();
-          }}
-        >
-          <div
+      <AnimatePresence>
+        {modalOpen ? (
+          <motion.div
+            key="platform-register-modal"
+            className="fixed inset-0 z-50 flex justify-center bg-[#0B0F14]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
             role="dialog"
+            aria-modal="true"
             aria-labelledby="platform-register-title"
-            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl"
+            aria-describedby="platform-register-desc"
           >
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <h2
-                id="platform-register-title"
-                className="text-lg font-semibold text-white"
+            <motion.div
+              className="flex h-full w-full flex-col gap-[16px]"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <header className="flex shrink-0 items-center gap-[12px] px-[16px] pt-[16px] pb-[8px]">
+                <img
+                  src="/674440574_18101674030793392_828162833995675842_n.jpg"
+                  alt="ARCHA"
+                  width={40}
+                  height={40}
+                  className="h-[40px] w-[40px] shrink-0 rounded-[12px] border border-[rgba(255,255,255,0.06)] object-cover shadow-[0_4px_14px_rgba(0,0,0,0.35)]"
+                />
+                <div className="flex min-w-[0] flex-1 flex-col gap-[8px]">
+                  <p className="text-[18px] font-[700] leading-[1.25] text-[#E5E7EB]">
+                    ARCHA
+                  </p>
+                  <p className="text-[14px] leading-[1.375] text-[#9CA3AF]">
+                    Магазин в Telegram
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="shrink-0 rounded-[9999px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.06)] px-[12px] py-[8px] text-[14px] font-[500] text-[#D1D5DB] transition active:bg-[rgba(255,255,255,0.12)]"
+                  aria-label="Закрыть"
+                >
+                  Закрыть
+                </button>
+              </header>
+
+              <form
+                className="flex min-h-[0] flex-1 flex-col overflow-hidden"
+                onSubmit={handleSubmit}
               >
-                Заявка на магазин
-              </h2>
-              <button
-                type="button"
-                className="-mr-1 -mt-1 rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-800 hover:text-white"
-                onClick={closeModal}
-                aria-label="Закрыть"
-              >
-                ✕
-              </button>
-            </div>
+                <div className="min-h-[0] flex-1 overflow-y-auto overscroll-y-contain px-[16px] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+                  <div className="mx-auto flex w-full max-w-[28rem] flex-col gap-[16px]">
+                    <div className="flex flex-col gap-[16px] rounded-[16px] border border-[rgba(255,255,255,0.06)] bg-[#111827] p-[16px] shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
+                      <div className="flex flex-col gap-[8px] text-center">
+                        <h2
+                          id="platform-register-title"
+                          className="text-[20px] font-[600] text-[#E5E7EB]"
+                        >
+                          Создание магазина
+                        </h2>
+                        <p
+                          id="platform-register-desc"
+                          className="text-[14px] leading-[1.625] text-[#9CA3AF]"
+                        >
+                          Заполните поля — заявка уйдёт на проверку
+                        </p>
+                      </div>
 
-            <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-              <div>
-                <label
-                  htmlFor="platform-store-name"
-                  className="mb-1 block text-sm text-slate-400"
-                >
-                  Название магазина
-                </label>
-                <input
-                  id="platform-store-name"
-                  type="text"
-                  required
-                  minLength={2}
-                  maxLength={160}
-                  autoComplete="organization"
-                  value={storeName}
-                  onChange={(e) => setStoreName(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none ring-emerald-500/50 focus:border-emerald-600 focus:ring-2"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="platform-bot-token"
-                  className="mb-1 block text-sm text-slate-400"
-                >
-                  Токен бота (BotFather)
-                </label>
-                <input
-                  id="platform-bot-token"
-                  type="password"
-                  autoComplete="off"
-                  required
-                  value={botToken}
-                  onChange={(e) => setBotToken(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 font-mono text-sm text-white outline-none ring-emerald-500/50 focus:border-emerald-600 focus:ring-2"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="platform-phone"
-                  className="mb-1 block text-sm text-slate-400"
-                >
-                  Телефон
-                </label>
-                <input
-                  id="platform-phone"
-                  type="tel"
-                  required
-                  inputMode="tel"
-                  placeholder="+996XXXXXXXXX или 0XXXXXXXXX"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none ring-emerald-500/50 focus:border-emerald-600 focus:ring-2"
-                />
-                <p className="mt-1 text-xs text-slate-500">
-                  Формат КР: +996 и 9 цифр, или 0 и 9 цифр
-                </p>
-              </div>
-              <div>
-                <label
-                  htmlFor="platform-finik"
-                  className="mb-1 block text-sm text-slate-400"
-                >
-                  API ключ Finik (онлайн ККМ)
-                </label>
-                <input
-                  id="platform-finik"
-                  type="password"
-                  autoComplete="off"
-                  required
-                  value={finikApiKey}
-                  onChange={(e) => setFinikApiKey(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 font-mono text-sm text-white outline-none ring-emerald-500/50 focus:border-emerald-600 focus:ring-2"
-                />
-              </div>
+                      <div className="flex flex-col gap-[4px]">
+                        <label
+                          htmlFor="platform-store-name"
+                          className="text-left text-[14px] text-[#9CA3AF]"
+                        >
+                          Название
+                        </label>
+                        <input
+                          id="platform-store-name"
+                          type="text"
+                          required
+                          minLength={2}
+                          maxLength={160}
+                          autoComplete="organization"
+                          placeholder="Например: Archa Store"
+                          value={storeName}
+                          onChange={(e) => setStoreName(e.target.value)}
+                          className="w-full rounded-[12px] border border-[rgba(255,255,255,0.06)] bg-[#0F172A] px-[16px] py-[12px] text-[16px] text-white shadow-[0_1px_3px_rgba(0,0,0,0.25)] outline-none placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#22C55E] focus:ring-offset-2 focus:ring-offset-[#111827] disabled:opacity-50"
+                        />
+                      </div>
 
-              {submitError ? (
-                <p className="text-sm text-red-300" role="alert">
-                  {submitError}
-                </p>
-              ) : null}
+                      <div className="flex flex-col gap-[4px]">
+                        <label
+                          htmlFor="platform-bot-token"
+                          className="text-left text-[14px] text-[#9CA3AF]"
+                        >
+                          Токен бота
+                        </label>
+                        <input
+                          id="platform-bot-token"
+                          type="password"
+                          autoComplete="off"
+                          required
+                          placeholder="От BotFather"
+                          value={botToken}
+                          onChange={(e) => setBotToken(e.target.value)}
+                          className="w-full rounded-[12px] border border-[rgba(255,255,255,0.06)] bg-[#0F172A] px-[16px] py-[12px] font-[ui-monospace,SFMono-Regular,Menlo,monospace] text-[16px] text-white shadow-[0_1px_3px_rgba(0,0,0,0.25)] outline-none placeholder:font-[inherit] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#22C55E] focus:ring-offset-2 focus:ring-offset-[#111827] disabled:opacity-50"
+                        />
+                      </div>
 
-              <button
-                type="submit"
-                disabled={submitting}
-                className="mt-2 w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50"
-              >
-                {submitting ? "Отправка…" : "Отправить заявку"}
-              </button>
-            </form>
-          </div>
-        </div>
-      ) : null}
+                      <div className="flex flex-col gap-[4px]">
+                        <label
+                          htmlFor="platform-phone"
+                          className="text-left text-[14px] text-[#9CA3AF]"
+                        >
+                          Телефон
+                        </label>
+                        <input
+                          id="platform-phone"
+                          type="tel"
+                          required
+                          inputMode="tel"
+                          placeholder="+996…"
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          className="w-full rounded-[12px] border border-[rgba(255,255,255,0.06)] bg-[#0F172A] px-[16px] py-[12px] text-[16px] text-white shadow-[0_1px_3px_rgba(0,0,0,0.25)] outline-none placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#22C55E] focus:ring-offset-2 focus:ring-offset-[#111827] disabled:opacity-50"
+                        />
+                        <p className="text-[12px] leading-[1.5] text-[#6B7280]">
+                          +996 и 9 цифр или 0 и 9 цифр
+                        </p>
+                      </div>
 
-      {settingsBusinessId != null ? (
-        <div
-          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 p-4 sm:items-center"
-          role="presentation"
-          onClick={(ev) => {
-            if (ev.target === ev.currentTarget) closeSettingsModal();
-          }}
-        >
-          <div
-            role="dialog"
-            aria-labelledby="platform-settings-title"
-            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl"
+                      {submitError ? (
+                        <p
+                          className="text-center text-[14px] leading-[1.625] text-[#fca5a5]"
+                          role="alert"
+                        >
+                          {submitError}
+                        </p>
+                      ) : null}
+
+                      <motion.button
+                        type="submit"
+                        disabled={submitting}
+                        whileTap={submitting ? undefined : { scale: 0.95 }}
+                        transition={{ type: "spring", stiffness: 500, damping: 28 }}
+                        className="flex h-[48px] w-full items-center justify-center rounded-[12px] bg-[#22C55E] text-[16px] font-[600] text-[#0B0F14] disabled:pointer-events-none disabled:opacity-[0.45]"
+                      >
+                        {submitting ? "Отправка…" : "Отправить заявку"}
+                      </motion.button>
+                    </div>
+                  </div>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {settingsBusinessId != null ? (
+          <motion.div
+            key="platform-settings-modal"
+            className={archa.modalBackdropElevated}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22 }}
+            role="presentation"
+            onClick={(ev) => {
+              if (ev.target === ev.currentTarget) closeSettingsModal();
+            }}
           >
+            <motion.div
+              role="dialog"
+              aria-labelledby="platform-settings-title"
+              className={archa.modalCard}
+              initial={{ opacity: 0, scale: 0.94, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 12 }}
+              transition={{ type: "spring", damping: 26, stiffness: 340 }}
+            >
             <div className="mb-4 flex items-start justify-between gap-3">
               <h2
                 id="platform-settings-title"
-                className="text-lg font-semibold text-white"
+                className="text-lg font-semibold text-[#E5E7EB]"
               >
                 Настройки магазина
               </h2>
               <button
                 type="button"
-                className="-mr-1 -mt-1 rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+                className="rounded-xl border border-white/[0.08] px-2.5 py-1.5 text-sm text-[#9CA3AF] transition hover:border-white/15 hover:bg-white/[0.06] hover:text-[#E5E7EB]"
                 onClick={closeSettingsModal}
                 aria-label="Закрыть"
               >
@@ -1065,7 +1132,7 @@ export default function PlatformPage() {
             </div>
 
             {settingsLoading ? (
-              <p className="text-sm text-slate-400">Загрузка…</p>
+              <p className={`text-sm ${archa.textMuted}`}>Загрузка…</p>
             ) : settingsErr != null && settingsSnap == null ? (
               <p className="text-sm text-red-300" role="alert">
                 {settingsErr}
@@ -1077,7 +1144,7 @@ export default function PlatformPage() {
               >
                 {settingsSnap?.pendingBotTokenChange ? (
                   <p
-                    className="rounded-lg border border-amber-900/50 bg-amber-950/35 px-3 py-2 text-sm text-amber-100"
+                    className="rounded-xl border border-amber-500/25 bg-amber-950/30 px-3 py-2.5 text-sm text-amber-100"
                     role="status"
                   >
                     ⏳ Ожидается подтверждение администратором смены токена бота.
@@ -1087,7 +1154,7 @@ export default function PlatformPage() {
                 <div>
                   <label
                     htmlFor="platform-settings-name"
-                    className="mb-1 block text-sm text-slate-400"
+                    className={`mb-1 block text-sm ${archa.textMuted}`}
                   >
                     Название магазина
                   </label>
@@ -1101,14 +1168,14 @@ export default function PlatformPage() {
                     disabled={settingsSnap == null}
                     value={settingsName}
                     onChange={(e) => setSettingsName(e.target.value)}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none ring-emerald-500/50 focus:border-emerald-600 focus:ring-2 disabled:opacity-50"
+                    className={archa.input}
                   />
                 </div>
 
                 <div>
                   <label
                     htmlFor="platform-settings-token"
-                    className="mb-1 block text-sm text-slate-400"
+                    className={`mb-1 block text-sm ${archa.textMuted}`}
                   >
                     Новый токен бота
                   </label>
@@ -1119,55 +1186,80 @@ export default function PlatformPage() {
                     disabled={settingsSnap == null}
                     value={settingsNewToken}
                     onChange={(e) => setSettingsNewToken(e.target.value)}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 font-mono text-sm text-white outline-none ring-emerald-500/50 focus:border-emerald-600 focus:ring-2 disabled:opacity-50"
+                    className={`${archa.input} font-mono`}
                   />
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className={`mt-1 text-xs ${archa.textMuted}`}>
                     Смена токена требует подтверждения администратором. Текущий
                     токен не отображается.
                   </p>
                 </div>
 
-                <div>
-                  <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-                    <label
-                      htmlFor="platform-settings-finik"
-                      className="block text-sm text-slate-400"
-                    >
-                      Finik API Key
-                    </label>
+                <div className={`${archa.cardGlass} border-white/[0.05] p-4`}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm font-semibold tracking-tight text-white">
+                      💳 Finik
+                    </span>
                     {settingsSnap?.finikConfigured ? (
-                      <span className="text-xs text-emerald-400/90">
-                        ключ задан
+                      <span className="text-xs font-medium text-[#86EFAC]">
+                        ✅ Finik подключён
                       </span>
-                    ) : null}
+                    ) : (
+                      <span className="text-xs font-medium text-amber-300/95">
+                        ⚠️ Не подключён
+                      </span>
+                    )}
                   </div>
+                  <p className="mt-2 font-mono text-xs text-slate-400">
+                    API Key:{" "}
+                    <span className="text-slate-300">
+                      {settingsSnap?.finikConfigured
+                        ? "************"
+                        : "—"}
+                    </span>
+                  </p>
+                  <label
+                    htmlFor="platform-settings-finik-draft"
+                    className={`mb-1 mt-3 block text-xs font-medium ${archa.textMuted}`}
+                  >
+                    Новый API ключ Finik
+                  </label>
                   <input
-                    id="platform-settings-finik"
+                    id="platform-settings-finik-draft"
                     type="password"
                     autoComplete="off"
-                    disabled={settingsSnap == null}
-                    value={settingsFinik}
+                    disabled={settingsSnap == null || finikSaving}
+                    value={finikDraft}
                     onChange={(e) => {
-                      setFinikTouched(true);
-                      setSettingsFinik(e.target.value);
+                      setFinikDraft(e.target.value);
+                      setFinikErr(null);
+                      setFinikMsg(null);
                     }}
-                    placeholder="Введите ключ или сбросьте ниже"
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 font-mono text-sm text-white outline-none ring-emerald-500/50 focus:border-emerald-600 focus:ring-2 disabled:opacity-50"
+                    placeholder="Вставьте ключ"
+                    className={`${archa.input} font-mono`}
                   />
-                  <p className="mt-1 text-xs text-slate-500">
-                    Сохраняется сразу (без подтверждения). Ключ не показывается
-                    повторно.
+                  <p className={`mt-1.5 text-[11px] leading-relaxed ${archa.textMuted}`}>
+                    Оставьте поле пустым и нажмите «Сохранить», чтобы отключить
+                    Finik. Ключ на сервер не возвращается.
                   </p>
+                  {finikErr ? (
+                    <p className="mt-2 text-sm text-red-300" role="alert">
+                      {finikErr}
+                    </p>
+                  ) : null}
+                  {finikMsg ? (
+                    <p className="mt-2 text-sm text-[#86EFAC]" role="status">
+                      {finikMsg}
+                    </p>
+                  ) : null}
                   <button
                     type="button"
-                    disabled={settingsSnap == null}
-                    onClick={() => {
-                      setFinikTouched(true);
-                      setSettingsFinik("");
-                    }}
-                    className="mt-2 text-xs font-medium text-amber-300/90 underline decoration-amber-700/80 hover:text-amber-200 disabled:opacity-45"
+                    disabled={
+                      settingsSnap == null || finikSaving || settingsLoading
+                    }
+                    onClick={() => void handleSaveFinik()}
+                    className={`${archa.btnPrimary} mt-3`}
                   >
-                    Сбросить ключ Finik
+                    {finikSaving ? "Сохранение…" : "Сохранить"}
                   </button>
                 </div>
 
@@ -1178,7 +1270,7 @@ export default function PlatformPage() {
                 ) : null}
                 {settingsOkMsg ? (
                   <p
-                    className="text-sm text-emerald-200/90"
+                    className="text-sm text-[#86EFAC]"
                     role="status"
                   >
                     {settingsOkMsg}
@@ -1190,15 +1282,16 @@ export default function PlatformPage() {
                   disabled={
                     settingsSnap == null || settingsSaving || settingsLoading
                   }
-                  className="mt-2 w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50"
+                  className={`${archa.btnPrimary} mt-1`}
                 >
                   {settingsSaving ? "Сохранение…" : "Сохранить"}
                 </button>
               </form>
             )}
-          </div>
-        </div>
-      ) : null}
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

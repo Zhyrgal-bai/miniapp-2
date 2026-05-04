@@ -120,7 +120,6 @@ export async function savePlatformStoreSettings(payload: {
   telegramId: number;
   businessId: number;
   storeName?: string;
-  finikApiKey?: string;
   newBotToken?: string;
 }): Promise<PlatformStoreSettingsSaveResult> {
   const tid = String(payload.telegramId);
@@ -128,7 +127,6 @@ export async function savePlatformStoreSettings(payload: {
     businessId: payload.businessId,
   };
   if (payload.storeName !== undefined) body.storeName = payload.storeName;
-  if (payload.finikApiKey !== undefined) body.finikApiKey = payload.finikApiKey;
   if (payload.newBotToken !== undefined) body.newBotToken = payload.newBotToken;
 
   const res = await fetch(apiAbsoluteUrl("/api/platform/store-settings"), {
@@ -165,11 +163,42 @@ export async function savePlatformStoreSettings(payload: {
   };
 }
 
+export async function postPlatformUpdateFinik(payload: {
+  telegramId: number;
+  businessId: number;
+  finikApiKey: string;
+}): Promise<{ ok: true; finikConfigured: boolean }> {
+  const tid = String(payload.telegramId);
+  const res = await fetch(apiAbsoluteUrl("/api/platform/update-finik"), {
+    method: "POST",
+    credentials: "omit",
+    headers: {
+      "Content-Type": "application/json",
+      "x-telegram-id": tid,
+    },
+    body: JSON.stringify({
+      businessId: payload.businessId,
+      finikApiKey: payload.finikApiKey,
+    }),
+  });
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    ok?: boolean;
+    finikConfigured?: boolean;
+  };
+  if (!res.ok) {
+    throw new Error(j.error ?? `HTTP ${res.status}`);
+  }
+  if (j.ok !== true) {
+    throw new Error(j.error ?? "Некорректный ответ сервера");
+  }
+  return { ok: true, finikConfigured: Boolean(j.finikConfigured) };
+}
+
 export async function submitPlatformRegisterRequest(payload: {
   storeName: string;
   botToken: string;
   phone: string;
-  finikApiKey: string;
   telegramId: number;
 }): Promise<void> {
   const tid = String(payload.telegramId);
@@ -184,7 +213,6 @@ export async function submitPlatformRegisterRequest(payload: {
       storeName: payload.storeName,
       botToken: payload.botToken,
       phone: payload.phone,
-      finikApiKey: payload.finikApiKey,
       telegramId: payload.telegramId,
     }),
   });

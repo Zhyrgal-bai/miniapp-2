@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import { ArchaHeader } from "../components/archa/ArchaHeader";
+import { archa } from "../components/archa/archaUi";
 import { getTelegramWebApp } from "../utils/telegram";
 import { getWebAppUserId } from "../utils/adminAccess";
 import {
@@ -6,6 +9,7 @@ import {
   fetchPlatformAdminRequests,
   postPlatformAdminApprove,
   postPlatformAdminDisable,
+  postPlatformAdminEnable,
   postPlatformAdminExtend,
   postPlatformAdminPurgeBusiness,
   postPlatformAdminReject,
@@ -19,26 +23,6 @@ function statusRu(status: string): string {
   if (u === "APPROVED") return "Одобрена";
   if (u === "REJECTED") return "Отклонена";
   return status;
-}
-
-function platformStatusRu(status: string): string {
-  const map: Record<string, string> = {
-    blocked: "🔒 Заблокирован",
-    inactive: "🔴 Не активен",
-    subscription_expired: "⏳ Подписка истекла",
-    trialing: "🟡 Пробный период",
-    active: "🟢 Активен",
-    past_due: "⚠️ Просрочен платёж",
-    canceled: "⛔ Отменён",
-    expired: "⏹ Истёк",
-  };
-  return map[status] ?? status;
-}
-
-function businessStatusLabel(b: PlatformAdminBusinessDTO): string {
-  if (b.isBlocked) return "заблокирован";
-  if (!b.isActive) return "неактивен";
-  return platformStatusRu(b.status);
 }
 
 function webhookListLabel(ws: PlatformAdminBusinessDTO["webhookStatus"]): string {
@@ -66,6 +50,31 @@ function formatIsoDate(iso: string | null): string {
   }
 }
 
+function adminShopRunBadge(b: PlatformAdminBusinessDTO): {
+  label: string;
+  className: string;
+} {
+  if (b.isBlocked) {
+    return {
+      label: "Заблокирован",
+      className:
+        "shrink-0 rounded-full border border-yellow-500/25 bg-yellow-500/10 px-2 py-0.5 text-[11px] font-medium text-yellow-400",
+    };
+  }
+  if (!b.isActive) {
+    return {
+      label: "Отключён",
+      className:
+        "shrink-0 rounded-full border border-red-500/25 bg-red-500/10 px-2 py-0.5 text-[11px] font-medium text-red-400",
+    };
+  }
+  return {
+    label: "Активен",
+    className:
+      "shrink-0 rounded-full border border-green-500/25 bg-green-500/10 px-2 py-0.5 text-[11px] font-medium text-green-400",
+  };
+}
+
 /** Mini App `/platform-admin`: доступ решает только сервер (`ADMIN_IDS` + 403). */
 export default function PlatformAdminPage() {
   const tg = getTelegramWebApp();
@@ -91,6 +100,7 @@ export default function PlatformAdminPage() {
   const [searchDraft, setSearchDraft] = useState("");
   const [searchApplied, setSearchApplied] = useState("");
   const [bizBusyKey, setBizBusyKey] = useState<string | null>(null);
+  const [bizSuccessMsg, setBizSuccessMsg] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     if (!hasTelegramUser) return;
@@ -183,10 +193,12 @@ export default function PlatformAdminPage() {
   }
 
   function runSearch() {
+    setBizSuccessMsg(null);
     setSearchApplied(searchDraft.trim());
   }
 
   function clearSearch() {
+    setBizSuccessMsg(null);
     setSearchDraft("");
     setSearchApplied("");
   }
@@ -209,9 +221,27 @@ export default function PlatformAdminPage() {
     }
     const key = `p-${businessId}`;
     setBizBusyKey(key);
+    setBizSuccessMsg(null);
     try {
       await postPlatformAdminPurgeBusiness({ telegramId: userId, businessId });
       await reloadBusinesses();
+    } catch (e) {
+      if (isForbiddenAdminError(e)) setAccessForbidden(true);
+      else setBizError(e instanceof Error ? e.message : "Ошибка");
+    } finally {
+      setBizBusyKey(null);
+    }
+  }
+
+  async function enableStore(businessId: number) {
+    if (accessForbidden || !hasTelegramUser) return;
+    const key = `y-${businessId}`;
+    setBizBusyKey(key);
+    setBizSuccessMsg(null);
+    try {
+      await postPlatformAdminEnable({ telegramId: userId, businessId });
+      await reloadBusinesses();
+      setBizSuccessMsg("✅ Магазин включён");
     } catch (e) {
       if (isForbiddenAdminError(e)) setAccessForbidden(true);
       else setBizError(e instanceof Error ? e.message : "Ошибка");
@@ -225,6 +255,7 @@ export default function PlatformAdminPage() {
     if (!window.confirm(`Отключить магазин #${businessId}?`)) return;
     const key = `d-${businessId}`;
     setBizBusyKey(key);
+    setBizSuccessMsg(null);
     try {
       await postPlatformAdminDisable({ telegramId: userId, businessId });
       await reloadBusinesses();
@@ -240,6 +271,7 @@ export default function PlatformAdminPage() {
     if (accessForbidden || !hasTelegramUser) return;
     const key = `e-${businessId}-${days}`;
     setBizBusyKey(key);
+    setBizSuccessMsg(null);
     try {
       await postPlatformAdminExtend({ telegramId: userId, businessId, days });
       await reloadBusinesses();
@@ -253,9 +285,16 @@ export default function PlatformAdminPage() {
 
   if (!hasTelegramUser) {
     return (
-      <div className="min-h-full bg-slate-950 p-6 text-center text-red-300">
-        <p className="font-semibold">⛔ Нет доступа</p>
-        <p className="mt-2 text-sm text-slate-400">
+      <div
+        className={`${archa.pageRoot} flex flex-col items-center justify-center gap-4 p-8 text-center`}
+      >
+        <img
+          src="/674440574_18101674030793392_828162833995675842_n.jpg"
+          alt=""
+          className="h-14 w-14 rounded-2xl border border-white/[0.08] opacity-90"
+        />
+        <p className="font-semibold text-red-300">⛔ Нет доступа</p>
+        <p className={`max-w-xs text-sm ${archa.textMuted}`}>
           Откройте страницу из Telegram Mini App.
         </p>
       </div>
@@ -264,9 +303,16 @@ export default function PlatformAdminPage() {
 
   if (accessForbidden) {
     return (
-      <div className="min-h-full bg-slate-950 p-6 text-center text-red-300">
-        <p className="font-semibold">Нет доступа</p>
-        <p className="mt-2 text-sm text-slate-400">
+      <div
+        className={`${archa.pageRoot} flex flex-col items-center justify-center gap-4 p-8 text-center`}
+      >
+        <img
+          src="/674440574_18101674030793392_828162833995675842_n.jpg"
+          alt=""
+          className="h-14 w-14 rounded-2xl border border-white/[0.08] opacity-90"
+        />
+        <p className="font-semibold text-red-300">Нет доступа</p>
+        <p className={`max-w-xs text-sm ${archa.textMuted}`}>
           Раздел только для администратора платформы (проверка на сервере).
         </p>
       </div>
@@ -274,28 +320,21 @@ export default function PlatformAdminPage() {
   }
 
   return (
-    <div className="min-h-full bg-slate-950 pb-12 text-slate-100">
-      <div className="mx-auto max-w-2xl space-y-10 px-4 py-6">
-        <header>
-          <h1 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">
-            Платформа — админка
-          </h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Скрытый URL · только администратор
-          </p>
-        </header>
+    <div className={`${archa.pageRoot} pb-14`}>
+      <div className={`${archa.shellAdmin} space-y-12`}>
+        <ArchaHeader
+          subtitle="Платформа"
+          secondLine="Заявки и магазины · только администратор"
+        />
 
         <section aria-labelledby="platform-requests-heading">
-          <h2
-            id="platform-requests-heading"
-            className="mb-3 text-lg font-medium text-white"
-          >
+          <h2 id="platform-requests-heading" className={`mb-4 ${archa.sectionTitle}`}>
             Заявки на магазин
           </h2>
 
           {listError ? (
             <div
-              className="rounded-xl border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200"
+              className="mb-4 rounded-2xl border border-red-500/25 bg-red-950/35 px-4 py-3 text-sm text-red-200 backdrop-blur-md"
               role="alert"
             >
               {listError}
@@ -303,66 +342,73 @@ export default function PlatformAdminPage() {
           ) : null}
 
           {loading ? (
-            <p className="text-sm text-slate-400">Загрузка…</p>
+            <p className={`text-sm ${archa.textMuted}`}>Загрузка…</p>
           ) : rows.length === 0 ? (
             <div
-              className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-6 text-center text-sm text-slate-400"
+              className={`${archa.cardGlass} px-5 py-10 text-center text-sm ${archa.textMuted}`}
               role="status"
             >
               Нет заявок в статусе «ожидает».
             </div>
           ) : (
             <ul className="flex flex-col gap-4">
-              {rows.map((r) => (
-                <li
+              {rows.map((r, i) => (
+                <motion.li
                   key={r.id}
-                  className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-lg shadow-black/20"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25, delay: i * 0.04 }}
+                  className={`${archa.cardGlass} ${archa.cardGlassHover} overflow-hidden p-5`}
                 >
-                  <div className="flex flex-col gap-2 border-b border-slate-800/80 pb-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="font-medium text-white">#{r.id}</span>
-                      <span className="rounded-full bg-amber-900/40 px-2 py-0.5 text-xs text-amber-200">
-                        {statusRu(r.status)}
-                      </span>
+                    <div className="flex flex-col gap-2 border-b border-white/[0.06] pb-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-mono text-sm text-[#9CA3AF]">
+                          #{r.id}
+                        </span>
+                        <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-300">
+                          {statusRu(r.status)}
+                        </span>
+                      </div>
+                      <p className="font-semibold text-[#E5E7EB]">{r.storeName}</p>
+                      <p className="font-mono text-sm text-[#9CA3AF]">{r.phone}</p>
                     </div>
-                    <p className="text-sm text-slate-200">{r.storeName}</p>
-                    <p className="font-mono text-sm text-slate-400">{r.phone}</p>
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void approve(r.id)}
-                      className="rounded-xl bg-emerald-700 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-600 disabled:opacity-50"
-                    >
-                      ✅ Одобрить
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void reject(r.id)}
-                      className="rounded-xl border border-red-800 bg-red-950/50 px-3 py-2 text-sm font-medium text-red-200 transition hover:bg-red-900/50 disabled:opacity-50"
-                    >
-                      ❌ Отклонить
-                    </button>
-                  </div>
-                </li>
-              ))}
+                    <div className="mt-4 grid grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void approve(r.id)}
+                        className={`${archa.btnPrimary} !py-3 text-sm`}
+                      >
+                        Одобрить
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void reject(r.id)}
+                        className={`${archa.btnSecondary} !py-3 text-sm text-red-200 hover:border-red-400/40 hover:text-red-100`}
+                      >
+                        Отклонить
+                      </button>
+                    </div>
+                  </motion.li>
+                ))}
             </ul>
           )}
         </section>
 
         <section aria-labelledby="platform-shops-heading">
-          <h2
-            id="platform-shops-heading"
-            className="mb-3 text-lg font-medium text-white"
-          >
+          <h2 id="platform-shops-heading" className={`mb-4 ${archa.sectionTitle}`}>
             Магазины
           </h2>
 
-          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end">
-            <label className="block flex-1 text-sm text-slate-400">
-              <span className="mb-1 block text-slate-500">Поиск (id или имя)</span>
+          <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-stretch">
+            <div className="relative min-w-0 flex-1">
+              <span
+                className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]"
+                aria-hidden
+              >
+                ⌕
+              </span>
               <input
                 type="text"
                 value={searchDraft}
@@ -370,22 +416,23 @@ export default function PlatformAdminPage() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter") runSearch();
                 }}
-                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 outline-none ring-emerald-600/40 focus:ring-2"
-                placeholder="например 12 или Coffee"
+                className={archa.inputSearch}
+                placeholder="ID или имя магазина…"
+                aria-label="Поиск по id или имени"
               />
-            </label>
-            <div className="flex gap-2">
+            </div>
+            <div className="flex shrink-0 gap-2">
               <button
                 type="button"
                 onClick={() => runSearch()}
-                className="rounded-xl bg-slate-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-600"
+                className={`${archa.btnPrimary} !w-auto min-w-[7.5rem] !px-5 !py-3`}
               >
-                🔍 Найти
+                Найти
               </button>
               <button
                 type="button"
                 onClick={() => clearSearch()}
-                className="rounded-xl border border-slate-600 px-4 py-2 text-sm text-slate-200 transition hover:bg-slate-800"
+                className={`${archa.btnSecondary} !w-auto !px-5 !py-3`}
               >
                 Сброс
               </button>
@@ -394,18 +441,27 @@ export default function PlatformAdminPage() {
 
           {bizError ? (
             <div
-              className="mb-4 rounded-xl border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200"
+              className="mb-4 rounded-2xl border border-red-500/25 bg-red-950/35 px-4 py-3 text-sm text-red-200 backdrop-blur-md"
               role="alert"
             >
               {bizError}
             </div>
           ) : null}
 
+          {bizSuccessMsg ? (
+            <div
+              className="mb-4 rounded-2xl border border-[#22C55E]/25 bg-[#22C55E]/10 px-4 py-3 text-sm text-[#86EFAC] backdrop-blur-md"
+              role="status"
+            >
+              {bizSuccessMsg}
+            </div>
+          ) : null}
+
           {bizLoading ? (
-            <p className="text-sm text-slate-400">Загрузка магазинов…</p>
+            <p className={`text-sm ${archa.textMuted}`}>Загрузка магазинов…</p>
           ) : businesses.length === 0 ? (
             <div
-              className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-6 text-center text-sm text-slate-400"
+              className={`${archa.cardGlass} px-5 py-12 text-center text-sm ${archa.textMuted}`}
               role="status"
             >
               {searchApplied.trim() !== ""
@@ -413,82 +469,128 @@ export default function PlatformAdminPage() {
                 : "Нет магазинов в выборке."}
             </div>
           ) : (
-            <ul className="flex flex-col gap-3">
-              {businesses.map((b) => (
-                <li
-                  key={b.id}
-                  className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-800/80 pb-2">
-                    <div>
-                      <span className="font-mono text-slate-400">#{b.id}</span>
-                      <span className="ml-2 font-medium text-white">
-                        {b.name}
-                      </span>
+            <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {businesses.map((b, index) => {
+                const run = adminShopRunBadge(b);
+                return (
+                  <motion.li
+                    key={b.id}
+                    initial={{ opacity: 0, y: 14 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    whileHover={{ scale: 1.02 }}
+                    transition={{
+                      duration: 0.28,
+                      delay: index * 0.03,
+                      ease: [0.22, 1, 0.36, 1],
+                    }}
+                    className={`${archa.cardGlass} ${archa.cardGlassHover} flex flex-col p-4 sm:p-5`}
+                  >
+                    <div className="flex gap-3">
+                      <img
+                        src="/674440574_18101674030793392_828162833995675842_n.jpg"
+                        alt=""
+                        className="h-11 w-11 shrink-0 rounded-xl border border-white/[0.08] object-cover"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="truncate text-base font-bold text-[#E5E7EB]">
+                            {b.name}
+                          </h3>
+                          <span className={run.className}>{run.label}</span>
+                        </div>
+                        <p className="mt-0.5 font-mono text-[11px] text-[#9CA3AF]">
+                          #{b.id}
+                        </p>
+                      </div>
                     </div>
-                    <span className="rounded-full bg-slate-700/80 px-2 py-0.5 text-xs text-slate-200">
-                      {businessStatusLabel(b)}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs text-slate-500">
-                    Подписка до:{" "}
-                    <span className="text-slate-300">
-                      {formatIsoDate(b.subscriptionEndsAt)}
-                    </span>
-                    {b.trialEndsAt != null ? (
-                      <>
-                        {" · "}
-                        триал:{" "}
-                        <span className="text-slate-300">
-                          {formatIsoDate(b.trialEndsAt)}
-                        </span>
-                      </>
-                    ) : null}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {webhookListLabel(b.webhookStatus)}
-                  </p>
-                  <p className="mt-0.5 break-all font-mono text-[11px] leading-relaxed text-slate-600">
-                    {b.webhookUrl != null && b.webhookUrl.trim() !== ""
-                      ? b.webhookUrl.trim()
-                      : "URL вебхука не задан или недоступен"}
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      disabled={bizBusyKey !== null}
-                      onClick={() => void disableStore(b.id)}
-                      className="rounded-xl border border-red-800/80 bg-red-950/40 px-3 py-2 text-sm text-red-200 transition hover:bg-red-900/40 disabled:opacity-50"
-                    >
-                      {bizBusyKey === `d-${b.id}` ? "…" : "❌ Отключить"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={bizBusyKey !== null}
-                      onClick={() => void purgeStore(b.id)}
-                      className="rounded-xl border border-rose-950 bg-rose-950/70 px-3 py-2 text-sm font-medium text-rose-100 transition hover:bg-rose-900 disabled:opacity-50"
-                    >
-                      {bizBusyKey === `p-${b.id}` ? "…" : "🗑 Удалить из БД"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={bizBusyKey !== null}
-                      onClick={() => void extendStore(b.id, 30)}
-                      className="rounded-xl bg-emerald-900/50 px-3 py-2 text-sm text-emerald-100 transition hover:bg-emerald-800/50 disabled:opacity-50"
-                    >
-                      {bizBusyKey === `e-${b.id}-30` ? "…" : "🔄 +30 дн."}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={bizBusyKey !== null}
-                      onClick={() => void extendStore(b.id, 90)}
-                      className="rounded-xl bg-emerald-900/50 px-3 py-2 text-sm text-emerald-100 transition hover:bg-emerald-800/50 disabled:opacity-50"
-                    >
-                      {bizBusyKey === `e-${b.id}-90` ? "…" : "🔄 +90 дн."}
-                    </button>
-                  </div>
-                </li>
-              ))}
+                    <p className={`mt-3 text-xs leading-relaxed ${archa.textMuted}`}>
+                      Подписка до:{" "}
+                      <span className="text-[#E5E7EB]">
+                        {formatIsoDate(b.subscriptionEndsAt)}
+                      </span>
+                      {b.trialEndsAt != null ? (
+                        <>
+                          {" · "}
+                          триал:{" "}
+                          <span className="text-[#E5E7EB]">
+                            {formatIsoDate(b.trialEndsAt)}
+                          </span>
+                        </>
+                      ) : null}
+                    </p>
+                    <p className={`mt-1 text-xs ${archa.textMuted}`}>
+                      {webhookListLabel(b.webhookStatus)}
+                    </p>
+                    <p className="mt-0.5 break-all font-mono text-[10px] leading-relaxed text-[#9CA3AF]/80">
+                      {b.webhookUrl != null && b.webhookUrl.trim() !== ""
+                        ? b.webhookUrl.trim()
+                        : "URL вебхука не задан или недоступен"}
+                    </p>
+                    <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-white/[0.06] pt-3">
+                      {!b.isActive && !b.isBlocked ? (
+                        <button
+                          type="button"
+                          title="Включить магазин"
+                          aria-label="Включить магазин"
+                          disabled={bizBusyKey !== null}
+                          onClick={() => void enableStore(b.id)}
+                          className={archa.btnIconSuccess}
+                        >
+                          {bizBusyKey === `y-${b.id}` ? "…" : "▶"}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        title="Отключить (блокировка)"
+                        aria-label="Отключить магазин"
+                        disabled={bizBusyKey !== null}
+                        onClick={() => void disableStore(b.id)}
+                        className={archa.btnIconDanger}
+                      >
+                        {bizBusyKey === `d-${b.id}` ? "…" : "⏻"}
+                      </button>
+                      <button
+                        type="button"
+                        title="Удалить из БД"
+                        aria-label="Удалить магазин из базы"
+                        disabled={bizBusyKey !== null}
+                        onClick={() => void purgeStore(b.id)}
+                        className={archa.btnIconDanger}
+                      >
+                        {bizBusyKey === `p-${b.id}` ? "…" : "🗑"}
+                      </button>
+                      <button
+                        type="button"
+                        title="Продлить на 30 дней"
+                        aria-label="Плюс 30 дней подписки"
+                        disabled={bizBusyKey !== null}
+                        onClick={() => void extendStore(b.id, 30)}
+                        className={archa.btnIcon}
+                      >
+                        {bizBusyKey === `e-${b.id}-30` ? "…" : (
+                          <span className="text-xs font-semibold tabular-nums">
+                            +30
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        title="Продлить на 90 дней"
+                        aria-label="Плюс 90 дней подписки"
+                        disabled={bizBusyKey !== null}
+                        onClick={() => void extendStore(b.id, 90)}
+                        className={archa.btnIcon}
+                      >
+                        {bizBusyKey === `e-${b.id}-90` ? "…" : (
+                          <span className="text-xs font-semibold tabular-nums">
+                            +90
+                          </span>
+                        )}
+                      </button>
+                    </div>
+                  </motion.li>
+                );
+              })}
             </ul>
           )}
         </section>
