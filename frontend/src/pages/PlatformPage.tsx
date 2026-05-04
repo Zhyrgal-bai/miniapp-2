@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { getTelegramWebApp } from "../utils/telegram";
@@ -458,6 +457,69 @@ export default function PlatformPage() {
     };
   }, [openCreate, closeCreateForm]);
 
+  /** Fallback: нижняя зелёная кнопка Telegram — если клики по UI не доходят. */
+  const openCreateHandlerRef = useRef(openCreateForm);
+  openCreateHandlerRef.current = openCreateForm;
+  useEffect(() => {
+    const tg = getTelegramWebApp();
+    type Mb = {
+      MainButton?: {
+        setParams: (p: { text?: string }) => void;
+        show: () => void;
+        hide: () => void;
+        enable: () => void;
+        onClick: (fn: () => void) => void;
+        offClick: (fn: () => void) => void;
+      };
+    };
+    const mb = (tg as Mb).MainButton;
+    if (
+      loading ||
+      openCreate ||
+      businesses.length > 0 ||
+      tg == null ||
+      mb == null ||
+      typeof mb.onClick !== "function" ||
+      typeof mb.offClick !== "function" ||
+      typeof mb.show !== "function" ||
+      typeof mb.hide !== "function"
+    ) {
+      if (tg != null && mb != null && typeof mb.hide === "function") {
+        try {
+          mb.hide();
+        } catch {
+          /* ignore */
+        }
+      }
+      return;
+    }
+    const handler = () => openCreateHandlerRef.current();
+    try {
+      const tp = mb as {
+        setParams?: (p: { text?: string }) => void;
+        setText?: (t: string) => void;
+      };
+      if (typeof tp.setParams === "function") {
+        tp.setParams({ text: "➕ Создать магазин" });
+      } else if (typeof tp.setText === "function") {
+        tp.setText("➕ Создать магазин");
+      }
+      if (typeof mb.enable === "function") mb.enable();
+      mb.onClick(handler);
+      mb.show();
+    } catch {
+      /* ignore */
+    }
+    return () => {
+      try {
+        mb.offClick(handler);
+        mb.hide();
+      } catch {
+        /* ignore */
+      }
+    };
+  }, [loading, openCreate, businesses.length]);
+
   const handleSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     const uid =
@@ -691,8 +753,12 @@ export default function PlatformPage() {
                 </p>
                 <button
                   type="button"
-                  onClick={openCreateForm}
-                  className={`${archa.btnPrimary} mt-8`}
+                  onClick={(ev) => {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    openCreateForm();
+                  }}
+                  className={`${archa.btnPrimary} mt-8 touch-manipulation`}
                 >
                   ➕ Создать
                 </button>
@@ -832,8 +898,12 @@ export default function PlatformPage() {
           <div className="mx-auto max-w-lg">
             <button
               type="button"
-              onClick={openCreateForm}
-              className={archa.btnPrimary}
+              onClick={(ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                openCreateForm();
+              }}
+              className={`${archa.btnPrimary} touch-manipulation`}
             >
               ➕ Создать магазин
             </button>
@@ -953,8 +1023,12 @@ export default function PlatformPage() {
                     </p>
                     <button
                       type="button"
-                      onClick={openCreateForm}
-                      className={`${archa.btnPrimary} py-4 text-base`}
+                      onClick={(ev) => {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        openCreateForm();
+                      }}
+                      className={`${archa.btnPrimary} touch-manipulation py-4 text-base`}
                     >
                       ➕ Создать магазин
                     </button>
@@ -1016,23 +1090,15 @@ export default function PlatformPage() {
         ) : null}
       </AnimatePresence>
 
-      {typeof document !== "undefined"
-        ? createPortal(
-            <AnimatePresence>
-              {openCreate ? (
-          <motion.div
-            key="platform-register-modal"
-            className="fixed inset-0 flex min-h-0 flex-col overflow-hidden bg-[#05080d] shadow-[inset_0_3px_0_0_#22c55e]"
+      {openCreate ? (
+          <div
+            className="fixed inset-0 flex min-h-0 flex-col overflow-x-hidden overflow-y-auto bg-[#05080d] shadow-[inset_0_3px_0_0_#22c55e]"
             style={{
               zIndex: 2147483000,
               minHeight: "100%",
               height: "100dvh",
               maxHeight: "100dvh",
             }}
-            initial={false}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.12 }}
             role="dialog"
             aria-modal="true"
             aria-labelledby="platform-register-title"
@@ -1161,26 +1227,20 @@ export default function PlatformPage() {
                         </p>
                       ) : null}
 
-                      <motion.button
+                      <button
                         type="submit"
                         disabled={submitting}
-                        whileTap={submitting ? undefined : { scale: 0.95 }}
-                        transition={{ type: "spring", stiffness: 500, damping: 28 }}
-                        className="flex h-[48px] w-full items-center justify-center rounded-[12px] bg-[#22C55E] text-[16px] font-[600] text-[#0B0F14] disabled:pointer-events-none disabled:opacity-[0.45]"
+                        className="flex h-[48px] w-full touch-manipulation items-center justify-center rounded-[12px] bg-[#22C55E] text-[16px] font-[600] text-[#0B0F14] disabled:pointer-events-none disabled:opacity-[0.45] active:scale-[0.98]"
                       >
                         {submitting ? "Отправка…" : "Отправить заявку"}
-                      </motion.button>
+                      </button>
                     </div>
                   </div>
                 </div>
               </form>
             </div>
-          </motion.div>
-              ) : null}
-            </AnimatePresence>,
-            document.body,
-          )
-        : null}
+          </div>
+      ) : null}
 
       <AnimatePresence>
         {settingsBusinessId != null ? (
