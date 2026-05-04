@@ -8,6 +8,20 @@ import { prisma } from "./db.js";
 import { syncBusinessSubscriptionActivationState } from "./saasBillingService.js";
 import { isSubscriptionActive } from "./subscriptionAccess.js";
 
+/**
+ * При истёкшей подписке всё равно пропускаем сырой /start и /cancel в чат,
+ * иначе клиенты не получают ответ бота вообще (вебхук отвечал 200 без handleUpdate).
+ */
+function webhookUpdateIsStartOrCancelCommandOnly(body: unknown): boolean {
+  const u = body as Record<string, unknown>;
+  const msg = u.message as Record<string, unknown> | undefined;
+  if (!msg || typeof msg !== "object") return false;
+  const text = typeof msg.text === "string" ? msg.text.trim() : "";
+  if (/^\/start(?:@\w+)?(?:\s|$)/i.test(text)) return true;
+  if (/^\/cancel(?:@\w+)?(?:\s|$)/i.test(text)) return true;
+  return false;
+}
+
 export async function relayDynamicStoreWebhook(
   req: Request,
   res: Response,
@@ -63,7 +77,11 @@ export async function relayDynamicStoreWebhook(
     return;
   }
 
-  if (!isSubscriptionActive(business)) {
+  const subscriptionDead = !isSubscriptionActive(business);
+  if (
+    subscriptionDead &&
+    !webhookUpdateIsStartOrCancelCommandOnly(req.body)
+  ) {
     res.sendStatus(200);
     return;
   }

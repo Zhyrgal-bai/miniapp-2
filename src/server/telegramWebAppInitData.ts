@@ -4,20 +4,68 @@
  */
 import crypto from "node:crypto";
 
-function platformWebAppBotTokenFromEnv(): string {
-  const explicit = process.env.PLATFORM_WEBAPP_BOT_TOKEN?.trim();
-  if (explicit) return explicit;
-  const fromMulti = process.env.BOT_TOKENS?.split(/[,;\s]+/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-  if (fromMulti && fromMulti.length > 0) return fromMulti[0]!;
-  const one = process.env.BOT_TOKEN?.trim();
-  return one ?? "";
+/**
+ * Все кандидаты на проверку подписи Mini App из env.
+ * Подпись initData зависит от бота, с которого открыли Web App — нужно перебирать все известные токены.
+ */
+export function envCandidateBotTokensForWebAppInit(): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (t: string | undefined | null) => {
+    const s = (t ?? "").trim();
+    if (s.length === 0 || seen.has(s)) return;
+    seen.add(s);
+    out.push(s);
+  };
+  push(process.env.PLATFORM_WEBAPP_BOT_TOKEN);
+  push(process.env.BOT_TOKEN);
+  const fromMulti = process.env.BOT_TOKENS?.split(/[,;\s]+/) ?? [];
+  for (const raw of fromMulti) {
+    push(raw.trim());
+  }
+  return out;
 }
 
-/** Токен бота, с которого открыт Mini App (первый из BOT_TOKENS или BOT_TOKEN / PLATFORM_WEBAPP_BOT_TOKEN). */
+/** Первый непустой (для сообщений об ошибке / обратная совместимость). */
 export function telegramWebAppValidationBotToken(): string {
-  return platformWebAppBotTokenFromEnv();
+  const list = envCandidateBotTokensForWebAppInit();
+  return list[0] ?? "";
+}
+
+/** Проверка initData любым из переданных токенов (порядок сохраняется). */
+export function validateTelegramInitDataWithTokenList(
+  initData: string,
+  tokens: readonly string[],
+): boolean {
+  return tokens.some((t) => validateTelegramInitData(initData, t));
+}
+
+/**
+ * `start_param` из initData (`t.me/Bot?startapp=…` или параметр в Web App).
+ * По нему можно загрузить Business.botToken для проверки подписи SaaS-бота, не перечисленного в BOT_TOKENS.
+ */
+export function parseBusinessIdFromWebAppStartParam(initData: string): number | null {
+  const raw = initData.trim();
+  if (raw === "") return null;
+  let params: URLSearchParams;
+  try {
+    params = new URLSearchParams(raw);
+  } catch {
+    return null;
+  }
+  const sp = params.get("start_param")?.trim() ?? "";
+  if (sp === "") return null;
+
+  const mShop = /^shop_(\d+)$/i.exec(sp);
+  if (mShop) {
+    const n = Number(mShop[1]);
+    if (Number.isSafeInteger(n) && n > 0) return n;
+  }
+  if (/^\d+$/.test(sp)) {
+    const n = Number(sp);
+    if (Number.isSafeInteger(n) && n > 0) return n;
+  }
+  return null;
 }
 
 /**
