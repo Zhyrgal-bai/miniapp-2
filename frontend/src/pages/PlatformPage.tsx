@@ -388,6 +388,15 @@ export default function PlatformPage() {
   const openCreateForm = () => {
     setSubmitError(null);
     setSuccessFlash(false);
+    try {
+      (
+        getTelegramWebApp() as
+          | { HapticFeedback?: { impactOccurred?: (s: string) => void } }
+          | undefined
+      )?.HapticFeedback?.impactOccurred?.("light");
+    } catch {
+      /* ignore */
+    }
     setOpenCreate(true);
   };
 
@@ -542,8 +551,10 @@ export default function PlatformPage() {
     }
   };
 
+  /** При открытой форме оверлей убираем — иначе в TG WebView клики «Создать» могут не доходить. */
   const showOnboardingLayer =
     onboardingBaseOk &&
+    !openCreate &&
     (businesses.length === 0 || onboardingStep === "success");
 
   /** Нижний «Создать» — всегда после загрузки, кроме полноэкранного онбординга (чтобы не дублировать с оверлеем). */
@@ -787,19 +798,30 @@ export default function PlatformPage() {
 
       <AnimatePresence>
         {showOnboardingLayer ? (
-          <motion.div
-            key="merchant-onboarding"
-            className="pointer-events-none fixed inset-0 z-[48] flex items-end justify-center bg-[#0B0F14]/88 p-4 backdrop-blur-md sm:items-center"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Знакомство с кабинетом"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.28 }}
-          >
+          <>
             <motion.div
-              className="pointer-events-auto mb-2 w-full max-w-lg rounded-3xl border border-white/[0.07] bg-[#111827]/95 p-6 shadow-2xl shadow-black/60 backdrop-blur-xl sm:mb-0 sm:p-8"
+              key="merchant-onboarding-backdrop"
+              aria-hidden
+              className="fixed inset-0 z-[48] bg-[#0B0F14]/88 backdrop-blur-md"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.28 }}
+              style={{ pointerEvents: "none" }}
+            />
+            <motion.div
+              key="merchant-onboarding-sheet"
+              className="pointer-events-none fixed inset-x-0 bottom-0 z-[49] flex justify-center px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-2 sm:bottom-auto sm:left-0 sm:right-0 sm:top-0 sm:items-center sm:pb-[max(16px,env(safe-area-inset-bottom))]"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Знакомство с кабинетом"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+            <motion.div
+              className="pointer-events-auto w-full max-w-lg rounded-3xl border border-white/[0.07] bg-[#111827]/95 p-6 shadow-2xl shadow-black/60 backdrop-blur-xl sm:p-8"
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 16 }}
@@ -945,6 +967,7 @@ export default function PlatformPage() {
               </AnimatePresence>
             </motion.div>
           </motion.div>
+          </>
         ) : null}
       </AnimatePresence>
 
@@ -952,7 +975,7 @@ export default function PlatformPage() {
         {openCreate ? (
           <motion.div
             key="platform-register-modal"
-            className="fixed inset-0 z-50 flex min-h-0 max-h-[100dvh] flex-col overflow-hidden bg-[#0B0F14] [height:100dvh]"
+            className="fixed inset-0 z-[100] flex min-h-0 max-h-[100dvh] flex-col overflow-hidden bg-[#0B0F14] [height:100dvh]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
