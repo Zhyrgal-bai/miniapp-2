@@ -33,6 +33,7 @@ import {
   isPlatformAdminTelegramId,
   listBusinessesForPlatformAdmin,
   listPendingRegistrationRequestsForAdmin,
+  purgeBusinessCompletelyForPlatformAdmin,
   rejectRegistrationRequestById,
 } from "./platformAdminService.js";
 import { adminBlockBusiness, adminUnblockBusiness } from "./saasBillingService.js";
@@ -733,6 +734,39 @@ app.post("/api/platform/admin/extend", async (req: Request, res: Response) => {
     res.json({ ok: true, subscriptionEndsAt: out.subscriptionEndsAt });
   } catch (e) {
     console.error("POST /api/platform/admin/extend:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post("/api/platform/admin/purge-business", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromRequest(req);
+    if (!telegramId) {
+      res.status(400).json({ error: "Нужен x-telegram-id" });
+      return;
+    }
+    if (!isPlatformAdminTelegramId(telegramId)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    const businessId = Number(
+      (req.body as { businessId?: unknown }).businessId,
+    );
+    if (!Number.isInteger(businessId) || businessId <= 0) {
+      res.status(400).json({ error: "Нужен корректный businessId" });
+      return;
+    }
+    const out = await purgeBusinessCompletelyForPlatformAdmin(
+      businessId,
+      telegramId,
+    );
+    if (!out.ok) {
+      res.status(out.statusCode).json({ error: out.message });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("POST /api/platform/admin/purge-business:", e);
     res.status(500).json({ error: "Ошибка сервера" });
   }
 });

@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import {
+  AdminActionType,
   BillingPlan,
   MembershipRole,
   RegistrationStatus,
@@ -9,6 +10,7 @@ import { bot as mainTelegrafBot } from "../bot/bot.js";
 import {
   getDynamicOwnerBot,
   initDynamicStoreBot,
+  stopDynamicStoreBotInMemory,
 } from "../bot/dynamicBots.js";
 import { prisma } from "./db.js";
 import { isAdmin } from "./adminAuth.js";
@@ -417,4 +419,88 @@ export async function extendBusinessSubscriptionAdmin(
   });
 
   return { ok: true, subscriptionEndsAt: next.toISOString() };
+}
+
+export type PurgeBusinessOutcome =
+  | { ok: true }
+  | { ok: false; statusCode: number; message: string };
+
+/**
+ * Полное удаление магазина и связанных данных из БД (порядок с учётом FK Product→Category).
+ * Пользователи `User` не удаляются (глобальные аккаунты).
+ */
+export async function purgeBusinessCompletelyForPlatformAdmin(
+  businessId: number,
+  adminTelegramId: string,
+): Promise<PurgeBusinessOutcome> {
+  if (!Number.isInteger(businessId) || businessId <= 0) {
+    return { ok: false, statusCode: 400, message: "Неверный businessId" };
+  }
+
+  const biz = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      botToken: true,
+    },
+  });
+  if (!biz) {
+    return { ok: false, statusCode: 404, message: "Магазин не найден" };
+  }
+
+  const botTokTrim = biz.botToken.trim();
+
+  await stopDynamicStoreBotInMemory(businessId);
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.order.deleteMany({ where: { businessId } });
+      await tx.product.deleteMany({ where: { businessId } });
+      await tx.category.deleteMany({ where: { businessId } });
+      await tx.promo.deleteMany({ where: { businessId } });
+      await tx.paymentRequest.deleteMany({ where: { businessId } });
+      await tx.subscriptionFinikPayment.deleteMany({ where: { businessId } });
+      await tx.merchantChangeRequest.deleteMany({ where: { businessId } });
+      await tx.membership.deleteMany({ where: { businessId } });
+      await tx.settings.deleteMany({ where: { businessId } });
+      await tx.adminActionLog.deleteMany({
+        where: { targetBusinessId: businessId },
+      });
+      await tx.registrationRequest.deleteMany({
+        where: { botToken: botTokTrim },
+      });
+      await tx.business.delete({ where: { id: businessId } });
+    });
+  } catch (e) {
+    console.error("[purgeBusinessCompletelyForPlatformAdmin]", businessId, e);
+    return {
+      ok: false,
+      statusCode: 500,
+      message: "Не удалось удалить данные из БД",
+    };
+  }
+
+  try {
+    await prisma.adminActionLog.create({
+      data: {
+        adminTelegramId,
+        action: AdminActionType.DELETE_SHOP,
+        targetBusinessId: businessId,
+        details: {
+          purgeComplete: true,
+          previousName: biz.name,
+          previousSlug: biz.slug,
+        } as object,
+      },
+    });
+  } catch (logErr) {
+    console.error(
+      "[purgeBusinessCompletelyForPlatformAdmin] AdminActionLog:",
+      logErr,
+    );
+  }
+
+  return { ok: true };
 }

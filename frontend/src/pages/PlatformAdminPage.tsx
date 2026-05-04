@@ -7,6 +7,7 @@ import {
   postPlatformAdminApprove,
   postPlatformAdminDisable,
   postPlatformAdminExtend,
+  postPlatformAdminPurgeBusiness,
   postPlatformAdminReject,
   type PlatformAdminBusinessDTO,
   type PlatformAdminRequestDTO,
@@ -188,6 +189,35 @@ export default function PlatformAdminPage() {
   function clearSearch() {
     setSearchDraft("");
     setSearchApplied("");
+  }
+
+  async function purgeStore(businessId: number) {
+    if (accessForbidden || !hasTelegramUser) return;
+    if (
+      !window.confirm(
+        `УДАЛИТЬ НАВСЕГДА магазин #${businessId}?\n\nБудут удалены заказы, товары, настройки, заявки с этим токеном и сам магазин из БД. Восстановление невозможно.`,
+      )
+    ) {
+      return;
+    }
+    if (
+      !window.confirm(
+        "Подтвердите ещё раз: полное удаление из базы данных без отката.",
+      )
+    ) {
+      return;
+    }
+    const key = `p-${businessId}`;
+    setBizBusyKey(key);
+    try {
+      await postPlatformAdminPurgeBusiness({ telegramId: userId, businessId });
+      await reloadBusinesses();
+    } catch (e) {
+      if (isForbiddenAdminError(e)) setAccessForbidden(true);
+      else setBizError(e instanceof Error ? e.message : "Ошибка");
+    } finally {
+      setBizBusyKey(null);
+    }
   }
 
   async function disableStore(businessId: number) {
@@ -431,6 +461,14 @@ export default function PlatformAdminPage() {
                       className="rounded-xl border border-red-800/80 bg-red-950/40 px-3 py-2 text-sm text-red-200 transition hover:bg-red-900/40 disabled:opacity-50"
                     >
                       {bizBusyKey === `d-${b.id}` ? "…" : "❌ Отключить"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={bizBusyKey !== null}
+                      onClick={() => void purgeStore(b.id)}
+                      className="rounded-xl border border-rose-950 bg-rose-950/70 px-3 py-2 text-sm font-medium text-rose-100 transition hover:bg-rose-900 disabled:opacity-50"
+                    >
+                      {bizBusyKey === `p-${b.id}` ? "…" : "🗑 Удалить из БД"}
                     </button>
                     <button
                       type="button"
