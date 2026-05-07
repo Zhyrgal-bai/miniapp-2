@@ -12,6 +12,7 @@ import {
   getDynamicOwnerBot,
   stopDynamicStoreBotInMemory,
 } from "../bot/dynamicBots.js";
+import { applyBusinessTemplate } from "./applyBusinessTemplate.js";
 import { prisma } from "./db.js";
 import {
   encryptedBotTokenRow,
@@ -273,6 +274,20 @@ export async function approveRegistrationRequestById(
 
   console.log("=== APPROVE START ===");
   console.log("BUSINESS CREATED:", businessId);
+
+  try {
+    await applyBusinessTemplate({
+      prisma,
+      businessId,
+      businessType: (row as any).businessType,
+    });
+  } catch (e) {
+    console.error("[platformAdmin] applyBusinessTemplate failed:", {
+      requestId,
+      businessId,
+      err: e,
+    });
+  }
 
   const bizFromDb = await prisma.business.findUnique({
     where: { id: businessId },

@@ -434,6 +434,13 @@ function isBusinessType(v: unknown): v is BusinessType {
   return v === "clothing" || v === "coffee" || v === "fastfood" || v === "flowers";
 }
 
+function isFinikSkipInput(raw: string): boolean {
+  const t = raw.trim();
+  if (t === "-") return true;
+  const low = t.toLowerCase();
+  return low === "skip" || low === "нет";
+}
+
 /** Business + Settings + OWNER membership (после approve админом). */
 async function provisionMerchantStoreInTx(
   tx: Prisma.TransactionClient,
@@ -754,13 +761,17 @@ export async function registrationFlow(
     }
     sess.data.phone = phone;
     sess.step = "finik";
-    await ctx.reply("Введите API ключ Finik (онлайн ККМ).", wizardExtra(ctx));
+    await ctx.reply(
+      "Введите API ключ Finik (онлайн ККМ).\n\nЧтобы пропустить, отправьте: `-` или `skip` или `нет`.",
+      wizardExtra(ctx),
+    );
     return true;
   }
 
   if (sess.step === "finik") {
     const finikInput = trimmedInput.trim();
-    if (!isValidFinikApiKey(finikInput)) {
+    const useFinik = !isFinikSkipInput(finikInput);
+    if (useFinik && !isValidFinikApiKey(finikInput)) {
       await ctx.reply(
         "Введите корректный API-ключ Finik (от 4 до 2048 символов, без переносов строк).",
         wizardExtra(ctx),
@@ -824,7 +835,7 @@ export async function registrationFlow(
           name,
           botToken: token,
           phone,
-          finikApiKey: finikInput.trim(),
+          finikApiKey: useFinik ? finikInput.trim() : null,
           businessType,
           telegramId: tid,
           status: RegistrationStatus.PENDING,
@@ -855,7 +866,7 @@ export async function registrationFlow(
         `Название: ${row.name}`,
         `Телефон: ${row.phone}`,
         `Telegram пользователя (id): ${row.telegramId}`,
-        "Finik ККМ: да",
+        `Finik ККМ: ${useFinik ? "да" : "нет"}`,
       ];
 
       for (const aid of admins) {
