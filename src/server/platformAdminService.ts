@@ -76,6 +76,7 @@ async function provisionMerchantStoreInTx(
     telegramId: string;
     slugSuffix: string;
     finikApiKey?: string | null;
+    businessType?: string;
   },
 ): Promise<number> {
   const slug = `shop-${params.slugSuffix}`;
@@ -106,6 +107,12 @@ async function provisionMerchantStoreInTx(
       botToken: tokenFields.botToken,
       botTokenHash: tokenFields.botTokenHash,
       finikApiKey: useFinik ? finikTrimmed! : null,
+      businessType:
+        params.businessType === "coffee" ||
+        params.businessType === "fastfood" ||
+        params.businessType === "flowers"
+          ? (params.businessType as any)
+          : ("clothing" as any),
       isActive: giveTrial,
       isBlocked: false,
       subscriptionStatus: giveTrial
@@ -114,7 +121,7 @@ async function provisionMerchantStoreInTx(
       billingPlan: BillingPlan.FREE,
       trialEndsAt: trialEnd,
       subscriptionEndsAt: null,
-    },
+    } as any,
   });
 
   if (giveTrial) {
@@ -237,6 +244,7 @@ export async function approveRegistrationRequestById(
         telegramId: row.telegramId,
         slugSuffix: `${requestId}-${Date.now().toString(36)}`,
         finikApiKey: row.finikApiKey,
+        businessType: (row as any).businessType,
       });
 
       await tx.registrationRequest.update({

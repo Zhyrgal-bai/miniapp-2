@@ -13,6 +13,7 @@ import {
   hashBotTokenSha256Hex,
   plainBotTokenFromStored,
 } from "../server/businessBotToken.js";
+import { applyBusinessTemplate } from "../server/applyBusinessTemplate.js";
 import { isEncryptedTokenFormat } from "../server/botTokenCrypto.js";
 import { logPrismaError, prisma } from "../server/db.js";
 import {
@@ -35,6 +36,8 @@ type BotRole =
   | { type: "env"; botIndex: number }
   | { type: "dynamic"; businessId: number };
 
+type BusinessType = "clothing" | "coffee" | "fastfood" | "flowers";
+
 const SUCCESS_REQUEST_SUBMITTED =
   "⏳ Заявка отправлена. Ожидайте подтверждения администратора";
 
@@ -43,10 +46,11 @@ const SUCCESS_REQUEST_SUBMITTED =
  * Telegraf 4: `import { session } from "telegraf"` (не `telegraf/session`).
  */
 export type RegistrationSessionState = {
-  step?: "name" | "token" | "phone" | "finik";
+  step?: "businessType" | "name" | "token" | "phone" | "finik";
   /** ms epoch — только для потоков вроде «добавить магазин» из inline */
   lastAttemptAt?: number;
   data: {
+    businessType?: BusinessType;
     name?: string;
     token?: string;
     phone?: string;
@@ -411,6 +415,25 @@ function registrationMarkup(requestId: number) {
   };
 }
 
+function businessTypePickerMarkup() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "👕 Одежда", callback_data: "bt_clothing" },
+        { text: "☕ Кофейня", callback_data: "bt_coffee" },
+      ],
+      [
+        { text: "🍔 Фастфуд", callback_data: "bt_fastfood" },
+        { text: "🌸 Цветочный", callback_data: "bt_flowers" },
+      ],
+    ],
+  };
+}
+
+function isBusinessType(v: unknown): v is BusinessType {
+  return v === "clothing" || v === "coffee" || v === "fastfood" || v === "flowers";
+}
+
 /** Business + Settings + OWNER membership (после approve админом). */
 async function provisionMerchantStoreInTx(
   tx: Prisma.TransactionClient,
@@ -420,6 +443,7 @@ async function provisionMerchantStoreInTx(
     telegramId: string;
     slugSuffix: string;
     finikApiKey?: string | null;
+    businessType: BusinessType;
   },
 ): Promise<number> {
   const slug = `shop-${params.slugSuffix}`;
@@ -450,6 +474,7 @@ async function provisionMerchantStoreInTx(
       botToken: tokRow.botToken,
       botTokenHash: tokRow.botTokenHash,
       finikApiKey: useFinik ? finikTrimmed! : null,
+      businessType: params.businessType,
       isActive: giveTrial,
       isBlocked: false,
       subscriptionStatus: giveTrial
@@ -458,7 +483,7 @@ async function provisionMerchantStoreInTx(
       billingPlan: BillingPlan.FREE,
       trialEndsAt: trialEnd,
       subscriptionEndsAt: null,
-    },
+    } as any,
   });
 
   if (giveTrial) {
@@ -685,6 +710,16 @@ export async function registrationFlow(
     return true;
   }
 
+  if (sess.step === "businessType") {
+    await ctx.reply(
+      "Выберите тип бизнеса кнопкой ниже:",
+      {
+        reply_markup: businessTypePickerMarkup(),
+      },
+    );
+    return true;
+  }
+
   if (sess.step === "token") {
     const tokenTrimmed = clean.replace(/\s/g, "");
     const gate = await precheckBotTokenBeforeRegistrationPersist(tokenTrimmed);
@@ -736,6 +771,7 @@ export async function registrationFlow(
     const name = sess.data.name ?? "";
     const token = sess.data.token ?? "";
     const phone = sess.data.phone ?? "";
+    const businessType = sess.data.businessType;
 
     try {
       const tid = telegramIdString(ctx);
@@ -760,7 +796,7 @@ export async function registrationFlow(
         return true;
       }
 
-      if (name === "" || token === "") {
+      if (businessType == null || !isBusinessType(businessType) || name === "" || token === "") {
         resetRegistrationWizardFields(ctx);
         await ctx.reply(
           "Шаги сбросились. Нажмите /start и заново укажите данные магазина.",
@@ -789,9 +825,10 @@ export async function registrationFlow(
           botToken: token,
           phone,
           finikApiKey: finikInput.trim(),
+          businessType,
           telegramId: tid,
           status: RegistrationStatus.PENDING,
-        },
+        } as any,
       });
 
       resetRegistrationWizardFields(ctx);
@@ -938,12 +975,11 @@ export async function handleRegistrationStartCommand(
     }
 
     sess.data = {};
-    sess.step = "name";
+    sess.step = "businessType";
 
-    await ctx.reply(
-      "Давайте создадим ваш магазин 🚀\nВведите название магазина.",
-      wizardExtra(ctx),
-    );
+    await ctx.reply("Выберите тип бизнеса:", {
+      reply_markup: businessTypePickerMarkup(),
+    });
 
     logSaas("registration_started", { telegramUserId: telegramIdStr });
     return true;
@@ -973,6 +1009,37 @@ export async function handleRegistrationCallbacks(
 
   const data = ctx.callbackQuery.data;
   if (typeof data !== "string") return false;
+
+  if (data.startsWith("bt_")) {
+    const sess = getRegistrationSession(ctx);
+    if (ctx.chat?.type !== "private" || !sess) {
+      await ctx.answerCbQuery("Только в личном чате").catch(() => undefined);
+      return true;
+    }
+    if (sess.step !== "businessType") {
+      await ctx.answerCbQuery().catch(() => undefined);
+      return true;
+    }
+    const map: Record<string, BusinessType> = {
+      bt_clothing: "clothing",
+      bt_coffee: "coffee",
+      bt_fastfood: "fastfood",
+      bt_flowers: "flowers",
+    };
+    const picked = map[data];
+    if (!isBusinessType(picked)) {
+      await ctx.answerCbQuery("Неизвестный тип").catch(() => undefined);
+      return true;
+    }
+    sess.data.businessType = picked;
+    sess.step = "name";
+    await ctx.answerCbQuery("Выбрано").catch(() => undefined);
+    await ctx.reply(
+      "Давайте создадим ваш магазин 🚀\nВведите название магазина.",
+      wizardExtra(ctx),
+    );
+    return true;
+  }
 
   if (data === "saas_new_store") {
     if (ctx.chat?.type !== "private") {
@@ -1006,15 +1073,15 @@ export async function handleRegistrationCallbacks(
         await ctx.answerCbQuery("Завершите текущую регистрацию");
         return true;
       }
-      sess.step = "name";
+      sess.step = "businessType";
       sess.data = {};
       sess.lastAttemptAt = Date.now();
       await ctx
-        .answerCbQuery("Введите название магазина в сообщении ниже")
+        .answerCbQuery("Выберите тип бизнеса")
         .catch(() => undefined);
       await ctx.reply(
-        "Новый магазин 🚀\nВведите название магазина (оно может отличаться от других ваших магазинов).",
-        wizardExtra(ctx),
+        "Новый магазин 🚀\nВыберите тип бизнеса:",
+        { reply_markup: businessTypePickerMarkup() },
       );
       logSaas("registration_started", {
         telegramUserId: tid,
@@ -1133,6 +1200,7 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
         telegramId: row.telegramId,
         slugSuffix: `${requestId}-${Date.now().toString(36)}`,
         finikApiKey: row.finikApiKey,
+        businessType: (row as any).businessType,
       });
 
       await tx.registrationRequest.update({
@@ -1142,6 +1210,20 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
     });
 
     console.log("BUSINESS CREATED:", businessId);
+
+    try {
+      await applyBusinessTemplate({
+        prisma,
+        businessId,
+        businessType: (row as any).businessType,
+      });
+    } catch (e) {
+      console.error("[saasRegistration] applyBusinessTemplate failed:", {
+        requestId,
+        businessId,
+        err: e,
+      });
+    }
 
     const bizFromDb = await prisma.business.findUnique({
       where: { id: businessId },

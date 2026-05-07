@@ -1,7 +1,9 @@
 import { prisma } from "./db.js";
 import { merchantStoreEntitled } from "./subscriptionAccess.js";
 import { isValidFinikApiKey } from "../bot/saasRegistrationValidation.js";
+import { validateMerchantConfig } from "./templateValidation.js";
 import { platformMerchantOwnsBusiness } from "./platformMerchantAccess.js";
+import { templateForBusinessType } from "../templates/index.js";
 import {
   createMerchantBotTokenChangeRequest,
   MERCHANT_CHANGE_STATUS_PENDING,
@@ -15,6 +17,9 @@ export type PlatformStoreSettingsDTO = {
   name: string;
   finikConfigured: boolean;
   pendingBotTokenChange: boolean;
+  businessType: string;
+  merchantConfig: Record<string, unknown>;
+  merchantSettingsSchema: Record<string, unknown>;
 };
 
 export async function getPlatformStoreSettingsForMerchant(input: {
@@ -38,6 +43,8 @@ export async function getPlatformStoreSettingsForMerchant(input: {
       id: true,
       name: true,
       finikApiKey: true,
+      businessType: true,
+      merchantConfig: true,
     },
   });
   if (b == null) {
@@ -63,6 +70,25 @@ export async function getPlatformStoreSettingsForMerchant(input: {
       name: b.name,
       finikConfigured,
       pendingBotTokenChange: pending != null,
+      businessType: String((b as any).businessType ?? ""),
+      merchantConfig:
+        (b as any).merchantConfig != null &&
+        typeof (b as any).merchantConfig === "object" &&
+        !Array.isArray((b as any).merchantConfig)
+          ? ((b as any).merchantConfig as Record<string, unknown>)
+          : {},
+      merchantSettingsSchema: (() => {
+        const bt = String((b as any).businessType ?? "");
+        if (bt !== "") {
+          try {
+            return (templateForBusinessType(bt as any).merchantSettingsSchema ??
+              {}) as Record<string, unknown>;
+          } catch {
+            return {};
+          }
+        }
+        return {};
+      })(),
     },
   };
 }
@@ -71,6 +97,7 @@ export type PlatformStoreSettingsUpdateBody = {
   storeName?: unknown;
   finikApiKey?: unknown;
   newBotToken?: unknown;
+  merchantConfig?: unknown;
 };
 
 export async function updatePlatformStoreSettingsForMerchant(input: {
@@ -112,6 +139,7 @@ export async function updatePlatformStoreSettingsForMerchant(input: {
   const rawName = input.body.storeName;
   const rawFinik = input.body.finikApiKey;
   const rawTok = input.body.newBotToken;
+  const rawMerchantConfig = input.body.merchantConfig;
 
   const hasName =
     rawName !== undefined &&
@@ -120,12 +148,13 @@ export async function updatePlatformStoreSettingsForMerchant(input: {
   const hasTok =
     rawTok !== undefined &&
     !(typeof rawTok === "string" && rawTok.replace(/\s/g, "").trim() === "");
+  const hasMerchantConfig = rawMerchantConfig !== undefined;
 
-  if (!hasName && !hasFinik && !hasTok) {
+  if (!hasName && !hasFinik && !hasTok && !hasMerchantConfig) {
     return {
       ok: false,
       statusCode: 400,
-      error: "Укажите storeName, finikApiKey и/или newBotToken",
+      error: "Укажите storeName, finikApiKey, newBotToken и/или merchantConfig",
     };
   }
 
@@ -181,6 +210,25 @@ export async function updatePlatformStoreSettingsForMerchant(input: {
         update: { paymentProvider: "finik" },
       });
     }
+  }
+
+  if (hasMerchantConfig) {
+    const b = await prisma.business.findUnique({
+      where: { id: input.businessId },
+      select: { id: true, businessType: true },
+    });
+    const bt = (b as any)?.businessType;
+    if (typeof bt !== "string" || bt.trim() === "") {
+      return { ok: false, statusCode: 400, error: "Магазин без businessType" };
+    }
+    const v = validateMerchantConfig(bt as any, rawMerchantConfig);
+    if (!v.ok) {
+      return { ok: false, statusCode: 400, error: v.error };
+    }
+    await prisma.business.update({
+      where: { id: input.businessId },
+      data: { merchantConfig: v.value } as any,
+    });
   }
 
   let botTokenChangeRequestId: number | undefined;

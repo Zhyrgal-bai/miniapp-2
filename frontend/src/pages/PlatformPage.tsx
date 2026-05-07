@@ -17,6 +17,10 @@ import {
   type PlatformMyBusinessDTO,
   type PlatformStoreSettingsDTO,
 } from "../services/platformApi";
+import {
+  MerchantSettingsRenderer,
+  type SchemaObject as MerchantSchemaObject,
+} from "../components/merchant/MerchantSettingsRenderer";
 import { MERCHANT_REGISTER_SENT_KEY } from "./MerchantRegisterPage";
 import "./MerchantPage.css";
 
@@ -156,6 +160,9 @@ export default function PlatformPage() {
   const [finikMsg, setFinikMsg] = useState<string | null>(null);
   const [finikErr, setFinikErr] = useState<string | null>(null);
   const [settingsNewToken, setSettingsNewToken] = useState("");
+  const [merchantConfigDraft, setMerchantConfigDraft] = useState<
+    Record<string, unknown>
+  >({});
   /** Сервер: только ADMIN_IDS видит админку (пробуем лёгкий GET заявок). */
   const [platformAdminAccess, setPlatformAdminAccess] = useState<
     "unknown" | "yes" | "no"
@@ -330,6 +337,7 @@ export default function PlatformPage() {
         if (cancelled) return;
         setSettingsSnap(s);
         setSettingsName(s.name);
+        setMerchantConfigDraft(s.merchantConfig ?? {});
         setFinikDraft("");
         setFinikMsg(null);
         setFinikErr(null);
@@ -564,14 +572,20 @@ export default function PlatformPage() {
       businessId: number;
       storeName?: string;
       newBotToken?: string;
+      merchantConfig?: Record<string, unknown>;
     } = {
       telegramId: merchantTelegramId,
       businessId: settingsBusinessId,
     };
     if (nameChanged) payload.storeName = trimmedName;
     if (newTok !== "") payload.newBotToken = newTok;
+    payload.merchantConfig = merchantConfigDraft;
 
-    if (payload.storeName === undefined && payload.newBotToken === undefined) {
+    if (
+      payload.storeName === undefined &&
+      payload.newBotToken === undefined &&
+      payload.merchantConfig === undefined
+    ) {
       setSettingsErr("Нет изменений для сохранения.");
       return;
     }
@@ -586,6 +600,9 @@ export default function PlatformPage() {
         name: out.name,
         finikConfigured: out.finikConfigured,
         pendingBotTokenChange: out.pendingBotTokenChange,
+        businessType: settingsSnap.businessType,
+        merchantConfig: merchantConfigDraft,
+        merchantSettingsSchema: settingsSnap.merchantSettingsSchema,
       });
       setSettingsName(out.name);
       setSettingsNewToken("");
@@ -1149,6 +1166,23 @@ export default function PlatformPage() {
                     className={archa.input}
                   />
                 </div>
+
+                {settingsSnap != null &&
+                Object.keys(settingsSnap.merchantSettingsSchema ?? {}).length >
+                  0 ? (
+                  <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3">
+                    <div className="mp-muted mb-2 text-sm">
+                      Настройки ({settingsSnap.businessType})
+                    </div>
+                    <MerchantSettingsRenderer
+                      schema={
+                        settingsSnap.merchantSettingsSchema as unknown as MerchantSchemaObject
+                      }
+                      value={merchantConfigDraft}
+                      onChange={setMerchantConfigDraft}
+                    />
+                  </div>
+                ) : null}
 
                 <div>
                   <label

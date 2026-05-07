@@ -44,6 +44,8 @@ export async function fetchPlatformMyBusinesses(params: {
       typeof x.webhookUrl === "string" && x.webhookUrl.trim() !== ""
         ? x.webhookUrl.trim()
         : null;
+    const isActive = Boolean(x.isActive);
+    const isBlocked = Boolean(x.isBlocked);
     return {
       id:
         typeof idNum === "number" &&
@@ -53,12 +55,12 @@ export async function fetchPlatformMyBusinesses(params: {
           : 0,
       name: String(x.name ?? ""),
       status: String(x.status ?? ""),
-      isActive: Boolean(x.isActive),
-      isBlocked: Boolean(x.isBlocked),
+      isActive,
+      isBlocked,
       subscriptionActive:
         typeof x.subscriptionActive === "boolean"
           ? x.subscriptionActive
-          : Boolean(x.isActive) && !Boolean(x.isBlocked),
+          : isActive && !isBlocked,
       webhookStatus: ws,
       webhookUrl: wu,
     };
@@ -71,6 +73,9 @@ export type PlatformStoreSettingsDTO = {
   name: string;
   finikConfigured: boolean;
   pendingBotTokenChange: boolean;
+  businessType: string;
+  merchantConfig: Record<string, unknown>;
+  merchantSettingsSchema: Record<string, unknown>;
 };
 
 export async function fetchPlatformStoreSettings(params: {
@@ -95,6 +100,9 @@ export async function fetchPlatformStoreSettings(params: {
     name?: string;
     finikConfigured?: boolean;
     pendingBotTokenChange?: boolean;
+    businessType?: unknown;
+    merchantConfig?: unknown;
+    merchantSettingsSchema?: unknown;
   };
   if (!res.ok) {
     throw new Error(j.error ?? `HTTP ${res.status}`);
@@ -111,6 +119,19 @@ export async function fetchPlatformStoreSettings(params: {
     name: String(j.name ?? ""),
     finikConfigured: Boolean(j.finikConfigured),
     pendingBotTokenChange: Boolean(j.pendingBotTokenChange),
+    businessType: typeof j.businessType === "string" ? j.businessType : "",
+    merchantConfig:
+      j.merchantConfig != null &&
+      typeof j.merchantConfig === "object" &&
+      !Array.isArray(j.merchantConfig)
+        ? (j.merchantConfig as Record<string, unknown>)
+        : {},
+    merchantSettingsSchema:
+      j.merchantSettingsSchema != null &&
+      typeof j.merchantSettingsSchema === "object" &&
+      !Array.isArray(j.merchantSettingsSchema)
+        ? (j.merchantSettingsSchema as Record<string, unknown>)
+        : {},
   };
 }
 
@@ -127,6 +148,7 @@ export async function savePlatformStoreSettings(payload: {
   businessId: number;
   storeName?: string;
   newBotToken?: string;
+  merchantConfig?: Record<string, unknown>;
 }): Promise<PlatformStoreSettingsSaveResult> {
   void payload.telegramId;
   const body: Record<string, unknown> = {
@@ -134,6 +156,8 @@ export async function savePlatformStoreSettings(payload: {
   };
   if (payload.storeName !== undefined) body.storeName = payload.storeName;
   if (payload.newBotToken !== undefined) body.newBotToken = payload.newBotToken;
+  if (payload.merchantConfig !== undefined)
+    body.merchantConfig = payload.merchantConfig;
 
   const res = await fetch(apiAbsoluteUrl("/api/platform/store-settings"), {
     method: "POST",

@@ -34,6 +34,7 @@ import {
   platformToggleBotBodySchema,
 } from "./platformRouteBodySchemas.js";
 import { validateAndPersistPlatformRegistration } from "./platformRegisterRequest.js";
+import { validateOrderOptions, validateProductAttributes } from "./templateValidation.js";
 import {
   approveRegistrationRequestById,
   extendBusinessSubscriptionAdmin,
@@ -43,6 +44,13 @@ import {
   purgeBusinessCompletelyForPlatformAdmin,
   rejectRegistrationRequestById,
 } from "./platformAdminService.js";
+import { templateForBusinessType } from "../templates/index.js";
+import { StorefrontConfigSchema, resolveStorefrontConfig } from "../storefront/schema.js";
+import {
+  getCachedStorefrontPayload,
+  invalidateStorefrontCache,
+  setCachedStorefrontPayload,
+} from "./storefrontCache.js";
 import {
   adminBlockBusiness,
   adminDeactivateBusiness,
@@ -456,6 +464,7 @@ app.post("/api/platform/store-settings", async (req: Request, res: Response) => 
       storeName: raw.storeName,
       finikApiKey: raw.finikApiKey,
       newBotToken: raw.newBotToken,
+      merchantConfig: raw.merchantConfig,
     };
     const out = await updatePlatformStoreSettingsForMerchant({
       telegramId,
@@ -556,6 +565,185 @@ app.post(
   } catch (e) {
     console.error("POST /api/platform/register-request:", e);
     res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.get("/api/merchant/schemas", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
+    const b = await prisma.business.findUnique({
+      where: { id: merchant.businessId },
+    });
+    const bt = (b as any)?.businessType;
+    if (typeof bt !== "string" || bt.trim() === "") {
+      return res.status(400).json({ error: "Магазин без businessType" });
+    }
+    const tpl = templateForBusinessType(bt as any);
+    res.json({
+      businessType: bt,
+      templateVersion: tpl.templateVersion ?? 1,
+      productSchema: tpl.productSchema ?? {},
+      merchantSettingsSchema: tpl.merchantSettingsSchema ?? {},
+      orderOptionsSchema: tpl.orderOptionsSchema ?? {},
+    });
+  } catch (e) {
+    console.error("GET /api/merchant/schemas:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.get("/api/storefront/:businessId", async (req: Request, res: Response) => {
+  try {
+    const businessId = Number(req.params.businessId);
+    if (!Number.isInteger(businessId) || businessId <= 0) {
+      return res.status(400).json({ error: "Invalid businessId" });
+    }
+
+    const cached = getCachedStorefrontPayload(businessId);
+    if (cached) {
+      return res.json(cached);
+    }
+
+    const b = await prisma.business.findUnique({
+      where: { id: businessId },
+      select: {
+        id: true,
+        isActive: true,
+        isBlocked: true,
+        businessType: true,
+        templateId: true,
+        themeConfig: true,
+        storefrontConfig: true,
+        storefrontConfigVersion: true,
+        featureFlags: true,
+      } as any,
+    });
+    if (!b) return res.status(404).json({ error: "Business not found" });
+    if (!(b as any).isActive || (b as any).isBlocked) {
+      return res.status(403).json({ error: "Store unavailable" });
+    }
+
+    const payload = resolveStorefrontConfig({
+      businessId,
+      businessType: String((b as any).businessType ?? ""),
+      templateId: (b as any).templateId ?? null,
+      storefrontConfigVersion: Number((b as any).storefrontConfigVersion ?? 1),
+      rawStorefrontConfig: (b as any).storefrontConfig ?? {},
+      rawThemeConfig: (b as any).themeConfig ?? {},
+      rawFeatureFlags: (b as any).featureFlags ?? {},
+    });
+
+    const enabledTypes = new Set(payload.sections.map((s) => s.type));
+    if (enabledTypes.has("categories")) {
+      const categories = await prisma.category.findMany({
+        where: { businessId },
+        orderBy: { id: "asc" },
+      });
+      const nodeById = new Map<number, any>();
+      for (const c of categories) {
+        nodeById.set(c.id, {
+          id: c.id,
+          name: c.name,
+          parentId: (c as any).parentId ?? null,
+          children: [],
+        });
+      }
+      const roots: any[] = [];
+      for (const c of categories) {
+        const node = nodeById.get(c.id)!;
+        const pid = (c as any).parentId ?? null;
+        if (pid == null) roots.push(node);
+        else {
+          const parent = nodeById.get(pid);
+          if (parent) parent.children.push(node);
+          else roots.push(node);
+        }
+      }
+      (payload as any).categories = roots;
+    }
+
+    if (enabledTypes.has("featuredProducts")) {
+      const sec = payload.sections.find((s) => s.type === "featuredProducts");
+      const lim = Number((sec?.config as any)?.limit ?? 8);
+      const take = Number.isFinite(lim) && lim > 0 ? Math.min(lim, 24) : 8;
+      const products = await prisma.product.findMany({
+        where: { businessId },
+        orderBy: { id: "desc" },
+        take,
+        select: {
+          id: true,
+          name: true,
+          price: true,
+          image: true,
+          images: true,
+          description: true,
+          categoryId: true,
+        },
+      });
+      (payload as any).featuredProducts = products;
+    }
+
+    setCachedStorefrontPayload({ businessId, payload });
+    return res.json(payload);
+  } catch (e) {
+    console.error("GET /api/storefront/:businessId:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.get("/api/merchant/storefront-config", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
+    const b = await prisma.business.findUnique({
+      where: { id: merchant.businessId },
+    });
+    if (!b) return res.status(404).json({ error: "Business not found" });
+    const raw = (b as any).storefrontConfig ?? {};
+    const out = StorefrontConfigSchema.safeParse(raw);
+    const rawSafe = out.success ? out.data : { version: 1, sections: [] };
+    const preview = resolveStorefrontConfig({
+      businessId: b.id,
+      businessType: String((b as any).businessType ?? ""),
+      templateId: (b as any).templateId ?? null,
+      storefrontConfigVersion: Number((b as any).storefrontConfigVersion ?? 1),
+      rawStorefrontConfig: rawSafe,
+      rawThemeConfig: (b as any).themeConfig ?? {},
+      rawFeatureFlags: (b as any).featureFlags ?? {},
+    });
+    res.json({
+      businessId: b.id,
+      storefrontConfig: rawSafe,
+      storefrontConfigVersion: Number((b as any).storefrontConfigVersion ?? 1),
+      preview,
+    });
+  } catch (e) {
+    console.error("GET /api/merchant/storefront-config:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.put("/api/merchant/storefront-config", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
+    const parsed = StorefrontConfigSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Invalid storefrontConfig" });
+    }
+    await prisma.business.update({
+      where: { id: merchant.businessId },
+      data: {
+        storefrontConfig: parsed.data as any,
+        storefrontConfigVersion: parsed.data.version,
+      } as any,
+    });
+    invalidateStorefrontCache(merchant.businessId);
+    res.json({ ok: true, storefrontConfigVersion: parsed.data.version });
+  } catch (e) {
+    console.error("PUT /api/merchant/storefront-config:", e);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -944,6 +1132,150 @@ app.post("/api/platform/admin/purge-business", async (req: Request, res: Respons
     res.json({ ok: true });
   } catch (e) {
     console.error("POST /api/platform/admin/purge-business:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.get("/api/platform/admin/template-info", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromWebApp(req);
+    if (!telegramId) {
+      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
+      return;
+    }
+    if (!isPlatformAdminTelegramId(telegramId)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    const bid = Number((req.query as { businessId?: string }).businessId);
+    if (!Number.isInteger(bid) || bid <= 0) {
+      res.status(400).json({ error: "Нужен query businessId" });
+      return;
+    }
+    const b = await prisma.business.findUnique({ where: { id: bid } });
+    if (!b) {
+      res.status(404).json({ error: "Business not found" });
+      return;
+    }
+    const bt = (b as any).businessType;
+    const tpl = typeof bt === "string" ? templateForBusinessType(bt as any) : null;
+    res.json({
+      businessId: b.id,
+      name: b.name,
+      businessType: bt ?? null,
+      templateId: (b as any).templateId ?? null,
+      templateVersion: (b as any).templateVersion ?? null,
+      schemas: tpl
+        ? {
+            productSchema: tpl.productSchema ?? {},
+            merchantSettingsSchema: tpl.merchantSettingsSchema ?? {},
+            orderOptionsSchema: tpl.orderOptionsSchema ?? {},
+            templateVersion: tpl.templateVersion ?? 1,
+          }
+        : null,
+    });
+  } catch (e) {
+    console.error("GET /api/platform/admin/template-info:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post("/api/platform/admin/reapply-template", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromWebApp(req);
+    if (!telegramId) {
+      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
+      return;
+    }
+    if (!isPlatformAdminTelegramId(telegramId)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    const bid = Number((req.body as { businessId?: unknown }).businessId);
+    if (!Number.isInteger(bid) || bid <= 0) {
+      res.status(400).json({ error: "Нужен корректный businessId" });
+      return;
+    }
+    const b = await prisma.business.findUnique({ where: { id: bid } });
+    if (!b) return res.status(404).json({ error: "Business not found" });
+    const bt = (b as any).businessType;
+    if (typeof bt !== "string" || bt.trim() === "") {
+      return res.status(400).json({ error: "Business без businessType" });
+    }
+    const { applyBusinessTemplate } = await import("./applyBusinessTemplate.js");
+    await applyBusinessTemplate({ prisma, businessId: bid, businessType: bt as any });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("POST /api/platform/admin/reapply-template:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post("/api/platform/admin/regenerate-demo", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromWebApp(req);
+    if (!telegramId) {
+      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
+      return;
+    }
+    if (!isPlatformAdminTelegramId(telegramId)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    const bid = Number((req.body as { businessId?: unknown }).businessId);
+    if (!Number.isInteger(bid) || bid <= 0) {
+      res.status(400).json({ error: "Нужен корректный businessId" });
+      return;
+    }
+    const b = await prisma.business.findUnique({ where: { id: bid } });
+    if (!b) return res.status(404).json({ error: "Business not found" });
+    const bt = (b as any).businessType;
+    if (typeof bt !== "string" || bt.trim() === "") {
+      return res.status(400).json({ error: "Business без businessType" });
+    }
+    const { applyBusinessTemplate } = await import("./applyBusinessTemplate.js");
+    await applyBusinessTemplate({
+      prisma,
+      businessId: bid,
+      businessType: bt as any,
+      forceDemo: true,
+    });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("POST /api/platform/admin/regenerate-demo:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post("/api/platform/admin/migrate-template", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromWebApp(req);
+    if (!telegramId) {
+      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
+      return;
+    }
+    if (!isPlatformAdminTelegramId(telegramId)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    const bid = Number((req.body as { businessId?: unknown }).businessId);
+    if (!Number.isInteger(bid) || bid <= 0) {
+      res.status(400).json({ error: "Нужен корректный businessId" });
+      return;
+    }
+    const b = await prisma.business.findUnique({ where: { id: bid } });
+    if (!b) return res.status(404).json({ error: "Business not found" });
+    const bt = (b as any).businessType;
+    if (typeof bt !== "string" || bt.trim() === "") {
+      return res.status(400).json({ error: "Business без businessType" });
+    }
+    const tpl = templateForBusinessType(bt as any);
+    const { applyBusinessTemplate } = await import("./applyBusinessTemplate.js");
+    await applyBusinessTemplate({ prisma, businessId: bid, businessType: bt as any, forceDemo: false });
+    await prisma.business.update({ where: { id: bid }, data: { templateVersion: tpl.templateVersion ?? 1 } as any });
+    res.json({ ok: true, templateVersion: tpl.templateVersion ?? 1 });
+  } catch (e) {
+    console.error("POST /api/platform/admin/migrate-template:", e);
     res.status(500).json({ error: "Ошибка сервера" });
   }
 });
@@ -2135,8 +2467,54 @@ app.get("/categories", async (_req: Request, res: Response) => {
     const categories = await prisma.category.findMany({
       where: { businessId },
       orderBy: { id: "asc" },
+      include: { _count: { select: { products: true } } },
     });
-    res.json(categories);
+
+    type Row = (typeof categories)[number];
+    const byId = new Map<number, Row>();
+    for (const c of categories) byId.set(c.id, c);
+
+    const nodeById = new Map<
+      number,
+      {
+        id: number;
+        name: string;
+        parentId: number | null;
+        productsCount: number;
+        config: unknown;
+        children: any[];
+      }
+    >();
+
+    for (const c of categories) {
+      nodeById.set(c.id, {
+        id: c.id,
+        name: c.name,
+        parentId: (c as unknown as { parentId?: number | null }).parentId ?? null,
+        productsCount: c._count.products,
+        config: (c as unknown as { config?: unknown }).config ?? {},
+        children: [],
+      });
+    }
+
+    const roots: any[] = [];
+    for (const c of categories) {
+      const node = nodeById.get(c.id)!;
+      const parentId =
+        (c as unknown as { parentId?: number | null }).parentId ?? null;
+      if (parentId == null) {
+        roots.push(node);
+        continue;
+      }
+      const parent = nodeById.get(parentId);
+      if (!parent) {
+        roots.push(node);
+        continue;
+      }
+      parent.children.push(node);
+    }
+
+    res.json(roots);
   } catch (e) {
     console.error("GET CATEGORIES ERROR:", e);
     res.status(500).json({ error: "Ошибка получения категорий" });
@@ -2147,13 +2525,35 @@ app.post("/categories", async (req: Request, res: Response) => {
   try {
     const merchant = await requireMerchantStaff(req, res);
     if (!merchant) return;
-    const body = req.body as { name?: unknown };
+    const body = req.body as { name?: unknown; parentId?: unknown };
     const name = String(body.name ?? "").trim();
     if (!name) {
       return res.status(400).json({ error: "Укажите название категории" });
     }
+    const parentIdRaw = body.parentId;
+    const parentId =
+      parentIdRaw == null || parentIdRaw === ""
+        ? null
+        : Number(parentIdRaw);
+    if (parentId != null && !Number.isFinite(parentId)) {
+      return res.status(400).json({ error: "Неверный parentId" });
+    }
+    if (parentId != null) {
+      const parent = await prisma.category.findUnique({
+        where: { id: parentId },
+        select: { id: true, businessId: true },
+      });
+      if (!parent || parent.businessId !== merchant.businessId) {
+        return res.status(400).json({ error: "Неверная родительская категория" });
+      }
+    }
     const category = await prisma.category.create({
-      data: { name, businessId: merchant.businessId },
+      // Prisma Client types may lag schema changes in editor; runtime column exists after migration.
+      data: {
+        name,
+        businessId: merchant.businessId,
+        parentId,
+      } as any,
     });
     res.json(category);
   } catch (e) {
@@ -2193,6 +2593,42 @@ app.delete("/categories/:id", async (req: Request, res: Response) => {
   }
 });
 
+app.put("/categories/:id/config", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ error: "Неверный id" });
+    }
+
+    const exists = await prisma.category.findUnique({
+      where: { id },
+      select: { id: true, businessId: true },
+    });
+    if (!exists || exists.businessId !== merchant.businessId) {
+      return res.status(404).json({ error: "Категория не найдена" });
+    }
+
+    const config =
+      req.body != null && typeof req.body === "object" && !Array.isArray(req.body)
+        ? (req.body as Record<string, unknown>)
+        : null;
+    if (!config) {
+      return res.status(400).json({ error: "Нужен JSON объект config" });
+    }
+
+    const updated = await prisma.category.update({
+      where: { id },
+      data: { config } as any,
+    });
+    res.json(updated);
+  } catch (e) {
+    console.error("UPDATE CATEGORY CONFIG ERROR:", e);
+    res.status(500).json({ error: "Ошибка обновления config" });
+  }
+});
+
 // ================== CREATE PRODUCT ==================
 app.post("/products", async (req: Request, res: Response) => {
   try {
@@ -2205,9 +2641,11 @@ app.post("/products", async (req: Request, res: Response) => {
       images?: unknown;
       description?: unknown;
       categoryId?: unknown;
+      attributes?: unknown;
     };
 
-    const { name, price, image, images, description, categoryId } = body;
+    const { name, price, image, images, description, categoryId, attributes } =
+      body;
 
     const rawImages = Array.isArray(images)
       ? (images as unknown[])
@@ -2235,7 +2673,27 @@ app.post("/products", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Неверная категория" });
     }
 
+    const b = await prisma.business.findUnique({
+      where: { id: merchant.businessId },
+      select: { id: true } as any,
+    });
+    const b2 = await prisma.business.findUnique({
+      where: { id: merchant.businessId },
+    });
+    const businessType = (b2 as any)?.businessType;
+    if (typeof businessType !== "string" || businessType.trim() === "") {
+      return res.status(400).json({ error: "Магазин без businessType" });
+    }
+    const vAttr = validateProductAttributes(
+      businessType as any,
+      attributes,
+    );
+    if (!vAttr.ok) {
+      return res.status(400).json({ error: vAttr.error, details: vAttr.details });
+    }
+
     const product = await prisma.product.create({
+      // Prisma Client types may lag schema changes in editor; runtime column exists after migration.
       data: {
         name: String(name),
         price: Number(price),
@@ -2247,7 +2705,8 @@ app.post("/products", async (req: Request, res: Response) => {
             : null,
         categoryId: normalizedCategoryId,
         businessId: merchant.businessId,
-      },
+        attributes: vAttr.value,
+      } as any,
       include: {
         category: true,
       },
@@ -2840,6 +3299,7 @@ app.post("/orders", async (req: Request, res: Response) => {
     name: string;
     size: string;
     color: string;
+    options?: unknown;
     quantity: number;
     price: number;
   }>;
@@ -2853,6 +3313,7 @@ app.post("/orders", async (req: Request, res: Response) => {
     name: cleanInput(item.name),
     size: cleanInput(item.size),
     color: cleanInput(item.color),
+    options: item.options,
     quantity: Number(item.quantity),
     price: Number(item.price),
     productId: Number(item.productId),
@@ -2866,6 +3327,35 @@ app.post("/orders", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "Товар не найден" });
   }
   const tenantBusinessId = probe.businessId;
+
+  const biz = await prisma.business.findUnique({
+    where: { id: tenantBusinessId },
+  });
+  const businessType = (biz as any)?.businessType;
+  if (typeof businessType !== "string" || businessType.trim() === "") {
+    return res.status(500).json({ error: "Магазин без businessType" });
+  }
+
+  const itemsValidated: Array<
+    (typeof items)[number] & { optionsValidated: Record<string, unknown> }
+  > = [];
+  for (const it of items) {
+    const mergedOptions =
+      it.options != null && typeof it.options === "object" && !Array.isArray(it.options)
+        ? (it.options as Record<string, unknown>)
+        : {};
+    // Backward-compatible: size/color still come from legacy fields
+    const withLegacy = {
+      ...mergedOptions,
+      ...(it.size ? { size: it.size } : {}),
+      ...(it.color ? { color: it.color } : {}),
+    };
+    const v = validateOrderOptions(businessType as any, withLegacy);
+    if (!v.ok) {
+      return res.status(400).json({ error: v.error, details: v.details });
+    }
+    itemsValidated.push({ ...it, optionsValidated: v.value });
+  }
 
   const hintedTenant = businessIdFromNonApiHint(req);
   if (hintedTenant != null && hintedTenant !== tenantBusinessId) {
@@ -2930,15 +3420,16 @@ app.post("/orders", async (req: Request, res: Response) => {
           paymentMethod,
           paymentId: paymentMethod === "finik" ? null : paymentId,
           items: {
-            create: items.map((item) => ({
+            create: itemsValidated.map((item) => ({
               businessId,
               productId: Number(item.productId),
               name: item.name,
               size: String(item.size),
               color: String(item.color),
+              options: item.optionsValidated,
               quantity: Number(item.quantity),
               price: Number(item.price),
-            })),
+            })) as any,
           },
         },
         include: {
@@ -2985,6 +3476,7 @@ app.post("/orders", async (req: Request, res: Response) => {
     const phone =
       orderForResponse.phone?.trim() || customerPhoneValue || "—";
 
+    const orderItemsAny = (orderForResponse as any).items as Array<{ name: string; quantity: number }> | undefined;
     void notifyAdminNewOrderTelegram({
       orderId: orderForResponse.id,
       businessId: orderForResponse.businessId,
@@ -2992,10 +3484,12 @@ app.post("/orders", async (req: Request, res: Response) => {
       phone,
       address,
       total: orderForResponse.total,
-      items: orderForResponse.items.map((i) => ({
-        name: i.name,
-        quantity: i.quantity,
-      })),
+      items: Array.isArray(orderItemsAny)
+        ? orderItemsAny.map((i: any) => ({
+            name: String(i?.name ?? ""),
+            quantity: Number(i?.quantity ?? 0),
+          }))
+        : [],
     });
 
     if (totalComputed.promoRaw) {
@@ -3117,6 +3611,7 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       images?: unknown;
       description?: unknown;
       categoryId?: unknown;
+      attributes?: unknown;
     };
 
     const id = Number(req.params.id);
@@ -3124,7 +3619,8 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Неверный id" });
     }
 
-    const { name, price, image, images, description, categoryId } = body;
+    const { name, price, image, images, description, categoryId, attributes } =
+      body;
 
     if (
       name === undefined &&
@@ -3132,7 +3628,8 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       image === undefined &&
       images === undefined &&
       description === undefined &&
-      categoryId === undefined
+      categoryId === undefined &&
+      attributes === undefined
     ) {
       return res.status(400).json({ error: "Нет полей для обновления" });
     }
@@ -3144,6 +3641,7 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       images?: string[];
       description?: string | null;
       categoryId?: number;
+      attributes?: Record<string, unknown>;
     } = {};
 
     if (name !== undefined) scalar.name = String(name);
@@ -3183,6 +3681,25 @@ app.put("/products/:id", async (req: Request, res: Response) => {
     if (description !== undefined) {
       scalar.description = description === null ? null : String(description);
     }
+    if (attributes !== undefined) {
+      const b2 = await prisma.business.findUnique({
+        where: { id: merchant.businessId },
+      });
+      const businessType = (b2 as any)?.businessType;
+      if (typeof businessType !== "string" || businessType.trim() === "") {
+        return res.status(400).json({ error: "Магазин без businessType" });
+      }
+      const vAttr = validateProductAttributes(
+        businessType as any,
+        attributes,
+      );
+      if (!vAttr.ok) {
+        return res
+          .status(400)
+          .json({ error: vAttr.error, details: vAttr.details });
+      }
+      scalar.attributes = vAttr.value;
+    }
 
     const exists = await prisma.product.findUnique({ where: { id } });
     if (!exists || exists.businessId !== merchant.businessId) {
@@ -3191,7 +3708,8 @@ app.put("/products/:id", async (req: Request, res: Response) => {
 
     const product = await prisma.product.update({
       where: { id },
-      data: scalar,
+      // Prisma UpdateInput is strict about relation scalars (categoryId) with exactOptionalPropertyTypes.
+      data: scalar as any,
       include: { category: true },
     });
 

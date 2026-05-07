@@ -16,6 +16,7 @@ export type PlatformRegisterBody = {
   phone?: unknown;
   telegramId?: unknown;
   finikApiKey?: unknown;
+  businessType?: unknown;
 };
 
 export type PlatformRegisterResult =
@@ -33,6 +34,13 @@ function normalizeTelegramId(raw: unknown): string | null {
     return /^\d+$/.test(t) ? t : null;
   }
   return null;
+}
+
+function normalizeBusinessType(
+  raw: unknown,
+): "clothing" | "coffee" | "fastfood" | "flowers" {
+  const v = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  return v === "coffee" || v === "fastfood" || v === "flowers" ? v : "clothing";
 }
 
 export async function validateAndPersistPlatformRegistration(
@@ -120,12 +128,14 @@ export async function validateAndPersistPlatformRegistration(
   }
 
   try {
+    const businessType = normalizeBusinessType(body.businessType);
     const row = await prisma.registrationRequest.create({
       data: {
         name: storeRaw,
         botToken,
         phone,
         finikApiKey: finikApiKeyToStore,
+        businessType,
         telegramId,
         status: RegistrationStatus.PENDING,
       },

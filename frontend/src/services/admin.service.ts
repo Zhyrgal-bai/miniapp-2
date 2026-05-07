@@ -129,6 +129,27 @@ async function fetchAdminOrders(): Promise<AdminOrderListItem[]> {
 }
 
 export const adminService = {
+  async getMerchantSchemas(): Promise<{
+    businessType: string;
+    productSchema: Record<string, unknown>;
+  }> {
+    const userId = requireAdminUserId();
+    const res = await api.get("/api/merchant/schemas", { params: { userId } });
+    const data = res.data as unknown;
+    const x =
+      data != null && typeof data === "object" && !Array.isArray(data)
+        ? (data as Record<string, unknown>)
+        : {};
+    return {
+      businessType: typeof x.businessType === "string" ? x.businessType : "",
+      productSchema:
+        x.productSchema != null &&
+        typeof x.productSchema === "object" &&
+        !Array.isArray(x.productSchema)
+          ? (x.productSchema as Record<string, unknown>)
+          : {},
+    };
+  },
   async getProducts(): Promise<Product[]> {
     const userId = requireAdminUserId();
     const res = await api.get<Product[]>("/products", { params: { userId } });

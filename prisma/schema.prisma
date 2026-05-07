@@ -34,6 +34,13 @@ enum BillingPlan {
   ENTERPRISE
 }
 
+enum BusinessType {
+  clothing
+  coffee
+  fastfood
+  flowers
+}
+
 model Business {
   id   Int    @id @default(autoincrement())
   name String
@@ -81,6 +88,16 @@ model Business {
 
   /// Готовый пресет: red | dark | light | luxury (null = только themeConfig).
   templateId String?
+
+  businessType BusinessType
+
+  merchantConfig Json? @default("{}")
+
+  templateVersion Int @default(1)
+
+  storefrontConfig Json? @default("{}")
+  storefrontConfigVersion Int @default(1)
+  featureFlags Json? @default("{}")
 
   createdAt DateTime @default(now())
 
@@ -202,13 +219,21 @@ model Category {
   businessId Int
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
+  parentId Int?
+  parent   Category? @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children Category[] @relation("CategoryTree")
+
+  config Json? @default("{}")
+
   products Product[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([businessId])
-  @@unique([businessId, name])
+  @@index([businessId, parentId])
+  @@index([parentId])
+  @@unique([businessId, parentId, name])
 }
 
 model Product {
@@ -225,6 +250,8 @@ model Product {
 
   categoryId Int
   category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  attributes Json? @default("{}")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -302,6 +329,8 @@ model OrderItem {
   quantity Int
   price    Int
 
+  options Json? @default("{}")
+
   @@index([businessId])
   @@index([orderId])
 }
@@ -363,6 +392,8 @@ model RegistrationRequest {
 
   /// Finik (онлайн ККМ), подставляется в Business.finikApiKey после approve.
   finikApiKey String?
+
+  businessType BusinessType
 
   telegramId String
   status     RegistrationStatus @default(PENDING)

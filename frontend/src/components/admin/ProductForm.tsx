@@ -6,6 +6,10 @@ import { PRODUCT_SIZES } from "../../constants/productCatalog";
 import type { Category, Product, Variant } from "../../types";
 import { categoryRoots } from "../../utils/categoryTree";
 import {
+  DynamicFieldRenderer,
+  type SchemaObject as DynamicSchemaObject,
+} from "./DynamicFieldRenderer";
+import {
   expandShortHex,
   isValidHexColor,
   lookupVariantHexByName,
@@ -86,6 +90,8 @@ const ProductForm = () => {
   const [isPopular, setIsPopular] = useState(false);
   const [isSale, setIsSale] = useState(false);
   const [discountPercent, setDiscountPercent] = useState<number | "">("");
+  const [productSchema, setProductSchema] = useState<DynamicSchemaObject>({});
+  const [attributes, setAttributes] = useState<Record<string, unknown>>({});
   const [variantDrafts, setVariantDrafts] = useState<VariantDraft[]>([
     createVariantDraft(),
   ]);
@@ -96,6 +102,8 @@ const ProductForm = () => {
   useEffect(() => {
     void (async () => {
       try {
+        const schema = await adminService.getMerchantSchemas();
+        setProductSchema(schema.productSchema as unknown as DynamicSchemaObject);
         const tree = await adminService.getCategories();
         setCategories(tree);
         const roots = categoryRoots(tree);
@@ -257,6 +265,7 @@ const ProductForm = () => {
       discountPercent: disc,
       description: description.trim(),
       variants,
+      attributes,
     };
 
     try {
@@ -271,6 +280,7 @@ const ProductForm = () => {
       setIsPopular(false);
       setIsSale(false);
       setVariantDrafts([createVariantDraft()]);
+      setAttributes({});
       alert("Товар добавлен ✅");
     } catch (err) {
       console.error(err);
@@ -462,6 +472,14 @@ const ProductForm = () => {
           </label>
         </div>
       </div>
+
+      <div className="admin-form-divider" />
+
+      <DynamicFieldRenderer
+        schema={productSchema}
+        value={attributes}
+        onChange={setAttributes}
+      />
 
       <div className="admin-form-divider" />
 
