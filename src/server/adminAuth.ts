@@ -1,10 +1,24 @@
 import type { Request, Response } from "express";
 
-const ADMIN_IDS = process.env.ADMIN_IDS
-  ? process.env.ADMIN_IDS.split(",")
-      .map((id) => id.trim())
-      .filter((id) => id !== "")
-  : [];
+function adminIdsFromEnv(): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (v: string | undefined | null) => {
+    const s = String(v ?? "").trim();
+    if (s === "" || seen.has(s)) return;
+    seen.add(s);
+    out.push(s);
+  };
+
+  // Backward/alt compatibility: allow single-id variable.
+  push(process.env.PLATFORM_ADMIN_TELEGRAM_ID);
+
+  const raw = process.env.ADMIN_IDS ?? "";
+  for (const part of raw.split(/[,;\s]+/)) {
+    push(part);
+  }
+  return out;
+}
 
 function queryUserId(req: Request): string | undefined {
   const raw = req.query.userId;
@@ -29,9 +43,10 @@ export function isAdmin(userId: unknown): boolean {
   if (!str) return false;
   const num = Number(str);
   if (Number.isFinite(num) && num <= 0) return false;
-  if (ADMIN_IDS.length === 0) return false;
-  if (ADMIN_IDS.includes(str)) return true;
-  if (Number.isFinite(num) && ADMIN_IDS.includes(String(num))) return true;
+  const adminIds = adminIdsFromEnv();
+  if (adminIds.length === 0) return false;
+  if (adminIds.includes(str)) return true;
+  if (Number.isFinite(num) && adminIds.includes(String(num))) return true;
   return false;
 }
 
