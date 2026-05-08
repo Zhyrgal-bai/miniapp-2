@@ -1,7 +1,7 @@
 /* Cart — minimal iOS-style, dark */
 
 .cart {
-  max-width: 430px;
+  max-width: var(--sf-content-max, 430px);
   margin: 0 auto;
   min-height: 100dvh;
   display: flex;
@@ -174,7 +174,7 @@
   left: 50%;
   transform: translateX(-50%);
   width: 100%;
-  max-width: 430px;
+  max-width: var(--sf-content-max, 430px);
   box-sizing: border-box;
   padding: 12px var(--sf-mobile-pad, 12px) calc(12px + env(safe-area-inset-bottom, 0));
   background: color-mix(in srgb, var(--sf-color-background) 92%, transparent);

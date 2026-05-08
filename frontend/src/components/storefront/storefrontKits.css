@@ -5,6 +5,12 @@
   --sf-section-radius: var(--sf-radius-lg, 18px);
 }
 
+/* content width */
+.sf-root {
+  max-width: var(--sf-content-max, 100%);
+  margin: 0 auto;
+}
+
 /* Prevent sticky cart bar from covering content */
 .sf-root {
   padding-bottom: 96px;

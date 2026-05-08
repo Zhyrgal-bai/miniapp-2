@@ -144,10 +144,25 @@ export default function App() {
     return found?.cssFamily ?? FONT_ALLOWLIST[0].cssFamily;
   };
 
+  const densityScale =
+    layout.density === "compact" ? 0.86 : layout.density === "comfortable" ? 1.14 : 1;
+
+  const scaledPx = (v: unknown): string => {
+    if (typeof v !== "number" || !Number.isFinite(v)) return "";
+    return `${Math.round(v * densityScale)}px`;
+  };
+
+  const contentMax =
+    layout.contentWidth === "narrow"
+      ? "430px"
+      : "100%";
+
   const sfVars: Record<string, string> = {
-    "--sf-section-pad": typeof layout.sectionSpacing === "number" ? `${layout.sectionSpacing}px` : "",
-    "--sf-grid-gap": typeof layout.productGap === "number" ? `${layout.productGap}px` : "",
-    "--sf-mobile-pad": typeof layout.mobilePadding === "number" ? `${layout.mobilePadding}px` : "",
+    "--sf-density-scale": String(densityScale),
+    "--sf-content-max": contentMax,
+    "--sf-section-pad": scaledPx(layout.sectionSpacing) || (typeof layout.sectionSpacing === "number" ? `${layout.sectionSpacing}px` : ""),
+    "--sf-grid-gap": scaledPx(layout.productGap) || (typeof layout.productGap === "number" ? `${layout.productGap}px` : ""),
+    "--sf-mobile-pad": scaledPx(layout.mobilePadding) || (typeof layout.mobilePadding === "number" ? `${layout.mobilePadding}px` : ""),
     "--sf-font-body": fontStack(typo.fontBody),
     "--sf-font-heading": fontStack(typo.fontTitle),
     "--sf-font-button": fontStack(typo.fontButton),
@@ -160,7 +175,7 @@ export default function App() {
     "--sf-typo-title-letter-spacing": typeof typo.letterSpacing === "number" ? `${typo.letterSpacing}em` : "",
     "--sf-typo-title-line-height": typeof typo.lineHeight === "number" ? String(typo.lineHeight) : "",
     "--sf-chip-radius": typeof chips.radius === "number" ? `${chips.radius}px` : "",
-    "--sf-chip-gap": typeof chips.gap === "number" ? `${chips.gap}px` : "",
+    "--sf-chip-gap": scaledPx(chips.gap) || (typeof chips.gap === "number" ? `${chips.gap}px` : ""),
     "--sf-chip-shape": typeof chips.shape === "string" ? String(chips.shape) : "",
     "--sf-chip-style": typeof chips.style === "string" ? String(chips.style) : "",
     "--sf-chip-size": typeof chips.size === "string" ? String(chips.size) : "",
