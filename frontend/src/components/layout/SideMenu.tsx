@@ -9,8 +9,6 @@ import {
 import { APP_NAME } from "../../config/brand";
 import "./app-shell.css";
 
-const SUPPORT_BOT_URL = "https://t.me/coffee_market_test_bot";
-
 type AppNavPage =
   | "home"
   | "cart"
@@ -18,6 +16,7 @@ type AppNavPage =
   | "admin"
   | "faq"
   | "my-orders"
+  // keep for deep links / legacy routes (menu item removed)
   | "connect-bot";
 
 type AdminSection =
@@ -39,7 +38,6 @@ type SideMenuProps = {
   myOrdersAttentionDot?: boolean;
   onNavToMyOrders: () => void;
   onNavToFaq: () => void;
-  onNavToConnectBot: () => void;
   onNavToAdmin: (section: AdminSection) => void;
 };
 
@@ -85,7 +83,6 @@ export default function SideMenu({
   myOrdersAttentionDot = false,
   onNavToMyOrders,
   onNavToFaq,
-  onNavToConnectBot,
   onNavToAdmin,
 }: SideMenuProps) {
   const hash = useSyncExternalStore(subscribeHash, readHash, () => "");
@@ -106,12 +103,6 @@ export default function SideMenu({
   const cartActive = currentPage === "cart";
   const myOrdersActive = currentPage === "my-orders";
   const faqActive = currentPage === "faq";
-  const connectBotActive = currentPage === "connect-bot";
-
-  const openSupport = () => {
-    window.open(SUPPORT_BOT_URL, "_blank", "noopener,noreferrer");
-    onClose();
-  };
 
   return (
     <AnimatePresence>

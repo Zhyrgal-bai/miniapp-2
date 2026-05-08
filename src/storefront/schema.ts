@@ -23,6 +23,8 @@ export type RawStorefrontSection = {
 export type RawStorefrontConfig = {
   version: number;
   sections: RawStorefrontSection[];
+  storefrontHeaderConfig?: StorefrontHeaderConfig;
+  storefrontCardConfig?: StorefrontCardConfig;
 };
 
 export type ResolvedStorefrontSection = {
@@ -40,6 +42,8 @@ export type ResolvedStorefrontPayload = {
   featureFlags: ResolvedFeatureFlags;
   storefrontConfigVersion: number;
   sections: ResolvedStorefrontSection[];
+  storefrontHeaderConfig: StorefrontHeaderConfig;
+  storefrontCardConfig: StorefrontCardConfig;
   /**
    * Optional preloaded data for renderer (MVP).
    * Keep shapes minimal + safe for public.
@@ -54,6 +58,33 @@ export type ResolvedStorefrontPayload = {
     description: string | null;
     categoryId: number;
   }>;
+};
+
+export type StorefrontHeaderConfig = {
+  variant: "centered" | "split" | "minimal" | "luxury" | "commerce";
+  showAvatar: boolean;
+  showSearch: boolean;
+  sticky: boolean;
+  glass: boolean;
+  alignment: "left" | "center";
+  height: "compact" | "normal" | "large";
+  logoSize: number;
+  titleStyle: "normal" | "uppercase" | "wide";
+  shadow: boolean;
+  border: boolean;
+};
+
+export type StorefrontCardConfig = {
+  variant: "minimal" | "modern" | "luxury" | "fashion" | "marketplace";
+  imageRatio: "square" | "portrait" | "landscape";
+  rounded: boolean;
+  shadow: boolean;
+  compact: boolean;
+  showBadges: boolean;
+  showWishlist: boolean;
+  buttonStyle: "solid" | "outline" | "glass";
+  textAlign: "left" | "center";
+  hoverEffect: "none" | "scale" | "lift";
 };
 
 function configBytesLimitCheck(v: unknown): boolean {
@@ -132,6 +163,60 @@ const PromoConfigSchema = z
     blocks: z.array(PromoBlockSchema).max(LIMITS.maxPromoBlocks).default([]),
   })
   .default({ blocks: [] });
+
+const StorefrontHeaderConfigSchema = z
+  .object({
+    variant: z.enum(["centered", "split", "minimal", "luxury", "commerce"]).default("commerce"),
+    showAvatar: z.boolean().default(true),
+    showSearch: z.boolean().default(false),
+    sticky: z.boolean().default(true),
+    glass: z.boolean().default(false),
+    alignment: z.enum(["left", "center"]).default("center"),
+    height: z.enum(["compact", "normal", "large"]).default("normal"),
+    logoSize: z.number().int().min(18).max(64).default(34),
+    titleStyle: z.enum(["normal", "uppercase", "wide"]).default("wide"),
+    shadow: z.boolean().default(true),
+    border: z.boolean().default(false),
+  })
+  .default({
+    variant: "commerce",
+    showAvatar: true,
+    showSearch: false,
+    sticky: true,
+    glass: false,
+    alignment: "center",
+    height: "normal",
+    logoSize: 34,
+    titleStyle: "wide",
+    shadow: true,
+    border: false,
+  });
+
+const StorefrontCardConfigSchema = z
+  .object({
+    variant: z.enum(["minimal", "modern", "luxury", "fashion", "marketplace"]).default("modern"),
+    imageRatio: z.enum(["square", "portrait", "landscape"]).default("square"),
+    rounded: z.boolean().default(true),
+    shadow: z.boolean().default(true),
+    compact: z.boolean().default(false),
+    showBadges: z.boolean().default(true),
+    showWishlist: z.boolean().default(false),
+    buttonStyle: z.enum(["solid", "outline", "glass"]).default("solid"),
+    textAlign: z.enum(["left", "center"]).default("left"),
+    hoverEffect: z.enum(["none", "scale", "lift"]).default("lift"),
+  })
+  .default({
+    variant: "modern",
+    imageRatio: "square",
+    rounded: true,
+    shadow: true,
+    compact: false,
+    showBadges: true,
+    showWishlist: false,
+    buttonStyle: "solid",
+    textAlign: "left",
+    hoverEffect: "lift",
+  });
 
 const ReviewsItemSchema = z.object({
   author: z.string().trim().max(80).default(""),
@@ -231,6 +316,8 @@ export const StorefrontConfigSchema = z
   .object({
     version: z.number().int().min(1).default(CURRENT_STOREFRONT_VERSION),
     sections: z.array(SectionBaseSchema).max(LIMITS.maxSections).default([]),
+    storefrontHeaderConfig: StorefrontHeaderConfigSchema.optional(),
+    storefrontCardConfig: StorefrontCardConfigSchema.optional(),
   })
   .refine((v) => configBytesLimitCheck(v), {
     message: `storefrontConfig слишком большой (лимит ${LIMITS.maxConfigBytes} байт)`,
@@ -252,16 +339,29 @@ export function migrateStorefrontConfig(
 
   const v = parsed.data;
   const version = typeof v.version === "number" ? v.version : fromVersion;
-  if (version === toVersion) return { version: toVersion, sections: v.sections as any };
+  if (version === toVersion)
+    return {
+      version: toVersion,
+      sections: v.sections as any,
+      storefrontHeaderConfig: (v as any).storefrontHeaderConfig,
+      storefrontCardConfig: (v as any).storefrontCardConfig,
+    };
 
   // future migrations: add here
-  return { version: toVersion, sections: v.sections as any };
+  return {
+    version: toVersion,
+    sections: v.sections as any,
+    storefrontHeaderConfig: (v as any).storefrontHeaderConfig,
+    storefrontCardConfig: (v as any).storefrontCardConfig,
+  };
 }
 
 export function defaultStorefrontConfig(): RawStorefrontConfig {
   return {
     version: CURRENT_STOREFRONT_VERSION,
     sections: defaultSections(),
+    storefrontHeaderConfig: StorefrontHeaderConfigSchema.parse({}),
+    storefrontCardConfig: StorefrontCardConfigSchema.parse({}),
   };
 }
 
@@ -399,6 +499,18 @@ export function resolveStorefrontConfig(input: {
     }))
     .sort((a, b) => a.order - b.order);
 
+  const headerCfg =
+    StorefrontHeaderConfigSchema.safeParse((migrated as any).storefrontHeaderConfig ?? undefined)
+      .success
+      ? StorefrontHeaderConfigSchema.parse((migrated as any).storefrontHeaderConfig ?? {})
+      : StorefrontHeaderConfigSchema.parse({});
+
+  const cardCfg =
+    StorefrontCardConfigSchema.safeParse((migrated as any).storefrontCardConfig ?? undefined)
+      .success
+      ? StorefrontCardConfigSchema.parse((migrated as any).storefrontCardConfig ?? {})
+      : StorefrontCardConfigSchema.parse({});
+
   return {
     businessId: input.businessId,
     businessType: input.businessType,
@@ -407,6 +519,8 @@ export function resolveStorefrontConfig(input: {
     featureFlags: resolveFeatureFlags(input.rawFeatureFlags),
     storefrontConfigVersion: CURRENT_STOREFRONT_VERSION,
     sections: sectionsResolved,
+    storefrontHeaderConfig: headerCfg,
+    storefrontCardConfig: cardCfg,
   };
 }
 

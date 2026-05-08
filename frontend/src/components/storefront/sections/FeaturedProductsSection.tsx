@@ -10,6 +10,7 @@ function readTitle(config: Record<string, unknown>, fallback: string): string {
 export function FeaturedProductsSection(props: {
   config: Record<string, unknown>;
   products: Product[];
+  cardConfig?: Record<string, unknown>;
 }): React.ReactElement | null {
   const { theme } = useTheme();
   const title = readTitle(props.config, "Хиты");
@@ -31,6 +32,7 @@ export function FeaturedProductsSection(props: {
           catalogProductCount={props.products.length}
           showToast={() => undefined}
           onProductSelect={() => undefined}
+          cardConfig={props.cardConfig}
         />
       </div>
     </section>

@@ -8,6 +8,7 @@ type ProductGridProps = {
   catalogProductCount: number;
   showToast: (msg: string) => void;
   onProductSelect?: (product: Product) => void;
+  cardConfig?: Record<string, unknown>;
 };
 
 export default function ProductGrid({
@@ -15,6 +16,7 @@ export default function ProductGrid({
   catalogProductCount,
   showToast,
   onProductSelect,
+  cardConfig,
 }: ProductGridProps) {
   if (catalogProductCount === 0) {
     return (
@@ -42,6 +44,7 @@ export default function ProductGrid({
           product={p}
           showToast={showToast}
           onOpenDetail={onProductSelect}
+          cardConfig={cardConfig}
         />
       ))}
     </div>

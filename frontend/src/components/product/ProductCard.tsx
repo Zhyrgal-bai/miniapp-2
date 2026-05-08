@@ -17,10 +17,51 @@ type Props = {
   showToast: (msg: string) => void;
   /** Открыть карточку товара (модалка на витрине). */
   onOpenDetail?: (product: Product) => void;
+  cardConfig?: Record<string, unknown>;
 };
 
-export default function ProductCard({ product, showToast, onOpenDetail }: Props) {
-  const { theme } = useTheme();
+function normalizeCardConfig(raw: Record<string, unknown> | undefined): {
+  variant: "minimal" | "modern" | "luxury" | "fashion" | "marketplace";
+  imageRatio: "square" | "portrait" | "landscape";
+  rounded: boolean;
+  shadow: boolean;
+  compact: boolean;
+  buttonStyle: "solid" | "outline" | "glass";
+  textAlign: "left" | "center";
+  hoverEffect: "none" | "scale" | "lift";
+} {
+  const c = (raw ?? {}) as any;
+  const variant =
+    c.variant === "minimal" ||
+    c.variant === "luxury" ||
+    c.variant === "fashion" ||
+    c.variant === "marketplace"
+      ? c.variant
+      : "modern";
+  const imageRatio =
+    c.imageRatio === "portrait" || c.imageRatio === "landscape" ? c.imageRatio : "square";
+  const buttonStyle =
+    c.buttonStyle === "outline" || c.buttonStyle === "glass" ? c.buttonStyle : "solid";
+  const textAlign = c.textAlign === "center" ? "center" : "left";
+  const hoverEffect =
+    c.hoverEffect === "none" || c.hoverEffect === "scale" || c.hoverEffect === "lift"
+      ? c.hoverEffect
+      : "lift";
+  return {
+    variant,
+    imageRatio,
+    rounded: c.rounded !== false,
+    shadow: c.shadow !== false,
+    compact: c.compact === true,
+    buttonStyle,
+    textAlign,
+    hoverEffect,
+  };
+}
+
+export default function ProductCard({ product, showToast, onOpenDetail, cardConfig }: Props) {
+  useTheme(); // keep existing context behavior for now (legacy vars)
+  const cfg = useMemo(() => normalizeCardConfig(cardConfig), [cardConfig]);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -199,11 +240,20 @@ export default function ProductCard({ product, showToast, onOpenDetail }: Props)
 
   return (
     <div
-      className={`product-card${outOfStock ? " out" : ""}`}
-      style={{
-        backgroundColor: theme.cardColor,
-        color: theme.textColor,
-      }}
+      className={[
+        "product-card",
+        outOfStock ? "out" : "",
+        `product-card--variant-${cfg.variant}`,
+        `product-card--ratio-${cfg.imageRatio}`,
+        cfg.rounded ? "product-card--rounded" : "product-card--square",
+        cfg.shadow ? "product-card--shadow" : "product-card--flat",
+        cfg.compact ? "product-card--compact" : "",
+        `product-card--btn-${cfg.buttonStyle}`,
+        `product-card--align-${cfg.textAlign}`,
+        `product-card--hover-${cfg.hoverEffect}`,
+      ]
+        .filter(Boolean)
+        .join(" ")}
     >
       <div
         className={`product-image-wrapper${onOpenDetail ? " product-image-wrapper--detail" : ""}`}
@@ -298,14 +348,6 @@ export default function ProductCard({ product, showToast, onOpenDetail }: Props)
                   type="button"
                   disabled={s.stock === 0}
                   className={selectedSize === s.size ? "active" : ""}
-                  style={
-                    selectedSize === s.size
-                      ? {
-                          borderColor: theme.primaryColor,
-                          color: theme.primaryColor,
-                        }
-                      : { color: theme.textColor }
-                  }
                   onClick={() => setSelectedSize(s.size)}
                 >
                   {s.size} ({s.stock})
@@ -340,7 +382,6 @@ export default function ProductCard({ product, showToast, onOpenDetail }: Props)
             {quantity <= 0 ? (
               <button
                 className="product-add-btn"
-                style={{ backgroundColor: theme.primaryColor, color: "#fff" }}
                 onClick={handleAddToCart}
                 disabled={outOfStock || !canAddToCart}
                 type="button"
@@ -351,7 +392,6 @@ export default function ProductCard({ product, showToast, onOpenDetail }: Props)
               <>
                 <button
                   className="product-action-btn"
-                  style={{ color: theme.primaryColor, borderColor: theme.primaryColor }}
                   onClick={handleDecrement}
                   disabled={
                     outOfStock ||
@@ -368,7 +408,6 @@ export default function ProductCard({ product, showToast, onOpenDetail }: Props)
                 </span>
                 <button
                   className="product-action-btn"
-                  style={{ color: theme.primaryColor, borderColor: theme.primaryColor }}
                   onClick={handleIncrement}
                   disabled={
                     outOfStock ||

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { Category, Product } from "../../types";
 import { useTheme } from "../../context/ThemeContext";
 import { ThemeVarsProvider } from "./theme/ThemeVarsProvider";
+import { StorefrontHeader } from "./header/StorefrontHeader";
 import { HeroSection } from "./sections/HeroSection";
 import { PromoSection } from "./sections/PromoSection";
 import { CategoriesSection } from "./sections/CategoriesSection";
@@ -35,6 +36,8 @@ export type ResolvedStorefrontPayload = {
   templateId: string | null;
   storefrontConfigVersion: number;
   sections: ResolvedStorefrontSection[];
+  storefrontHeaderConfig?: Record<string, unknown>;
+  storefrontCardConfig?: Record<string, unknown>;
   categories?: Category[];
   featuredProducts?: Product[];
 };
@@ -51,6 +54,7 @@ export function StorefrontRenderer(props: {
 
   return (
     <ThemeVarsProvider theme={theme}>
+      <StorefrontHeader theme={theme} config={props.payload.storefrontHeaderConfig ?? undefined} />
       {sections.map((s) => {
         switch (s.type) {
           case "hero":
@@ -71,6 +75,7 @@ export function StorefrontRenderer(props: {
                 key={s.id}
                 config={s.config}
                 products={props.payload.featuredProducts ?? []}
+                cardConfig={props.payload.storefrontCardConfig ?? undefined}
               />
             );
           case "footer":

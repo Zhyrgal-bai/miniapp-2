@@ -271,7 +271,6 @@ export default function App() {
         myOrdersAttentionDot={myOrdersAttention}
         onNavToMyOrders={() => handleNav("my-orders")}
         onNavToFaq={() => handleNav("faq")}
-        onNavToConnectBot={() => handleNav("connect-bot")}
         onNavToAdmin={goAdminSection}
       />
 
