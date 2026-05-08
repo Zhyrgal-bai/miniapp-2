@@ -19,6 +19,9 @@ import { BuilderCanvas } from "./BuilderCanvas";
 import { SectionEditor } from "./SectionEditor";
 import { ThemeEditor } from "./ThemeEditor";
 import type { ResolvedStorefrontPayload } from "../components/storefront/StorefrontRenderer";
+import { SectionMarketplaceModal } from "./sectionLibrary/SectionMarketplaceModal";
+import type { SectionLibraryItem } from "./sectionLibrary/types";
+import { stableSectionId } from "./sectionRegistry";
 
 function ensureUserId(): number {
   const id = getWebAppUserId();
@@ -46,6 +49,7 @@ export default function BuilderPage(): React.ReactElement {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [marketOpen, setMarketOpen] = useState(false);
   const [ux, setUx] = useState<{ errors: string[]; warnings: string[] }>({
     errors: [],
     warnings: [],
@@ -182,6 +186,24 @@ export default function BuilderPage(): React.ReactElement {
     [draft, scheduleSave],
   );
 
+  const addSection = useCallback(
+    (item: SectionLibraryItem) => {
+      if (!draft) return;
+      const maxOrder = Math.max(0, ...draft.sections.map((s) => Number(s.order ?? 0)));
+      const nextSection: BuilderSection = {
+        id: stableSectionId(item.type),
+        type: item.type,
+        enabled: true,
+        order: maxOrder + 10,
+        config: item.defaultConfig ?? {},
+      };
+      scheduleSave({ ...draft, sections: [...draft.sections, nextSection] });
+      setSelectedId(nextSection.id);
+      setMarketOpen(false);
+    },
+    [draft, scheduleSave],
+  );
+
   const onThemePatch = useCallback(
     (patch: Partial<ResolvedStoreTheme>) => {
       const nextTheme = mergeThemeFromUnknown(patch, theme);
@@ -255,6 +277,11 @@ export default function BuilderPage(): React.ReactElement {
   return (
     <div style={{ minHeight: "100%", display: "grid", gridTemplateRows: "auto 1fr" }}>
       <BuilderToolbar saving={saving} onPublish={onPublish} onReset={onReset} canPublish={canPublish} />
+      <SectionMarketplaceModal
+        open={marketOpen}
+        onClose={() => setMarketOpen(false)}
+        onPick={addSection}
+      />
       <div
         style={{
           display: "grid",
@@ -273,6 +300,7 @@ export default function BuilderPage(): React.ReactElement {
           onSelect={setSelectedId}
           onToggle={onToggle}
           onReorder={onReorder}
+          onAddSection={() => setMarketOpen(true)}
           uxErrors={ux.errors}
           uxWarnings={ux.warnings}
         />

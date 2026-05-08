@@ -96,6 +96,7 @@ export function BuilderSidebar(props: {
   onSelect: (id: string) => void;
   onToggle: (id: string) => void;
   onReorder: (ids: string[]) => void;
+  onAddSection: () => void;
   uxWarnings: string[];
   uxErrors: string[];
 }): React.ReactElement {
@@ -110,7 +111,25 @@ export function BuilderSidebar(props: {
       }}
     >
       <div style={{ padding: 12 }}>
-        <div style={{ fontWeight: 800, marginBottom: 8 }}>Секции</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+          <div style={{ fontWeight: 800 }}>Секции</div>
+          <div style={{ flex: 1 }} />
+          <button
+            onClick={props.onAddSection}
+            style={{
+              borderRadius: 12,
+              border: "1px solid rgba(255,255,255,0.14)",
+              background: "rgba(220,38,38,0.18)",
+              color: "#fff",
+              padding: "8px 10px",
+              fontWeight: 900,
+              fontSize: 12,
+              cursor: "pointer",
+            }}
+          >
+            + Добавить
+          </button>
+        </div>
         <DndContext
           collisionDetection={closestCenter}
           onDragEnd={(ev) => {
