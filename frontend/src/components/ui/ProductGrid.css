@@ -4,8 +4,8 @@
   gap: var(--sf-grid-gap, 10px);
   padding: var(--sf-mobile-pad, 10px) var(--sf-mobile-pad, 10px) 20px;
   align-items: stretch;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  /* Telegram Mini App: one main scroll container. Avoid nested scrolling. */
+  overflow: visible;
 }
 
 .product-grid--density-compact {

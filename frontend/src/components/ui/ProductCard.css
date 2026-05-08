@@ -137,6 +137,16 @@
   width: 100%;
 }
 
+.product-add-btn--bump {
+  animation: sfCtaBump 240ms ease-out;
+}
+
+@keyframes sfCtaBump {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+
 .product-card--square {
   --sf-card-radius: 12px;
 }

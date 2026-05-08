@@ -105,6 +105,13 @@ export function StorefrontRenderer(props: {
 
     "--sf-hero-height": typeof hero.height === "number" ? `${hero.height}px` : "",
     "--sf-hero-radius": typeof hero.radius === "number" ? `${hero.radius}px` : "",
+    "--sf-hero-layout": typeof hero.layout === "string" ? String(hero.layout) : "",
+    "--sf-hero-overlay": typeof hero.overlay === "boolean" ? (hero.overlay ? "1" : "0") : "",
+    "--sf-hero-overlay-strength":
+      typeof hero.overlayStrength === "number" ? String(hero.overlayStrength) : "",
+    "--sf-hero-alignment": typeof hero.alignment === "string" ? String(hero.alignment) : "",
+    "--sf-hero-cta-position": typeof hero.ctaPosition === "string" ? String(hero.ctaPosition) : "",
+    "--sf-hero-shadow": typeof hero.shadow === "boolean" ? (hero.shadow ? "1" : "0") : "",
   };
 
   const sections = useMemo(() => {
@@ -130,6 +137,9 @@ export function StorefrontRenderer(props: {
                   config={s.config}
                   textConfig={props.payload.storefrontTextConfig ?? undefined}
                   kit={kit}
+                  heroStyle={(props.payload.storefrontStyleConfig as Record<string, unknown> | undefined)?.hero as
+                    | Record<string, unknown>
+                    | undefined}
                 />
               );
             case "promo":

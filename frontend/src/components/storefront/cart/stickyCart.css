@@ -16,6 +16,16 @@
   -webkit-backdrop-filter: blur(14px);
 }
 
+.sf-sticky-cart--bump {
+  animation: sfStickyBump 260ms ease-out;
+}
+
+@keyframes sfStickyBump {
+  0% { transform: translateY(0) scale(1); }
+  35% { transform: translateY(-1px) scale(1.01); }
+  100% { transform: translateY(0) scale(1); }
+}
+
 .sf-sticky-cart__main {
   display: grid;
   gap: 2px;

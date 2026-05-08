@@ -11,6 +11,7 @@ import {
   resolveFeatureFlags,
   type ResolvedFeatureFlags,
 } from "./featureFlags.js";
+import { stylePresetForTemplateId } from "./stylePresets.js";
 
 export type RawStorefrontSection = {
   id: string;
@@ -184,8 +185,9 @@ export type StorefrontStyleConfig = {
     density: "compact" | "normal";
   };
   hero: {
-    layout: "centered" | "split" | "banner";
+    layout: "centered" | "split" | "banner" | "editorial";
     overlay: boolean;
+    overlayStrength: number;
     height: number;
     radius: number;
     shadow: boolean;
@@ -517,8 +519,9 @@ const StorefrontStyleConfigSchema = z
       }),
     hero: z
       .object({
-        layout: z.enum(["centered", "split", "banner"]).default("centered"),
+        layout: z.enum(["centered", "split", "banner", "editorial"]).default("centered"),
         overlay: z.boolean().default(false),
+        overlayStrength: z.number().min(0).max(1).default(0.55),
         height: z.number().int().min(160).max(520).default(320),
         radius: z.number().int().min(0).max(40).default(24),
         shadow: z.boolean().default(false),
@@ -528,6 +531,7 @@ const StorefrontStyleConfigSchema = z
       .default({
         layout: "centered",
         overlay: false,
+        overlayStrength: 0.55,
         height: 320,
         radius: 24,
         shadow: false,
@@ -587,6 +591,7 @@ const StorefrontStyleConfigSchema = z
     hero: {
       layout: "centered",
       overlay: false,
+      overlayStrength: 0.55,
       height: 320,
       radius: 24,
       shadow: false,
@@ -901,10 +906,12 @@ export function resolveStorefrontConfig(input: {
       ? StorefrontTextConfigSchema.parse((migrated as any).storefrontTextConfig ?? {})
       : StorefrontTextConfigSchema.parse({});
 
+  const hasExplicitStyleCfg = (migrated as any).storefrontStyleConfig != null;
+  const preset = !hasExplicitStyleCfg ? stylePresetForTemplateId(input.templateId) : null;
   const styleCfg =
-    StorefrontStyleConfigSchema.safeParse((migrated as any).storefrontStyleConfig ?? undefined).success
-      ? StorefrontStyleConfigSchema.parse((migrated as any).storefrontStyleConfig ?? {})
-      : StorefrontStyleConfigSchema.parse({});
+    StorefrontStyleConfigSchema.safeParse((migrated as any).storefrontStyleConfig ?? preset ?? undefined).success
+      ? StorefrontStyleConfigSchema.parse((migrated as any).storefrontStyleConfig ?? preset ?? {})
+      : StorefrontStyleConfigSchema.parse(preset ?? {});
 
   return {
     businessId: input.businessId,

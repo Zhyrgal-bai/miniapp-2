@@ -28,6 +28,8 @@ import { ButtonSystemControls } from "./design/ButtonSystemControls";
 import { CartControls } from "./design/CartControls";
 import { DrawerControls } from "./design/DrawerControls";
 import { LayoutControls } from "./design/LayoutControls";
+import { HeroControls } from "./design/HeroControls";
+import { STYLE_PRESETS } from "./design/stylePresets";
 import { SectionMarketplaceModal } from "./sectionLibrary/SectionMarketplaceModal";
 import { stableSectionId } from "./sectionRegistry";
 import type { PreviewMode } from "./preview/modes";
@@ -572,9 +574,48 @@ export default function BuilderPage(): React.ReactElement {
                     }}
                   />
                 </div>
+                <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                  <HeroControls
+                    value={(draft as unknown as { storefrontStyleConfig?: Record<string, unknown> })?.storefrontStyleConfig?.hero ?? {}}
+                    onChange={(next) => {
+                      const currentStyle =
+                        (draft as unknown as { storefrontStyleConfig?: Record<string, unknown> })?.storefrontStyleConfig ??
+                        {};
+                      onStyleChange({ ...(currentStyle as Record<string, unknown>), hero: next });
+                    }}
+                  />
+                </div>
                 <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", padding: 12 }}>
-                  <div style={{ fontWeight: 900, marginBottom: 10 }}>Layout / Chips / Buttons / Hero</div>
+                  <div style={{ fontWeight: 900, marginBottom: 10 }}>Presets / Layout / Chips / Buttons / Hero</div>
                   <div style={{ display: "grid", gap: 10 }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {(
+                        [
+                          { id: "minimal", label: "Minimal" },
+                          { id: "luxury", label: "Luxury" },
+                          { id: "fashion", label: "Fashion" },
+                          { id: "neon", label: "Neon" },
+                        ] as const
+                      ).map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => onStyleChange(STYLE_PRESETS[p.id])}
+                          style={{
+                            borderRadius: 999,
+                            border: "1px solid rgba(255,255,255,0.14)",
+                            background: "rgba(255,255,255,0.03)",
+                            color: "#fff",
+                            padding: "8px 10px",
+                            fontWeight: 900,
+                            cursor: "pointer",
+                            fontSize: 12,
+                          }}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
                     <label style={{ display: "grid", gap: 6, fontSize: 12, opacity: 0.9 }}>
                       Быстрый старт (создать `storefrontStyleConfig`)
                       <button
@@ -589,6 +630,9 @@ export default function BuilderPage(): React.ReactElement {
                               contentWidth: "full",
                             },
                             typography: {
+                              fontBody: "system",
+                              fontTitle: "system",
+                              fontButton: "system",
                               titleSize: 24,
                               sectionTitleSize: 16,
                               buttonSize: 13,
@@ -616,6 +660,7 @@ export default function BuilderPage(): React.ReactElement {
                             hero: {
                               layout: "centered",
                               overlay: false,
+                              overlayStrength: 0.55,
                               height: 320,
                               radius: 24,
                               shadow: false,
@@ -638,8 +683,8 @@ export default function BuilderPage(): React.ReactElement {
                       </button>
                     </label>
                     <div style={{ opacity: 0.75, fontSize: 12 }}>
-                      Следующим шагом: заменю эту “заглушку” на полноценные слайдеры/тумблеры и привяжу к
-                      <b> --sf-*</b> в `StorefrontRenderer`.
+                      Пресеты создают “разные приложения” из одной витрины: плотность, типографика, chips, кнопки,
+                      hero-иерархия и mobile spacing.
                     </div>
                   </div>
                 </div>
