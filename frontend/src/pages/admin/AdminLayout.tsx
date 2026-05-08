@@ -33,7 +33,7 @@ const navAll: NavItem[] = [
     icon: "🗂️",
   },
   { href: "#/admin/analytics", match: "analytics", label: "Аналитика", icon: "📊" },
-  { href: "#/admin/settings", match: "settings", label: "Настройки", icon: "⚙️" },
+  { href: "#/admin/settings", match: "settings", label: "Оформление витрины", icon: "🎨" },
 ];
 
 type AdminLayoutProps = {

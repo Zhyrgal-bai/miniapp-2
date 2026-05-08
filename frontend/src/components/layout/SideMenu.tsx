@@ -72,7 +72,7 @@ const ADMIN_LINKS: {
   { section: "products", hash: "#/admin/products", icon: "🏷️", label: "Товары" },
   { section: "categories", hash: "#/admin/categories", icon: "🗂", label: "Категории" },
   { section: "analytics", hash: "#/admin/analytics", icon: "📊", label: "Аналитика" },
-  { section: "settings", hash: "#/admin/settings", icon: "⚙", label: "Настройки" },
+  { section: "settings", hash: "#/admin/settings", icon: "🎨", label: "Оформление витрины" },
 ];
 
 export default function SideMenu({
