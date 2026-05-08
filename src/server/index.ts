@@ -630,6 +630,7 @@ app.get("/api/storefront/:businessId", async (req: Request, res: Response) => {
       where: { id: businessId },
       select: {
         id: true,
+        name: true,
         isActive: true,
         isBlocked: true,
         businessType: true,
@@ -674,6 +675,7 @@ app.get("/api/storefront/:businessId", async (req: Request, res: Response) => {
       rawThemeConfig: (b as any).themeConfig ?? {},
       rawFeatureFlags: (b as any).featureFlags ?? {},
     });
+    (payload as any).storeName = String((b as any).name ?? "").slice(0, 80);
 
     const enabledTypes = new Set(payload.sections.map((s) => s.type));
     if (enabledTypes.has("categories")) {

@@ -194,6 +194,15 @@ export default function App() {
 
   const handleMenuToggle = () => setIsMenuOpen((prev) => !prev);
   const handleMenuClose = () => setIsMenuOpen(false);
+  
+  // Storefront header (customer-facing) toggles SideMenu via safe event (no prop drilling).
+  useEffect(() => {
+    const onToggle = () => handleMenuToggle();
+    window.addEventListener("sf:toggleMenu", onToggle as unknown as EventListener);
+    return () =>
+      window.removeEventListener("sf:toggleMenu", onToggle as unknown as EventListener);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleNav = (target: AppNavPage) => {
     commitPage(target);
@@ -255,11 +264,13 @@ export default function App() {
 
   return (
     <div className="app">
-      <Header
-        menuOpen={isMenuOpen}
-        onMenuToggle={handleMenuToggle}
-        attentionDot={showHeaderAttentionDot}
-      />
+      {page !== "home" ? (
+        <Header
+          menuOpen={isMenuOpen}
+          onMenuToggle={handleMenuToggle}
+          attentionDot={showHeaderAttentionDot}
+        />
+      ) : null}
 
       <SideMenu
         open={isMenuOpen}

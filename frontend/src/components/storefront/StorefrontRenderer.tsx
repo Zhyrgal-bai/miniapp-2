@@ -32,6 +32,7 @@ export type ResolvedStorefrontSection = {
 
 export type ResolvedStorefrontPayload = {
   businessId: number;
+  storeName?: string;
   businessType: string;
   templateId: string | null;
   storefrontConfigVersion: number;
@@ -54,7 +55,11 @@ export function StorefrontRenderer(props: {
 
   return (
     <ThemeVarsProvider theme={theme}>
-      <StorefrontHeader theme={theme} config={props.payload.storefrontHeaderConfig ?? undefined} />
+      <StorefrontHeader
+        theme={theme}
+        storeName={props.payload.storeName ?? null}
+        config={props.payload.storefrontHeaderConfig ?? undefined}
+      />
       {sections.map((s) => {
         switch (s.type) {
           case "hero":

@@ -62,6 +62,7 @@ export type ResolvedStorefrontPayload = {
 
 export type StorefrontHeaderConfig = {
   variant: "centered" | "split" | "minimal" | "luxury" | "commerce";
+  titleText: string;
   showAvatar: boolean;
   showSearch: boolean;
   sticky: boolean;
@@ -167,6 +168,7 @@ const PromoConfigSchema = z
 const StorefrontHeaderConfigSchema = z
   .object({
     variant: z.enum(["centered", "split", "minimal", "luxury", "commerce"]).default("commerce"),
+    titleText: z.string().trim().max(32).optional().default(""),
     showAvatar: z.boolean().default(true),
     showSearch: z.boolean().default(false),
     sticky: z.boolean().default(true),
@@ -180,6 +182,7 @@ const StorefrontHeaderConfigSchema = z
   })
   .default({
     variant: "commerce",
+    titleText: "",
     showAvatar: true,
     showSearch: false,
     sticky: true,

@@ -14,6 +14,7 @@ function normalize(input: unknown): StorefrontHeaderConfig {
       c.variant === "commerce"
         ? c.variant
         : "commerce",
+    titleText: typeof c.titleText === "string" ? c.titleText.slice(0, 32) : undefined,
     showAvatar: c.showAvatar !== false,
     showSearch: c.showSearch === true,
     sticky: c.sticky !== false,

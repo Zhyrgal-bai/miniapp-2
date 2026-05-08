@@ -5,6 +5,7 @@ import type { ResolvedStoreTheme } from "@repo-shared/storeTheme";
 
 type StorefrontHeaderConfig = {
   variant?: "centered" | "split" | "minimal" | "luxury" | "commerce";
+  titleText?: string;
   showAvatar?: boolean;
   showSearch?: boolean;
   sticky?: boolean;
@@ -37,6 +38,7 @@ function normalize(cfg: Record<string, unknown> | undefined): Required<Storefron
       : 34;
   return {
     variant,
+    titleText: typeof c.titleText === "string" ? c.titleText.trim().slice(0, 32) : "",
     showAvatar: c.showAvatar !== false,
     showSearch: c.showSearch === true,
     sticky: c.sticky !== false,
@@ -50,15 +52,18 @@ function normalize(cfg: Record<string, unknown> | undefined): Required<Storefron
   };
 }
 
-function titleText(theme: ResolvedStoreTheme, cfg: Required<StorefrontHeaderConfig>): string {
-  const base = (theme as any)?.templateId ? String((theme as any).templateId) : "SHOP";
-  if (cfg.variant === "luxury") return "BOUTIQUE";
-  if (cfg.variant === "minimal") return "SHOP";
-  return base.toUpperCase() === base ? base : "SHOP";
+function titleText(cfg: Required<StorefrontHeaderConfig>, storeName: string | null): string {
+  const custom = cfg.titleText.trim();
+  if (custom) return custom;
+  const fallback = storeName && storeName.trim() ? storeName.trim() : "SHOP";
+  if (cfg.variant === "luxury") return fallback.toUpperCase();
+  if (cfg.variant === "minimal") return fallback.toUpperCase();
+  return fallback.toUpperCase();
 }
 
 export function StorefrontHeader(props: {
   theme: ResolvedStoreTheme;
+  storeName?: string | null;
   config?: Record<string, unknown>;
 }): React.ReactElement {
   const cfg = useMemo(() => normalize(props.config), [props.config]);
@@ -82,7 +87,7 @@ export function StorefrontHeader(props: {
   const alignJustify =
     cfg.variant === "split" ? "space-between" : cfg.alignment === "left" ? "flex-start" : "center";
 
-  const title = titleText(props.theme, cfg);
+  const title = titleText(cfg, props.storeName ?? null);
   const titleCss: React.CSSProperties =
     cfg.titleStyle === "uppercase"
       ? { textTransform: "uppercase", letterSpacing: "0.24em" }
@@ -107,9 +112,24 @@ export function StorefrontHeader(props: {
         boxShadow: shadow,
       }}
     >
-      {cfg.variant !== "centered" ? (
-        <div style={{ width: 36, height: 36, borderRadius: 12, background: "rgba(255,255,255,0.06)" }} />
-      ) : null}
+      <button
+        type="button"
+        onClick={() => window.dispatchEvent(new CustomEvent("sf:toggleMenu"))}
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: 14,
+          border: "1px solid rgba(255,255,255,0.10)",
+          background: "rgba(255,255,255,0.04)",
+          color: "var(--sf-color-text)",
+          fontWeight: 900,
+          cursor: "pointer",
+        }}
+        aria-label="Меню"
+        title="Меню"
+      >
+        ☰
+      </button>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
         <div

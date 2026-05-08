@@ -2,6 +2,7 @@ import React from "react";
 
 export type StorefrontHeaderConfig = {
   variant: "centered" | "split" | "minimal" | "luxury" | "commerce";
+  titleText?: string;
   showAvatar: boolean;
   showSearch: boolean;
   sticky: boolean;
@@ -24,6 +25,22 @@ export function HeaderControls(props: {
   return (
     <div style={{ padding: 12, display: "grid", gap: 10 }}>
       <div style={{ fontWeight: 900 }}>Header</div>
+
+      <label style={{ display: "grid", gap: 6, fontSize: 12, opacity: 0.9 }}>
+        Store title (вместо SHOP)
+        <input
+          value={v.titleText ?? ""}
+          onChange={(e) => patch({ titleText: e.target.value })}
+          placeholder="Например: BAR'S"
+          style={{
+            borderRadius: 10,
+            border: "1px solid rgba(255,255,255,0.14)",
+            background: "rgba(2,6,23,0.45)",
+            color: "#fff",
+            padding: "8px 10px",
+          }}
+        />
+      </label>
 
       <label style={{ display: "grid", gap: 6, fontSize: 12, opacity: 0.9 }}>
         Variant
