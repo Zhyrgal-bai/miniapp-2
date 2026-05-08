@@ -236,6 +236,27 @@ mountFinikWebhookRoutes(app);
 mountFinikSettingsRoutes(app);
 mountSubscriptionFinikPaymentRoutes(app);
 
+/**
+ * Диагностика platform admin доступа (без токенов/PII).
+ * Показывает telegramId из валидного initData и результат isPlatformAdminTelegramId().
+ */
+app.get("/api/platform/admin/whoami", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromWebApp(req);
+    if (!telegramId) {
+      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
+      return;
+    }
+    res.json({
+      telegramId,
+      isPlatformAdmin: isPlatformAdminTelegramId(telegramId),
+    });
+  } catch (e) {
+    console.error("GET /api/platform/admin/whoami:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
 /** Публичная витрина: тема магазина без Telegram (до tenant middleware). */
 app.get("/api/business/:businessId", async (req: Request, res: Response) => {
   try {
