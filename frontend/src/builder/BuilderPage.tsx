@@ -21,6 +21,7 @@ import { ThemeEditor } from "./ThemeEditor";
 import type { ResolvedStorefrontPayload } from "../components/storefront/StorefrontRenderer";
 import { HeaderBuilder } from "./header/HeaderBuilder";
 import { ProductCardBuilder } from "./cards/ProductCardBuilder";
+import { TextControls } from "./texts/TextControls";
 import { SectionMarketplaceModal } from "./sectionLibrary/SectionMarketplaceModal";
 import { stableSectionId } from "./sectionRegistry";
 import type { PreviewMode } from "./preview/modes";
@@ -60,7 +61,7 @@ export default function BuilderPage(): React.ReactElement {
     errors: [],
     warnings: [],
   });
-  const [rightTab, setRightTab] = useState<"sections" | "header" | "cards">("sections");
+  const [rightTab, setRightTab] = useState<"sections" | "header" | "cards" | "texts">("sections");
   const save = useBuilderSaveState();
 
   const debounceRef = useRef<number | null>(null);
@@ -108,8 +109,9 @@ export default function BuilderPage(): React.ReactElement {
           ? {
               ...p,
               sections: sortSections(nextDraft.sections ?? []) as unknown as ResolvedStorefrontPayload["sections"],
-              storefrontHeaderConfig: (nextDraft as any).storefrontHeaderConfig ?? (p as any).storefrontHeaderConfig,
-              storefrontCardConfig: (nextDraft as any).storefrontCardConfig ?? (p as any).storefrontCardConfig,
+              storefrontHeaderConfig: nextDraft.storefrontHeaderConfig ?? p.storefrontHeaderConfig,
+              storefrontCardConfig: nextDraft.storefrontCardConfig ?? p.storefrontCardConfig,
+              storefrontTextConfig: nextDraft.storefrontTextConfig ?? p.storefrontTextConfig,
             }
           : p,
       );
@@ -158,7 +160,7 @@ export default function BuilderPage(): React.ReactElement {
   const onHeaderChange = useCallback(
     (next: Record<string, unknown>) => {
       if (!draft) return;
-      scheduleSave({ ...(draft as any), storefrontHeaderConfig: next } as BuilderConfig);
+      scheduleSave({ ...draft, storefrontHeaderConfig: next });
       setRightTab("header");
     },
     [draft, scheduleSave],
@@ -167,8 +169,17 @@ export default function BuilderPage(): React.ReactElement {
   const onCardChange = useCallback(
     (next: Record<string, unknown>) => {
       if (!draft) return;
-      scheduleSave({ ...(draft as any), storefrontCardConfig: next } as BuilderConfig);
+      scheduleSave({ ...draft, storefrontCardConfig: next });
       setRightTab("cards");
+    },
+    [draft, scheduleSave],
+  );
+
+  const onTextChange = useCallback(
+    (next: Record<string, unknown>) => {
+      if (!draft) return;
+      scheduleSave({ ...draft, storefrontTextConfig: next });
+      setRightTab("texts");
     },
     [draft, scheduleSave],
   );
@@ -421,15 +432,18 @@ export default function BuilderPage(): React.ReactElement {
         </div>
         <div style={{ borderLeft: "1px solid rgba(255,255,255,0.06)", minHeight: 0, overflow: "auto", display: "grid", gridTemplateRows: "auto 1fr auto" }}>
           <div style={{ display: "flex", gap: 8, padding: 10, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-            {[
-              { id: "sections", label: "Секции" },
-              { id: "header", label: "Header" },
-              { id: "cards", label: "Карточки" },
-            ].map((t) => (
+            {(
+              [
+                { id: "sections", label: "Секции" },
+                { id: "header", label: "Header" },
+                { id: "cards", label: "Карточки" },
+                { id: "texts", label: "Тексты" },
+              ] as const
+            ).map((t) => (
               <button
                 key={t.id}
                 type="button"
-                onClick={() => setRightTab(t.id as any)}
+                onClick={() => setRightTab(t.id)}
                 style={{
                   borderRadius: 999,
                   border: "1px solid rgba(255,255,255,0.14)",
@@ -450,14 +464,20 @@ export default function BuilderPage(): React.ReactElement {
             {rightTab === "header" ? (
               <HeaderBuilder
                 theme={theme}
-                value={(draft as any).storefrontHeaderConfig}
+                value={draft?.storefrontHeaderConfig}
                 onChange={(next) => onHeaderChange(next as unknown as Record<string, unknown>)}
               />
             ) : null}
             {rightTab === "cards" ? (
               <ProductCardBuilder
-                value={(draft as any).storefrontCardConfig}
+                value={draft?.storefrontCardConfig}
                 onChange={(next) => onCardChange(next as unknown as Record<string, unknown>)}
+              />
+            ) : null}
+            {rightTab === "texts" ? (
+              <TextControls
+                value={draft?.storefrontTextConfig}
+                onChange={(next) => onTextChange(next as unknown as Record<string, unknown>)}
               />
             ) : null}
           </div>

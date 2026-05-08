@@ -11,7 +11,7 @@ const DEMO: Product = {
   images: ["https://res.cloudinary.com/demo/image/upload/w_600/sample.jpg"],
   description: "Preview карточки товара",
   categoryId: 0,
-} as any;
+} as unknown as Product;
 
 export function ProductCardPreview(props: {
   value: StorefrontCardConfig;

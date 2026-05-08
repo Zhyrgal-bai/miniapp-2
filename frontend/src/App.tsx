@@ -201,7 +201,6 @@ export default function App() {
     window.addEventListener("sf:toggleMenu", onToggle as unknown as EventListener);
     return () =>
       window.removeEventListener("sf:toggleMenu", onToggle as unknown as EventListener);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleNav = (target: AppNavPage) => {

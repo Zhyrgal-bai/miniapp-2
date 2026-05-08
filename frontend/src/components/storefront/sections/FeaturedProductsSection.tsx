@@ -11,6 +11,7 @@ export function FeaturedProductsSection(props: {
   config: Record<string, unknown>;
   products: Product[];
   cardConfig?: Record<string, unknown>;
+  textConfig?: Record<string, unknown>;
 }): React.ReactElement | null {
   const { theme } = useTheme();
   const title = readTitle(props.config, "Хиты");
@@ -33,6 +34,7 @@ export function FeaturedProductsSection(props: {
           showToast={() => undefined}
           onProductSelect={() => undefined}
           cardConfig={props.cardConfig}
+          textConfig={props.textConfig}
         />
       </div>
     </section>

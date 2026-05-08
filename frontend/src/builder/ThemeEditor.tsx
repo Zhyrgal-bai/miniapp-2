@@ -8,28 +8,42 @@ export function ThemeEditor(props: {
   onPatch: (patch: Record<string, unknown>) => void;
 }): React.ReactElement {
   const t = props.theme;
-  const t3 = (t as any).tokensV3 as any | undefined;
+  const t3 = (t as unknown as { tokensV3?: unknown }).tokensV3;
+  const t3obj: Record<string, unknown> | null =
+    t3 && typeof t3 === "object" && !Array.isArray(t3) ? (t3 as Record<string, unknown>) : null;
+  const palette =
+    t3obj?.palette && typeof t3obj.palette === "object" && !Array.isArray(t3obj.palette)
+      ? (t3obj.palette as Record<string, unknown>)
+      : ({} as Record<string, unknown>);
+  const getPal = (k: string, fb: string) => (typeof palette[k] === "string" ? (palette[k] as string) : fb);
+  const patchPal = (k: string, v: string) =>
+    props.onPatch({
+      tokensV3: {
+        ...(t3obj ?? {}),
+        version: 3,
+        palette: {
+          ...(t3obj?.palette ?? {}),
+          [k]: v,
+        },
+      },
+    });
   const density: string =
-    t3 && typeof t3 === "object" && typeof t3.density === "string" ? t3.density : "normal";
+    t3obj && typeof t3obj.density === "string" ? t3obj.density : "normal";
+  const typography =
+    t3obj?.typography && typeof t3obj.typography === "object" && !Array.isArray(t3obj.typography)
+      ? (t3obj.typography as Record<string, unknown>)
+      : null;
+  const fonts =
+    typography?.fonts && typeof typography.fonts === "object" && !Array.isArray(typography.fonts)
+      ? (typography.fonts as Record<string, unknown>)
+      : null;
   const headingFont: FontId =
-    t3 &&
-    typeof t3 === "object" &&
-    t3.typography &&
-    typeof t3.typography === "object" &&
-    t3.typography.fonts &&
-    typeof t3.typography.fonts === "object" &&
-    isFontId((t3.typography.fonts as any).heading)
-      ? ((t3.typography.fonts as any).heading as FontId)
+    isFontId(fonts?.heading)
+      ? (fonts?.heading as FontId)
       : "system";
   const bodyFont: FontId =
-    t3 &&
-    typeof t3 === "object" &&
-    t3.typography &&
-    typeof t3.typography === "object" &&
-    t3.typography.fonts &&
-    typeof t3.typography.fonts === "object" &&
-    isFontId((t3.typography.fonts as any).body)
-      ? ((t3.typography.fonts as any).body as FontId)
+    isFontId(fonts?.body)
+      ? (fonts?.body as FontId)
       : "system";
   return (
     <div style={{ padding: 12 }}>
@@ -71,12 +85,12 @@ export function ThemeEditor(props: {
               if (!isFontId(next)) return;
               props.onPatch({
                 tokensV3: {
-                  ...(t3 ?? {}),
+                  ...(t3obj ?? {}),
                   version: 3,
                   typography: {
-                    ...(t3?.typography ?? {}),
+                    ...(t3obj?.typography ?? {}),
                     fonts: {
-                      ...(t3?.typography?.fonts ?? {}),
+                      ...(typography?.fonts ?? {}),
                       heading: next,
                     },
                   },
@@ -107,12 +121,12 @@ export function ThemeEditor(props: {
               if (!isFontId(next)) return;
               props.onPatch({
                 tokensV3: {
-                  ...(t3 ?? {}),
+                  ...(t3obj ?? {}),
                   version: 3,
                   typography: {
-                    ...(t3?.typography ?? {}),
+                    ...(t3obj?.typography ?? {}),
                     fonts: {
-                      ...(t3?.typography?.fonts ?? {}),
+                      ...(typography?.fonts ?? {}),
                       body: next,
                     },
                   },
@@ -143,7 +157,7 @@ export function ThemeEditor(props: {
               if (next !== "compact" && next !== "normal" && next !== "comfortable") return;
               props.onPatch({
                 tokensV3: {
-                  ...(t3 ?? {}),
+                  ...(t3obj ?? {}),
                   version: 3,
                   density: next,
                 },
@@ -164,6 +178,44 @@ export function ThemeEditor(props: {
         </label>
         <div style={{ opacity: 0.7, fontSize: 12 }}>
           Safe allowlist (без custom CSS). Мгновенный preview через CSS variables.
+        </div>
+      </div>
+      <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
+        <div style={{ fontWeight: 900, opacity: 0.9, fontSize: 12 }}>Palette (V3)</div>
+        {[
+          ["primary", "Primary", t.primaryColor],
+          ["secondary", "Secondary", "#22c55e"],
+          ["accent", "Accent", "#f97316"],
+          ["background", "Background", t.bgColor],
+          ["surface", "Surface", t.bgColor],
+          ["card", "Card", t.cardColor],
+          ["text", "Text", t.textColor],
+          ["muted", "Muted", "#94a3b8"],
+          ["border", "Border", "#334155"],
+          ["success", "Success", "#22c55e"],
+          ["warning", "Warning", "#f59e0b"],
+          ["danger", "Danger", "#ef4444"],
+        ].map(([key, label, fb]) => (
+          <label
+            key={String(key)}
+            style={{ display: "grid", gap: 6, fontSize: 12, opacity: 0.9 }}
+          >
+            {label}
+            <input
+              defaultValue={getPal(String(key), String(fb))}
+              onBlur={(e) => patchPal(String(key), e.target.value)}
+              style={{
+                borderRadius: 10,
+                border: "1px solid rgba(255,255,255,0.14)",
+                background: "rgba(2,6,23,0.45)",
+                color: "#fff",
+                padding: "8px 10px",
+              }}
+            />
+          </label>
+        ))}
+        <div style={{ opacity: 0.7, fontSize: 12 }}>
+          Цвета применяются через <b>--sf-color-*</b> (без inline инъекций).
         </div>
       </div>
       <div style={{ display: "grid", gap: 10 }}>

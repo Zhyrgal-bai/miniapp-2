@@ -25,6 +25,7 @@ export type RawStorefrontConfig = {
   sections: RawStorefrontSection[];
   storefrontHeaderConfig?: StorefrontHeaderConfig;
   storefrontCardConfig?: StorefrontCardConfig;
+  storefrontTextConfig?: StorefrontTextConfig;
 };
 
 export type ResolvedStorefrontSection = {
@@ -44,6 +45,7 @@ export type ResolvedStorefrontPayload = {
   sections: ResolvedStorefrontSection[];
   storefrontHeaderConfig: StorefrontHeaderConfig;
   storefrontCardConfig: StorefrontCardConfig;
+  storefrontTextConfig: StorefrontTextConfig;
   /**
    * Optional preloaded data for renderer (MVP).
    * Keep shapes minimal + safe for public.
@@ -86,6 +88,11 @@ export type StorefrontCardConfig = {
   buttonStyle: "solid" | "outline" | "glass";
   textAlign: "left" | "center";
   hoverEffect: "none" | "scale" | "lift";
+};
+
+export type StorefrontTextConfig = {
+  heroDefaultTitle: string;
+  addToCartLabel: string;
 };
 
 function configBytesLimitCheck(v: unknown): boolean {
@@ -221,6 +228,16 @@ const StorefrontCardConfigSchema = z
     hoverEffect: "lift",
   });
 
+const StorefrontTextConfigSchema = z
+  .object({
+    heroDefaultTitle: z.string().trim().max(LIMITS.maxTitleLen).optional().default("Добро пожаловать"),
+    addToCartLabel: z.string().trim().max(24).optional().default("Добавить"),
+  })
+  .default({
+    heroDefaultTitle: "Добро пожаловать",
+    addToCartLabel: "Добавить",
+  });
+
 const ReviewsItemSchema = z.object({
   author: z.string().trim().max(80).default(""),
   text: z.string().trim().max(LIMITS.maxTextLen).default(""),
@@ -321,6 +338,7 @@ export const StorefrontConfigSchema = z
     sections: z.array(SectionBaseSchema).max(LIMITS.maxSections).default([]),
     storefrontHeaderConfig: StorefrontHeaderConfigSchema.optional(),
     storefrontCardConfig: StorefrontCardConfigSchema.optional(),
+    storefrontTextConfig: StorefrontTextConfigSchema.optional(),
   })
   .refine((v) => configBytesLimitCheck(v), {
     message: `storefrontConfig слишком большой (лимит ${LIMITS.maxConfigBytes} байт)`,
@@ -348,6 +366,7 @@ export function migrateStorefrontConfig(
       sections: v.sections as any,
       storefrontHeaderConfig: (v as any).storefrontHeaderConfig,
       storefrontCardConfig: (v as any).storefrontCardConfig,
+      storefrontTextConfig: (v as any).storefrontTextConfig,
     };
 
   // future migrations: add here
@@ -356,6 +375,7 @@ export function migrateStorefrontConfig(
     sections: v.sections as any,
     storefrontHeaderConfig: (v as any).storefrontHeaderConfig,
     storefrontCardConfig: (v as any).storefrontCardConfig,
+    storefrontTextConfig: (v as any).storefrontTextConfig,
   };
 }
 
@@ -365,6 +385,7 @@ export function defaultStorefrontConfig(): RawStorefrontConfig {
     sections: defaultSections(),
     storefrontHeaderConfig: StorefrontHeaderConfigSchema.parse({}),
     storefrontCardConfig: StorefrontCardConfigSchema.parse({}),
+    storefrontTextConfig: StorefrontTextConfigSchema.parse({}),
   };
 }
 
@@ -514,6 +535,11 @@ export function resolveStorefrontConfig(input: {
       ? StorefrontCardConfigSchema.parse((migrated as any).storefrontCardConfig ?? {})
       : StorefrontCardConfigSchema.parse({});
 
+  const textCfg =
+    StorefrontTextConfigSchema.safeParse((migrated as any).storefrontTextConfig ?? undefined).success
+      ? StorefrontTextConfigSchema.parse((migrated as any).storefrontTextConfig ?? {})
+      : StorefrontTextConfigSchema.parse({});
+
   return {
     businessId: input.businessId,
     businessType: input.businessType,
@@ -524,6 +550,7 @@ export function resolveStorefrontConfig(input: {
     sections: sectionsResolved,
     storefrontHeaderConfig: headerCfg,
     storefrontCardConfig: cardCfg,
+    storefrontTextConfig: textCfg,
   };
 }
 

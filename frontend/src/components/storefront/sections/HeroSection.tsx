@@ -7,6 +7,12 @@ function readString(obj: unknown, key: string): string {
   return typeof v === "string" ? v : "";
 }
 
+function readTextConfigString(cfg: unknown, key: string): string {
+  if (cfg == null || typeof cfg !== "object" || Array.isArray(cfg)) return "";
+  const v = (cfg as Record<string, unknown>)[key];
+  return typeof v === "string" ? v : "";
+}
+
 function readSlides(config: Record<string, unknown>): Array<Record<string, unknown>> {
   const v = config.slides;
   if (!Array.isArray(v)) return [];
@@ -17,14 +23,19 @@ function readSlides(config: Record<string, unknown>): Array<Record<string, unkno
 
 export function HeroSection(props: {
   config: Record<string, unknown>;
+  textConfig?: Record<string, unknown>;
 }): React.ReactElement {
   const { theme } = useTheme();
   const slides = readSlides(props.config);
   const first = slides[0] ?? {};
+  const defaultTitle =
+    readTextConfigString(props.textConfig ?? undefined, "heroDefaultTitle").trim() !== ""
+      ? readTextConfigString(props.textConfig ?? undefined, "heroDefaultTitle")
+      : "Добро пожаловать";
   const title =
     readString(first, "title").trim() !== ""
       ? readString(first, "title")
-      : "Добро пожаловать";
+      : defaultTitle;
   const subtitle =
     readString(first, "subtitle").trim() !== ""
       ? readString(first, "subtitle")

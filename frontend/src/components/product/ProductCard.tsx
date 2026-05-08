@@ -18,7 +18,14 @@ type Props = {
   /** Открыть карточку товара (модалка на витрине). */
   onOpenDetail?: (product: Product) => void;
   cardConfig?: Record<string, unknown>;
+  textConfig?: Record<string, unknown>;
 };
+
+function readTextConfigString(cfg: unknown, key: string): string {
+  if (cfg == null || typeof cfg !== "object" || Array.isArray(cfg)) return "";
+  const v = (cfg as Record<string, unknown>)[key];
+  return typeof v === "string" ? v : "";
+}
 
 function normalizeCardConfig(raw: Record<string, unknown> | undefined): {
   variant: "minimal" | "modern" | "luxury" | "fashion" | "marketplace";
@@ -30,38 +37,48 @@ function normalizeCardConfig(raw: Record<string, unknown> | undefined): {
   textAlign: "left" | "center";
   hoverEffect: "none" | "scale" | "lift";
 } {
-  const c = (raw ?? {}) as any;
+  const c = raw ?? {};
+  const getStr = (k: string): string | null => (typeof c[k] === "string" ? (c[k] as string) : null);
+  const getBool = (k: string): boolean | null => (typeof c[k] === "boolean" ? (c[k] as boolean) : null);
   const variant =
-    c.variant === "minimal" ||
-    c.variant === "luxury" ||
-    c.variant === "fashion" ||
-    c.variant === "marketplace"
-      ? c.variant
+    getStr("variant") === "minimal" ||
+    getStr("variant") === "luxury" ||
+    getStr("variant") === "fashion" ||
+    getStr("variant") === "marketplace"
+      ? (getStr("variant") as "minimal" | "luxury" | "fashion" | "marketplace")
       : "modern";
   const imageRatio =
-    c.imageRatio === "portrait" || c.imageRatio === "landscape" ? c.imageRatio : "square";
+    getStr("imageRatio") === "portrait" || getStr("imageRatio") === "landscape"
+      ? (getStr("imageRatio") as "portrait" | "landscape")
+      : "square";
   const buttonStyle =
-    c.buttonStyle === "outline" || c.buttonStyle === "glass" ? c.buttonStyle : "solid";
-  const textAlign = c.textAlign === "center" ? "center" : "left";
+    getStr("buttonStyle") === "outline" || getStr("buttonStyle") === "glass"
+      ? (getStr("buttonStyle") as "outline" | "glass")
+      : "solid";
+  const textAlign = getStr("textAlign") === "center" ? "center" : "left";
   const hoverEffect =
-    c.hoverEffect === "none" || c.hoverEffect === "scale" || c.hoverEffect === "lift"
-      ? c.hoverEffect
+    getStr("hoverEffect") === "none" || getStr("hoverEffect") === "scale" || getStr("hoverEffect") === "lift"
+      ? (getStr("hoverEffect") as "none" | "scale" | "lift")
       : "lift";
   return {
     variant,
     imageRatio,
-    rounded: c.rounded !== false,
-    shadow: c.shadow !== false,
-    compact: c.compact === true,
+    rounded: getBool("rounded") !== false,
+    shadow: getBool("shadow") !== false,
+    compact: getBool("compact") === true,
     buttonStyle,
     textAlign,
     hoverEffect,
   };
 }
 
-export default function ProductCard({ product, showToast, onOpenDetail, cardConfig }: Props) {
+export default function ProductCard({ product, showToast, onOpenDetail, cardConfig, textConfig }: Props) {
   useTheme(); // keep existing context behavior for now (legacy vars)
   const cfg = useMemo(() => normalizeCardConfig(cardConfig), [cardConfig]);
+  const addLabel =
+    readTextConfigString(textConfig ?? undefined, "addToCartLabel").trim() !== ""
+      ? readTextConfigString(textConfig ?? undefined, "addToCartLabel")
+      : "Добавить";
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -386,7 +403,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
                 disabled={outOfStock || !canAddToCart}
                 type="button"
               >
-                Добавить
+                {addLabel}
               </button>
             ) : (
               <>

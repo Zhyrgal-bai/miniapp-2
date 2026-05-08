@@ -38,12 +38,14 @@ export async function uploadImageToCdn(
         return;
       }
       try {
-        const j = JSON.parse(xhr.responseText) as Partial<UploadedImageAsset> & { url?: string };
+        const j = JSON.parse(xhr.responseText) as unknown;
+        const obj: Record<string, unknown> =
+          j && typeof j === "object" && !Array.isArray(j) ? (j as Record<string, unknown>) : {};
         const asset: UploadedImageAsset = {
-          url: String(j.url ?? ""),
-          publicId: String((j as any).publicId ?? ""),
-          width: Number((j as any).width ?? 0) || 0,
-          height: Number((j as any).height ?? 0) || 0,
+          url: String(obj.url ?? ""),
+          publicId: String(obj.publicId ?? ""),
+          width: Number(obj.width ?? 0) || 0,
+          height: Number(obj.height ?? 0) || 0,
         };
         if (!asset.url || !asset.publicId) {
           reject(new Error("Bad upload response"));

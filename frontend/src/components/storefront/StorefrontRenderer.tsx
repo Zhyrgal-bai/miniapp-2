@@ -39,6 +39,7 @@ export type ResolvedStorefrontPayload = {
   sections: ResolvedStorefrontSection[];
   storefrontHeaderConfig?: Record<string, unknown>;
   storefrontCardConfig?: Record<string, unknown>;
+  storefrontTextConfig?: Record<string, unknown>;
   categories?: Category[];
   featuredProducts?: Product[];
 };
@@ -63,7 +64,13 @@ export function StorefrontRenderer(props: {
       {sections.map((s) => {
         switch (s.type) {
           case "hero":
-            return <HeroSection key={s.id} config={s.config} />;
+            return (
+              <HeroSection
+                key={s.id}
+                config={s.config}
+                textConfig={props.payload.storefrontTextConfig ?? undefined}
+              />
+            );
           case "promo":
             return <PromoSection key={s.id} config={s.config} />;
           case "categories":
@@ -81,6 +88,7 @@ export function StorefrontRenderer(props: {
                 config={s.config}
                 products={props.payload.featuredProducts ?? []}
                 cardConfig={props.payload.storefrontCardConfig ?? undefined}
+                textConfig={props.payload.storefrontTextConfig ?? undefined}
               />
             );
           case "footer":

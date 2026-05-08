@@ -3,26 +3,35 @@ import { ProductCardControls, type StorefrontCardConfig } from "./ProductCardCon
 import { ProductCardPreview } from "./ProductCardPreview";
 
 function normalize(input: unknown): StorefrontCardConfig {
-  const c = (input && typeof input === "object" && !Array.isArray(input) ? input : {}) as any;
+  const c: Record<string, unknown> =
+    input && typeof input === "object" && !Array.isArray(input) ? (input as Record<string, unknown>) : {};
+  const getStr = (k: string): string | null => (typeof c[k] === "string" ? (c[k] as string) : null);
+  const getBool = (k: string): boolean | null => (typeof c[k] === "boolean" ? (c[k] as boolean) : null);
   return {
     variant:
-      c.variant === "minimal" ||
-      c.variant === "luxury" ||
-      c.variant === "fashion" ||
-      c.variant === "marketplace"
-        ? c.variant
+      getStr("variant") === "minimal" ||
+      getStr("variant") === "luxury" ||
+      getStr("variant") === "fashion" ||
+      getStr("variant") === "marketplace"
+        ? (getStr("variant") as "minimal" | "luxury" | "fashion" | "marketplace")
         : "modern",
-    imageRatio: c.imageRatio === "portrait" || c.imageRatio === "landscape" ? c.imageRatio : "square",
-    rounded: c.rounded !== false,
-    shadow: c.shadow !== false,
-    compact: c.compact === true,
-    showBadges: c.showBadges !== false,
-    showWishlist: c.showWishlist === true,
-    buttonStyle: c.buttonStyle === "outline" || c.buttonStyle === "glass" ? c.buttonStyle : "solid",
-    textAlign: c.textAlign === "center" ? "center" : "left",
+    imageRatio:
+      getStr("imageRatio") === "portrait" || getStr("imageRatio") === "landscape"
+        ? (getStr("imageRatio") as "portrait" | "landscape")
+        : "square",
+    rounded: getBool("rounded") !== false,
+    shadow: getBool("shadow") !== false,
+    compact: getBool("compact") === true,
+    showBadges: getBool("showBadges") !== false,
+    showWishlist: getBool("showWishlist") === true,
+    buttonStyle:
+      getStr("buttonStyle") === "outline" || getStr("buttonStyle") === "glass"
+        ? (getStr("buttonStyle") as "outline" | "glass")
+        : "solid",
+    textAlign: getStr("textAlign") === "center" ? "center" : "left",
     hoverEffect:
-      c.hoverEffect === "none" || c.hoverEffect === "scale" || c.hoverEffect === "lift"
-        ? c.hoverEffect
+      getStr("hoverEffect") === "none" || getStr("hoverEffect") === "scale" || getStr("hoverEffect") === "lift"
+        ? (getStr("hoverEffect") as "none" | "scale" | "lift")
         : "lift",
   };
 }

@@ -4,30 +4,35 @@ import { HeaderControls, type StorefrontHeaderConfig } from "./HeaderControls";
 import { HeaderPreview } from "./HeaderPreview";
 
 function normalize(input: unknown): StorefrontHeaderConfig {
-  const c = (input && typeof input === "object" && !Array.isArray(input) ? input : {}) as any;
+  const c: Record<string, unknown> =
+    input && typeof input === "object" && !Array.isArray(input) ? (input as Record<string, unknown>) : {};
+  const getStr = (k: string): string | null => (typeof c[k] === "string" ? (c[k] as string) : null);
+  const getBool = (k: string): boolean | null => (typeof c[k] === "boolean" ? (c[k] as boolean) : null);
+  const getNum = (k: string): number | null =>
+    typeof c[k] === "number" && Number.isFinite(c[k]) ? (c[k] as number) : null;
   return {
     variant:
-      c.variant === "centered" ||
-      c.variant === "split" ||
-      c.variant === "minimal" ||
-      c.variant === "luxury" ||
-      c.variant === "commerce"
-        ? c.variant
+      getStr("variant") === "centered" ||
+      getStr("variant") === "split" ||
+      getStr("variant") === "minimal" ||
+      getStr("variant") === "luxury" ||
+      getStr("variant") === "commerce"
+        ? (getStr("variant") as "centered" | "split" | "minimal" | "luxury" | "commerce")
         : "commerce",
-    titleText: typeof c.titleText === "string" ? c.titleText.slice(0, 32) : undefined,
-    showAvatar: c.showAvatar !== false,
-    showSearch: c.showSearch === true,
-    sticky: c.sticky !== false,
-    glass: c.glass === true,
-    alignment: c.alignment === "left" ? "left" : "center",
-    height: c.height === "compact" || c.height === "large" ? c.height : "normal",
+    titleText: typeof c.titleText === "string" ? (c.titleText as string).slice(0, 32) : undefined,
+    showAvatar: getBool("showAvatar") !== false,
+    showSearch: getBool("showSearch") === true,
+    sticky: getBool("sticky") !== false,
+    glass: getBool("glass") === true,
+    alignment: getStr("alignment") === "left" ? "left" : "center",
+    height: getStr("height") === "compact" || getStr("height") === "large" ? (getStr("height") as "compact" | "large") : "normal",
     logoSize:
-      typeof c.logoSize === "number" && Number.isFinite(c.logoSize)
-        ? Math.min(64, Math.max(18, Math.round(c.logoSize)))
+      getNum("logoSize") != null
+        ? Math.min(64, Math.max(18, Math.round(getNum("logoSize") as number)))
         : 34,
-    titleStyle: c.titleStyle === "uppercase" || c.titleStyle === "wide" ? c.titleStyle : "normal",
-    shadow: c.shadow !== false,
-    border: c.border === true,
+    titleStyle: getStr("titleStyle") === "uppercase" || getStr("titleStyle") === "wide" ? (getStr("titleStyle") as "uppercase" | "wide") : "normal",
+    shadow: getBool("shadow") !== false,
+    border: getBool("border") === true,
   };
 }
 

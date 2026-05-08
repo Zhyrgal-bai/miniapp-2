@@ -14,6 +14,7 @@ export type BuilderConfig = {
   sections: BuilderSection[];
   storefrontHeaderConfig?: Record<string, unknown>;
   storefrontCardConfig?: Record<string, unknown>;
+  storefrontTextConfig?: Record<string, unknown>;
 };
 
 export type StorefrontBuilderState = {
