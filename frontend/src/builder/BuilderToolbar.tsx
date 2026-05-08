@@ -1,10 +1,14 @@
 import type React from "react";
+import type { PreviewMode } from "./preview/modes";
+import { PreviewModeSwitcher } from "./PreviewModeSwitcher";
 
 export function BuilderToolbar(props: {
   saving: boolean;
   onPublish: () => void;
   onReset: () => void;
   canPublish: boolean;
+  previewMode: PreviewMode;
+  onPreviewModeChange: (m: PreviewMode) => void;
 }): React.ReactElement {
   return (
     <div
@@ -24,6 +28,12 @@ export function BuilderToolbar(props: {
       <div style={{ fontWeight: 800, letterSpacing: "0.16em" }}>BUILDER</div>
       <div style={{ opacity: 0.7, fontSize: 12 }}>
         {props.saving ? "Сохранение…" : "Готово"}
+      </div>
+      <div style={{ marginLeft: 10 }}>
+        <PreviewModeSwitcher
+          mode={props.previewMode}
+          onChange={props.onPreviewModeChange}
+        />
       </div>
       <div style={{ flex: 1 }} />
       <button

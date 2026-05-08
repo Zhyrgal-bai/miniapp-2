@@ -16,6 +16,8 @@ function SortableRow(props: {
   subtitle: string;
   onSelect: () => void;
   onToggle: () => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
 }): React.ReactElement {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: props.id });
@@ -69,6 +71,44 @@ function SortableRow(props: {
         <button
           onClick={(e) => {
             e.stopPropagation();
+            props.onDuplicate();
+          }}
+          style={{
+            borderRadius: 10,
+            border: "1px solid rgba(255,255,255,0.12)",
+            background: "rgba(255,255,255,0.02)",
+            color: "rgba(255,255,255,0.85)",
+            padding: "6px 10px",
+            fontWeight: 800,
+            fontSize: 12,
+            cursor: "pointer",
+          }}
+          title="Duplicate"
+        >
+          ⧉
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            props.onDelete();
+          }}
+          style={{
+            borderRadius: 10,
+            border: "1px solid rgba(239,68,68,0.30)",
+            background: "rgba(239,68,68,0.10)",
+            color: "rgba(255,255,255,0.9)",
+            padding: "6px 10px",
+            fontWeight: 900,
+            fontSize: 12,
+            cursor: "pointer",
+          }}
+          title="Delete"
+        >
+          🗑
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
             props.onToggle();
           }}
           style={{
@@ -97,6 +137,8 @@ export function BuilderSidebar(props: {
   onToggle: (id: string) => void;
   onReorder: (ids: string[]) => void;
   onAddSection: () => void;
+  onDuplicate: (id: string) => void;
+  onDelete: (id: string) => void;
   uxWarnings: string[];
   uxErrors: string[];
 }): React.ReactElement {
@@ -143,24 +185,41 @@ export function BuilderSidebar(props: {
           }}
         >
           <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-            <div style={{ display: "grid", gap: 8 }}>
-              {props.sections.map((s) => {
-                const active = props.selectedId === s.id;
-                const enabled = s.enabled !== false;
-                return (
-                  <SortableRow
-                    key={s.id}
-                    id={s.id}
-                    active={active}
-                    enabled={enabled}
-                    titleLeft={s.type}
-                    subtitle={s.id}
-                    onSelect={() => props.onSelect(s.id)}
-                    onToggle={() => props.onToggle(s.id)}
-                  />
-                );
-              })}
-            </div>
+            {props.sections.length === 0 ? (
+              <div
+                style={{
+                  padding: 16,
+                  borderRadius: 16,
+                  border: "1px solid rgba(255,255,255,0.10)",
+                  background: "rgba(255,255,255,0.03)",
+                  color: "rgba(255,255,255,0.85)",
+                  textAlign: "center",
+                }}
+              >
+                У вас пока нет секций. Нажмите “+ Добавить”.
+              </div>
+            ) : (
+              <div style={{ display: "grid", gap: 8 }}>
+                {props.sections.map((s) => {
+                  const active = props.selectedId === s.id;
+                  const enabled = s.enabled !== false;
+                  return (
+                    <SortableRow
+                      key={s.id}
+                      id={s.id}
+                      active={active}
+                      enabled={enabled}
+                      titleLeft={s.type}
+                      subtitle={s.id}
+                      onSelect={() => props.onSelect(s.id)}
+                      onToggle={() => props.onToggle(s.id)}
+                      onDuplicate={() => props.onDuplicate(s.id)}
+                      onDelete={() => props.onDelete(s.id)}
+                    />
+                  );
+                })}
+              </div>
+            )}
           </SortableContext>
         </DndContext>
 

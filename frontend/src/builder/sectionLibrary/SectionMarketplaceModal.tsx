@@ -145,30 +145,48 @@ export function SectionMarketplaceModal(props: {
               gap: 12,
             }}
           >
-            {items.map((x) => (
-              <button
-                key={x.id}
-                onClick={() => props.onPick(x)}
+            {items.length === 0 ? (
+              <div
                 style={{
-                  textAlign: "left",
+                  gridColumn: "1 / -1",
+                  padding: 18,
                   borderRadius: 16,
                   border: "1px solid rgba(255,255,255,0.10)",
                   background: "rgba(255,255,255,0.03)",
-                  padding: 12,
-                  color: "#fff",
-                  cursor: "pointer",
+                  color: "rgba(255,255,255,0.85)",
+                  textAlign: "center",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ fontSize: 18 }}>{x.icon}</div>
-                  <div style={{ fontWeight: 900 }}>{x.title}</div>
-                </div>
-                <div style={{ opacity: 0.75, fontSize: 12, marginTop: 6 }}>{x.description}</div>
-                <div style={{ opacity: 0.6, fontSize: 11, marginTop: 8 }}>
-                  {x.category} • {x.type}
-                </div>
-              </button>
-            ))}
+                Ничего не найдено.
+              </div>
+            ) : (
+              items.map((x) => (
+                <button
+                  key={x.id}
+                  onClick={() => props.onPick(x)}
+                  style={{
+                    textAlign: "left",
+                    borderRadius: 16,
+                    border: "1px solid rgba(255,255,255,0.10)",
+                    background: "rgba(255,255,255,0.03)",
+                    padding: 12,
+                    color: "#fff",
+                    cursor: "pointer",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ fontSize: 18 }}>{x.icon}</div>
+                    <div style={{ fontWeight: 900 }}>{x.title}</div>
+                  </div>
+                  <div style={{ opacity: 0.75, fontSize: 12, marginTop: 6 }}>
+                    {x.description}
+                  </div>
+                  <div style={{ opacity: 0.6, fontSize: 11, marginTop: 8 }}>
+                    {x.category} • {x.type}
+                  </div>
+                </button>
+              ))
+            )}
           </div>
         </div>
       </div>

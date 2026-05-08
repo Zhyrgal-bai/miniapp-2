@@ -22,6 +22,9 @@ import type { ResolvedStorefrontPayload } from "../components/storefront/Storefr
 import { SectionMarketplaceModal } from "./sectionLibrary/SectionMarketplaceModal";
 import type { SectionLibraryItem } from "./sectionLibrary/types";
 import { stableSectionId } from "./sectionRegistry";
+import type { PreviewMode } from "./preview/modes";
+import { useBuilderSaveState } from "./useBuilderSaveState";
+import { BuilderStatusBar } from "./BuilderStatusBar";
 
 function ensureUserId(): number {
   const id = getWebAppUserId();
@@ -50,10 +53,12 @@ export default function BuilderPage(): React.ReactElement {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [marketOpen, setMarketOpen] = useState(false);
+  const [previewMode, setPreviewMode] = useState<PreviewMode>("mobile");
   const [ux, setUx] = useState<{ errors: string[]; warnings: string[] }>({
     errors: [],
     warnings: [],
   });
+  const save = useBuilderSaveState();
 
   const debounceRef = useRef<number | null>(null);
   const savingRef = useRef(false);
@@ -92,6 +97,7 @@ export default function BuilderPage(): React.ReactElement {
 
   const scheduleSave = useCallback(
     (nextDraft: BuilderConfig, themePatch?: Partial<ResolvedStoreTheme> | null) => {
+      save.markDirty();
       setDraft(nextDraft);
       // optimistic preview: reuse server preview but swap sections only
       setPreview((p) =>
@@ -109,6 +115,7 @@ export default function BuilderPage(): React.ReactElement {
           try {
             if (savingRef.current) return;
             savingRef.current = true;
+            save.startSaving();
             setSaving(true);
             const userId = ensureUserId();
             const out = await saveStorefrontBuilderDraft({
@@ -127,9 +134,12 @@ export default function BuilderPage(): React.ReactElement {
               ? uxResp.warnings.map((x) => String(x?.message ?? ""))
               : [];
             setUx({ errors, warnings });
+            save.savedOk();
           } catch (e) {
             console.error(e);
-            setErr(e instanceof Error ? e.message : "Ошибка сохранения");
+            const msg = e instanceof Error ? e.message : "Ошибка сохранения";
+            setErr(msg);
+            save.saveFailed(msg);
           } finally {
             setSaving(false);
             savingRef.current = false;
@@ -137,7 +147,7 @@ export default function BuilderPage(): React.ReactElement {
         })();
       }, 600);
     },
-    [],
+    [save],
   );
 
   const onToggle = useCallback(
@@ -186,6 +196,51 @@ export default function BuilderPage(): React.ReactElement {
     [draft, scheduleSave],
   );
 
+  const deepClone = (v: unknown): unknown => {
+    if ("structuredClone" in globalThis && typeof globalThis.structuredClone === "function") {
+      return globalThis.structuredClone(v);
+    }
+    try {
+      return JSON.parse(JSON.stringify(v));
+    } catch {
+      return v;
+    }
+  };
+
+  const onDuplicate = useCallback(
+    (id: string) => {
+      if (!draft) return;
+      const idx = draft.sections.findIndex((s) => String(s.id) === String(id));
+      if (idx < 0) return;
+      const src = draft.sections[idx]!;
+      const clone: BuilderSection = {
+        ...src,
+        id: stableSectionId(src.type),
+        config: (deepClone(src.config) as Record<string, unknown>) ?? {},
+      };
+      const next = [...draft.sections];
+      next.splice(idx + 1, 0, clone);
+      // normalize orders
+      const normalized = next.map((s, i) => ({ ...s, order: 10 + i * 10 }));
+      scheduleSave({ ...draft, sections: normalized });
+      setSelectedId(clone.id);
+    },
+    [draft, scheduleSave],
+  );
+
+  const onDelete = useCallback(
+    (id: string) => {
+      if (!draft) return;
+      const next = draft.sections.filter((s) => String(s.id) !== String(id));
+      const normalized = next.map((s, i) => ({ ...s, order: 10 + i * 10 }));
+      scheduleSave({ ...draft, sections: normalized });
+      if (selectedId === id) {
+        setSelectedId(normalized[0]?.id ?? null);
+      }
+    },
+    [draft, scheduleSave, selectedId],
+  );
+
   const addSection = useCallback(
     (item: SectionLibraryItem) => {
       if (!draft) return;
@@ -205,10 +260,10 @@ export default function BuilderPage(): React.ReactElement {
   );
 
   const onThemePatch = useCallback(
-    (patch: Partial<ResolvedStoreTheme>) => {
+    (patch: Record<string, unknown>) => {
       const nextTheme = mergeThemeFromUnknown(patch, theme);
       setThemeDraft(nextTheme);
-      if (draft) scheduleSave(draft, patch);
+      if (draft) scheduleSave(draft, patch as unknown as Partial<ResolvedStoreTheme>);
     },
     [draft, scheduleSave, setThemeDraft, theme],
   );
@@ -219,17 +274,21 @@ export default function BuilderPage(): React.ReactElement {
     void (async () => {
       try {
         const userId = ensureUserId();
+        save.startPublishing();
         setSaving(true);
         await publishStorefrontBuilderDraft({ userId });
+        save.publishedOk();
         await load();
       } catch (e) {
         console.error(e);
-        setErr(e instanceof Error ? e.message : "Publish failed");
+        const msg = e instanceof Error ? e.message : "Publish failed";
+        setErr(msg);
+        save.publishFailed(msg);
       } finally {
         setSaving(false);
       }
     })();
-  }, [load]);
+  }, [load, save]);
 
   const onReset = useCallback(() => {
     void (async () => {
@@ -237,6 +296,7 @@ export default function BuilderPage(): React.ReactElement {
         const userId = ensureUserId();
         setSaving(true);
         await resetStorefrontBuilderDraft({ userId });
+        save.resetDone();
         await load();
       } catch (e) {
         console.error(e);
@@ -245,7 +305,7 @@ export default function BuilderPage(): React.ReactElement {
         setSaving(false);
       }
     })();
-  }, [load]);
+  }, [load, save]);
 
   if (err) {
     return (
@@ -276,7 +336,14 @@ export default function BuilderPage(): React.ReactElement {
 
   return (
     <div style={{ minHeight: "100%", display: "grid", gridTemplateRows: "auto 1fr" }}>
-      <BuilderToolbar saving={saving} onPublish={onPublish} onReset={onReset} canPublish={canPublish} />
+      <BuilderToolbar
+        saving={saving}
+        onPublish={onPublish}
+        onReset={onReset}
+        canPublish={canPublish}
+        previewMode={previewMode}
+        onPreviewModeChange={setPreviewMode}
+      />
       <SectionMarketplaceModal
         open={marketOpen}
         onClose={() => setMarketOpen(false)}
@@ -301,17 +368,22 @@ export default function BuilderPage(): React.ReactElement {
           onToggle={onToggle}
           onReorder={onReorder}
           onAddSection={() => setMarketOpen(true)}
+          onDuplicate={onDuplicate}
+          onDelete={onDelete}
           uxErrors={ux.errors}
           uxWarnings={ux.warnings}
         />
         <div style={{ minHeight: 0, overflow: "auto" }}>
-          <BuilderCanvas previewPayload={preview} />
+          <BuilderCanvas previewPayload={preview} mode={previewMode} />
         </div>
-        <div style={{ borderLeft: "1px solid rgba(255,255,255,0.06)", minHeight: 0, overflow: "auto" }}>
+        <div style={{ borderLeft: "1px solid rgba(255,255,255,0.06)", minHeight: 0, overflow: "auto", display: "grid", gridTemplateRows: "1fr auto" }}>
           {selected ? <SectionEditor section={selected} onChange={onSectionChange} /> : null}
-          <ThemeEditor theme={theme} onPatch={onThemePatch} />
+          <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            <ThemeEditor theme={theme} onPatch={onThemePatch} />
+          </div>
         </div>
       </div>
+      <BuilderStatusBar state={save.state} uxErrorsCount={ux.errors.length} />
     </div>
   );
 }

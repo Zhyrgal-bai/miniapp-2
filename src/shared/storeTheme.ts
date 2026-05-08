@@ -24,6 +24,8 @@ export type ResolvedStoreTheme = {
   tokens: ThemeTokensV2;
 };
 
+export type { ThemeTokensV2 } from "../theme/tokens.js";
+
 export const STORE_TEMPLATE_IDS = ["red", "dark", "light", "luxury"] as const;
 
 export type StoreTemplateId = (typeof STORE_TEMPLATE_IDS)[number];
