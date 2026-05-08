@@ -292,9 +292,10 @@ export const adminService = {
       body: form,
     });
     if (!res.ok) throw new Error(await readFetchError(res));
-    const j = (await res.json()) as { url?: string };
-    if (!j.url) throw new Error("Нет url в ответе");
-    return j.url;
+    const j = (await res.json()) as { url?: string; secure_url?: string };
+    const out = j.url ?? j.secure_url;
+    if (!out) throw new Error("Нет url в ответе");
+    return out;
   },
 
   async uploadImages(files: File[]): Promise<string[]> {
@@ -312,8 +313,10 @@ export const adminService = {
       body: form,
     });
     if (!res.ok) throw new Error(await readFetchError(res));
-    const j = (await res.json()) as { urls?: string[] };
-    return Array.isArray(j.urls) ? j.urls : [];
+    const j = (await res.json()) as { urls?: string[]; assets?: Array<{ url?: string }> };
+    if (Array.isArray(j.urls)) return j.urls;
+    if (Array.isArray(j.assets)) return j.assets.map((a) => String(a.url ?? "")).filter(Boolean);
+    return [];
   },
 
   async updateOrderStatus(

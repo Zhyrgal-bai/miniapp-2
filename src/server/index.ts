@@ -51,6 +51,8 @@ import {
   resolveStorefrontConfig,
 } from "../storefront/schema.js";
 import { validateUx } from "../ux/validators.js";
+import { validateImageFile, uploadTenantImage } from "../media/upload.js";
+import { extractCloudinaryPublicIds, safeDeleteCloudinaryAsset } from "../media/delete.js";
 import {
   getCachedStorefrontPayload,
   invalidateStorefrontCache,
@@ -131,7 +133,7 @@ import { isStorefrontClosedForCustomers } from "./subscriptionAccess.js";
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 8 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024 },
 });
 
 console.log(
@@ -844,8 +846,27 @@ app.put("/api/merchant/storefront-builder/draft", async (req: Request, res: Resp
     const sf = await prisma.storefront.findFirst({
       where: { businessId: merchant.businessId },
       orderBy: { id: "asc" },
-      select: { id: true } as any,
+      select: { id: true, draftConfig: true } as any,
     });
+
+    // Safe delete sync: remove assets that disappeared from draft (hero/promo/etc).
+    // Never throws fatal; cross-tenant safety enforced by publicId prefix.
+    try {
+      const prevDraft = sf ? (sf as any).draftConfig : null;
+      const prevIds = new Set(extractCloudinaryPublicIds(prevDraft));
+      const nextIds = new Set(extractCloudinaryPublicIds(parsed.data));
+      for (const pid of prevIds) {
+        if (!nextIds.has(pid)) {
+          await safeDeleteCloudinaryAsset({
+            businessId: merchant.businessId,
+            publicId: pid,
+          });
+        }
+      }
+    } catch (e) {
+      console.error("draft media delete sync:", e);
+    }
+
     if (sf) {
       await prisma.storefront.update({
         where: { id: (sf as any).id },
@@ -1047,6 +1068,17 @@ app.delete(
       if (!row || (row as any).businessId !== merchant.businessId) {
         return res.status(404).json({ error: "Not found" });
       }
+
+      // Safe delete sync: delete Cloudinary assets referenced by this block config.
+      try {
+        const ids = extractCloudinaryPublicIds((row as any).config);
+        for (const pid of ids) {
+          await safeDeleteCloudinaryAsset({ businessId: merchant.businessId, publicId: pid });
+        }
+      } catch (e) {
+        console.error("reusable block delete sync:", e);
+      }
+
       await prisma.storefrontReusableBlock.delete({ where: { id } });
       res.json({ ok: true });
     } catch (e) {
@@ -2545,18 +2577,23 @@ app.post(
     try {
       if (!isCloudinaryConfigured()) {
         return res.status(503).json({
-          error: "Cloudinary не настроен (CLOUD_NAME, CLOUD_KEY, CLOUD_SECRET)",
+          error:
+            "Cloudinary не настроен (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET)",
         });
       }
       const file = req.file;
       if (!file?.buffer?.length) {
         return res.status(400).json({ error: "Нет файла" });
       }
-      const url = await uploadImageToCloudinary(
-        file.buffer,
-        file.mimetype || "application/octet-stream"
-      );
-      res.json({ url });
+      const v = validateImageFile({ mimetype: file.mimetype, sizeBytes: file.size });
+      if (!v.ok) return res.status(400).json({ error: v.error });
+      const asset = await uploadTenantImage({
+        businessId: m.businessId,
+        kind: "storefront",
+        buffer: file.buffer,
+        mimetype: v.mimetype,
+      });
+      res.json(asset);
     } catch (e) {
       console.error("UPLOAD ERROR:", e);
       res.status(500).json({ error: "upload failed" });
@@ -2573,26 +2610,31 @@ app.post(
     try {
       if (!isCloudinaryConfigured()) {
         return res.status(503).json({
-          error: "Cloudinary не настроен (CLOUD_NAME, CLOUD_KEY, CLOUD_SECRET)",
+          error:
+            "Cloudinary не настроен (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET)",
         });
       }
       const files = req.files as Express.Multer.File[] | undefined;
       if (!files?.length) {
         return res.status(400).json({ error: "Нет файлов" });
       }
-      const urls: string[] = [];
+      const assets: any[] = [];
       for (const file of files) {
         if (!file.buffer?.length) continue;
-        const url = await uploadImageToCloudinary(
-          file.buffer,
-          file.mimetype || "application/octet-stream"
-        );
-        urls.push(url);
+        const v = validateImageFile({ mimetype: file.mimetype, sizeBytes: file.size });
+        if (!v.ok) continue;
+        const asset = await uploadTenantImage({
+          businessId: m.businessId,
+          kind: "products",
+          buffer: file.buffer,
+          mimetype: v.mimetype,
+        });
+        assets.push(asset);
       }
-      if (urls.length === 0) {
+      if (assets.length === 0) {
         return res.status(400).json({ error: "Пустые файлы" });
       }
-      res.json({ urls });
+      res.json({ assets });
     } catch (e) {
       console.error("UPLOAD-IMAGES ERROR:", e);
       res.status(500).json({ error: "upload failed" });
@@ -4097,6 +4139,20 @@ app.delete("/products/:id", async (req: Request, res: Response) => {
     const exists = await prisma.product.findUnique({ where: { id } });
     if (!exists || exists.businessId !== merchant.businessId) {
       return res.status(404).json({ error: "Товар не найден" });
+    }
+
+    // Safe delete sync: remove cloudinary assets referenced by Product.imagesMeta.
+    try {
+      const ids = extractCloudinaryPublicIds((exists as any).imagesMeta);
+      for (const pid of ids) {
+        await safeDeleteCloudinaryAsset({
+          businessId: merchant.businessId,
+          publicId: pid,
+          kindPrefix: "products",
+        });
+      }
+    } catch (e) {
+      console.error("product delete sync:", e);
     }
 
     await prisma.product.delete({ where: { id } });

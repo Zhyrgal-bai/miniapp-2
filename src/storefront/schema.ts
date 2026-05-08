@@ -108,7 +108,8 @@ const HttpsMediaUrl = z
 const HeroSlideSchema = z.object({
   title: z.string().trim().max(LIMITS.maxTitleLen).default(""),
   subtitle: z.string().trim().max(LIMITS.maxSubtitleLen).default(""),
-  imageUrl: HttpsImageUrl,
+  imageUrl: HttpsImageUrl.optional(),
+  imagePublicId: z.string().trim().max(256).optional(),
   ctaText: z.string().trim().max(40).optional().default(""),
   ctaUrl: z.string().trim().max(2048).optional().default(""),
 });
@@ -123,6 +124,7 @@ const PromoBlockSchema = z.object({
   title: z.string().trim().max(LIMITS.maxTitleLen),
   subtitle: z.string().trim().max(LIMITS.maxSubtitleLen).optional().default(""),
   imageUrl: HttpsImageUrl.optional(),
+  imagePublicId: z.string().trim().max(256).optional(),
 });
 
 const PromoConfigSchema = z

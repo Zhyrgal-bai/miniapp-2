@@ -1,4 +1,5 @@
 import { useTheme } from "../../../context/ThemeContext";
+import { buildCloudinaryResponsiveUrl } from "../../../utils/cloudinaryTransforms";
 
 function readString(obj: unknown, key: string): string {
   if (obj == null || typeof obj !== "object" || Array.isArray(obj)) return "";
@@ -28,7 +29,8 @@ export function HeroSection(props: {
     readString(first, "subtitle").trim() !== ""
       ? readString(first, "subtitle")
       : "";
-  const imageUrl = readString(first, "imageUrl");
+  const imageUrlRaw = readString(first, "imageUrl");
+  const imageUrl = buildCloudinaryResponsiveUrl(imageUrlRaw, "preview");
 
   return (
     <section style={{ padding: 16 }}>
@@ -45,6 +47,7 @@ export function HeroSection(props: {
             src={imageUrl}
             alt=""
             style={{ width: "100%", maxHeight: 220, objectFit: "cover" }}
+            loading="lazy"
           />
         ) : null}
         <div style={{ padding: 16 }}>

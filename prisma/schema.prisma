@@ -304,6 +304,9 @@ model Product {
 
   image  String?
   images String[] @default([])
+  /// New (Stage 6.5): Cloudinary metadata, backwards compatible with `image`/`images`.
+  /// Format: [{ url, publicId, width, height }]
+  imagesMeta Json? @default("[]")
 
   businessId Int
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)

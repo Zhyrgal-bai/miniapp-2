@@ -1,4 +1,5 @@
 import { useTheme } from "../../../context/ThemeContext";
+import { buildCloudinaryResponsiveUrl } from "../../../utils/cloudinaryTransforms";
 
 function readString(obj: unknown, key: string): string {
   if (obj == null || typeof obj !== "object" || Array.isArray(obj)) return "";
@@ -27,7 +28,7 @@ export function PromoSection(props: {
         {blocks.map((b, idx) => {
           const title = readString(b, "title");
           const subtitle = readString(b, "subtitle");
-          const imageUrl = readString(b, "imageUrl");
+          const imageUrl = buildCloudinaryResponsiveUrl(readString(b, "imageUrl"), "storefront");
           return (
             <div
               key={`${idx}-${title}`}
@@ -43,6 +44,7 @@ export function PromoSection(props: {
                   src={imageUrl}
                   alt=""
                   style={{ width: "100%", maxHeight: 160, objectFit: "cover" }}
+                  loading="lazy"
                 />
               ) : null}
               <div style={{ padding: 12 }}>

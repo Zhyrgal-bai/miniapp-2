@@ -1,4 +1,4 @@
-import type React from "react";
+import React, { useState } from "react";
 import { Label, TextAreaField, TextField } from "./common/Fields";
 import { uploadImageToCdn } from "../media/uploadImage";
 
@@ -6,6 +6,7 @@ type HeroSlide = {
   title?: string;
   subtitle?: string;
   imageUrl?: string;
+  imagePublicId?: string;
   ctaText?: string;
   ctaUrl?: string;
 };
@@ -16,12 +17,15 @@ export function HeroEditor(props: {
 }): React.ReactElement {
   const slides = Array.isArray(props.value.slides) ? (props.value.slides as HeroSlide[]) : [];
   const first = (slides[0] ?? {}) as HeroSlide;
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
+  const [uploadErr, setUploadErr] = useState<string | null>(null);
 
   const setFirst = (patch: Partial<HeroSlide>) => {
     const nextSlide: HeroSlide = { ...first, ...patch };
     // normalize empty strings for optional URLs to undefined
     if (typeof nextSlide.imageUrl === "string" && nextSlide.imageUrl.trim() === "") {
       delete nextSlide.imageUrl;
+      delete nextSlide.imagePublicId;
     }
     if (typeof nextSlide.ctaUrl === "string" && nextSlide.ctaUrl.trim() === "") {
       nextSlide.ctaUrl = "";
@@ -60,6 +64,29 @@ export function HeroEditor(props: {
           placeholder="https://res.cloudinary.com/..."
         />
       </Label>
+      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <button
+          type="button"
+          onClick={() => setFirst({ imageUrl: undefined, imagePublicId: undefined })}
+          disabled={!first.imageUrl && !first.imagePublicId}
+          style={{
+            borderRadius: 12,
+            border: "1px solid rgba(255,255,255,0.14)",
+            background: "transparent",
+            color: "rgba(255,255,255,0.85)",
+            padding: "8px 10px",
+            fontWeight: 900,
+            cursor: !first.imageUrl && !first.imagePublicId ? "not-allowed" : "pointer",
+            opacity: !first.imageUrl && !first.imagePublicId ? 0.5 : 1,
+          }}
+        >
+          Remove
+        </button>
+        {uploadPct != null ? (
+          <div style={{ fontSize: 12, opacity: 0.85 }}>Uploading… {uploadPct}%</div>
+        ) : null}
+        {uploadErr ? <div style={{ fontSize: 12, color: "#fca5a5" }}>{uploadErr}</div> : null}
+      </div>
       <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
         <input
           type="file"
@@ -67,7 +94,12 @@ export function HeroEditor(props: {
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (!f) return;
-            void uploadImageToCdn(f).then((url) => setFirst({ imageUrl: url }));
+            setUploadErr(null);
+            setUploadPct(0);
+            void uploadImageToCdn(f, { onProgress: setUploadPct })
+              .then((asset) => setFirst({ imageUrl: asset.url, imagePublicId: asset.publicId }))
+              .catch((err) => setUploadErr(err instanceof Error ? err.message : "Upload failed"))
+              .finally(() => setUploadPct(null));
           }}
         />
         <span style={{ opacity: 0.8, fontSize: 12 }}>Upload image</span>
