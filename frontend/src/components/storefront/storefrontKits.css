@@ -9,6 +9,9 @@
 .sf-root {
   max-width: var(--sf-content-max, 100%);
   margin: 0 auto;
+  /* Telegram mobile: prevent horizontal overscroll when swiping media */
+  overflow-x: hidden;
+  overscroll-behavior-x: contain;
 }
 
 /* Prevent sticky cart bar from covering content */

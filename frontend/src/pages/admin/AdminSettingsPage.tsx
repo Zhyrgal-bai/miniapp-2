@@ -1,4 +1,5 @@
 import StoreThemeEditor from "../../components/admin/StoreThemeEditor";
+import { InlineDesignStudio } from "./InlineDesignStudio";
 
 export default function AdminSettingsPage() {
   return (
@@ -13,6 +14,16 @@ export default function AdminSettingsPage() {
       <section className="admin-dash-section">
         <div className="admin-dash-card">
           <StoreThemeEditor />
+        </div>
+      </section>
+
+      <section className="admin-dash-section">
+        <div className="admin-dash-card">
+          <h3 className="admin-dash-section__title">Design Studio (новое)</h3>
+          <p className="admin-form-hint">
+            Здесь те самые новые настройки: Presets / Hero / Layout / Typography / Chips / Buttons / Cart / Drawer.
+          </p>
+          <InlineDesignStudio />
         </div>
       </section>
 

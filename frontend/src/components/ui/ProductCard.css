@@ -53,7 +53,8 @@
   width: 100%;
   aspect-ratio: var(--sf-card-image-ratio, 1 / 1);
   overflow: hidden;
-  touch-action: manipulation;
+  /* Mobile/TMA: keep vertical scroll stable while allowing horizontal swipe inside */
+  touch-action: pan-y;
 }
 
 .product-card--fit-cover .image-slide img {
