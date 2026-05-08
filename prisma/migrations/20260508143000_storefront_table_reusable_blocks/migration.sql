@@ -15,9 +15,16 @@ CREATE TABLE IF NOT EXISTS "Storefront" (
 CREATE INDEX IF NOT EXISTS "Storefront_businessId_idx" ON "Storefront" ("businessId");
 CREATE INDEX IF NOT EXISTS "Storefront_businessId_slug_idx" ON "Storefront" ("businessId", "slug");
 
-ALTER TABLE "Storefront"
-  ADD CONSTRAINT IF NOT EXISTS "Storefront_businessId_fkey"
-  FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'Storefront_businessId_fkey'
+  ) THEN
+    ALTER TABLE "Storefront"
+      ADD CONSTRAINT "Storefront_businessId_fkey"
+      FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS "StorefrontReusableBlock" (
   "id" SERIAL PRIMARY KEY,
@@ -34,13 +41,27 @@ CREATE INDEX IF NOT EXISTS "StorefrontReusableBlock_businessId_idx" ON "Storefro
 CREATE INDEX IF NOT EXISTS "StorefrontReusableBlock_storefrontId_idx" ON "StorefrontReusableBlock" ("storefrontId");
 CREATE INDEX IF NOT EXISTS "StorefrontReusableBlock_businessId_type_idx" ON "StorefrontReusableBlock" ("businessId", "type");
 
-ALTER TABLE "StorefrontReusableBlock"
-  ADD CONSTRAINT IF NOT EXISTS "StorefrontReusableBlock_businessId_fkey"
-  FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'StorefrontReusableBlock_businessId_fkey'
+  ) THEN
+    ALTER TABLE "StorefrontReusableBlock"
+      ADD CONSTRAINT "StorefrontReusableBlock_businessId_fkey"
+      FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 
-ALTER TABLE "StorefrontReusableBlock"
-  ADD CONSTRAINT IF NOT EXISTS "StorefrontReusableBlock_storefrontId_fkey"
-  FOREIGN KEY ("storefrontId") REFERENCES "Storefront"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'StorefrontReusableBlock_storefrontId_fkey'
+  ) THEN
+    ALTER TABLE "StorefrontReusableBlock"
+      ADD CONSTRAINT "StorefrontReusableBlock_storefrontId_fkey"
+      FOREIGN KEY ("storefrontId") REFERENCES "Storefront"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- Backfill: ensure each Business has a default Storefront row.
 INSERT INTO "Storefront" ("businessId", "name", "draftConfig", "publishedConfig", "publishedAt")
