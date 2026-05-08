@@ -482,7 +482,8 @@ async function provisionMerchantStoreInTx(
       botTokenHash: tokRow.botTokenHash,
       finikApiKey: useFinik ? finikTrimmed! : null,
       businessType: params.businessType,
-      isActive: giveTrial,
+      // Витрина должна быть включена сразу после approve; доступ может ограничиваться подпиской.
+      isActive: true,
       isBlocked: false,
       subscriptionStatus: giveTrial
         ? SubscriptionStatus.TRIALING

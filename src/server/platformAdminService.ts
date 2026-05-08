@@ -114,7 +114,8 @@ async function provisionMerchantStoreInTx(
         params.businessType === "flowers"
           ? (params.businessType as any)
           : ("clothing" as any),
-      isActive: giveTrial,
+      // Витрина должна быть включена сразу после approve; доступ может ограничиваться подпиской.
+      isActive: true,
       isBlocked: false,
       subscriptionStatus: giveTrial
         ? SubscriptionStatus.TRIALING
