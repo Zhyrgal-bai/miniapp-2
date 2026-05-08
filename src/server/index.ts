@@ -115,13 +115,13 @@ import {
 } from "./storeTheme.js";
 import {
   businessMiddleware,
-  businessSubscriptionBlocked,
 } from "../middleware/business.middleware.js";
 import { apiSafeErrorHandler } from "../middleware/apiErrorHandler.js";
 import { apiLimiter, strictLimiter } from "../middleware/apiRateLimits.js";
 import { jsonBodyLimits } from "../middleware/jsonBodyLimits.js";
 import { requireNonEmptyJsonBody } from "../middleware/requireNonEmptyJsonBody.js";
 import { requireTelegramAuth } from "../middleware/requireTelegramAuth.js";
+import { isStorefrontClosedForCustomers } from "./subscriptionAccess.js";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -1695,7 +1695,7 @@ function telegramIdFromRequest(req: Request): string | null {
 
 const PUBLIC_BUSINESS_PARSE_ERROR = "Invalid businessId";
 const PUBLIC_BUSINESS_MISSING_ERROR = "Not found";
-const PUBLIC_BUSINESS_UNAVAILABLE_ERROR = "Подписка не активна";
+const PUBLIC_BUSINESS_UNAVAILABLE_ERROR = "Store unavailable";
 
 function queryParamToTrimmedString(raw: unknown): string {
   if (typeof raw === "string") return raw.trim();
@@ -1866,7 +1866,7 @@ async function resolveCatalogBusinessId(
     res.status(404).json({ error: PUBLIC_BUSINESS_MISSING_ERROR });
     return null;
   }
-  if (businessSubscriptionBlocked(business, new Date())) {
+  if (isStorefrontClosedForCustomers(business)) {
     res.status(403).json({ error: PUBLIC_BUSINESS_UNAVAILABLE_ERROR });
     return null;
   }

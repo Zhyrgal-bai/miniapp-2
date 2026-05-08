@@ -4,6 +4,7 @@ import { prisma } from "../server/db.js";
 import {
   type SubscriptionGateFields,
   isSubscriptionActive,
+  isStorefrontClosedForCustomers,
 } from "../server/subscriptionAccess.js";
 
 declare global {
@@ -130,8 +131,8 @@ export async function businessMiddleware(
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
-      if (businessSubscriptionBlocked(business)) {
-        res.status(403).json({ error: "Подписка не активна" });
+      if (isStorefrontClosedForCustomers(business)) {
+        res.status(403).json({ error: "Store unavailable" });
         return;
       }
 
@@ -179,8 +180,8 @@ export async function businessMiddleware(
     }
 
     const only = memberships[0]!;
-    if (businessSubscriptionBlocked(only.business)) {
-      res.status(403).json({ error: "Подписка не активна" });
+    if (isStorefrontClosedForCustomers(only.business)) {
+      res.status(403).json({ error: "Store unavailable" });
       return;
     }
 

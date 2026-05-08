@@ -59,3 +59,14 @@ export function merchantStoreEntitled(
   if (b.isBlocked) return false;
   return hasValidPaidOrTrialWindow(b, now);
 }
+
+/**
+ * Для клиента Mini App (?shop=/каталог): витрина «закрыта» только по флагам.
+ * Истечение подписки не отключает публичный каталог/`/api/me` — это слой платформы/мерчанта отдельно.
+ */
+export function isStorefrontClosedForCustomers(b: {
+  isActive: boolean;
+  isBlocked: boolean;
+}): boolean {
+  return b.isBlocked || !b.isActive;
+}
