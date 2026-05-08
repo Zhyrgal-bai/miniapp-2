@@ -153,8 +153,19 @@ export default function App() {
     "--sf-typo-title-line-height": typeof typo.lineHeight === "number" ? String(typo.lineHeight) : "",
     "--sf-chip-radius": typeof chips.radius === "number" ? `${chips.radius}px` : "",
     "--sf-chip-gap": typeof chips.gap === "number" ? `${chips.gap}px` : "",
+    "--sf-chip-shape": typeof chips.shape === "string" ? String(chips.shape) : "",
+    "--sf-chip-style": typeof chips.style === "string" ? String(chips.style) : "",
+    "--sf-chip-size": typeof chips.size === "string" ? String(chips.size) : "",
     "--sf-button-radius": typeof buttons.radius === "number" ? `${buttons.radius}px` : "",
     "--sf-button-height": typeof buttons.height === "number" ? `${buttons.height}px` : "",
+    "--sf-button-variant": typeof buttons.variant === "string" ? String(buttons.variant) : "",
+    "--sf-button-shadow-enabled":
+      typeof buttons.shadow === "boolean" ? (buttons.shadow ? "1" : "0") : "",
+    "--sf-button-glow-enabled":
+      typeof buttons.glow === "boolean" ? (buttons.glow ? "1" : "0") : "",
+    "--sf-button-compact":
+      typeof buttons.compact === "boolean" ? (buttons.compact ? "1" : "0") : "",
+    "--sf-motion-level": typeof buttons.animationLevel === "string" ? String(buttons.animationLevel) : "",
     "--sf-hero-height": typeof hero.height === "number" ? `${hero.height}px` : "",
     "--sf-hero-radius": typeof hero.radius === "number" ? `${hero.radius}px` : "",
   };

@@ -27,27 +27,88 @@
 }
 
 .sf-chip {
-  padding: 8px 10px;
+  padding: var(--sf-chip-pad-y, 8px) var(--sf-chip-pad-x, 10px);
   border-radius: var(--sf-chip-radius, var(--sf-radius-full, 999px));
-  border: 1px solid var(--sf-color-border);
-  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 65%, transparent);
+  background: var(--sf-chip-bg, transparent);
   color: var(--sf-color-text);
   opacity: 0.95;
-  font-size: 13px;
+  font-size: var(--sf-chip-font-size, 13px);
   line-height: 1.1;
+}
+
+/* chip system driven by --sf-chip-* vars */
+.sf-root {
+  --sf-chip-bg: transparent;
+  --sf-chip-pad-y: 8px;
+  --sf-chip-pad-x: 10px;
+  --sf-chip-font-size: 13px;
+}
+
+.sf-root[data-sf-kit] {
+  /* keep selector stable */
+}
+
+.sf-root[style*="--sf-chip-style:filled"] .sf-chip,
+.sf-root[data-sf-chip-style="filled"] .sf-chip {
+  --sf-chip-bg: color-mix(in srgb, var(--sf-color-primary) 14%, transparent);
+  border-color: color-mix(in srgb, var(--sf-color-primary) 32%, transparent);
+}
+
+.sf-root[style*="--sf-chip-shape:square"] .sf-chip,
+.sf-root[data-sf-chip-shape="square"] .sf-chip {
+  border-radius: 12px;
+}
+
+.sf-root[style*="--sf-chip-size:sm"] .sf-chip,
+.sf-root[data-sf-chip-size="sm"] .sf-chip {
+  --sf-chip-pad-y: 6px;
+  --sf-chip-pad-x: 8px;
+  --sf-chip-font-size: 12px;
+}
+.sf-root[style*="--sf-chip-size:lg"] .sf-chip,
+.sf-root[data-sf-chip-size="lg"] .sf-chip {
+  --sf-chip-pad-y: 10px;
+  --sf-chip-pad-x: 12px;
+  --sf-chip-font-size: 14px;
 }
 
 .sf-hero__cta {
   min-height: var(--sf-button-height, 44px);
   padding: 10px 14px;
   border-radius: var(--sf-button-radius, 14px);
-  border: 1px solid color-mix(in srgb, var(--sf-color-primary) 55%, transparent);
-  background: var(--sf-color-primary);
-  color: var(--sf-on-primary, #fff);
+  border: 1px solid var(--sf-btn-border, color-mix(in srgb, var(--sf-color-primary) 55%, transparent));
+  background: var(--sf-btn-bg, var(--sf-color-primary));
+  color: var(--sf-btn-fg, var(--sf-on-primary, #fff));
   font-weight: 800;
   font-size: var(--sf-typo-button-size, 13px);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* global button tokens */
+.sf-root {
+  --sf-btn-bg: var(--sf-color-primary);
+  --sf-btn-border: color-mix(in srgb, var(--sf-color-primary) 55%, transparent);
+  --sf-btn-fg: var(--sf-on-primary, #fff);
+  --sf-btn-shadow: none;
+}
+
+.sf-root[style*="--sf-button-variant:outline"] {
+  --sf-btn-bg: transparent;
+  --sf-btn-fg: var(--sf-color-text);
+}
+
+.sf-root[style*="--sf-button-shadow-enabled:1"] {
+  --sf-btn-shadow: 0 14px 34px color-mix(in srgb, black 38%, transparent);
+}
+
+.sf-root[style*="--sf-button-glow-enabled:1"] {
+  --sf-btn-shadow: 0 16px 46px color-mix(in srgb, var(--sf-color-primary) 26%, transparent);
+}
+
+.sf-hero__cta {
+  box-shadow: var(--sf-btn-shadow);
 }
 
 .sf-section {

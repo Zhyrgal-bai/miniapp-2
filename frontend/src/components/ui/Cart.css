@@ -188,8 +188,9 @@
   border: none;
   border-radius: var(--sf-button-radius, 14px);
   min-height: var(--sf-button-height, 44px);
-  background: var(--sf-color-primary);
-  color: var(--sf-on-primary, #fff);
+  background: var(--sf-btn-bg, var(--sf-color-primary));
+  color: var(--sf-btn-fg, var(--sf-on-primary, #fff));
+  border: 1px solid var(--sf-btn-border, color-mix(in srgb, var(--sf-color-primary) 55%, transparent));
   font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -245,7 +246,7 @@
   padding: 12px 20px;
   border: none;
   border-radius: var(--sf-button-radius, 12px);
-  background: color-mix(in srgb, var(--sf-color-primary) 18%, transparent);
+  background: color-mix(in srgb, var(--sf-btn-bg, var(--sf-color-primary)) 18%, transparent);
   color: var(--sf-color-primary);
   font-size: 12px;
   font-weight: 700;

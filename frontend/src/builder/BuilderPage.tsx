@@ -23,6 +23,8 @@ import { HeaderBuilder } from "./header/HeaderBuilder";
 import { ProductCardBuilder } from "./cards/ProductCardBuilder";
 import { TextControls } from "./texts/TextControls";
 import { TypographyControls } from "./design/TypographyControls";
+import { ChipsControls } from "./design/ChipsControls";
+import { ButtonSystemControls } from "./design/ButtonSystemControls";
 import { SectionMarketplaceModal } from "./sectionLibrary/SectionMarketplaceModal";
 import { stableSectionId } from "./sectionRegistry";
 import type { PreviewMode } from "./preview/modes";
@@ -509,6 +511,28 @@ export default function BuilderPage(): React.ReactElement {
                         typography: next,
                       };
                       onStyleChange(nextStyle);
+                    }}
+                  />
+                </div>
+                <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                  <ChipsControls
+                    value={(draft as unknown as { storefrontStyleConfig?: Record<string, unknown> })?.storefrontStyleConfig?.chips ?? {}}
+                    onChange={(next) => {
+                      const currentStyle =
+                        (draft as unknown as { storefrontStyleConfig?: Record<string, unknown> })?.storefrontStyleConfig ??
+                        {};
+                      onStyleChange({ ...(currentStyle as Record<string, unknown>), chips: next });
+                    }}
+                  />
+                </div>
+                <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                  <ButtonSystemControls
+                    value={(draft as unknown as { storefrontStyleConfig?: Record<string, unknown> })?.storefrontStyleConfig?.buttons ?? {}}
+                    onChange={(next) => {
+                      const currentStyle =
+                        (draft as unknown as { storefrontStyleConfig?: Record<string, unknown> })?.storefrontStyleConfig ??
+                        {};
+                      onStyleChange({ ...(currentStyle as Record<string, unknown>), buttons: next });
                     }}
                   />
                 </div>
