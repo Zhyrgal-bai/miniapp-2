@@ -7,8 +7,6 @@ export function telegramWebAppInitDataHeader(): {
 
   const initData = tg?.initData ?? "";
 
-  console.log(initData);
-
   if (initData === "") {
     console.warn(
       "[Mini App] initData пустой — приложение открыто не из Telegram или WebApp.ready() ещё не подготовил данные.",

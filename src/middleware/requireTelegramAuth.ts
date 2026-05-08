@@ -43,11 +43,6 @@ function headerInitData(req: Request): string {
   return s;
 }
 
-function logCheckingToken(plainToken: string): void {
-  if (!shouldLogTelegramAuthDebug()) return;
-  console.log("Checking token:", plainToken.slice(0, 10));
-}
-
 /** Не роняем весь запрос, если один из магазинов в БД с битым ciphertext/ключом. */
 function safePlainBotTokenFromStored(raw: string | null | undefined): string {
   try {
@@ -72,7 +67,6 @@ function tryValidateInitDataWithToken(
   next: NextFunction,
 ): boolean {
   if (plainToken.trim() === "") return false;
-  logCheckingToken(plainToken);
   if (!validateTelegramInitData(initData, plainToken)) return false;
   logHashOk(req);
   acceptInitData(req, res, next, initData);
@@ -139,7 +133,15 @@ export async function requireTelegramAuth(
       });
       const plain =
         row != null ? safePlainBotTokenFromStored(row.botToken) : "";
-      if (tryValidateInitDataWithToken(initData, plain, req, res, next)) {
+      if (
+        tryValidateInitDataWithToken(
+          initData,
+          plain,
+          req,
+          res,
+          next,
+        )
+      ) {
         return;
       }
     }
