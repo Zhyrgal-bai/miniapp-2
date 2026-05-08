@@ -644,17 +644,24 @@ app.get("/api/storefront/:businessId", async (req: Request, res: Response) => {
       return res.status(403).json({ error: "Store unavailable" });
     }
 
+    // Prefer default Storefront table (Stage 6), fallback to legacy Business fields.
+    const sf = await prisma.storefront.findFirst({
+      where: { businessId },
+      orderBy: { id: "asc" },
+      select: { publishedConfig: true } as any,
+    });
     const publishedRaw =
-      (b as any).storefrontPublishedConfig != null &&
-      typeof (b as any).storefrontPublishedConfig === "object"
-        ? (b as any).storefrontPublishedConfig
-        : {};
+      sf && (sf as any).publishedConfig != null && typeof (sf as any).publishedConfig === "object"
+        ? (sf as any).publishedConfig
+        : (b as any).storefrontPublishedConfig != null &&
+            typeof (b as any).storefrontPublishedConfig === "object"
+          ? (b as any).storefrontPublishedConfig
+          : {};
     const legacyRaw =
       (b as any).storefrontConfig != null && typeof (b as any).storefrontConfig === "object"
         ? (b as any).storefrontConfig
         : {};
-    const rawConfig =
-      publishedRaw && JSON.stringify(publishedRaw) !== "{}" ? publishedRaw : legacyRaw;
+    const rawConfig = publishedRaw && JSON.stringify(publishedRaw) !== "{}" ? publishedRaw : legacyRaw;
 
     const payload = resolveStorefrontConfig({
       businessId,
@@ -751,17 +758,32 @@ app.get("/api/merchant/storefront-builder", async (req: Request, res: Response) 
       return out.success ? out.data : defaultStorefrontConfig();
     };
 
+    const sf = await prisma.storefront.findFirst({
+      where: { businessId: merchant.businessId },
+      orderBy: { id: "asc" },
+      select: {
+        id: true,
+        draftConfig: true,
+        publishedConfig: true,
+        publishedAt: true,
+      } as any,
+    });
+
     const published =
-      (b as any).storefrontPublishedConfig &&
-      JSON.stringify((b as any).storefrontPublishedConfig) !== "{}"
-        ? parseCfg((b as any).storefrontPublishedConfig)
-        : parseCfg((b as any).storefrontConfig);
+      sf && (sf as any).publishedConfig && JSON.stringify((sf as any).publishedConfig) !== "{}"
+        ? parseCfg((sf as any).publishedConfig)
+        : (b as any).storefrontPublishedConfig &&
+            JSON.stringify((b as any).storefrontPublishedConfig) !== "{}"
+          ? parseCfg((b as any).storefrontPublishedConfig)
+          : parseCfg((b as any).storefrontConfig);
 
     const draft =
-      (b as any).storefrontDraftConfig &&
-      JSON.stringify((b as any).storefrontDraftConfig) !== "{}"
-        ? parseCfg((b as any).storefrontDraftConfig)
-        : published;
+      sf && (sf as any).draftConfig && JSON.stringify((sf as any).draftConfig) !== "{}"
+        ? parseCfg((sf as any).draftConfig)
+        : (b as any).storefrontDraftConfig &&
+            JSON.stringify((b as any).storefrontDraftConfig) !== "{}"
+          ? parseCfg((b as any).storefrontDraftConfig)
+          : published;
 
     const preview = resolveStorefrontConfig({
       businessId: merchant.businessId,
@@ -775,9 +797,10 @@ app.get("/api/merchant/storefront-builder", async (req: Request, res: Response) 
 
     res.json({
       businessId: merchant.businessId,
+      storefrontId: sf ? (sf as any).id : null,
       draft,
       published,
-      publishedAt: (b as any).storefrontPublishedAt ?? null,
+      publishedAt: (sf as any)?.publishedAt ?? (b as any).storefrontPublishedAt ?? null,
       themeConfig: (b as any).themeConfig ?? {},
       templateId: (b as any).templateId ?? null,
       featureFlags: (b as any).featureFlags ?? {},
@@ -818,18 +841,33 @@ app.put("/api/merchant/storefront-builder/draft", async (req: Request, res: Resp
     const resolvedTheme = resolveStoreTheme((b as any)?.templateId ?? null, nextThemeStored);
     const ux = validateUx({ draft: parsed.data as any, theme: resolvedTheme });
 
-    const data: any = {
-      storefrontDraftConfig: parsed.data as any,
-      storefrontDraftUpdatedAt: new Date(),
-    };
-    if (themePatch) {
-      data.themeConfig = themePatch as any;
-    }
-
-    await prisma.business.update({
-      where: { id: merchant.businessId },
-      data,
+    const sf = await prisma.storefront.findFirst({
+      where: { businessId: merchant.businessId },
+      orderBy: { id: "asc" },
+      select: { id: true } as any,
     });
+    if (sf) {
+      await prisma.storefront.update({
+        where: { id: (sf as any).id },
+        data: { draftConfig: parsed.data as any } as any,
+      });
+    } else {
+      // Fallback: legacy Business draft storage
+      const data: any = {
+        storefrontDraftConfig: parsed.data as any,
+        storefrontDraftUpdatedAt: new Date(),
+      };
+      await prisma.business.update({
+        where: { id: merchant.businessId },
+        data,
+      });
+    }
+    if (themePatch) {
+      await prisma.business.update({
+        where: { id: merchant.businessId },
+        data: { themeConfig: themePatch as any } as any,
+      });
+    }
     invalidateStorefrontCache(merchant.businessId);
     res.json({ ok: true, draftVersion: parsed.data.version, ux });
   } catch (e) {
@@ -853,7 +891,13 @@ app.post("/api/merchant/storefront-builder/publish", async (req: Request, res: R
     });
     if (!b) return res.status(404).json({ error: "Business not found" });
 
-    const draft = StorefrontConfigSchema.safeParse((b as any).storefrontDraftConfig ?? {});
+    const sf = await prisma.storefront.findFirst({
+      where: { businessId: merchant.businessId },
+      orderBy: { id: "asc" },
+      select: { id: true, draftConfig: true } as any,
+    });
+    const rawDraft = sf ? (sf as any).draftConfig : (b as any).storefrontDraftConfig;
+    const draft = StorefrontConfigSchema.safeParse(rawDraft ?? {});
     const draftSafe = draft.success ? draft.data : defaultStorefrontConfig();
 
     const resolvedTheme = resolveStoreTheme((b as any).templateId ?? null, (b as any).themeConfig ?? {});
@@ -865,13 +909,23 @@ app.post("/api/merchant/storefront-builder/publish", async (req: Request, res: R
       });
     }
 
-    await prisma.business.update({
-      where: { id: merchant.businessId },
-      data: {
-        storefrontPublishedConfig: draftSafe as any,
-        storefrontPublishedAt: new Date(),
-      } as any,
-    });
+    if (sf) {
+      await prisma.storefront.update({
+        where: { id: (sf as any).id },
+        data: {
+          publishedConfig: draftSafe as any,
+          publishedAt: new Date(),
+        } as any,
+      });
+    } else {
+      await prisma.business.update({
+        where: { id: merchant.businessId },
+        data: {
+          storefrontPublishedConfig: draftSafe as any,
+          storefrontPublishedAt: new Date(),
+        } as any,
+      });
+    }
     invalidateStorefrontCache(merchant.businessId);
     res.json({ ok: true, publishedAt: new Date().toISOString(), ux });
   } catch (e) {
@@ -885,13 +939,25 @@ app.post("/api/merchant/storefront-builder/reset", async (req: Request, res: Res
     const merchant = await requireMerchantStaff(req, res);
     if (!merchant) return;
     const def = defaultStorefrontConfig();
-    await prisma.business.update({
-      where: { id: merchant.businessId },
-      data: {
-        storefrontDraftConfig: def as any,
-        storefrontDraftUpdatedAt: new Date(),
-      } as any,
+    const sf = await prisma.storefront.findFirst({
+      where: { businessId: merchant.businessId },
+      orderBy: { id: "asc" },
+      select: { id: true } as any,
     });
+    if (sf) {
+      await prisma.storefront.update({
+        where: { id: (sf as any).id },
+        data: { draftConfig: def as any } as any,
+      });
+    } else {
+      await prisma.business.update({
+        where: { id: merchant.businessId },
+        data: {
+          storefrontDraftConfig: def as any,
+          storefrontDraftUpdatedAt: new Date(),
+        } as any,
+      });
+    }
     invalidateStorefrontCache(merchant.businessId);
     res.json({ ok: true, draft: def });
   } catch (e) {
@@ -899,6 +965,96 @@ app.post("/api/merchant/storefront-builder/reset", async (req: Request, res: Res
     res.status(500).json({ error: "Server error" });
   }
 });
+
+app.get("/api/merchant/reusable-blocks", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
+    const typeRaw = req.query.type;
+    const type =
+      typeof typeRaw === "string" && typeRaw.trim() !== ""
+        ? typeRaw.trim()
+        : undefined;
+    const rows = await prisma.storefrontReusableBlock.findMany({
+      where: {
+        businessId: merchant.businessId,
+        ...(type ? { type } : {}),
+      } as any,
+      orderBy: { updatedAt: "desc" },
+      take: 200,
+    });
+    res.json({ blocks: rows });
+  } catch (e) {
+    console.error("GET /api/merchant/reusable-blocks:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.post("/api/merchant/reusable-blocks", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
+    const body = req.body as { name?: unknown; type?: unknown; config?: unknown } | undefined;
+    const name = typeof body?.name === "string" ? body.name.trim().slice(0, 80) : "";
+    const type = typeof body?.type === "string" ? body.type.trim().slice(0, 40) : "";
+    if (!name || !type) {
+      return res.status(400).json({ error: "Invalid name/type" });
+    }
+    // Validate config through StorefrontConfigSchema by wrapping in one section.
+    const cfg = body?.config ?? {};
+    const wrapped = StorefrontConfigSchema.safeParse({
+      version: 1,
+      sections: [
+        {
+          id: "block",
+          type,
+          enabled: true,
+          order: 10,
+          config: cfg,
+        },
+      ],
+    });
+    if (!wrapped.success) {
+      return res.status(400).json({ error: "Invalid section config" });
+    }
+
+    const created = await prisma.storefrontReusableBlock.create({
+      data: {
+        businessId: merchant.businessId,
+        type,
+        name,
+        config: cfg as any,
+      } as any,
+    });
+    res.json({ ok: true, block: created });
+  } catch (e) {
+    console.error("POST /api/merchant/reusable-blocks:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.delete(
+  "/api/merchant/reusable-blocks/:id",
+  async (req: Request, res: Response) => {
+    try {
+      const merchant = await requireMerchantStaff(req, res);
+      if (!merchant) return;
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: "Invalid id" });
+      }
+      const row = await prisma.storefrontReusableBlock.findUnique({ where: { id } });
+      if (!row || (row as any).businessId !== merchant.businessId) {
+        return res.status(404).json({ error: "Not found" });
+      }
+      await prisma.storefrontReusableBlock.delete({ where: { id } });
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("DELETE /api/merchant/reusable-blocks/:id:", e);
+      res.status(500).json({ error: "Server error" });
+    }
+  },
+);
 
 app.get("/api/merchant/storefront-config", async (req: Request, res: Response) => {
   try {

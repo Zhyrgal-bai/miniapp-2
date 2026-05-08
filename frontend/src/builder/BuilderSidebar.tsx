@@ -18,6 +18,7 @@ function SortableRow(props: {
   onToggle: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  onSaveAsBlock: () => void;
 }): React.ReactElement {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: props.id });
@@ -109,6 +110,25 @@ function SortableRow(props: {
         <button
           onClick={(e) => {
             e.stopPropagation();
+            props.onSaveAsBlock();
+          }}
+          style={{
+            borderRadius: 10,
+            border: "1px solid rgba(255,255,255,0.12)",
+            background: "rgba(255,255,255,0.02)",
+            color: "rgba(255,255,255,0.85)",
+            padding: "6px 10px",
+            fontWeight: 900,
+            fontSize: 12,
+            cursor: "pointer",
+          }}
+          title="Save as block"
+        >
+          ⬇
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
             props.onToggle();
           }}
           style={{
@@ -139,6 +159,7 @@ export function BuilderSidebar(props: {
   onAddSection: () => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
+  onSaveAsBlock: (id: string) => void;
   uxWarnings: string[];
   uxErrors: string[];
 }): React.ReactElement {
@@ -215,6 +236,7 @@ export function BuilderSidebar(props: {
                       onToggle={() => props.onToggle(s.id)}
                       onDuplicate={() => props.onDuplicate(s.id)}
                       onDelete={() => props.onDelete(s.id)}
+                    onSaveAsBlock={() => props.onSaveAsBlock(s.id)}
                     />
                   );
                 })}

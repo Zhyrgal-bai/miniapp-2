@@ -108,6 +108,9 @@ model Business {
 
   createdAt DateTime @default(now())
 
+  storefronts Storefront[]
+  reusableBlocks StorefrontReusableBlock[]
+
   memberships Membership[]
   products    Product[]
   orders      Order[]
@@ -125,6 +128,56 @@ model Business {
   @@index([isActive])
   @@index([subscriptionStatus])
   @@index([isBlocked])
+}
+
+model Storefront {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  /// Human friendly name for merchant (MVP).
+  name String @default("Main")
+
+  /// Optional URL slug for future multi-storefront routing.
+  slug String?
+
+  /// Draft edited in builder.
+  draftConfig Json @default("{}")
+
+  /// Published served to public storefront.
+  publishedConfig Json @default("{}")
+  publishedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reusableBlocks StorefrontReusableBlock[]
+
+  @@index([businessId])
+  @@index([businessId, slug])
+}
+
+model StorefrontReusableBlock {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  /// Nullable for now: business-scoped blocks; later can be tied to a specific storefront.
+  storefrontId Int?
+  storefront   Storefront? @relation(fields: [storefrontId], references: [id], onDelete: Cascade)
+
+  type String
+  name String
+  config Json @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([storefrontId])
+  @@index([businessId, type])
 }
 
 /// Ручное подтверждение абонемента магазина (скрин/чек в Telegram владельцем).

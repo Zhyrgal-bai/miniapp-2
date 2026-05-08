@@ -20,11 +20,11 @@ import { SectionEditor } from "./SectionEditor";
 import { ThemeEditor } from "./ThemeEditor";
 import type { ResolvedStorefrontPayload } from "../components/storefront/StorefrontRenderer";
 import { SectionMarketplaceModal } from "./sectionLibrary/SectionMarketplaceModal";
-import type { SectionLibraryItem } from "./sectionLibrary/types";
 import { stableSectionId } from "./sectionRegistry";
 import type { PreviewMode } from "./preview/modes";
 import { useBuilderSaveState } from "./useBuilderSaveState";
 import { BuilderStatusBar } from "./BuilderStatusBar";
+import { createReusableBlock } from "./reusableBlocks/reusableBlocksApi";
 
 function ensureUserId(): number {
   const id = getWebAppUserId();
@@ -242,21 +242,40 @@ export default function BuilderPage(): React.ReactElement {
   );
 
   const addSection = useCallback(
-    (item: SectionLibraryItem) => {
+    (params: { type: string; config: Record<string, unknown> }) => {
       if (!draft) return;
       const maxOrder = Math.max(0, ...draft.sections.map((s) => Number(s.order ?? 0)));
       const nextSection: BuilderSection = {
-        id: stableSectionId(item.type),
-        type: item.type,
+        id: stableSectionId(params.type),
+        type: params.type,
         enabled: true,
         order: maxOrder + 10,
-        config: item.defaultConfig ?? {},
+        config: params.config ?? {},
       };
       scheduleSave({ ...draft, sections: [...draft.sections, nextSection] });
       setSelectedId(nextSection.id);
       setMarketOpen(false);
     },
     [draft, scheduleSave],
+  );
+
+  const onSaveAsBlock = useCallback(
+    (id: string) => {
+      if (!draft) return;
+      const sec = draft.sections.find((s) => String(s.id) === String(id));
+      if (!sec) return;
+      const name = window.prompt("Block name", `${sec.type} block`);
+      if (!name) return;
+      void createReusableBlock({
+        name: name.trim().slice(0, 80),
+        type: sec.type,
+        config: sec.config ?? {},
+      }).catch((e) => {
+        console.error(e);
+        setErr(e instanceof Error ? e.message : "Не удалось сохранить block");
+      });
+    },
+    [draft],
   );
 
   const onThemePatch = useCallback(
@@ -370,6 +389,7 @@ export default function BuilderPage(): React.ReactElement {
           onAddSection={() => setMarketOpen(true)}
           onDuplicate={onDuplicate}
           onDelete={onDelete}
+          onSaveAsBlock={onSaveAsBlock}
           uxErrors={ux.errors}
           uxWarnings={ux.warnings}
         />
