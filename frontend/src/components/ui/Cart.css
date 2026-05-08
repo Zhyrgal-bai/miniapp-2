@@ -42,6 +42,17 @@
   border-bottom: 1px solid color-mix(in srgb, var(--sf-color-border) 65%, transparent);
 }
 
+.sf-app[style*="--sf-cart-item-style:card"] .cart-list {
+  gap: 10px;
+}
+.sf-app[style*="--sf-cart-item-style:card"] .cart-item {
+  border-bottom: none;
+  padding: 12px;
+  border-radius: var(--sf-card-radius, 16px);
+  background: color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface)) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 55%, transparent);
+}
+
 .cart-item:last-child {
   border-bottom: none;
 }
@@ -115,6 +126,16 @@
   border: 1px solid color-mix(in srgb, var(--sf-color-border) 60%, transparent);
 }
 
+.sf-app[style*="--sf-cart-qty-style:minimal"] .cart-actions {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+.sf-app[style*="--sf-cart-qty-style:minimal"] .cart-actions button {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 55%, transparent);
+}
+
 .cart-actions button {
   width: 28px;
   height: 28px;
@@ -160,6 +181,18 @@
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-top: 1px solid color-mix(in srgb, var(--sf-color-border) 65%, transparent);
+}
+
+.sf-app[style*="--sf-cart-footer-style:inline"] .cart-footer {
+  position: static;
+  transform: none;
+  left: auto;
+  max-width: 100%;
+  background: transparent;
+  border-top: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  padding: 12px var(--sf-mobile-pad, 12px) calc(16px + env(safe-area-inset-bottom, 0));
 }
 
 .total {
@@ -219,6 +252,15 @@
   padding: 24px 20px;
   text-align: center;
   color: var(--sf-color-text);
+}
+
+.sf-app[style*="--sf-cart-empty-style:card"] .cart-empty {
+  margin: 14px var(--sf-mobile-pad, 12px);
+  padding: 18px 16px;
+  border-radius: var(--sf-card-radius, 16px);
+  background: color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface)) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 55%, transparent);
+  min-height: auto;
 }
 
 .cart-empty-icon {

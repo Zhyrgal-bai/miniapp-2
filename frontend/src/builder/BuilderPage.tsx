@@ -25,6 +25,8 @@ import { TextControls } from "./texts/TextControls";
 import { TypographyControls } from "./design/TypographyControls";
 import { ChipsControls } from "./design/ChipsControls";
 import { ButtonSystemControls } from "./design/ButtonSystemControls";
+import { CartControls } from "./design/CartControls";
+import { DrawerControls } from "./design/DrawerControls";
 import { SectionMarketplaceModal } from "./sectionLibrary/SectionMarketplaceModal";
 import { stableSectionId } from "./sectionRegistry";
 import type { PreviewMode } from "./preview/modes";
@@ -533,6 +535,28 @@ export default function BuilderPage(): React.ReactElement {
                         (draft as unknown as { storefrontStyleConfig?: Record<string, unknown> })?.storefrontStyleConfig ??
                         {};
                       onStyleChange({ ...(currentStyle as Record<string, unknown>), buttons: next });
+                    }}
+                  />
+                </div>
+                <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                  <CartControls
+                    value={(draft as unknown as { storefrontStyleConfig?: Record<string, unknown> })?.storefrontStyleConfig?.cart ?? {}}
+                    onChange={(next) => {
+                      const currentStyle =
+                        (draft as unknown as { storefrontStyleConfig?: Record<string, unknown> })?.storefrontStyleConfig ??
+                        {};
+                      onStyleChange({ ...(currentStyle as Record<string, unknown>), cart: next });
+                    }}
+                  />
+                </div>
+                <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                  <DrawerControls
+                    value={(draft as unknown as { storefrontStyleConfig?: Record<string, unknown> })?.storefrontStyleConfig?.drawer ?? {}}
+                    onChange={(next) => {
+                      const currentStyle =
+                        (draft as unknown as { storefrontStyleConfig?: Record<string, unknown> })?.storefrontStyleConfig ??
+                        {};
+                      onStyleChange({ ...(currentStyle as Record<string, unknown>), drawer: next });
                     }}
                   />
                 </div>

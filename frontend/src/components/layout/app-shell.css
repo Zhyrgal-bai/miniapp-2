@@ -252,11 +252,26 @@
 
 /* Storefront-themed drawer */
 .sf-app .app-drawer {
-  background: var(--sf-color-surface);
+  background: var(--sf-drawer-bg-resolved, var(--sf-color-surface));
   border-right: 1px solid color-mix(in srgb, var(--sf-color-border) 60%, transparent);
   box-shadow:
     16px 0 48px color-mix(in srgb, black 42%, transparent),
     0 0 0 1px color-mix(in srgb, var(--sf-color-border) 22%, transparent) inset;
+}
+
+.sf-app {
+  --sf-drawer-bg-resolved: var(--sf-color-surface);
+}
+.sf-app[style*="--sf-drawer-bg:background"] {
+  --sf-drawer-bg-resolved: var(--sf-color-background);
+}
+.sf-app[style*="--sf-drawer-bg:glass"] {
+  --sf-drawer-bg-resolved: color-mix(in srgb, var(--sf-color-surface) 70%, transparent);
+}
+
+.sf-app[style*="--sf-drawer-bg:glass"][style*="--sf-drawer-blur:1"] .app-drawer {
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .app-drawer__pull {
@@ -421,6 +436,22 @@
   background: var(--sf-color-primary) !important;
   border-color: color-mix(in srgb, var(--sf-color-primary) 55%, transparent) !important;
   box-shadow: var(--sf-shadow-button, 0 8px 24px rgba(0,0,0,0.25));
+}
+
+.sf-app[style*="--sf-drawer-active-style:outline"] .app-drawer__link--active {
+  background: transparent !important;
+  color: var(--sf-color-text) !important;
+  border-color: color-mix(in srgb, var(--sf-color-primary) 55%, transparent) !important;
+  box-shadow: none;
+}
+
+.sf-app[style*="--sf-drawer-density:compact"] .app-drawer__link {
+  padding: 10px 12px;
+  font-size: 0.9rem;
+}
+
+.sf-app[style*="--sf-drawer-avatar-shape:rounded"] .app-drawer__user-avatar {
+  border-radius: 14px;
 }
 
 .app-drawer__link-icon {

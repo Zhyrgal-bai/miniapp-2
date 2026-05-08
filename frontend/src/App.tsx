@@ -129,6 +129,14 @@ export default function App() {
     styleCfg.hero && typeof styleCfg.hero === "object" && !Array.isArray(styleCfg.hero)
       ? (styleCfg.hero as Record<string, unknown>)
       : {};
+  const cart =
+    styleCfg.cart && typeof styleCfg.cart === "object" && !Array.isArray(styleCfg.cart)
+      ? (styleCfg.cart as Record<string, unknown>)
+      : {};
+  const drawer =
+    styleCfg.drawer && typeof styleCfg.drawer === "object" && !Array.isArray(styleCfg.drawer)
+      ? (styleCfg.drawer as Record<string, unknown>)
+      : {};
 
   const fontStack = (id: unknown): string => {
     const v = isFontId(id) ? id : "system";
@@ -166,6 +174,15 @@ export default function App() {
     "--sf-button-compact":
       typeof buttons.compact === "boolean" ? (buttons.compact ? "1" : "0") : "",
     "--sf-motion-level": typeof buttons.animationLevel === "string" ? String(buttons.animationLevel) : "",
+    "--sf-cart-item-style": typeof cart.itemStyle === "string" ? String(cart.itemStyle) : "",
+    "--sf-cart-empty-style": typeof cart.emptyStyle === "string" ? String(cart.emptyStyle) : "",
+    "--sf-cart-footer-style": typeof cart.footerStyle === "string" ? String(cart.footerStyle) : "",
+    "--sf-cart-qty-style": typeof cart.qtyStyle === "string" ? String(cart.qtyStyle) : "",
+    "--sf-drawer-bg": typeof drawer.background === "string" ? String(drawer.background) : "",
+    "--sf-drawer-blur": typeof drawer.blur === "boolean" ? (drawer.blur ? "1" : "0") : "",
+    "--sf-drawer-active-style": typeof drawer.activeStyle === "string" ? String(drawer.activeStyle) : "",
+    "--sf-drawer-avatar-shape": typeof drawer.avatarShape === "string" ? String(drawer.avatarShape) : "",
+    "--sf-drawer-density": typeof drawer.density === "string" ? String(drawer.density) : "",
     "--sf-hero-height": typeof hero.height === "number" ? `${hero.height}px` : "",
     "--sf-hero-radius": typeof hero.radius === "number" ? `${hero.radius}px` : "",
   };

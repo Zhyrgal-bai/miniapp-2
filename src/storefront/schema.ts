@@ -170,6 +170,19 @@ export type StorefrontStyleConfig = {
     compact: boolean;
     animationLevel: "off" | "low" | "high";
   };
+  cart: {
+    itemStyle: "list" | "card";
+    qtyStyle: "stepper" | "minimal";
+    emptyStyle: "minimal" | "card";
+    footerStyle: "sticky" | "inline";
+  };
+  drawer: {
+    background: "surface" | "background" | "glass";
+    blur: boolean;
+    activeStyle: "solid" | "outline";
+    avatarShape: "circle" | "rounded";
+    density: "compact" | "normal";
+  };
   hero: {
     layout: "centered" | "split" | "banner";
     overlay: boolean;
@@ -474,6 +487,34 @@ const StorefrontStyleConfigSchema = z
         compact: false,
         animationLevel: "low",
       }),
+    cart: z
+      .object({
+        itemStyle: z.enum(["list", "card"]).default("list"),
+        qtyStyle: z.enum(["stepper", "minimal"]).default("stepper"),
+        emptyStyle: z.enum(["minimal", "card"]).default("minimal"),
+        footerStyle: z.enum(["sticky", "inline"]).default("sticky"),
+      })
+      .default({
+        itemStyle: "list",
+        qtyStyle: "stepper",
+        emptyStyle: "minimal",
+        footerStyle: "sticky",
+      }),
+    drawer: z
+      .object({
+        background: z.enum(["surface", "background", "glass"]).default("surface"),
+        blur: z.boolean().default(true),
+        activeStyle: z.enum(["solid", "outline"]).default("solid"),
+        avatarShape: z.enum(["circle", "rounded"]).default("circle"),
+        density: z.enum(["compact", "normal"]).default("normal"),
+      })
+      .default({
+        background: "surface",
+        blur: true,
+        activeStyle: "solid",
+        avatarShape: "circle",
+        density: "normal",
+      }),
     hero: z
       .object({
         layout: z.enum(["centered", "split", "banner"]).default("centered"),
@@ -529,6 +570,19 @@ const StorefrontStyleConfigSchema = z
       variant: "filled",
       compact: false,
       animationLevel: "low",
+    },
+    cart: {
+      itemStyle: "list",
+      qtyStyle: "stepper",
+      emptyStyle: "minimal",
+      footerStyle: "sticky",
+    },
+    drawer: {
+      background: "surface",
+      blur: true,
+      activeStyle: "solid",
+      avatarShape: "circle",
+      density: "normal",
     },
     hero: {
       layout: "centered",
