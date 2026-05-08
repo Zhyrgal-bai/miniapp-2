@@ -1,6 +1,7 @@
 import { useCartStore } from "../store/useCartStore";
 import { mergeTenantShopIntoSearch, readShopIdString } from "../utils/storeParams";
 import "../components/ui/Cart.css";
+import { useStorefrontPayload } from "../components/storefront/runtime/StorefrontPayloadContext";
 
 type Props = {
   onGoToCheckout: () => void;
@@ -10,6 +11,12 @@ export default function CartPage({ onGoToCheckout }: Props) {
   const items = useCartStore((state) => state.items);
   const addItem = useCartStore((state) => state.addItem);
   const removeItem = useCartStore((state) => state.removeItem);
+  const { payload } = useStorefrontPayload();
+  const txt = payload?.storefrontTextConfig ?? {};
+  const readTxt = (k: string, fb: string) => {
+    const v = (txt as Record<string, unknown>)[k];
+    return typeof v === "string" && v.trim() !== "" ? v : fb;
+  };
 
   const totalPrice = items.reduce((sum, item) => {
     return sum + item.price * (item.quantity ?? 1);
@@ -50,10 +57,10 @@ export default function CartPage({ onGoToCheckout }: Props) {
       {items.length === 0 && (
         <div className="cart-empty">
           <div className="cart-empty-icon">🛒</div>
-          <h2>КОРЗИНА ПУСТА</h2>
-          <p>Добавьте товары, чтобы оформить заказ</p>
+          <h2>{readTxt("emptyCartTitle", "Корзина пуста").toUpperCase()}</h2>
+          <p>{readTxt("emptyCartHint", "Добавьте товары, чтобы оформить заказ")}</p>
           <button className="go-shop" type="button" onClick={handleGoShop}>
-            СМОТРЕТЬ ТОВАРЫ
+            {readTxt("menuShopLabel", "Магазин").toUpperCase()}
           </button>
         </div>
       )}
@@ -115,7 +122,7 @@ export default function CartPage({ onGoToCheckout }: Props) {
               className="checkout-btn"
               onClick={onGoToCheckout}
             >
-              ОФОРМИТЬ ЗАКАЗ
+              {readTxt("checkoutLabel", "Оформить").toUpperCase()}
             </button>
           </div>
         </>

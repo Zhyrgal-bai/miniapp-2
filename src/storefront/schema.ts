@@ -96,7 +96,31 @@ export type StorefrontCardConfig = {
 
 export type StorefrontTextConfig = {
   heroDefaultTitle: string;
+  heroDefaultSubtitle: string;
+  heroDefaultCta: string;
+
   addToCartLabel: string;
+  buyNowLabel: string;
+  viewAllLabel: string;
+  checkoutLabel: string;
+
+  titleCategories: string;
+  titleHits: string;
+  titleTrending: string;
+  titleFaq: string;
+  titleReviews: string;
+
+  emptyCartTitle: string;
+  emptyCartHint: string;
+  emptyCatalogTitle: string;
+  emptyCatalogHint: string;
+  emptySearchTitle: string;
+  emptySearchHint: string;
+
+  menuShopLabel: string;
+  menuCartLabel: string;
+  menuOrdersLabel: string;
+  menuFaqLabel: string;
 };
 
 export type StorefrontStyleConfig = {
@@ -279,11 +303,57 @@ const StorefrontCardConfigSchema = z
 const StorefrontTextConfigSchema = z
   .object({
     heroDefaultTitle: z.string().trim().max(LIMITS.maxTitleLen).optional().default("Добро пожаловать"),
+    heroDefaultSubtitle: z.string().trim().max(LIMITS.maxSubtitleLen).optional().default(""),
+    heroDefaultCta: z.string().trim().max(40).optional().default(""),
     addToCartLabel: z.string().trim().max(24).optional().default("Добавить"),
+    buyNowLabel: z.string().trim().max(24).optional().default("Купить"),
+    viewAllLabel: z.string().trim().max(24).optional().default("Смотреть всё"),
+    checkoutLabel: z.string().trim().max(24).optional().default("Оформить"),
+
+    titleCategories: z.string().trim().max(LIMITS.maxTitleLen).optional().default("Категории"),
+    titleHits: z.string().trim().max(LIMITS.maxTitleLen).optional().default("Хиты"),
+    titleTrending: z.string().trim().max(LIMITS.maxTitleLen).optional().default("Trending"),
+    titleFaq: z.string().trim().max(LIMITS.maxTitleLen).optional().default("FAQ"),
+    titleReviews: z.string().trim().max(LIMITS.maxTitleLen).optional().default("Отзывы"),
+
+    emptyCartTitle: z.string().trim().max(LIMITS.maxTitleLen).optional().default("Корзина пуста"),
+    emptyCartHint: z.string().trim().max(LIMITS.maxTextLen).optional().default("Добавьте товары, чтобы оформить заказ"),
+    emptyCatalogTitle: z.string().trim().max(LIMITS.maxTitleLen).optional().default("Нет товаров"),
+    emptyCatalogHint: z.string().trim().max(LIMITS.maxTextLen).optional().default("Скоро появятся товары"),
+    emptySearchTitle: z.string().trim().max(LIMITS.maxTitleLen).optional().default("Ничего не найдено"),
+    emptySearchHint: z.string().trim().max(LIMITS.maxTextLen).optional().default("Смените категорию или поиск"),
+
+    menuShopLabel: z.string().trim().max(24).optional().default("Магазин"),
+    menuCartLabel: z.string().trim().max(24).optional().default("Корзина"),
+    menuOrdersLabel: z.string().trim().max(24).optional().default("Мои заказы"),
+    menuFaqLabel: z.string().trim().max(24).optional().default("FAQ"),
   })
   .default({
     heroDefaultTitle: "Добро пожаловать",
+    heroDefaultSubtitle: "",
+    heroDefaultCta: "",
     addToCartLabel: "Добавить",
+    buyNowLabel: "Купить",
+    viewAllLabel: "Смотреть всё",
+    checkoutLabel: "Оформить",
+
+    titleCategories: "Категории",
+    titleHits: "Хиты",
+    titleTrending: "Trending",
+    titleFaq: "FAQ",
+    titleReviews: "Отзывы",
+
+    emptyCartTitle: "Корзина пуста",
+    emptyCartHint: "Добавьте товары, чтобы оформить заказ",
+    emptyCatalogTitle: "Нет товаров",
+    emptyCatalogHint: "Скоро появятся товары",
+    emptySearchTitle: "Ничего не найдено",
+    emptySearchHint: "Смените категорию или поиск",
+
+    menuShopLabel: "Магазин",
+    menuCartLabel: "Корзина",
+    menuOrdersLabel: "Мои заказы",
+    menuFaqLabel: "FAQ",
   });
 
 const StorefrontStyleConfigSchema = z

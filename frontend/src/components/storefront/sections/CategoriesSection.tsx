@@ -8,8 +8,14 @@ function readTitle(config: Record<string, unknown>, fallback: string): string {
 export function CategoriesSection(props: {
   config: Record<string, unknown>;
   categories: Category[];
+  textConfig?: Record<string, unknown>;
 }): React.ReactElement | null {
-  const title = readTitle(props.config, "Категории");
+  const cfgTitle = readTitle(props.config, "");
+  const txtTitle =
+    typeof props.textConfig?.titleCategories === "string" && String(props.textConfig.titleCategories).trim() !== ""
+      ? String(props.textConfig.titleCategories)
+      : "Категории";
+  const title = cfgTitle.trim() !== "" ? cfgTitle : txtTitle;
   if (!props.categories?.length) return null;
 
   return (

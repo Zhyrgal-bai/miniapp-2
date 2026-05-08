@@ -36,6 +36,19 @@
   line-height: 1.1;
 }
 
+.sf-hero__cta {
+  min-height: var(--sf-button-height, 44px);
+  padding: 10px 14px;
+  border-radius: var(--sf-button-radius, 14px);
+  border: 1px solid color-mix(in srgb, var(--sf-color-primary) 55%, transparent);
+  background: var(--sf-color-primary);
+  color: var(--sf-on-primary, #fff);
+  font-weight: 800;
+  font-size: var(--sf-typo-button-size, 13px);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
 .sf-section {
   position: relative;
 }

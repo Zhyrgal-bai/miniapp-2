@@ -31,6 +31,14 @@ export function HeroSection(props: {
     readTextConfigString(props.textConfig ?? undefined, "heroDefaultTitle").trim() !== ""
       ? readTextConfigString(props.textConfig ?? undefined, "heroDefaultTitle")
       : "Добро пожаловать";
+  const defaultSubtitle =
+    readTextConfigString(props.textConfig ?? undefined, "heroDefaultSubtitle").trim() !== ""
+      ? readTextConfigString(props.textConfig ?? undefined, "heroDefaultSubtitle")
+      : "";
+  const defaultCta =
+    readTextConfigString(props.textConfig ?? undefined, "heroDefaultCta").trim() !== ""
+      ? readTextConfigString(props.textConfig ?? undefined, "heroDefaultCta")
+      : "";
   const title =
     readString(first, "title").trim() !== ""
       ? readString(first, "title")
@@ -38,7 +46,11 @@ export function HeroSection(props: {
   const subtitle =
     readString(first, "subtitle").trim() !== ""
       ? readString(first, "subtitle")
-      : "";
+      : defaultSubtitle;
+  const ctaText =
+    readString(first, "ctaText").trim() !== ""
+      ? readString(first, "ctaText")
+      : defaultCta;
   const imageUrlRaw = readString(first, "imageUrl");
   const imageUrl = buildCloudinaryResponsiveUrl(imageUrlRaw, "preview");
   const kit = props.kit ?? "default";
@@ -52,6 +64,13 @@ export function HeroSection(props: {
             <div className="sf-hero__kicker">EDITORIAL</div>
             <div className="sf-hero__title">{title}</div>
             {subtitle ? <div className="sf-hero__subtitle">{subtitle}</div> : null}
+            {ctaText ? (
+              <div style={{ marginTop: 10 }}>
+                <button type="button" className="sf-hero__cta">
+                  {ctaText}
+                </button>
+              </div>
+            ) : null}
           </div>
           <div className="sf-hero__media">
             {imageUrl ? <img src={imageUrl} alt="" loading="lazy" /> : null}
@@ -71,12 +90,26 @@ export function HeroSection(props: {
               <div className="sf-hero__overlay">
                 <div className="sf-hero__title">{title}</div>
                 {subtitle ? <div className="sf-hero__subtitle">{subtitle}</div> : null}
+                {ctaText ? (
+                  <div style={{ marginTop: 10 }}>
+                    <button type="button" className="sf-hero__cta">
+                      {ctaText}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </div>
           ) : (
             <div className="sf-hero__overlay sf-hero__overlay--noimg">
               <div className="sf-hero__title">{title}</div>
               {subtitle ? <div className="sf-hero__subtitle">{subtitle}</div> : null}
+              {ctaText ? (
+                <div style={{ marginTop: 10 }}>
+                  <button type="button" className="sf-hero__cta">
+                    {ctaText}
+                  </button>
+                </div>
+              ) : null}
             </div>
           )}
         </div>
@@ -106,6 +139,13 @@ export function HeroSection(props: {
           <div style={{ fontSize: "var(--sf-font-size-h2, 22px)", fontWeight: "var(--sf-font-weight-heading, 800)" }}>{title}</div>
           {subtitle ? (
             <div style={{ marginTop: 6, opacity: 0.85 }}>{subtitle}</div>
+          ) : null}
+          {ctaText ? (
+            <div style={{ marginTop: 10 }}>
+              <button type="button" className="sf-hero__cta">
+                {ctaText}
+              </button>
+            </div>
           ) : null}
         </div>
       </div>

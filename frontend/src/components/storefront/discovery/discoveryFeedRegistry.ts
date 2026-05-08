@@ -29,16 +29,21 @@ function bySoldDesc(a: Product, b: Product): number {
   return sb - sa;
 }
 
-export function buildDiscoveryRails(ctx: DiscoveryContext): DiscoveryRail[] {
+export function buildDiscoveryRails(ctx: DiscoveryContext & { textConfig?: Record<string, unknown> }): DiscoveryRail[] {
   const rails: DiscoveryRail[] = [];
   const affinities = categoryAffinities(ctx.businessId);
+  const txt = ctx.textConfig ?? {};
+  const readText = (k: string, fb: string) => {
+    const v = (txt as Record<string, unknown>)[k];
+    return typeof v === "string" && v.trim() !== "" ? v : fb;
+  };
 
   // Trending: use sold metric if present, else fallback to featured order.
   const trending = [...(ctx.featuredProducts ?? [])].sort(bySoldDesc).slice(0, 12);
   if (trending.length) {
     rails.push({
       id: "trending",
-      title: ctx.businessType === "fastfood" ? "Горячее сейчас" : "Trending",
+      title: ctx.businessType === "fastfood" ? "Горячее сейчас" : readText("titleTrending", "Trending"),
       layout: ctx.kit === "fashion" ? "editorialStrip" : "horizontalRail",
       products: trending,
     });
@@ -52,7 +57,7 @@ export function buildDiscoveryRails(ctx: DiscoveryContext): DiscoveryRail[] {
     if (recent.length) {
       rails.push({
         id: "recent",
-        title: "Вы смотрели",
+        title: readText("titleHits", "Вы смотрели"),
         layout: "horizontalRail",
         products: recent.slice(0, 12),
       });
@@ -70,7 +75,7 @@ export function buildDiscoveryRails(ctx: DiscoveryContext): DiscoveryRail[] {
     if (because.length) {
       rails.push({
         id: "because_viewed",
-        title: "Потому что вы смотрели",
+        title: readText("titleHits", "Потому что вы смотрели"),
         layout: ctx.kit === "fashion" ? "editorialStrip" : "horizontalRail",
         products: because,
       });
@@ -92,7 +97,7 @@ export function buildDiscoveryRails(ctx: DiscoveryContext): DiscoveryRail[] {
       if (related.length) {
         rails.push({
           id: "related",
-          title: "Похожие товары",
+          title: readText("titleHits", "Похожие товары"),
           layout: "horizontalRail",
           products: related,
         });

@@ -13,14 +13,20 @@ function readItems(config: Record<string, unknown>): Array<Record<string, unknow
 
 export function ReviewsSection(props: {
   config: Record<string, unknown>;
+  textConfig?: Record<string, unknown>;
 }): React.ReactElement | null {
-  const title = readTitle(props.config, "Отзывы");
+  const cfgTitle = readTitle(props.config, "");
+  const txtTitle =
+    typeof props.textConfig?.titleReviews === "string" && String(props.textConfig.titleReviews).trim() !== ""
+      ? String(props.textConfig.titleReviews)
+      : "Отзывы";
+  const title = cfgTitle.trim() !== "" ? cfgTitle : txtTitle;
   const items = readItems(props.config);
   if (items.length === 0) return null;
 
   return (
-    <section style={{ padding: 16 }}>
-      <div style={{ fontWeight: 800, marginBottom: 10 }}>{title}</div>
+    <section className="sf-section sf-section--reviews" style={{ padding: "var(--sf-section-pad)" }}>
+      <div className="sf-section__title">{title}</div>
       <div style={{ display: "grid", gap: 10 }}>
         {items.map((it, idx) => {
           const author = typeof it.author === "string" ? it.author : "";

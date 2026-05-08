@@ -8,6 +8,7 @@ import {
 } from "../../utils/telegramUserMark";
 import { APP_NAME } from "../../config/brand";
 import "./app-shell.css";
+import { useStorefrontPayload } from "../storefront/runtime/StorefrontPayloadContext";
 
 type AppNavPage =
   | "home"
@@ -89,6 +90,12 @@ export default function SideMenu({
   const user = useMemo(() => getTelegramUser(), []);
   const admin = useAdminPanelVisible();
   const adminActive = activeAdminSection(hash);
+  const { payload } = useStorefrontPayload();
+  const txt = payload?.storefrontTextConfig ?? {};
+  const readTxt = (k: string, fb: string) => {
+    const v = (txt as Record<string, unknown>)[k];
+    return typeof v === "string" && v.trim() !== "" ? v : fb;
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -168,7 +175,7 @@ export default function SideMenu({
                   <span className="app-drawer__link-icon" aria-hidden>
                     📦
                   </span>
-                  Мои заказы
+                  {readTxt("menuOrdersLabel", "Мои заказы")}
                 </button>
 
                 <button
@@ -182,7 +189,7 @@ export default function SideMenu({
                   <span className="app-drawer__link-icon" aria-hidden>
                     🛍
                   </span>
-                  Магазин
+                  {readTxt("menuShopLabel", "Магазин")}
                 </button>
 
                 <button
@@ -199,7 +206,7 @@ export default function SideMenu({
                       <span className="app-drawer__cart-badge">{cartCount}</span>
                     )}
                   </span>
-                  Корзина
+                  {readTxt("menuCartLabel", "Корзина")}
                 </button>
 
                 {admin && (
@@ -241,7 +248,7 @@ export default function SideMenu({
                   <span className="app-drawer__link-icon" aria-hidden>
                     ❓
                   </span>
-                  FAQ
+                  {readTxt("menuFaqLabel", "FAQ")}
                 </button>
               </nav>
             </div>

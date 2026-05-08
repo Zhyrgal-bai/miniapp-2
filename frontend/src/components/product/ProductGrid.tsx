@@ -24,11 +24,15 @@ export default function ProductGrid({
   kit,
   businessId,
 }: ProductGridProps) {
+  const readTxt = (k: string, fb: string) => {
+    const v = (textConfig as Record<string, unknown> | undefined)?.[k];
+    return typeof v === "string" && v.trim() !== "" ? v : fb;
+  };
   if (catalogProductCount === 0) {
     return (
       <div className="product-grid product-grid--empty" role="status">
-        <p className="product-grid__empty-title">Скоро появятся товары 🔥</p>
-        <p className="product-grid__empty-hint">Загляните позже</p>
+        <p className="product-grid__empty-title">{readTxt("emptyCatalogTitle", "Нет товаров")}</p>
+        <p className="product-grid__empty-hint">{readTxt("emptyCatalogHint", "Скоро появятся товары")}</p>
       </div>
     );
   }
@@ -36,8 +40,8 @@ export default function ProductGrid({
   if (products.length === 0) {
     return (
       <div className="product-grid product-grid--empty" role="status">
-        <p className="product-grid__empty-title">Ничего не найдено</p>
-        <p className="product-grid__empty-hint">Смените категорию или поиск</p>
+        <p className="product-grid__empty-title">{readTxt("emptySearchTitle", "Ничего не найдено")}</p>
+        <p className="product-grid__empty-hint">{readTxt("emptySearchHint", "Смените категорию или поиск")}</p>
       </div>
     );
   }

@@ -41,8 +41,9 @@ export function DiscoveryRails(props: Props): React.ReactElement | null {
       businessId: props.businessId,
       featuredProducts: props.featuredProducts ?? [],
       catalogProducts,
+      textConfig: props.textConfig,
     });
-  }, [props.kit, props.businessType, props.businessId, props.featuredProducts, catalog]);
+  }, [props.kit, props.businessType, props.businessId, props.featuredProducts, props.textConfig, catalog]);
 
   if (!rails.length) return null;
 

@@ -13,14 +13,20 @@ function readItems(config: Record<string, unknown>): Array<Record<string, unknow
 
 export function FaqSection(props: {
   config: Record<string, unknown>;
+  textConfig?: Record<string, unknown>;
 }): React.ReactElement | null {
-  const title = readTitle(props.config, "FAQ");
+  const cfgTitle = readTitle(props.config, "");
+  const txtTitle =
+    typeof props.textConfig?.titleFaq === "string" && String(props.textConfig.titleFaq).trim() !== ""
+      ? String(props.textConfig.titleFaq)
+      : "FAQ";
+  const title = cfgTitle.trim() !== "" ? cfgTitle : txtTitle;
   const items = readItems(props.config);
   if (items.length === 0) return null;
 
   return (
-    <section style={{ padding: 16 }}>
-      <div style={{ fontWeight: 800, marginBottom: 10 }}>{title}</div>
+    <section className="sf-section sf-section--faq" style={{ padding: "var(--sf-section-pad)" }}>
+      <div className="sf-section__title">{title}</div>
       <div style={{ display: "grid", gap: 8 }}>
         {items.map((it, idx) => {
           const q = typeof it.q === "string" ? it.q : "";

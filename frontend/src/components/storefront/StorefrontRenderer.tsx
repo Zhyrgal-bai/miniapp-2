@@ -140,6 +140,7 @@ export function StorefrontRenderer(props: {
                   key={s.id}
                   config={s.config}
                   categories={props.payload.categories ?? []}
+                  textConfig={props.payload.storefrontTextConfig ?? undefined}
                 />
               );
             case "featuredProducts":
@@ -157,9 +158,21 @@ export function StorefrontRenderer(props: {
             case "footer":
               return <FooterSection key={s.id} config={s.config} />;
             case "reviews":
-              return <ReviewsSection key={s.id} config={s.config} />;
+              return (
+                <ReviewsSection
+                  key={s.id}
+                  config={s.config}
+                  textConfig={props.payload.storefrontTextConfig ?? undefined}
+                />
+              );
             case "faq":
-              return <FaqSection key={s.id} config={s.config} />;
+              return (
+                <FaqSection
+                  key={s.id}
+                  config={s.config}
+                  textConfig={props.payload.storefrontTextConfig ?? undefined}
+                />
+              );
             default:
               return null;
           }

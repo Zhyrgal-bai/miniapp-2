@@ -14,12 +14,17 @@ export function FeaturedProductsSection(props: {
   kit?: "minimal" | "luxury" | "fashion" | "neon" | "default";
   businessId?: number;
 }): React.ReactElement | null {
-  const title = readTitle(props.config, "Хиты");
+  const cfgTitle = readTitle(props.config, "");
+  const txtTitle =
+    typeof props.textConfig?.titleHits === "string" && String(props.textConfig.titleHits).trim() !== ""
+      ? String(props.textConfig.titleHits)
+      : "Хиты";
+  const title = cfgTitle.trim() !== "" ? cfgTitle : txtTitle;
   if (!props.products?.length) return null;
 
   return (
     <section className="sf-section sf-section--featured" style={{ padding: "var(--sf-section-pad)" }}>
-      <div style={{ fontWeight: 800, marginBottom: "var(--sf-space-sm)" }}>{title}</div>
+      <div className="sf-section__title">{title}</div>
       <div
         style={{
           borderRadius: "var(--sf-section-radius)",
