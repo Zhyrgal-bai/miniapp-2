@@ -44,7 +44,34 @@ const rbOut = (rolledBack.stdout ?? "") + (rolledBack.stderr ?? "");
 if (rbOut) process.stdout.write(rbOut);
 // Exit 1 when there is no failed migration — safe to ignore (clears P3018 when applicable).
 
-run("npx prisma migrate deploy");
+const deployAttempt = spawnSync("npx prisma migrate deploy", {
+  shell: true,
+  encoding: "utf8",
+  stdio: ["inherit", "pipe", "pipe"],
+  env: process.env,
+});
+const deployOut = (deployAttempt.stdout ?? "") + (deployAttempt.stderr ?? "");
+if (deployOut) process.stdout.write(deployOut);
+
+// If a known migration is stuck as "failed" in production DB (P3009),
+// automatically unmark it and retry. This is safe here because the SQL was
+// made idempotent (CREATE TABLE IF NOT EXISTS + constraint guards).
+if (
+  (deployAttempt.status ?? 1) !== 0 &&
+  deployOut.includes("P3009") &&
+  deployOut.includes("20260508143000_storefront_table_reusable_blocks")
+) {
+  console.warn(
+    "[start] Detected failed migration 20260508143000_storefront_table_reusable_blocks; attempting auto-resolve then redeploy.",
+  );
+  run(
+    "npx prisma migrate resolve --rolled-back 20260508143000_storefront_table_reusable_blocks",
+  );
+  run("npx prisma migrate deploy");
+} else {
+  const code = deployAttempt.status ?? 1;
+  if (code !== 0) process.exit(code);
+}
 
 // One-off data backfills (Render only).
 // Use env flags and remove them after one successful deploy.
