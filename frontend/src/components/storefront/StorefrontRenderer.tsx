@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { Category, Product } from "../../types";
 import { useTheme } from "../../context/ThemeContext";
+import { ThemeVarsProvider } from "./theme/ThemeVarsProvider";
 import { HeroSection } from "./sections/HeroSection";
 import { PromoSection } from "./sections/PromoSection";
 import { CategoriesSection } from "./sections/CategoriesSection";
@@ -49,13 +50,7 @@ export function StorefrontRenderer(props: {
   }, [props.payload.sections]);
 
   return (
-    <div
-      style={{
-        minHeight: "100%",
-        background: theme.bgColor,
-        color: theme.textColor,
-      }}
-    >
+    <ThemeVarsProvider theme={theme}>
       {sections.map((s) => {
         switch (s.type) {
           case "hero":
@@ -88,7 +83,7 @@ export function StorefrontRenderer(props: {
             return null;
         }
       })}
-    </div>
+    </ThemeVarsProvider>
   );
 }
 

@@ -81,6 +81,43 @@ export function validateUx(params: {
     });
   }
 
+  // Typography guards (tokens v3, if present)
+  const t3 = (params.theme as any).tokensV3 as any | undefined;
+  try {
+    const base = t3?.typography?.sizes?.base;
+    if (typeof base === "number" && base > 0 && base < 14) {
+      uxPush(r, {
+        code: "typography.too_small",
+        level: "warning",
+        message:
+          "Слишком маленький базовый шрифт. Для Telegram Mini App лучше >= 14px.",
+        path: "theme.tokensV3.typography.sizes.base",
+      });
+    }
+    const lh = t3?.typography?.lineHeights?.body;
+    if (typeof lh === "number" && lh > 0 && lh < 1.25) {
+      uxPush(r, {
+        code: "typography.line_height_low",
+        level: "warning",
+        message:
+          "Слишком маленький line-height для текста. Рекомендуется >= 1.3 для читабельности.",
+        path: "theme.tokensV3.typography.lineHeights.body",
+      });
+    }
+    const density = typeof t3?.density === "string" ? t3.density : null;
+    if (density === "compact") {
+      uxPush(r, {
+        code: "density.compact",
+        level: "warning",
+        message:
+          "Compact плотность может ухудшить удобство на мобильных. Используйте с осторожностью.",
+        path: "theme.tokensV3.density",
+      });
+    }
+  } catch {
+    // Never fail validation on optional V3 tokens.
+  }
+
   return r;
 }
 

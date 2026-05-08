@@ -3,6 +3,8 @@
 import { resolveThemeTokensV2 } from "../theme/resolver.js";
 import { presetTokens } from "../theme/presets.js";
 import type { ThemeTokensV2 } from "../theme/tokens.js";
+import { resolveThemeTokensV3 } from "../themeSystem/resolveThemeV3.js";
+import type { ThemeTokensV3 } from "../designTokens/v3/types.js";
 
 export type StoreBannerConfig = {
   enabled: boolean;
@@ -22,6 +24,8 @@ export type ResolvedStoreTheme = {
   banner: StoreBannerConfig;
   /** Design tokens v2 for builder/UX system (safe, schema-driven). */
   tokens: ThemeTokensV2;
+  /** Theme tokens v3 (next-gen design system). Optional for backward compatibility. */
+  tokensV3?: ThemeTokensV3;
 };
 
 export type { ThemeTokensV2 } from "../theme/tokens.js";
@@ -206,6 +210,11 @@ export function mergeThemeFromUnknown(
     stored,
   });
 
+  const tokensV3 = resolveThemeTokensV3({
+    templateId: (stored as any).templateId ?? null,
+    stored,
+  });
+
   return {
     primaryColor: pickColor("primaryColor"),
     bgColor: pickColor("bgColor"),
@@ -215,6 +224,7 @@ export function mergeThemeFromUnknown(
     layout,
     banner,
     tokens,
+    tokensV3,
   };
 }
 

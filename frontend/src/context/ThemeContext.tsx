@@ -84,6 +84,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const root = document.documentElement;
+    // Legacy vars (kept for existing components). Stage 7 uses container-scoped `--sf-*` vars via ThemeVarsProvider.
     root.style.setProperty("--store-bg", theme.bgColor);
     root.style.setProperty("--store-card", theme.cardColor);
     root.style.setProperty("--store-primary", theme.primaryColor);

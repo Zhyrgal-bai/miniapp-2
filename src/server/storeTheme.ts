@@ -87,6 +87,10 @@ export function applyThemePatchAndValidate(
     return { ok: false, error: "Нужен объект themeConfig в теле" };
   }
   const patch = body as ThemePatchPayload;
+  const rawPatchObj =
+    body != null && typeof body === "object" && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : null;
 
   const curTid =
     currentTemplateId != null &&
@@ -187,6 +191,10 @@ export function applyThemePatchAndValidate(
       title: next.banner.title,
       subtitle: next.banner.subtitle,
     },
+    // Stage 7 rollout: keep tokensV3 if provided by builder/theme studio.
+    ...(rawPatchObj && "tokensV3" in rawPatchObj
+      ? { tokensV3: (rawPatchObj as any).tokensV3, themeVersion: 3 }
+      : {}),
   };
 
   return {
