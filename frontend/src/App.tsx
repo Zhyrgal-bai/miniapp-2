@@ -25,6 +25,7 @@ import "./components/storefront/cart/stickyCart.css";
 import { ThemeVarsProvider } from "./components/storefront/theme/ThemeVarsProvider";
 import { useTheme } from "./context/ThemeContext";
 import { useStorefrontPayload } from "./components/storefront/runtime/StorefrontPayloadContext";
+import { FONT_ALLOWLIST, isFontId } from "./themeStudio/fonts";
 
 type AppNavPage =
   | "home"
@@ -129,10 +130,19 @@ export default function App() {
       ? (styleCfg.hero as Record<string, unknown>)
       : {};
 
+  const fontStack = (id: unknown): string => {
+    const v = isFontId(id) ? id : "system";
+    const found = FONT_ALLOWLIST.find((f) => f.id === v);
+    return found?.cssFamily ?? FONT_ALLOWLIST[0].cssFamily;
+  };
+
   const sfVars: Record<string, string> = {
     "--sf-section-pad": typeof layout.sectionSpacing === "number" ? `${layout.sectionSpacing}px` : "",
     "--sf-grid-gap": typeof layout.productGap === "number" ? `${layout.productGap}px` : "",
     "--sf-mobile-pad": typeof layout.mobilePadding === "number" ? `${layout.mobilePadding}px` : "",
+    "--sf-font-body": fontStack(typo.fontBody),
+    "--sf-font-heading": fontStack(typo.fontTitle),
+    "--sf-font-button": fontStack(typo.fontButton),
     "--sf-typo-title-size": typeof typo.titleSize === "number" ? `${typo.titleSize}px` : "",
     "--sf-typo-section-title-size": typeof typo.sectionTitleSize === "number" ? `${typo.sectionTitleSize}px` : "",
     "--sf-typo-button-size": typeof typo.buttonSize === "number" ? `${typo.buttonSize}px` : "",

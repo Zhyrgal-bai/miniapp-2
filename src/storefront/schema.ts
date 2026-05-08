@@ -132,6 +132,9 @@ export type StorefrontStyleConfig = {
     contentWidth: "full" | "narrow";
   };
   typography: {
+    fontBody: "system" | "inter" | "poppins" | "manrope" | "montserrat" | "bebasNeue" | "playfairDisplay";
+    fontTitle: "system" | "inter" | "poppins" | "manrope" | "montserrat" | "bebasNeue" | "playfairDisplay";
+    fontButton: "system" | "inter" | "poppins" | "manrope" | "montserrat" | "bebasNeue" | "playfairDisplay";
     titleSize: number;
     sectionTitleSize: number;
     buttonSize: number;
@@ -375,6 +378,15 @@ const StorefrontStyleConfigSchema = z
       }),
     typography: z
       .object({
+        fontBody: z
+          .enum(["system", "inter", "poppins", "manrope", "montserrat", "bebasNeue", "playfairDisplay"])
+          .default("system"),
+        fontTitle: z
+          .enum(["system", "inter", "poppins", "manrope", "montserrat", "bebasNeue", "playfairDisplay"])
+          .default("system"),
+        fontButton: z
+          .enum(["system", "inter", "poppins", "manrope", "montserrat", "bebasNeue", "playfairDisplay"])
+          .default("system"),
         titleSize: z.number().int().min(14).max(44).default(24),
         sectionTitleSize: z.number().int().min(12).max(28).default(16),
         buttonSize: z.number().int().min(10).max(20).default(13),
@@ -384,6 +396,9 @@ const StorefrontStyleConfigSchema = z
         lineHeight: z.number().min(1).max(1.8).default(1.15),
       })
       .default({
+        fontBody: "system",
+        fontTitle: "system",
+        fontButton: "system",
         titleSize: 24,
         sectionTitleSize: 16,
         buttonSize: 13,
@@ -455,6 +470,9 @@ const StorefrontStyleConfigSchema = z
       contentWidth: "full",
     },
     typography: {
+      fontBody: "system",
+      fontTitle: "system",
+      fontButton: "system",
       titleSize: 24,
       sectionTitleSize: 16,
       buttonSize: 13,

@@ -17,6 +17,7 @@
   text-transform: var(--sf-typo-title-transform, none);
   letter-spacing: var(--sf-typo-title-letter-spacing, 0);
   line-height: var(--sf-typo-title-line-height, 1.15);
+  font-family: var(--sf-font-heading);
 }
 
 .sf-chips {

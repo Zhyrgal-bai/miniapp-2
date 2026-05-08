@@ -22,6 +22,7 @@ import type { ResolvedStorefrontPayload } from "../components/storefront/Storefr
 import { HeaderBuilder } from "./header/HeaderBuilder";
 import { ProductCardBuilder } from "./cards/ProductCardBuilder";
 import { TextControls } from "./texts/TextControls";
+import { TypographyControls } from "./design/TypographyControls";
 import { SectionMarketplaceModal } from "./sectionLibrary/SectionMarketplaceModal";
 import { stableSectionId } from "./sectionRegistry";
 import type { PreviewMode } from "./preview/modes";
@@ -492,6 +493,23 @@ export default function BuilderPage(): React.ReactElement {
                   <TextControls
                     value={draft?.storefrontTextConfig}
                     onChange={(next) => onTextChange(next as unknown as Record<string, unknown>)}
+                  />
+                </div>
+                <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                  <TypographyControls
+                    value={(draft as unknown as { storefrontStyleConfig?: unknown })?.storefrontStyleConfig
+                      ? ((draft as unknown as { storefrontStyleConfig?: Record<string, unknown> }).storefrontStyleConfig?.typography ?? {})
+                      : {}}
+                    onChange={(next) => {
+                      const currentStyle =
+                        (draft as unknown as { storefrontStyleConfig?: Record<string, unknown> })?.storefrontStyleConfig ??
+                        {};
+                      const nextStyle = {
+                        ...(currentStyle as Record<string, unknown>),
+                        typography: next,
+                      };
+                      onStyleChange(nextStyle);
+                    }}
                   />
                 </div>
                 <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", padding: 12 }}>
