@@ -11,6 +11,10 @@ import {
 import { getVariantCssBackground } from "../../utils/variantColor";
 import "../ui/ProductCard.css";
 import { useTheme } from "../../context/ThemeContext";
+import { computeBadges } from "../storefront/commerce/badgeEngine";
+import { profileForBusinessType } from "../storefront/commerce/businessBehaviorProfiles";
+import { computeCtaModel } from "../storefront/commerce/ctaEngine";
+import { recordRecentlyViewed } from "../storefront/discovery/recentlyViewed";
 
 type Props = {
   product: Product;
@@ -19,6 +23,8 @@ type Props = {
   onOpenDetail?: (product: Product) => void;
   cardConfig?: Record<string, unknown>;
   textConfig?: Record<string, unknown>;
+  kit?: "minimal" | "luxury" | "fashion" | "neon" | "default";
+  businessId?: number;
 };
 
 function readTextConfigString(cfg: unknown, key: string): string {
@@ -72,7 +78,7 @@ function normalizeCardConfig(raw: Record<string, unknown> | undefined): {
   };
 }
 
-export default function ProductCard({ product, showToast, onOpenDetail, cardConfig, textConfig }: Props) {
+export default function ProductCard({ product, showToast, onOpenDetail, cardConfig, textConfig, kit = "default", businessId }: Props) {
   useTheme(); // keep existing context behavior for now (legacy vars)
   const cfg = useMemo(() => normalizeCardConfig(cardConfig), [cardConfig]);
   const addLabel =
@@ -123,6 +129,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   }, [product, selectedColor]);
 
   const outOfStock = isOutOfStock(product);
+  const profile = useMemo(() => profileForBusinessType(undefined), []);
 
   const images = useMemo(
     () =>
@@ -174,6 +181,20 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
     return sizes.find((s) => s.size === selectedSize)?.stock ?? 0;
   }, [selectedSize, sizes]);
 
+  const totalStock = useMemo(() => {
+    if (product.variants?.length) {
+      let total = 0;
+      for (const v of product.variants) for (const s of v.sizes ?? []) total += Number(s.stock ?? 0) || 0;
+      return total;
+    }
+    if (product.sizes?.length) {
+      let total = 0;
+      for (const s of product.sizes) total += Number(s.stock ?? 0) || 0;
+      return total;
+    }
+    return null;
+  }, [product.variants, product.sizes]);
+
   const cartItem = useMemo(() => {
     if (!selectedSize || lineColor === null) return null;
     return (
@@ -216,10 +237,26 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
     selectedStock > 0 &&
     (!hasCustomColors || lineColor !== null);
 
+  const cta = useMemo(() => {
+    const soldScore = Number(product.sold ?? 0) || 0;
+    return computeCtaModel({
+      product,
+      profile,
+      kit,
+      addLabelOverride: addLabel,
+      outOfStock,
+      selectionComplete: canAddToCart,
+      inCartQty: quantity,
+      stockLeft: totalStock,
+      soldScore,
+    });
+  }, [product, profile, kit, addLabel, outOfStock, canAddToCart, quantity, totalStock]);
+
   const handleAddToCart = () => {
     if (!canAddToCart || lineColor === null) return;
     const line = sizes.find((s) => s.size === selectedSize);
     if (!line || line.stock === 0) return;
+    if (businessId && product.id) recordRecentlyViewed({ businessId, product });
     upsertQuantity(1);
     showToast("Добавлено в корзину");
   };
@@ -252,8 +289,100 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   };
 
   const openDetail = () => {
+    if (businessId && product.id) recordRecentlyViewed({ businessId, product });
     if (onOpenDetail) onOpenDetail(product);
   };
+
+  const badges = useMemo(() => {
+    return computeBadges({ product, kit });
+  }, [product, kit]);
+
+  const badgeClass = (id: string): string => {
+    switch (id) {
+      case "NEW":
+        return "new";
+      case "HOT":
+        return "hot";
+      case "SALE":
+        return "sale";
+      case "LIMITED":
+        return "limited";
+      case "LOW_STOCK":
+        return "low";
+      case "BESTSELLER":
+        return "best";
+      default:
+        return "new";
+    }
+  };
+
+  const archetype: "marketplace" | "luxury" | "fashion" | "minimal" | "neon" = useMemo(() => {
+    if (cfg.variant === "marketplace") return "marketplace";
+    if (cfg.variant === "luxury") return "luxury";
+    if (cfg.variant === "fashion") return "fashion";
+    if (cfg.variant === "minimal") return "minimal";
+    if (kit === "luxury") return "luxury";
+    if (kit === "fashion") return "fashion";
+    if (kit === "neon") return "neon";
+    if (kit === "minimal") return "minimal";
+    return "marketplace";
+  }, [cfg.variant, kit]);
+
+  const PriceBlock = (
+    <span className="product-price-block">
+      {discountPct > 0 ? (
+        <>
+          <span className="product-price-old" aria-label="Без скидки">
+            {product.price} <span className="product-price-currency">сом</span>
+          </span>
+          <span className="product-price product-price--sale">
+            {displayPrice} <span className="product-price-currency">сом</span>
+          </span>
+        </>
+      ) : (
+        <span className="product-price">
+          {product.price} <span className="product-price-currency">сом</span>
+        </span>
+      )}
+    </span>
+  );
+
+  const AddToCartButton =
+    quantity <= 0 ? (
+      <button
+        className={`product-add-btn product-add-btn--${cta.emphasis}`}
+        onClick={handleAddToCart}
+        disabled={cta.disabled}
+        type="button"
+      >
+        <span className="product-add-btn__label">{cta.label}</span>
+        {cta.sublabel ? <span className="product-add-btn__sub">{cta.sublabel}</span> : null}
+      </button>
+    ) : (
+      <>
+        <button
+          className="product-action-btn"
+          onClick={handleDecrement}
+          disabled={outOfStock || !selectedSize || lineColor === null}
+          type="button"
+          aria-label="Уменьшить"
+        >
+          -
+        </button>
+        <span className="product-qty" aria-label="Количество">
+          {quantity}
+        </span>
+        <button
+          className="product-action-btn"
+          onClick={handleIncrement}
+          disabled={outOfStock || !selectedSize || lineColor === null || atMaxQty}
+          type="button"
+          aria-label="Увеличить"
+        >
+          +
+        </button>
+      </>
+    );
 
   return (
     <div
@@ -268,10 +397,12 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
         `product-card--btn-${cfg.buttonStyle}`,
         `product-card--align-${cfg.textAlign}`,
         `product-card--hover-${cfg.hoverEffect}`,
+        `product-card--arch-${archetype}`,
       ]
         .filter(Boolean)
         .join(" ")}
     >
+      {/* Archetype-specific composition */}
       <div
         className={`product-image-wrapper${onOpenDetail ? " product-image-wrapper--detail" : ""}`}
         onTouchStart={handleTouchStart}
@@ -288,7 +419,6 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
         tabIndex={onOpenDetail ? 0 : undefined}
         aria-label={onOpenDetail ? "Подробнее о товаре" : undefined}
       >
-        {/* Instagram: шаг = currentIndex × (100% / n) ширины трека; строка «−index×100%» без деления сдвинула бы на n слайдов за раз */}
         <div
           className="image-slider"
           style={
@@ -305,7 +435,6 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
             </div>
           ))}
         </div>
-
         <div className="dots">
           {images.map((_, i) => (
             <span
@@ -318,6 +447,15 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
             />
           ))}
         </div>
+        {badges.slice(0, 2).map((b) => (
+          <div
+            key={b.id}
+            className={`product-badge product-badge--${badgeClass(b.id)}`}
+            style={badges[0]?.id === b.id ? undefined : { top: 44 }}
+          >
+            {b.label}
+          </div>
+        ))}
       </div>
 
       <div className="product-info">
@@ -374,73 +512,65 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
           </>
         )}
 
-        <div className="product-bottom">
-          <span className="product-price-block">
-            {discountPct > 0 ? (
-              <>
-                <span className="product-price-old" aria-label="Без скидки">
-                  {product.price}{" "}
-                  <span className="product-price-currency">сом</span>
-                </span>
-                <span className="product-price product-price--sale">
-                  {displayPrice}{" "}
-                  <span className="product-price-currency">сом</span>
-                </span>
-              </>
-            ) : (
-              <span className="product-price">
-                {product.price}{" "}
-                <span className="product-price-currency">сом</span>
-              </span>
-            )}
-          </span>
-
-          <div className="product-actions">
-            {quantity <= 0 ? (
-              <button
-                className="product-add-btn"
-                onClick={handleAddToCart}
-                disabled={outOfStock || !canAddToCart}
-                type="button"
-              >
-                {addLabel}
-              </button>
-            ) : (
-              <>
+        {archetype === "fashion" ? (
+          <div className="product-bottom product-bottom--fashion">
+            <div className="product-price-stack">
+              <div className="product-price-label">PRICE</div>
+              {PriceBlock}
+            </div>
+            <div className="product-actions product-actions--icon">
+              {quantity <= 0 ? (
                 <button
-                  className="product-action-btn"
-                  onClick={handleDecrement}
-                  disabled={
-                    outOfStock ||
-                    !selectedSize ||
-                    lineColor === null
-                  }
+                  className="product-add-btn product-add-btn--icon"
+                  onClick={handleAddToCart}
+                  disabled={outOfStock || !canAddToCart}
                   type="button"
-                  aria-label="Уменьшить"
-                >
-                  -
-                </button>
-                <span className="product-qty" aria-label="Количество">
-                  {quantity}
-                </span>
-                <button
-                  className="product-action-btn"
-                  onClick={handleIncrement}
-                  disabled={
-                    outOfStock ||
-                    !selectedSize ||
-                    lineColor === null ||
-                    atMaxQty
-                  }
-                  type="button"
-                  aria-label="Увеличить"
+                  aria-label={addLabel}
+                  title={addLabel}
                 >
                   +
                 </button>
-              </>
-            )}
+              ) : (
+                <div className="product-actions">
+                  {AddToCartButton}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        ) : archetype === "luxury" ? (
+          <div className="product-bottom product-bottom--luxury">
+            {PriceBlock}
+            <div className="product-actions product-actions--full">
+              {quantity <= 0 ? (
+                <button
+                  className="product-add-btn product-add-btn--full"
+                  onClick={handleAddToCart}
+                  disabled={outOfStock || !canAddToCart}
+                  type="button"
+                >
+                  {addLabel}
+                </button>
+              ) : (
+                <div className="product-actions">{AddToCartButton}</div>
+              )}
+            </div>
+          </div>
+        ) : archetype === "minimal" ? (
+          <div className="product-bottom product-bottom--minimal">
+            {PriceBlock}
+            <div className="product-actions">{AddToCartButton}</div>
+          </div>
+        ) : archetype === "neon" ? (
+          <div className="product-bottom product-bottom--neon">
+            {PriceBlock}
+            <div className="product-actions product-actions--neon">{AddToCartButton}</div>
+          </div>
+        ) : (
+          <div className="product-bottom">
+            {PriceBlock}
+            <div className="product-actions">{AddToCartButton}</div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -722,9 +722,33 @@ app.get("/api/storefront/:businessId", async (req: Request, res: Response) => {
           images: true,
           description: true,
           categoryId: true,
+          createdAt: true,
         },
       });
-      (payload as any).featuredProducts = products;
+      const ids = products.map((p) => p.id);
+      const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const soldRows =
+        ids.length > 0
+          ? await prisma.orderItem.groupBy({
+              by: ["productId"],
+              where: {
+                businessId,
+                productId: { in: ids },
+                order: { createdAt: { gte: since30d } },
+              },
+              _sum: { quantity: true },
+            })
+          : [];
+      const soldById = new Map<number, number>();
+      for (const r of soldRows) {
+        const pid = r.productId;
+        if (typeof pid === "number") soldById.set(pid, Number(r._sum.quantity ?? 0) || 0);
+      }
+      (payload as any).featuredProducts = products.map((p) => ({
+        ...p,
+        sold30d: soldById.get(p.id) ?? 0,
+        sold: soldById.get(p.id) ?? 0,
+      }));
     }
 
     setCachedStorefrontPayload({ businessId, payload });

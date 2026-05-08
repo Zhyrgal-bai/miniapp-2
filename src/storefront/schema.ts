@@ -59,6 +59,8 @@ export type ResolvedStorefrontPayload = {
     images: string[];
     description: string | null;
     categoryId: number;
+    createdAt?: string | Date;
+    sold30d?: number;
   }>;
 };
 

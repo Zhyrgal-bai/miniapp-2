@@ -20,6 +20,8 @@ import "./components/ui/Admin.css";
 import Header from "./components/layout/Header";
 import SideMenu from "./components/layout/SideMenu";
 import FloatingCart from "./components/layout/FloatingCart";
+import { StickyCartBar } from "./components/storefront/cart/StickyCartBar";
+import "./components/storefront/cart/stickyCart.css";
 
 type AppNavPage =
   | "home"
@@ -215,6 +217,13 @@ export default function App() {
     setIsMenuOpen(false);
   };
 
+  const handleCheckoutQuick = () => {
+    if (page !== "checkout") {
+      commitPage("checkout");
+    }
+    setIsMenuOpen(false);
+  };
+
   const goAdminSection = (
     section: "orders" | "products" | "categories" | "analytics" | "settings"
   ) => {
@@ -314,9 +323,15 @@ export default function App() {
       </div>
 
       <FloatingCart
-        visible={page !== "checkout"}
+        visible={page !== "checkout" && !(page === "home" && totalQuantity > 0)}
         totalQuantity={totalQuantity}
         onOpen={handleFloatingCartClick}
+      />
+
+      <StickyCartBar
+        visible={page === "home"}
+        onOpenCart={handleFloatingCartClick}
+        onCheckout={handleCheckoutQuick}
       />
     </div>
   );

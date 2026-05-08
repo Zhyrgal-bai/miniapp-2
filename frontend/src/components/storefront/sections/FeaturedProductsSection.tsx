@@ -1,5 +1,4 @@
 import type { Product } from "../../../types";
-import { useTheme } from "../../../context/ThemeContext";
 import ProductGrid from "../../product/ProductGrid";
 
 function readTitle(config: Record<string, unknown>, fallback: string): string {
@@ -12,18 +11,19 @@ export function FeaturedProductsSection(props: {
   products: Product[];
   cardConfig?: Record<string, unknown>;
   textConfig?: Record<string, unknown>;
+  kit?: "minimal" | "luxury" | "fashion" | "neon" | "default";
+  businessId?: number;
 }): React.ReactElement | null {
-  const { theme } = useTheme();
   const title = readTitle(props.config, "Хиты");
   if (!props.products?.length) return null;
 
   return (
-    <section style={{ padding: 16 }}>
-      <div style={{ fontWeight: 800, marginBottom: 10 }}>{title}</div>
+    <section className="sf-section sf-section--featured" style={{ padding: "var(--sf-section-pad)" }}>
+      <div style={{ fontWeight: 800, marginBottom: "var(--sf-space-sm)" }}>{title}</div>
       <div
         style={{
-          borderRadius: 16,
-          border: `1px solid ${theme.primaryColor}22`,
+          borderRadius: "var(--sf-section-radius)",
+          border: "1px solid var(--sf-color-border)",
           background: "transparent",
           padding: 6,
         }}
@@ -35,6 +35,8 @@ export function FeaturedProductsSection(props: {
           onProductSelect={() => undefined}
           cardConfig={props.cardConfig}
           textConfig={props.textConfig}
+          kit={props.kit}
+          businessId={props.businessId}
         />
       </div>
     </section>

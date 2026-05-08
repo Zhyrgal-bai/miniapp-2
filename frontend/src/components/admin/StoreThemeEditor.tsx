@@ -22,6 +22,9 @@ const TEMPLATE_LABELS: Record<StoreTemplateId, string> = {
   dark: "Dark",
   light: "Light",
   luxury: "Luxury",
+  minimal: "Minimal",
+  fashion: "Fashion",
+  neon: "Neon",
 };
 
 export default function StoreThemeEditor() {

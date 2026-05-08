@@ -10,6 +10,19 @@ import { FeaturedProductsSection } from "./sections/FeaturedProductsSection";
 import { FooterSection } from "./sections/FooterSection";
 import { ReviewsSection } from "./sections/ReviewsSection";
 import { FaqSection } from "./sections/FaqSection";
+import { DiscoveryRails } from "./discovery/DiscoveryRails";
+import "./storefrontKits.css";
+
+type StorefrontKitId = "minimal" | "luxury" | "fashion" | "neon" | "default";
+
+function kitFromTemplateId(tid: string | null | undefined): StorefrontKitId {
+  const t = typeof tid === "string" ? tid.trim().toLowerCase() : "";
+  if (t === "minimal" || t === "light") return "minimal";
+  if (t === "luxury") return "luxury";
+  if (t === "fashion") return "fashion";
+  if (t === "neon") return "neon";
+  return "default";
+}
 
 export type StorefrontSectionType =
   | "hero"
@@ -48,6 +61,7 @@ export function StorefrontRenderer(props: {
   payload: ResolvedStorefrontPayload;
 }): React.ReactElement {
   const { theme } = useTheme();
+  const kit = kitFromTemplateId(props.payload.templateId);
 
   const sections = useMemo(() => {
     const s = Array.isArray(props.payload.sections) ? props.payload.sections : [];
@@ -56,51 +70,66 @@ export function StorefrontRenderer(props: {
 
   return (
     <ThemeVarsProvider theme={theme}>
-      <StorefrontHeader
-        theme={theme}
-        storeName={props.payload.storeName ?? null}
-        config={props.payload.storefrontHeaderConfig ?? undefined}
-      />
-      {sections.map((s) => {
-        switch (s.type) {
-          case "hero":
-            return (
-              <HeroSection
-                key={s.id}
-                config={s.config}
-                textConfig={props.payload.storefrontTextConfig ?? undefined}
-              />
-            );
-          case "promo":
-            return <PromoSection key={s.id} config={s.config} />;
-          case "categories":
-            return (
-              <CategoriesSection
-                key={s.id}
-                config={s.config}
-                categories={props.payload.categories ?? []}
-              />
-            );
-          case "featuredProducts":
-            return (
-              <FeaturedProductsSection
-                key={s.id}
-                config={s.config}
-                products={props.payload.featuredProducts ?? []}
-                cardConfig={props.payload.storefrontCardConfig ?? undefined}
-                textConfig={props.payload.storefrontTextConfig ?? undefined}
-              />
-            );
-          case "footer":
-            return <FooterSection key={s.id} config={s.config} />;
-          case "reviews":
-            return <ReviewsSection key={s.id} config={s.config} />;
-          case "faq":
-            return <FaqSection key={s.id} config={s.config} />;
-          default:
-            return null;
-        }
-      })}
+      <div data-sf-kit={kit} className="sf-root">
+        <StorefrontHeader
+          theme={theme}
+          storeName={props.payload.storeName ?? null}
+          config={props.payload.storefrontHeaderConfig ?? undefined}
+          kit={kit}
+        />
+        {sections.map((s) => {
+          switch (s.type) {
+            case "hero":
+              return (
+                <HeroSection
+                  key={s.id}
+                  config={s.config}
+                  textConfig={props.payload.storefrontTextConfig ?? undefined}
+                  kit={kit}
+                />
+              );
+            case "promo":
+              return <PromoSection key={s.id} config={s.config} />;
+            case "categories":
+              return (
+                <CategoriesSection
+                  key={s.id}
+                  config={s.config}
+                  categories={props.payload.categories ?? []}
+                />
+              );
+            case "featuredProducts":
+              return (
+                <FeaturedProductsSection
+                  key={s.id}
+                  config={s.config}
+                  products={props.payload.featuredProducts ?? []}
+                  cardConfig={props.payload.storefrontCardConfig ?? undefined}
+                  textConfig={props.payload.storefrontTextConfig ?? undefined}
+                kit={kit}
+                  businessId={props.payload.businessId}
+                />
+              );
+            case "footer":
+              return <FooterSection key={s.id} config={s.config} />;
+            case "reviews":
+              return <ReviewsSection key={s.id} config={s.config} />;
+            case "faq":
+              return <FaqSection key={s.id} config={s.config} />;
+            default:
+              return null;
+          }
+        })}
+
+        <DiscoveryRails
+          kit={kit}
+          businessType={props.payload.businessType}
+          businessId={props.payload.businessId}
+          featuredProducts={props.payload.featuredProducts ?? []}
+          cardConfig={props.payload.storefrontCardConfig ?? undefined}
+          textConfig={props.payload.storefrontTextConfig ?? undefined}
+        />
+      </div>
     </ThemeVarsProvider>
   );
 }

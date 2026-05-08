@@ -1,7 +1,13 @@
 import { defaultThemeTokensV3 } from "./defaults.js";
 import type { ThemeTokensV3 } from "./types.js";
 
-export type ThemePresetV3Id = "darkCommerce" | "lightMinimal" | "redBold" | "luxuryGold";
+export type ThemePresetV3Id =
+  | "darkCommerce"
+  | "lightMinimal"
+  | "redBold"
+  | "luxuryGold"
+  | "fashionVibe"
+  | "neonGlow";
 
 export function presetTokensV3(id: ThemePresetV3Id): ThemeTokensV3 {
   const base = defaultThemeTokensV3();
@@ -63,6 +69,7 @@ export function presetTokensV3(id: ThemePresetV3Id): ThemeTokensV3 {
           fonts: { heading: "playfairDisplay", body: "manrope", button: "montserrat" },
           weights: { heading: 800, body: 500, button: 700 },
           letterSpacing: { heading: 0.01, body: 0, button: 0.06 },
+          sizes: { ...base.typography.sizes, h1: 30, h2: 24, h3: 19, button: 14 },
         },
         components: {
           ...base.components,
@@ -70,6 +77,70 @@ export function presetTokensV3(id: ThemePresetV3Id): ThemeTokensV3 {
           buttons: { ...base.components.buttons, style: "gradient", radius: "lg" },
         },
         motion: { preset: "subtle" },
+      };
+    case "fashionVibe":
+      return {
+        ...base,
+        density: "comfortable",
+        palette: {
+          ...base.palette,
+          primary: "#ff3ea5",
+          secondary: "#a855f7",
+          accent: "#22c55e",
+          background: "#07070a",
+          surface: "#0b0b12",
+          surfaceAlt: "#10101a",
+          card: "#0f111a",
+          border: "#1e2233",
+          text: "#ffffff",
+          muted: "#a1a1aa",
+        },
+        typography: {
+          ...base.typography,
+          fonts: { heading: "montserrat", body: "inter", button: "montserrat" },
+          weights: { heading: 900, body: 500, button: 800 },
+          letterSpacing: { heading: 0.04, body: 0, button: 0.08 },
+          sizes: { ...base.typography.sizes, base: 16, h1: 34, h2: 26, h3: 20, button: 15 },
+        },
+        radius: { ...base.radius, sm: 14, md: 18, lg: 24, xl: 28 },
+        components: {
+          ...base.components,
+          cards: { ...base.components.cards, style: "elevated", shadow: "glow", borderOpacity: 0.10 },
+          buttons: { ...base.components.buttons, style: "filled", radius: "full", paddingY: 12, paddingX: 18 },
+        },
+        motion: { preset: "energetic" },
+      };
+    case "neonGlow":
+      return {
+        ...base,
+        density: "compact",
+        palette: {
+          ...base.palette,
+          primary: "#22d3ee",
+          secondary: "#a78bfa",
+          accent: "#f472b6",
+          background: "#020617",
+          surface: "#050a1a",
+          surfaceAlt: "#061027",
+          card: "#050b1a",
+          border: "#12304a",
+          text: "#e5f6ff",
+          muted: "#7dd3fc",
+        },
+        typography: {
+          ...base.typography,
+          fonts: { heading: "montserrat", body: "inter", button: "montserrat" },
+          weights: { heading: 900, body: 500, button: 900 },
+          letterSpacing: { heading: 0.06, body: 0, button: 0.10 },
+          sizes: { ...base.typography.sizes, base: 15, h1: 30, h2: 22, h3: 18, button: 14 },
+        },
+        radius: { ...base.radius, xs: 10, sm: 12, md: 16, lg: 20, xl: 26 },
+        components: {
+          ...base.components,
+          cards: { ...base.components.cards, style: "bordered", shadow: "none", borderOpacity: 0.22 },
+          buttons: { ...base.components.buttons, style: "outline", radius: "lg", paddingY: 11, paddingX: 16 },
+        },
+        motion: { preset: "smooth" },
       };
     case "darkCommerce":
     default:

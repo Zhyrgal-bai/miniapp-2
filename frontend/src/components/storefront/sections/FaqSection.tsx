@@ -1,5 +1,3 @@
-import { useTheme } from "../../../context/ThemeContext";
-
 function readTitle(config: Record<string, unknown>, fallback: string): string {
   const v = config.title;
   return typeof v === "string" && v.trim() !== "" ? v : fallback;
@@ -16,7 +14,6 @@ function readItems(config: Record<string, unknown>): Array<Record<string, unknow
 export function FaqSection(props: {
   config: Record<string, unknown>;
 }): React.ReactElement | null {
-  const { theme } = useTheme();
   const title = readTitle(props.config, "FAQ");
   const items = readItems(props.config);
   if (items.length === 0) return null;
@@ -33,7 +30,7 @@ export function FaqSection(props: {
               key={idx}
               style={{
                 borderRadius: 14,
-                border: `1px solid ${theme.textColor}22`,
+                border: "1px solid var(--sf-color-border)",
                 background: "transparent",
                 padding: 12,
               }}

@@ -54,6 +54,7 @@ export function ThemeEditor(props: {
             key={p.id}
             onClick={() =>
               props.onPatch({
+                templateId: p.id,
                 ...(p.colors ?? {}),
                 tokens: p.tokens,
               })

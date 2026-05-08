@@ -30,7 +30,7 @@ export type ResolvedStoreTheme = {
 
 export type { ThemeTokensV2 } from "../theme/tokens.js";
 
-export const STORE_TEMPLATE_IDS = ["red", "dark", "light", "luxury"] as const;
+export const STORE_TEMPLATE_IDS = ["red", "dark", "light", "luxury", "minimal", "fashion", "neon"] as const;
 
 export type StoreTemplateId = (typeof STORE_TEMPLATE_IDS)[number];
 
@@ -106,6 +106,48 @@ export const TEMPLATES: Record<StoreTemplateId, ResolvedStoreTheme> = {
       subtitle: "Промокод GOLD10",
     },
     tokens: presetTokens("luxury"),
+  },
+  minimal: {
+    primaryColor: "#3b82f6",
+    bgColor: "#ffffff",
+    cardColor: "#ffffff",
+    textColor: "#0b1220",
+    logoUrl: null,
+    layout: "modern",
+    banner: {
+      enabled: true,
+      title: "Добро пожаловать",
+      subtitle: "Скидка 10% — MIN10",
+    },
+    tokens: presetTokens("light"),
+  },
+  fashion: {
+    primaryColor: "#ff3ea5",
+    bgColor: "#07070a",
+    cardColor: "#0f111a",
+    textColor: "#ffffff",
+    logoUrl: null,
+    layout: "modern",
+    banner: {
+      enabled: true,
+      title: "New drop",
+      subtitle: "Промокод FASHION10",
+    },
+    tokens: presetTokens("dark"),
+  },
+  neon: {
+    primaryColor: "#22d3ee",
+    bgColor: "#020617",
+    cardColor: "#050b1a",
+    textColor: "#e5f6ff",
+    logoUrl: null,
+    layout: "modern",
+    banner: {
+      enabled: true,
+      title: "Neon mode",
+      subtitle: "Промокод NEON10",
+    },
+    tokens: presetTokens("dark"),
   },
 };
 

@@ -10,6 +10,8 @@ type ProductGridProps = {
   onProductSelect?: (product: Product) => void;
   cardConfig?: Record<string, unknown>;
   textConfig?: Record<string, unknown>;
+  kit?: "minimal" | "luxury" | "fashion" | "neon" | "default";
+  businessId?: number;
 };
 
 export default function ProductGrid({
@@ -19,6 +21,8 @@ export default function ProductGrid({
   onProductSelect,
   cardConfig,
   textConfig,
+  kit,
+  businessId,
 }: ProductGridProps) {
   if (catalogProductCount === 0) {
     return (
@@ -48,6 +52,8 @@ export default function ProductGrid({
           onOpenDetail={onProductSelect}
           cardConfig={cardConfig}
           textConfig={textConfig}
+          kit={kit}
+          businessId={businessId}
         />
       ))}
     </div>

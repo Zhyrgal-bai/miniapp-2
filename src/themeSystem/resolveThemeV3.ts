@@ -9,9 +9,11 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 
 export function presetFromLegacyTemplateId(templateId: string | null | undefined): ThemePresetV3Id {
   const t = typeof templateId === "string" ? templateId.trim().toLowerCase() : "";
-  if (t === "light") return "lightMinimal";
+  if (t === "light" || t === "minimal") return "lightMinimal";
   if (t === "red") return "redBold";
   if (t === "luxury") return "luxuryGold";
+  if (t === "fashion") return "fashionVibe";
+  if (t === "neon") return "neonGlow";
   return "darkCommerce";
 }
 

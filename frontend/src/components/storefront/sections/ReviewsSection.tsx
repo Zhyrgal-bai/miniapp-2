@@ -1,5 +1,3 @@
-import { useTheme } from "../../../context/ThemeContext";
-
 function readTitle(config: Record<string, unknown>, fallback: string): string {
   const v = config.title;
   return typeof v === "string" && v.trim() !== "" ? v : fallback;
@@ -16,7 +14,6 @@ function readItems(config: Record<string, unknown>): Array<Record<string, unknow
 export function ReviewsSection(props: {
   config: Record<string, unknown>;
 }): React.ReactElement | null {
-  const { theme } = useTheme();
   const title = readTitle(props.config, "Отзывы");
   const items = readItems(props.config);
   if (items.length === 0) return null;
@@ -34,8 +31,8 @@ export function ReviewsSection(props: {
               key={idx}
               style={{
                 borderRadius: 14,
-                border: `1px solid ${theme.primaryColor}22`,
-                background: theme.cardColor,
+                border: "1px solid var(--sf-color-border)",
+                background: "var(--sf-color-card)",
                 padding: 12,
               }}
             >

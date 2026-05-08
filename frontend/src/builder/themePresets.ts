@@ -1,7 +1,7 @@
 import type { ThemeTokensV2 } from "@repo-shared/storeTheme";
 
 export type ThemePreset = {
-  id: "minimal" | "darkCommerce" | "fashion" | "luxury" | "tech";
+  id: "minimal" | "darkCommerce" | "fashion" | "luxury" | "tech" | "neon";
   title: string;
   tokens: ThemeTokensV2;
   colors?: Partial<{
@@ -105,6 +105,26 @@ export const THEME_PRESETS: ThemePreset[] = [
       ...baseTokens,
       typography: { ...baseTokens.typography, baseFontSize: 15 },
       button: { ...baseTokens.button, radius: 10 },
+    },
+  },
+  {
+    id: "neon",
+    title: "Neon",
+    colors: {
+      primaryColor: "#22d3ee",
+      bgColor: "#020617",
+      cardColor: "#050b1a",
+      textColor: "#e5f6ff",
+    },
+    tokens: {
+      ...baseTokens,
+      typography: { ...baseTokens.typography, baseFontSize: 15, headingWeight: 900 },
+      radius: { ...baseTokens.radius, md: 14, lg: 20 },
+      shadows: {
+        sm: "0 2px 10px rgba(34,211,238,0.10)",
+        md: "0 10px 26px rgba(34,211,238,0.14)",
+        lg: "0 18px 60px rgba(34,211,238,0.18)",
+      },
     },
   },
 ];

@@ -1,4 +1,3 @@
-import { useTheme } from "../../../context/ThemeContext";
 import { buildCloudinaryResponsiveUrl } from "../../../utils/cloudinaryTransforms";
 
 function readString(obj: unknown, key: string): string {
@@ -18,13 +17,12 @@ function readBlocks(config: Record<string, unknown>): Array<Record<string, unkno
 export function PromoSection(props: {
   config: Record<string, unknown>;
 }): React.ReactElement | null {
-  const { theme } = useTheme();
   const blocks = readBlocks(props.config);
   if (blocks.length === 0) return null;
 
   return (
-    <section style={{ padding: 16 }}>
-      <div style={{ display: "grid", gap: 10 }}>
+    <section className="sf-section sf-section--promo" style={{ padding: "var(--sf-section-pad)" }}>
+      <div style={{ display: "grid", gap: "var(--sf-section-gap)" }}>
         {blocks.map((b, idx) => {
           const title = readString(b, "title");
           const subtitle = readString(b, "subtitle");
@@ -33,9 +31,9 @@ export function PromoSection(props: {
             <div
               key={`${idx}-${title}`}
               style={{
-                borderRadius: 14,
-                border: `1px solid ${theme.primaryColor}22`,
-                background: theme.cardColor,
+                borderRadius: "var(--sf-section-radius)",
+                border: "1px solid var(--sf-color-border)",
+                background: "var(--sf-color-card)",
                 overflow: "hidden",
               }}
             >
@@ -47,7 +45,7 @@ export function PromoSection(props: {
                   loading="lazy"
                 />
               ) : null}
-              <div style={{ padding: 12 }}>
+              <div style={{ padding: "var(--sf-space-md)" }}>
                 <div style={{ fontWeight: 700 }}>{title}</div>
                 {subtitle ? (
                   <div style={{ marginTop: 4, opacity: 0.8 }}>{subtitle}</div>

@@ -57,7 +57,7 @@ function normalizeTemplateIdPatch(
   if (!isStoreTemplateId(t)) {
     return {
       ok: false,
-      error: "Неизвестный шаблон. Допустимо: red, dark, light, luxury",
+      error: "Неизвестный шаблон. Допустимо: red, dark, light, luxury, minimal, fashion, neon",
     };
   }
   const cur = current?.trim().toLowerCase() ?? null;
