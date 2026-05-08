@@ -283,17 +283,9 @@ app.get("/api/business/:businessId", async (req: Request, res: Response) => {
       res.status(404).json({ error: "Not found" });
       return;
     }
-    const blocked = businessSubscriptionBlocked(
-      {
-        isActive: row.isActive,
-        isBlocked: row.isBlocked,
-        subscriptionStatus: row.subscriptionStatus,
-        trialEndsAt: row.trialEndsAt,
-        subscriptionEndsAt: row.subscriptionEndsAt,
-      },
-      new Date(),
-    );
-    if (blocked) {
+    // Публичная витрина/тема: доступность определяется флагами витрины.
+    // Подписка/триал — отдельная бизнес-логика (платформа/лимиты), не "hard-disable" theme fetch.
+    if (row.isBlocked || !row.isActive) {
       res.status(403).json({ error: "Store unavailable" });
       return;
     }
