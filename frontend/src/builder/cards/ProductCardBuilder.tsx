@@ -9,25 +9,36 @@ function normalize(input: unknown): StorefrontCardConfig {
   const getBool = (k: string): boolean | null => (typeof c[k] === "boolean" ? (c[k] as boolean) : null);
   return {
     variant:
+      getStr("variant") === "compact" ||
       getStr("variant") === "minimal" ||
       getStr("variant") === "luxury" ||
       getStr("variant") === "fashion" ||
-      getStr("variant") === "marketplace"
-        ? (getStr("variant") as "minimal" | "luxury" | "fashion" | "marketplace")
+      getStr("variant") === "marketplace" ||
+      getStr("variant") === "neon"
+        ? (getStr("variant") as "compact" | "minimal" | "luxury" | "fashion" | "marketplace" | "neon")
         : "modern",
     imageRatio:
       getStr("imageRatio") === "portrait" || getStr("imageRatio") === "landscape"
         ? (getStr("imageRatio") as "portrait" | "landscape")
         : "square",
+    imageFit: getStr("imageFit") === "contain" ? "contain" : "cover",
+    imageShadow: getBool("imageShadow") === true,
     rounded: getBool("rounded") !== false,
     shadow: getBool("shadow") !== false,
     compact: getBool("compact") === true,
+    density: getStr("density") === "compact" || getStr("density") === "airy" ? (getStr("density") as "compact" | "airy") : "normal",
+    priceStyle: getStr("priceStyle") === "luxury" || getStr("priceStyle") === "compact" ? (getStr("priceStyle") as "luxury" | "compact") : "bold",
     showBadges: getBool("showBadges") !== false,
+    badgeStyle: getStr("badgeStyle") === "glow" || getStr("badgeStyle") === "luxury" ? (getStr("badgeStyle") as "glow" | "luxury") : "minimal",
+    badgePosition: getStr("badgePosition") === "topRight" || getStr("badgePosition") === "bottomLeft" ? (getStr("badgePosition") as "topRight" | "bottomLeft") : "topLeft",
     showWishlist: getBool("showWishlist") === true,
-    buttonStyle:
-      getStr("buttonStyle") === "outline" || getStr("buttonStyle") === "glass"
-        ? (getStr("buttonStyle") as "outline" | "glass")
-        : "solid",
+    ctaStyle:
+      getStr("ctaStyle") === "square" ||
+      getStr("ctaStyle") === "glow" ||
+      getStr("ctaStyle") === "outline" ||
+      getStr("ctaStyle") === "full"
+        ? (getStr("ctaStyle") as "square" | "glow" | "outline" | "full")
+        : "pill",
     textAlign: getStr("textAlign") === "center" ? "center" : "left",
     hoverEffect:
       getStr("hoverEffect") === "none" || getStr("hoverEffect") === "scale" || getStr("hoverEffect") === "lift"

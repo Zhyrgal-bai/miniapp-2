@@ -8,6 +8,16 @@
   -webkit-overflow-scrolling: touch;
 }
 
+.product-grid--density-compact {
+  gap: max(6px, calc(var(--sf-grid-gap, 10px) - 4px));
+  padding: max(6px, calc(var(--sf-mobile-pad, 10px) - 2px)) max(6px, calc(var(--sf-mobile-pad, 10px) - 2px)) 18px;
+}
+
+.product-grid--density-airy {
+  gap: calc(var(--sf-grid-gap, 10px) + 6px);
+  padding: calc(var(--sf-mobile-pad, 10px) + 4px) calc(var(--sf-mobile-pad, 10px) + 4px) 24px;
+}
+
 .product-grid .product-card {
   width: 100%;
 }

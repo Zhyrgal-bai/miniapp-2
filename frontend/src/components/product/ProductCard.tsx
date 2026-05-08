@@ -34,12 +34,19 @@ function readTextConfigString(cfg: unknown, key: string): string {
 }
 
 function normalizeCardConfig(raw: Record<string, unknown> | undefined): {
-  variant: "minimal" | "modern" | "luxury" | "fashion" | "marketplace";
+  variant: "compact" | "minimal" | "modern" | "luxury" | "fashion" | "marketplace" | "neon";
   imageRatio: "square" | "portrait" | "landscape";
+  imageFit: "cover" | "contain";
+  imageShadow: boolean;
   rounded: boolean;
   shadow: boolean;
   compact: boolean;
-  buttonStyle: "solid" | "outline" | "glass";
+  density: "compact" | "normal" | "airy";
+  priceStyle: "bold" | "luxury" | "compact";
+  showBadges: boolean;
+  badgeStyle: "minimal" | "glow" | "luxury";
+  badgePosition: "topLeft" | "topRight" | "bottomLeft";
+  ctaStyle: "pill" | "square" | "glow" | "outline" | "full";
   textAlign: "left" | "center";
   hoverEffect: "none" | "scale" | "lift";
 } {
@@ -47,20 +54,40 @@ function normalizeCardConfig(raw: Record<string, unknown> | undefined): {
   const getStr = (k: string): string | null => (typeof c[k] === "string" ? (c[k] as string) : null);
   const getBool = (k: string): boolean | null => (typeof c[k] === "boolean" ? (c[k] as boolean) : null);
   const variant =
+    getStr("variant") === "compact" ||
     getStr("variant") === "minimal" ||
     getStr("variant") === "luxury" ||
     getStr("variant") === "fashion" ||
-    getStr("variant") === "marketplace"
-      ? (getStr("variant") as "minimal" | "luxury" | "fashion" | "marketplace")
+    getStr("variant") === "marketplace" ||
+    getStr("variant") === "neon"
+      ? (getStr("variant") as "compact" | "minimal" | "luxury" | "fashion" | "marketplace" | "neon")
       : "modern";
   const imageRatio =
     getStr("imageRatio") === "portrait" || getStr("imageRatio") === "landscape"
       ? (getStr("imageRatio") as "portrait" | "landscape")
       : "square";
-  const buttonStyle =
-    getStr("buttonStyle") === "outline" || getStr("buttonStyle") === "glass"
-      ? (getStr("buttonStyle") as "outline" | "glass")
-      : "solid";
+  const imageFit = getStr("imageFit") === "contain" ? "contain" : "cover";
+  const density =
+    getStr("density") === "compact" || getStr("density") === "airy" ? (getStr("density") as "compact" | "airy") : "normal";
+  const priceStyle =
+    getStr("priceStyle") === "luxury" || getStr("priceStyle") === "compact"
+      ? (getStr("priceStyle") as "luxury" | "compact")
+      : "bold";
+  const badgeStyle =
+    getStr("badgeStyle") === "glow" || getStr("badgeStyle") === "luxury"
+      ? (getStr("badgeStyle") as "glow" | "luxury")
+      : "minimal";
+  const badgePosition =
+    getStr("badgePosition") === "topRight" || getStr("badgePosition") === "bottomLeft"
+      ? (getStr("badgePosition") as "topRight" | "bottomLeft")
+      : "topLeft";
+  const ctaStyle =
+    getStr("ctaStyle") === "square" ||
+    getStr("ctaStyle") === "glow" ||
+    getStr("ctaStyle") === "outline" ||
+    getStr("ctaStyle") === "full"
+      ? (getStr("ctaStyle") as "square" | "glow" | "outline" | "full")
+      : "pill";
   const textAlign = getStr("textAlign") === "center" ? "center" : "left";
   const hoverEffect =
     getStr("hoverEffect") === "none" || getStr("hoverEffect") === "scale" || getStr("hoverEffect") === "lift"
@@ -69,10 +96,17 @@ function normalizeCardConfig(raw: Record<string, unknown> | undefined): {
   return {
     variant,
     imageRatio,
+    imageFit,
+    imageShadow: getBool("imageShadow") === true,
     rounded: getBool("rounded") !== false,
     shadow: getBool("shadow") !== false,
     compact: getBool("compact") === true,
-    buttonStyle,
+    density,
+    priceStyle,
+    showBadges: getBool("showBadges") !== false,
+    badgeStyle,
+    badgePosition,
+    ctaStyle,
     textAlign,
     hoverEffect,
   };
@@ -316,11 +350,13 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
     }
   };
 
-  const archetype: "marketplace" | "luxury" | "fashion" | "minimal" | "neon" = useMemo(() => {
+  const archetype: "compact" | "marketplace" | "luxury" | "fashion" | "minimal" | "neon" = useMemo(() => {
+    if (cfg.variant === "compact") return "compact";
     if (cfg.variant === "marketplace") return "marketplace";
     if (cfg.variant === "luxury") return "luxury";
     if (cfg.variant === "fashion") return "fashion";
     if (cfg.variant === "minimal") return "minimal";
+    if (cfg.variant === "neon") return "neon";
     if (kit === "luxury") return "luxury";
     if (kit === "fashion") return "fashion";
     if (kit === "neon") return "neon";
@@ -350,7 +386,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   const AddToCartButton =
     quantity <= 0 ? (
       <button
-        className={`product-add-btn product-add-btn--${cta.emphasis}`}
+        className={`product-add-btn product-add-btn--${cta.emphasis} product-add-btn--cta-${cfg.ctaStyle}`}
         onClick={handleAddToCart}
         disabled={cta.disabled}
         type="button"
@@ -391,10 +427,13 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
         outOfStock ? "out" : "",
         `product-card--variant-${cfg.variant}`,
         `product-card--ratio-${cfg.imageRatio}`,
+        `product-card--fit-${cfg.imageFit}`,
+        cfg.imageShadow ? "product-card--img-shadow" : "",
         cfg.rounded ? "product-card--rounded" : "product-card--square",
         cfg.shadow ? "product-card--shadow" : "product-card--flat",
         cfg.compact ? "product-card--compact" : "",
-        `product-card--btn-${cfg.buttonStyle}`,
+        `product-card--density-${cfg.density}`,
+        `product-card--price-${cfg.priceStyle}`,
         `product-card--align-${cfg.textAlign}`,
         `product-card--hover-${cfg.hoverEffect}`,
         `product-card--arch-${archetype}`,
@@ -447,15 +486,20 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
             />
           ))}
         </div>
-        {badges.slice(0, 2).map((b) => (
+        {cfg.showBadges ? badges.slice(0, 2).map((b) => (
           <div
             key={b.id}
-            className={`product-badge product-badge--${badgeClass(b.id)}`}
-            style={badges[0]?.id === b.id ? undefined : { top: 44 }}
+            className={[
+              "product-badge",
+              `product-badge--${badgeClass(b.id)}`,
+              `product-badge--style-${cfg.badgeStyle}`,
+              `product-badge--pos-${cfg.badgePosition}`,
+            ].join(" ")}
+            style={badges[0]?.id === b.id ? undefined : { top: cfg.badgePosition.startsWith("bottom") ? undefined : 44 }}
           >
             {b.label}
           </div>
-        ))}
+        )) : null}
       </div>
 
       <div className="product-info">

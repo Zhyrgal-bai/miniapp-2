@@ -56,6 +56,87 @@
   touch-action: manipulation;
 }
 
+.product-card--fit-cover .image-slide img {
+  object-fit: cover;
+}
+.product-card--fit-contain .image-slide img {
+  object-fit: contain;
+  background: color-mix(in srgb, var(--sf-color-surface) 70%, transparent);
+}
+
+.product-card--img-shadow .product-image-wrapper {
+  box-shadow: 0 18px 44px color-mix(in srgb, black 35%, transparent);
+}
+
+.product-card--density-compact .product-info {
+  padding: 8px;
+  gap: 6px;
+}
+.product-card--density-airy .product-info {
+  padding: 12px;
+  gap: 10px;
+}
+
+.product-card--price-luxury .product-price {
+  font-family: var(--sf-font-heading);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.product-card--price-compact .product-price,
+.product-card--price-compact .product-price-old {
+  font-size: 12px;
+}
+
+.product-badge--pos-topLeft {
+  top: 10px;
+  left: 10px;
+  right: auto;
+  bottom: auto;
+}
+.product-badge--pos-topRight {
+  top: 10px;
+  right: 10px;
+  left: auto;
+  bottom: auto;
+}
+.product-badge--pos-bottomLeft {
+  bottom: 10px;
+  left: 10px;
+  top: auto;
+  right: auto;
+}
+
+.product-badge--style-minimal {
+  backdrop-filter: blur(10px);
+}
+.product-badge--style-luxury {
+  background: rgba(0, 0, 0, 0.45);
+  border-color: color-mix(in srgb, var(--sf-color-primary) 30%, transparent);
+}
+.product-badge--style-glow {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sf-color-primary) 35%, transparent),
+    0 12px 30px color-mix(in srgb, var(--sf-color-primary) 26%, transparent);
+  border-color: color-mix(in srgb, var(--sf-color-primary) 40%, transparent);
+}
+
+.product-add-btn--cta-pill {
+  border-radius: 999px;
+}
+.product-add-btn--cta-square {
+  border-radius: 10px;
+}
+.product-add-btn--cta-outline {
+  background: transparent !important;
+  border: 1px solid color-mix(in srgb, var(--sf-color-primary) 55%, transparent) !important;
+  color: var(--sf-color-text) !important;
+}
+.product-add-btn--cta-glow {
+  box-shadow: 0 14px 40px color-mix(in srgb, var(--sf-color-primary) 28%, transparent);
+}
+.product-add-btn--cta-full {
+  width: 100%;
+}
+
 .product-card--square {
   --sf-card-radius: 12px;
 }

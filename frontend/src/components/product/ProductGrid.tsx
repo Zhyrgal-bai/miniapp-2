@@ -28,6 +28,11 @@ export default function ProductGrid({
     const v = (textConfig as Record<string, unknown> | undefined)?.[k];
     return typeof v === "string" && v.trim() !== "" ? v : fb;
   };
+
+  const densityRaw = (cardConfig as Record<string, unknown> | undefined)?.density;
+  const density =
+    densityRaw === "compact" || densityRaw === "airy" ? (densityRaw as "compact" | "airy") : "normal";
+
   if (catalogProductCount === 0) {
     return (
       <div className="product-grid product-grid--empty" role="status">
@@ -47,7 +52,7 @@ export default function ProductGrid({
   }
 
   return (
-    <div className="product-grid">
+    <div className={`product-grid product-grid--density-${density}`}>
       {products.map((p) => (
         <ProductCard
           key={p.id}

@@ -82,14 +82,20 @@ export type StorefrontHeaderConfig = {
 };
 
 export type StorefrontCardConfig = {
-  variant: "minimal" | "modern" | "luxury" | "fashion" | "marketplace";
+  variant: "compact" | "minimal" | "modern" | "luxury" | "fashion" | "marketplace" | "neon";
   imageRatio: "square" | "portrait" | "landscape";
+  imageFit: "cover" | "contain";
+  imageShadow: boolean;
   rounded: boolean;
   shadow: boolean;
   compact: boolean;
+  density: "compact" | "normal" | "airy";
+  priceStyle: "bold" | "luxury" | "compact";
   showBadges: boolean;
+  badgeStyle: "minimal" | "glow" | "luxury";
+  badgePosition: "topLeft" | "topRight" | "bottomLeft";
   showWishlist: boolean;
-  buttonStyle: "solid" | "outline" | "glass";
+  ctaStyle: "pill" | "square" | "glow" | "outline" | "full";
   textAlign: "left" | "center";
   hoverEffect: "none" | "scale" | "lift";
 };
@@ -279,26 +285,38 @@ const StorefrontHeaderConfigSchema = z
 
 const StorefrontCardConfigSchema = z
   .object({
-    variant: z.enum(["minimal", "modern", "luxury", "fashion", "marketplace"]).default("modern"),
+    variant: z.enum(["compact", "minimal", "modern", "luxury", "fashion", "marketplace", "neon"]).default("modern"),
     imageRatio: z.enum(["square", "portrait", "landscape"]).default("square"),
+    imageFit: z.enum(["cover", "contain"]).default("cover"),
+    imageShadow: z.boolean().default(false),
     rounded: z.boolean().default(true),
     shadow: z.boolean().default(true),
     compact: z.boolean().default(false),
+    density: z.enum(["compact", "normal", "airy"]).default("normal"),
+    priceStyle: z.enum(["bold", "luxury", "compact"]).default("bold"),
     showBadges: z.boolean().default(true),
+    badgeStyle: z.enum(["minimal", "glow", "luxury"]).default("minimal"),
+    badgePosition: z.enum(["topLeft", "topRight", "bottomLeft"]).default("topLeft"),
     showWishlist: z.boolean().default(false),
-    buttonStyle: z.enum(["solid", "outline", "glass"]).default("solid"),
+    ctaStyle: z.enum(["pill", "square", "glow", "outline", "full"]).default("pill"),
     textAlign: z.enum(["left", "center"]).default("left"),
     hoverEffect: z.enum(["none", "scale", "lift"]).default("lift"),
   })
   .default({
     variant: "modern",
     imageRatio: "square",
+    imageFit: "cover",
+    imageShadow: false,
     rounded: true,
     shadow: true,
     compact: false,
+    density: "normal",
+    priceStyle: "bold",
     showBadges: true,
+    badgeStyle: "minimal",
+    badgePosition: "topLeft",
     showWishlist: false,
-    buttonStyle: "solid",
+    ctaStyle: "pill",
     textAlign: "left",
     hoverEffect: "lift",
   });
