@@ -26,6 +26,7 @@ export type RawStorefrontConfig = {
   storefrontHeaderConfig?: StorefrontHeaderConfig;
   storefrontCardConfig?: StorefrontCardConfig;
   storefrontTextConfig?: StorefrontTextConfig;
+  storefrontStyleConfig?: StorefrontStyleConfig;
 };
 
 export type ResolvedStorefrontSection = {
@@ -46,6 +47,7 @@ export type ResolvedStorefrontPayload = {
   storefrontHeaderConfig: StorefrontHeaderConfig;
   storefrontCardConfig: StorefrontCardConfig;
   storefrontTextConfig: StorefrontTextConfig;
+  storefrontStyleConfig: StorefrontStyleConfig;
   /**
    * Optional preloaded data for renderer (MVP).
    * Keep shapes minimal + safe for public.
@@ -95,6 +97,50 @@ export type StorefrontCardConfig = {
 export type StorefrontTextConfig = {
   heroDefaultTitle: string;
   addToCartLabel: string;
+};
+
+export type StorefrontStyleConfig = {
+  layout: {
+    density: "compact" | "normal" | "comfortable";
+    sectionSpacing: number;
+    productGap: number;
+    mobilePadding: number;
+    contentWidth: "full" | "narrow";
+  };
+  typography: {
+    titleSize: number;
+    sectionTitleSize: number;
+    buttonSize: number;
+    titleWeight: number;
+    uppercaseTitles: boolean;
+    letterSpacing: number;
+    lineHeight: number;
+  };
+  chips: {
+    shape: "pill" | "square";
+    style: "outline" | "filled";
+    size: "sm" | "md" | "lg";
+    radius: number;
+    gap: number;
+  };
+  buttons: {
+    radius: number;
+    height: number;
+    shadow: boolean;
+    glow: boolean;
+    variant: "filled" | "outline";
+    compact: boolean;
+    animationLevel: "off" | "low" | "high";
+  };
+  hero: {
+    layout: "centered" | "split" | "banner";
+    overlay: boolean;
+    height: number;
+    radius: number;
+    shadow: boolean;
+    alignment: "left" | "center";
+    ctaPosition: "below" | "overlay" | "hidden";
+  };
 };
 
 function configBytesLimitCheck(v: unknown): boolean {
@@ -240,6 +286,140 @@ const StorefrontTextConfigSchema = z
     addToCartLabel: "Добавить",
   });
 
+const StorefrontStyleConfigSchema = z
+  .object({
+    layout: z
+      .object({
+        density: z.enum(["compact", "normal", "comfortable"]).default("normal"),
+        sectionSpacing: z.number().int().min(0).max(48).default(16),
+        productGap: z.number().int().min(0).max(32).default(10),
+        mobilePadding: z.number().int().min(0).max(28).default(10),
+        contentWidth: z.enum(["full", "narrow"]).default("full"),
+      })
+      .default({
+        density: "normal",
+        sectionSpacing: 16,
+        productGap: 10,
+        mobilePadding: 10,
+        contentWidth: "full",
+      }),
+    typography: z
+      .object({
+        titleSize: z.number().int().min(14).max(44).default(24),
+        sectionTitleSize: z.number().int().min(12).max(28).default(16),
+        buttonSize: z.number().int().min(10).max(20).default(13),
+        titleWeight: z.number().int().min(400).max(900).default(800),
+        uppercaseTitles: z.boolean().default(false),
+        letterSpacing: z.number().min(-0.06).max(0.5).default(0),
+        lineHeight: z.number().min(1).max(1.8).default(1.15),
+      })
+      .default({
+        titleSize: 24,
+        sectionTitleSize: 16,
+        buttonSize: 13,
+        titleWeight: 800,
+        uppercaseTitles: false,
+        letterSpacing: 0,
+        lineHeight: 1.15,
+      }),
+    chips: z
+      .object({
+        shape: z.enum(["pill", "square"]).default("pill"),
+        style: z.enum(["outline", "filled"]).default("outline"),
+        size: z.enum(["sm", "md", "lg"]).default("md"),
+        radius: z.number().int().min(0).max(32).default(999),
+        gap: z.number().int().min(0).max(20).default(8),
+      })
+      .default({
+        shape: "pill",
+        style: "outline",
+        size: "md",
+        radius: 999,
+        gap: 8,
+      }),
+    buttons: z
+      .object({
+        radius: z.number().int().min(0).max(32).default(14),
+        height: z.number().int().min(32).max(60).default(44),
+        shadow: z.boolean().default(true),
+        glow: z.boolean().default(false),
+        variant: z.enum(["filled", "outline"]).default("filled"),
+        compact: z.boolean().default(false),
+        animationLevel: z.enum(["off", "low", "high"]).default("low"),
+      })
+      .default({
+        radius: 14,
+        height: 44,
+        shadow: true,
+        glow: false,
+        variant: "filled",
+        compact: false,
+        animationLevel: "low",
+      }),
+    hero: z
+      .object({
+        layout: z.enum(["centered", "split", "banner"]).default("centered"),
+        overlay: z.boolean().default(false),
+        height: z.number().int().min(160).max(520).default(320),
+        radius: z.number().int().min(0).max(40).default(24),
+        shadow: z.boolean().default(false),
+        alignment: z.enum(["left", "center"]).default("center"),
+        ctaPosition: z.enum(["below", "overlay", "hidden"]).default("below"),
+      })
+      .default({
+        layout: "centered",
+        overlay: false,
+        height: 320,
+        radius: 24,
+        shadow: false,
+        alignment: "center",
+        ctaPosition: "below",
+      }),
+  })
+  .default({
+    layout: {
+      density: "normal",
+      sectionSpacing: 16,
+      productGap: 10,
+      mobilePadding: 10,
+      contentWidth: "full",
+    },
+    typography: {
+      titleSize: 24,
+      sectionTitleSize: 16,
+      buttonSize: 13,
+      titleWeight: 800,
+      uppercaseTitles: false,
+      letterSpacing: 0,
+      lineHeight: 1.15,
+    },
+    chips: {
+      shape: "pill",
+      style: "outline",
+      size: "md",
+      radius: 999,
+      gap: 8,
+    },
+    buttons: {
+      radius: 14,
+      height: 44,
+      shadow: true,
+      glow: false,
+      variant: "filled",
+      compact: false,
+      animationLevel: "low",
+    },
+    hero: {
+      layout: "centered",
+      overlay: false,
+      height: 320,
+      radius: 24,
+      shadow: false,
+      alignment: "center",
+      ctaPosition: "below",
+    },
+  });
+
 const ReviewsItemSchema = z.object({
   author: z.string().trim().max(80).default(""),
   text: z.string().trim().max(LIMITS.maxTextLen).default(""),
@@ -341,6 +521,7 @@ export const StorefrontConfigSchema = z
     storefrontHeaderConfig: StorefrontHeaderConfigSchema.optional(),
     storefrontCardConfig: StorefrontCardConfigSchema.optional(),
     storefrontTextConfig: StorefrontTextConfigSchema.optional(),
+    storefrontStyleConfig: StorefrontStyleConfigSchema.optional(),
   })
   .refine((v) => configBytesLimitCheck(v), {
     message: `storefrontConfig слишком большой (лимит ${LIMITS.maxConfigBytes} байт)`,
@@ -369,6 +550,7 @@ export function migrateStorefrontConfig(
       storefrontHeaderConfig: (v as any).storefrontHeaderConfig,
       storefrontCardConfig: (v as any).storefrontCardConfig,
       storefrontTextConfig: (v as any).storefrontTextConfig,
+      storefrontStyleConfig: (v as any).storefrontStyleConfig,
     };
 
   // future migrations: add here
@@ -378,6 +560,7 @@ export function migrateStorefrontConfig(
     storefrontHeaderConfig: (v as any).storefrontHeaderConfig,
     storefrontCardConfig: (v as any).storefrontCardConfig,
     storefrontTextConfig: (v as any).storefrontTextConfig,
+    storefrontStyleConfig: (v as any).storefrontStyleConfig,
   };
 }
 
@@ -388,6 +571,7 @@ export function defaultStorefrontConfig(): RawStorefrontConfig {
     storefrontHeaderConfig: StorefrontHeaderConfigSchema.parse({}),
     storefrontCardConfig: StorefrontCardConfigSchema.parse({}),
     storefrontTextConfig: StorefrontTextConfigSchema.parse({}),
+    storefrontStyleConfig: StorefrontStyleConfigSchema.parse({}),
   };
 }
 
@@ -542,6 +726,11 @@ export function resolveStorefrontConfig(input: {
       ? StorefrontTextConfigSchema.parse((migrated as any).storefrontTextConfig ?? {})
       : StorefrontTextConfigSchema.parse({});
 
+  const styleCfg =
+    StorefrontStyleConfigSchema.safeParse((migrated as any).storefrontStyleConfig ?? undefined).success
+      ? StorefrontStyleConfigSchema.parse((migrated as any).storefrontStyleConfig ?? {})
+      : StorefrontStyleConfigSchema.parse({});
+
   return {
     businessId: input.businessId,
     businessType: input.businessType,
@@ -553,6 +742,7 @@ export function resolveStorefrontConfig(input: {
     storefrontHeaderConfig: headerCfg,
     storefrontCardConfig: cardCfg,
     storefrontTextConfig: textCfg,
+    storefrontStyleConfig: styleCfg,
   };
 }
 

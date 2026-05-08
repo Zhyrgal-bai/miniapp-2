@@ -14,19 +14,10 @@ export function CategoriesSection(props: {
 
   return (
     <section className="sf-section sf-section--categories" style={{ padding: "var(--sf-section-pad)" }}>
-      <div style={{ fontWeight: 800, marginBottom: "var(--sf-space-sm)" }}>{title}</div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sf-space-sm)" }}>
+      <div className="sf-section__title">{title}</div>
+      <div className="sf-chips">
         {props.categories.map((c) => (
-          <div
-            key={c.id}
-            style={{
-              padding: "8px 10px",
-              borderRadius: "var(--sf-radius-full)",
-              border: "1px solid var(--sf-color-border)",
-              background: "transparent",
-              opacity: 0.95,
-            }}
-          >
+          <div key={c.id} className="sf-chip">
             {c.name}
           </div>
         ))}

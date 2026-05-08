@@ -293,7 +293,7 @@ export default function App() {
         onNavToAdmin={goAdminSection}
       />
 
-      <div className="content app__content">
+      <div className={`content app__content${page === "home" ? " app__content--storefront" : ""}`}>
         {page === "home" && <HomePage />}
         {page === "faq" && <FAQ />}
         {page === "my-orders" && <MyOrders />}

@@ -53,6 +53,7 @@ export type ResolvedStorefrontPayload = {
   storefrontHeaderConfig?: Record<string, unknown>;
   storefrontCardConfig?: Record<string, unknown>;
   storefrontTextConfig?: Record<string, unknown>;
+  storefrontStyleConfig?: Record<string, unknown>;
   categories?: Category[];
   featuredProducts?: Product[];
 };
@@ -62,6 +63,49 @@ export function StorefrontRenderer(props: {
 }): React.ReactElement {
   const { theme } = useTheme();
   const kit = kitFromTemplateId(props.payload.templateId);
+  const styleCfg = props.payload.storefrontStyleConfig ?? {};
+  const layout = (styleCfg.layout && typeof styleCfg.layout === "object" ? (styleCfg.layout as Record<string, unknown>) : {}) as Record<
+    string,
+    unknown
+  >;
+  const typo = (styleCfg.typography && typeof styleCfg.typography === "object"
+    ? (styleCfg.typography as Record<string, unknown>)
+    : {}) as Record<string, unknown>;
+  const chips = (styleCfg.chips && typeof styleCfg.chips === "object" ? (styleCfg.chips as Record<string, unknown>) : {}) as Record<
+    string,
+    unknown
+  >;
+  const buttons = (styleCfg.buttons && typeof styleCfg.buttons === "object"
+    ? (styleCfg.buttons as Record<string, unknown>)
+    : {}) as Record<string, unknown>;
+  const hero = (styleCfg.hero && typeof styleCfg.hero === "object" ? (styleCfg.hero as Record<string, unknown>) : {}) as Record<
+    string,
+    unknown
+  >;
+
+  const cssVars: Record<string, string> = {
+    "--sf-section-pad": typeof layout.sectionSpacing === "number" ? `${layout.sectionSpacing}px` : "",
+    "--sf-grid-gap": typeof layout.productGap === "number" ? `${layout.productGap}px` : "",
+    "--sf-mobile-pad": typeof layout.mobilePadding === "number" ? `${layout.mobilePadding}px` : "",
+
+    "--sf-typo-title-size": typeof typo.titleSize === "number" ? `${typo.titleSize}px` : "",
+    "--sf-typo-section-title-size": typeof typo.sectionTitleSize === "number" ? `${typo.sectionTitleSize}px` : "",
+    "--sf-typo-button-size": typeof typo.buttonSize === "number" ? `${typo.buttonSize}px` : "",
+    "--sf-typo-title-weight": typeof typo.titleWeight === "number" ? String(typo.titleWeight) : "",
+    "--sf-typo-title-transform":
+      typeof typo.uppercaseTitles === "boolean" ? (typo.uppercaseTitles ? "uppercase" : "none") : "",
+    "--sf-typo-title-letter-spacing": typeof typo.letterSpacing === "number" ? `${typo.letterSpacing}em` : "",
+    "--sf-typo-title-line-height": typeof typo.lineHeight === "number" ? String(typo.lineHeight) : "",
+
+    "--sf-chip-radius": typeof chips.radius === "number" ? `${chips.radius}px` : "",
+    "--sf-chip-gap": typeof chips.gap === "number" ? `${chips.gap}px` : "",
+
+    "--sf-button-radius": typeof buttons.radius === "number" ? `${buttons.radius}px` : "",
+    "--sf-button-height": typeof buttons.height === "number" ? `${buttons.height}px` : "",
+
+    "--sf-hero-height": typeof hero.height === "number" ? `${hero.height}px` : "",
+    "--sf-hero-radius": typeof hero.radius === "number" ? `${hero.radius}px` : "",
+  };
 
   const sections = useMemo(() => {
     const s = Array.isArray(props.payload.sections) ? props.payload.sections : [];
@@ -70,7 +114,7 @@ export function StorefrontRenderer(props: {
 
   return (
     <ThemeVarsProvider theme={theme}>
-      <div data-sf-kit={kit} className="sf-root">
+      <div data-sf-kit={kit} className="sf-root" style={cssVars as unknown as React.CSSProperties}>
         <StorefrontHeader
           theme={theme}
           storeName={props.payload.storeName ?? null}

@@ -61,7 +61,7 @@ export default function BuilderPage(): React.ReactElement {
     errors: [],
     warnings: [],
   });
-  const [rightTab, setRightTab] = useState<"sections" | "header" | "cards" | "texts">("sections");
+  const [rightTab, setRightTab] = useState<"sections" | "design" | "header" | "cards" | "texts">("sections");
   const save = useBuilderSaveState();
 
   const debounceRef = useRef<number | null>(null);
@@ -112,6 +112,7 @@ export default function BuilderPage(): React.ReactElement {
               storefrontHeaderConfig: nextDraft.storefrontHeaderConfig ?? p.storefrontHeaderConfig,
               storefrontCardConfig: nextDraft.storefrontCardConfig ?? p.storefrontCardConfig,
               storefrontTextConfig: nextDraft.storefrontTextConfig ?? p.storefrontTextConfig,
+              storefrontStyleConfig: nextDraft.storefrontStyleConfig ?? p.storefrontStyleConfig,
             }
           : p,
       );
@@ -180,6 +181,15 @@ export default function BuilderPage(): React.ReactElement {
       if (!draft) return;
       scheduleSave({ ...draft, storefrontTextConfig: next });
       setRightTab("texts");
+    },
+    [draft, scheduleSave],
+  );
+
+  const onStyleChange = useCallback(
+    (next: Record<string, unknown>) => {
+      if (!draft) return;
+      scheduleSave({ ...draft, storefrontStyleConfig: next } as unknown as BuilderConfig);
+      setRightTab("design");
     },
     [draft, scheduleSave],
   );
@@ -435,6 +445,7 @@ export default function BuilderPage(): React.ReactElement {
             {(
               [
                 { id: "sections", label: "Секции" },
+                { id: "design", label: "Оформление витрины" },
                 { id: "header", label: "Header" },
                 { id: "cards", label: "Карточки" },
                 { id: "texts", label: "Тексты" },
@@ -461,6 +472,101 @@ export default function BuilderPage(): React.ReactElement {
           </div>
           <div style={{ minHeight: 0, overflow: "auto" }}>
             {rightTab === "sections" ? (selected ? <SectionEditor section={selected} onChange={onSectionChange} /> : null) : null}
+            {rightTab === "design" ? (
+              <div>
+                <ThemeEditor theme={theme} onPatch={onThemePatch} />
+                <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                  <HeaderBuilder
+                    theme={theme}
+                    value={draft?.storefrontHeaderConfig}
+                    onChange={(next) => onHeaderChange(next as unknown as Record<string, unknown>)}
+                  />
+                </div>
+                <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                  <ProductCardBuilder
+                    value={draft?.storefrontCardConfig}
+                    onChange={(next) => onCardChange(next as unknown as Record<string, unknown>)}
+                  />
+                </div>
+                <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                  <TextControls
+                    value={draft?.storefrontTextConfig}
+                    onChange={(next) => onTextChange(next as unknown as Record<string, unknown>)}
+                  />
+                </div>
+                <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", padding: 12 }}>
+                  <div style={{ fontWeight: 900, marginBottom: 10 }}>Layout / Chips / Buttons / Hero</div>
+                  <div style={{ display: "grid", gap: 10 }}>
+                    <label style={{ display: "grid", gap: 6, fontSize: 12, opacity: 0.9 }}>
+                      Быстрый старт (создать `storefrontStyleConfig`)
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onStyleChange({
+                            layout: {
+                              density: "normal",
+                              sectionSpacing: 16,
+                              productGap: 10,
+                              mobilePadding: 10,
+                              contentWidth: "full",
+                            },
+                            typography: {
+                              titleSize: 24,
+                              sectionTitleSize: 16,
+                              buttonSize: 13,
+                              titleWeight: 800,
+                              uppercaseTitles: false,
+                              letterSpacing: 0,
+                              lineHeight: 1.15,
+                            },
+                            chips: {
+                              shape: "pill",
+                              style: "outline",
+                              size: "md",
+                              radius: 999,
+                              gap: 8,
+                            },
+                            buttons: {
+                              radius: 14,
+                              height: 44,
+                              shadow: true,
+                              glow: false,
+                              variant: "filled",
+                              compact: false,
+                              animationLevel: "low",
+                            },
+                            hero: {
+                              layout: "centered",
+                              overlay: false,
+                              height: 320,
+                              radius: 24,
+                              shadow: false,
+                              alignment: "center",
+                              ctaPosition: "below",
+                            },
+                          })
+                        }
+                        style={{
+                          borderRadius: 12,
+                          border: "1px solid rgba(255,255,255,0.14)",
+                          background: "rgba(255,255,255,0.03)",
+                          color: "#fff",
+                          padding: "10px 12px",
+                          fontWeight: 900,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Создать настройки
+                      </button>
+                    </label>
+                    <div style={{ opacity: 0.75, fontSize: 12 }}>
+                      Следующим шагом: заменю эту “заглушку” на полноценные слайдеры/тумблеры и привяжу к
+                      <b> --sf-*</b> в `StorefrontRenderer`.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             {rightTab === "header" ? (
               <HeaderBuilder
                 theme={theme}
@@ -480,9 +586,6 @@ export default function BuilderPage(): React.ReactElement {
                 onChange={(next) => onTextChange(next as unknown as Record<string, unknown>)}
               />
             ) : null}
-          </div>
-          <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-            <ThemeEditor theme={theme} onPatch={onThemePatch} />
           </div>
         </div>
       </div>

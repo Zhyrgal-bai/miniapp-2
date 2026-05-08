@@ -1,8 +1,8 @@
 .product-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 14px;
-  padding: 14px 12px 24px;
+  gap: var(--sf-grid-gap, 10px);
+  padding: var(--sf-mobile-pad, 10px) var(--sf-mobile-pad, 10px) 20px;
   align-items: stretch;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -45,7 +45,7 @@
 
 @media (max-width: 400px) {
   .product-grid {
-    gap: 10px;
-    padding: 10px;
+    gap: var(--sf-grid-gap, 8px);
+    padding: var(--sf-mobile-pad, 8px) var(--sf-mobile-pad, 8px) 18px;
   }
 }
