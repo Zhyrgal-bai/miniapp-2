@@ -46,6 +46,23 @@ if (rbOut) process.stdout.write(rbOut);
 
 run("npx prisma migrate deploy");
 
+// One-off data backfills (Render only).
+// Use env flags and remove them after one successful deploy.
+if (process.env.BACKFILL_ENABLE_STOREFRONT === "1") {
+  if (!process.env.RENDER) {
+    console.error(
+      "[start] BACKFILL_ENABLE_STOREFRONT ignored: use only on Render (with RENDER set).",
+    );
+  } else {
+    console.warn(
+      "[start] BACKFILL_ENABLE_STOREFRONT=1: enabling storefront (isActive=true) for all non-blocked businesses. Remove this env after one successful deploy.",
+    );
+    run(
+      "npx prisma db execute --file prisma/sql/backfill_enable_storefront_active.sql",
+    );
+  }
+}
+
 const serve = spawnSync(process.execPath, ["dist/server/index.js"], {
   stdio: "inherit",
   env: process.env,
