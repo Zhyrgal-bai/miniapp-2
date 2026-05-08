@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   allowedImageHosts,
+  allowedMediaHosts,
   CURRENT_STOREFRONT_VERSION,
   LIMITS,
   type SectionType,
@@ -75,6 +76,17 @@ function isAllowedHttpsImageUrl(input: string): boolean {
   }
 }
 
+function isAllowedHttpsMediaUrl(input: string): boolean {
+  try {
+    const u = new URL(input);
+    if (u.protocol !== "https:") return false;
+    const host = u.hostname.toLowerCase();
+    return allowedMediaHosts().includes(host);
+  } catch {
+    return false;
+  }
+}
+
 const HttpsImageUrl = z
   .string()
   .trim()
@@ -82,6 +94,15 @@ const HttpsImageUrl = z
   .max(LIMITS.maxImageUrlLen)
   .refine((s) => isAllowedHttpsImageUrl(s), {
     message: "Недопустимый URL изображения (только https + allowlist)",
+  });
+
+const HttpsMediaUrl = z
+  .string()
+  .trim()
+  .min(1)
+  .max(2048)
+  .refine((s) => isAllowedHttpsMediaUrl(s), {
+    message: "Недопустимый URL медиа (только https + allowlist)",
   });
 
 const HeroSlideSchema = z.object({
@@ -110,6 +131,59 @@ const PromoConfigSchema = z
   })
   .default({ blocks: [] });
 
+const ReviewsItemSchema = z.object({
+  author: z.string().trim().max(80).default(""),
+  text: z.string().trim().max(LIMITS.maxTextLen).default(""),
+  rating: z.number().int().min(1).max(5).optional().default(5),
+});
+
+const ReviewsConfigSchema = z
+  .object({
+    title: z.string().trim().max(LIMITS.maxTitleLen).optional().default("Отзывы"),
+    items: z.array(ReviewsItemSchema).max(LIMITS.maxReviews).default([]),
+  })
+  .default({ title: "Отзывы", items: [] });
+
+const FaqItemSchema = z.object({
+  q: z.string().trim().max(LIMITS.maxTitleLen).default(""),
+  a: z.string().trim().max(LIMITS.maxTextLen).default(""),
+});
+
+const FaqConfigSchema = z
+  .object({
+    title: z.string().trim().max(LIMITS.maxTitleLen).optional().default("FAQ"),
+    items: z.array(FaqItemSchema).max(LIMITS.maxFaqItems).default([]),
+  })
+  .default({ title: "FAQ", items: [] });
+
+const CountdownConfigSchema = z
+  .object({
+    title: z.string().trim().max(LIMITS.maxTitleLen).optional().default("Акция"),
+    untilIso: z.string().trim().max(64).optional().default(""),
+  })
+  .default({ title: "Акция", untilIso: "" });
+
+const StoryItemSchema = z.object({
+  title: z.string().trim().max(LIMITS.maxTitleLen).optional().default(""),
+  imageUrl: HttpsImageUrl.optional(),
+});
+
+const StorySliderConfigSchema = z
+  .object({
+    title: z.string().trim().max(LIMITS.maxTitleLen).optional().default("Stories"),
+    items: z.array(StoryItemSchema).max(LIMITS.maxStoryItems).default([]),
+  })
+  .default({ title: "Stories", items: [] });
+
+const VideoBannerConfigSchema = z
+  .object({
+    title: z.string().trim().max(LIMITS.maxTitleLen).optional().default(""),
+    subtitle: z.string().trim().max(LIMITS.maxSubtitleLen).optional().default(""),
+    videoUrl: HttpsMediaUrl.optional().default(""),
+    posterUrl: HttpsImageUrl.optional(),
+  })
+  .default({ title: "", subtitle: "", videoUrl: "", posterUrl: undefined });
+
 const CategoriesConfigSchema = z
   .object({
     title: z.string().trim().max(LIMITS.maxTitleLen).optional().default("Категории"),
@@ -134,7 +208,18 @@ const FooterConfigSchema = z
 
 const SectionBaseSchema = z.object({
   id: z.string().trim().min(1).max(64),
-  type: z.enum(["hero", "promo", "categories", "featuredProducts", "footer"]),
+  type: z.enum([
+    "hero",
+    "promo",
+    "categories",
+    "featuredProducts",
+    "footer",
+    "reviews",
+    "faq",
+    "countdown",
+    "storySlider",
+    "videoBanner",
+  ]),
   enabled: z.boolean().default(true),
   order: z.number().int().min(0).max(10_000).default(0),
   config: z.record(z.string(), z.unknown()).default({}),
@@ -169,6 +254,13 @@ export function migrateStorefrontConfig(
 
   // future migrations: add here
   return { version: toVersion, sections: v.sections as any };
+}
+
+export function defaultStorefrontConfig(): RawStorefrontConfig {
+  return {
+    version: CURRENT_STOREFRONT_VERSION,
+    sections: defaultSections(),
+  };
 }
 
 function defaultSections(): RawStorefrontSection[] {
@@ -210,6 +302,20 @@ function defaultSections(): RawStorefrontSection[] {
       order: 50,
       config: {},
     },
+    {
+      id: "reviews",
+      type: "reviews",
+      enabled: false,
+      order: 60,
+      config: {},
+    },
+    {
+      id: "faq",
+      type: "faq",
+      enabled: false,
+      order: 70,
+      config: {},
+    },
   ];
 }
 
@@ -236,6 +342,26 @@ function resolveSectionConfig(type: SectionType, raw: unknown): Record<string, u
       const parsed = FooterConfigSchema.safeParse(obj);
       return parsed.success ? parsed.data : FooterConfigSchema.parse({});
     }
+    case "reviews": {
+      const parsed = ReviewsConfigSchema.safeParse(obj);
+      return parsed.success ? parsed.data : ReviewsConfigSchema.parse({});
+    }
+    case "faq": {
+      const parsed = FaqConfigSchema.safeParse(obj);
+      return parsed.success ? parsed.data : FaqConfigSchema.parse({});
+    }
+    case "countdown": {
+      const parsed = CountdownConfigSchema.safeParse(obj);
+      return parsed.success ? parsed.data : CountdownConfigSchema.parse({});
+    }
+    case "storySlider": {
+      const parsed = StorySliderConfigSchema.safeParse(obj);
+      return parsed.success ? parsed.data : StorySliderConfigSchema.parse({});
+    }
+    case "videoBanner": {
+      const parsed = VideoBannerConfigSchema.safeParse(obj);
+      return parsed.success ? parsed.data : VideoBannerConfigSchema.parse({});
+    }
     default:
       return {};
   }
@@ -256,8 +382,13 @@ export function resolveStorefrontConfig(input: {
     CURRENT_STOREFRONT_VERSION,
   );
 
-  const sectionsResolved: ResolvedStorefrontSection[] = migrated.sections
-    .filter((s) => s && (s as any).enabled !== false)
+  const enabledRaw = migrated.sections.filter(
+    (s) => s && (s as any).enabled !== false,
+  );
+  const sourceSections: RawStorefrontSection[] =
+    enabledRaw.length > 0 ? enabledRaw : defaultSections();
+
+  const sectionsResolved: ResolvedStorefrontSection[] = sourceSections
     .map((s) => ({
       id: String((s as any).id),
       type: (s as any).type as SectionType,

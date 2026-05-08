@@ -5,6 +5,7 @@ import type {
   StoreTemplateId,
   ThemePatchPayload,
 } from "@repo-shared/storeTheme";
+import { withTenantHeaders } from "./api";
 
 export type BusinessPublicPayload = {
   id: number;
@@ -16,7 +17,10 @@ export type BusinessPublicPayload = {
 export async function fetchBusinessPublic(
   businessId: number,
 ): Promise<BusinessPublicPayload> {
-  const res = await fetch(apiAbsoluteUrl(`/api/business/${businessId}`));
+  const url = apiAbsoluteUrl(`/api/business/${businessId}`);
+  const res = await fetch(url, {
+    headers: withTenantHeaders(undefined, url, { businessId }),
+  });
   if (!res.ok) {
     const t = await res.text().catch(() => "");
     throw new Error(t || `HTTP ${res.status}`);
@@ -40,7 +44,11 @@ export async function saveBusinessThemePut(
 
   const res = await fetch(url.toString(), {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: withTenantHeaders(
+      { "Content-Type": "application/json" },
+      url.toString(),
+      { businessId },
+    ),
     body: JSON.stringify(patch),
   });
   const text = await res.text();
@@ -97,7 +105,11 @@ export async function saveBusinessTemplateId(
 
   const res = await fetch(url.toString(), {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: withTenantHeaders(
+      { "Content-Type": "application/json" },
+      url.toString(),
+      { businessId },
+    ),
     body: JSON.stringify({ templateId }),
   });
   const text = await res.text();

@@ -6,13 +6,20 @@ import { PromoSection } from "./sections/PromoSection";
 import { CategoriesSection } from "./sections/CategoriesSection";
 import { FeaturedProductsSection } from "./sections/FeaturedProductsSection";
 import { FooterSection } from "./sections/FooterSection";
+import { ReviewsSection } from "./sections/ReviewsSection";
+import { FaqSection } from "./sections/FaqSection";
 
 export type StorefrontSectionType =
   | "hero"
   | "promo"
   | "categories"
   | "featuredProducts"
-  | "footer";
+  | "footer"
+  | "reviews"
+  | "faq"
+  | "countdown"
+  | "storySlider"
+  | "videoBanner";
 
 export type ResolvedStorefrontSection = {
   id: string;
@@ -73,6 +80,10 @@ export function StorefrontRenderer(props: {
             );
           case "footer":
             return <FooterSection key={s.id} config={s.config} />;
+          case "reviews":
+            return <ReviewsSection key={s.id} config={s.config} />;
+          case "faq":
+            return <FaqSection key={s.id} config={s.config} />;
           default:
             return null;
         }

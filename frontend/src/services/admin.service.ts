@@ -1,6 +1,7 @@
 import { api, API_BASE_URL, apiAbsoluteUrl } from "./api";
 import type { Category, Product } from "../types";
 import { getWebAppUserId } from "../utils/telegramUserId";
+import { withTenantHeaders } from "./api";
 
 /** Относительный путь или уже полный `https://...` (не дублируем API_BASE_URL). */
 function resolveAdminUrl(path: string): string {
@@ -43,7 +44,7 @@ async function adminPost<T>(
   const url = resolveAdminUrl(path);
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: withTenantHeaders({ "Content-Type": "application/json" }, url),
     body: JSON.stringify({ ...body, userId }),
   });
   if (!res.ok) throw new Error(await readFetchError(res));
@@ -54,7 +55,10 @@ async function adminGet<T>(path: string): Promise<T> {
   const userId = requireAdminUserId();
   const url = new URL(resolveAdminUrl(path));
   url.searchParams.set("userId", String(userId));
-  const res = await fetch(url.toString(), { method: "GET" });
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: withTenantHeaders(undefined, url.toString()),
+  });
   if (!res.ok) throw new Error(await readFetchError(res));
   return res.json() as Promise<T>;
 }
@@ -66,7 +70,7 @@ async function adminDelete(path: string): Promise<void> {
   const url = `${resolved}${sep}userId=${encodeURIComponent(String(userId))}`;
   const res = await fetch(url, {
     method: "DELETE",
-    headers: { "Content-Type": "application/json" },
+    headers: withTenantHeaders({ "Content-Type": "application/json" }, url),
     body: JSON.stringify({ userId }),
   });
   if (!res.ok) throw new Error(await readFetchError(res));
@@ -282,7 +286,11 @@ export const adminService = {
     form.append("userId", String(userId));
     form.append("file", file);
     const url = `${API_BASE_URL}/upload`;
-    const res = await fetch(url, { method: "POST", body: form });
+    const res = await fetch(url, {
+      method: "POST",
+      headers: withTenantHeaders(undefined, url),
+      body: form,
+    });
     if (!res.ok) throw new Error(await readFetchError(res));
     const j = (await res.json()) as { url?: string };
     if (!j.url) throw new Error("Нет url в ответе");
@@ -298,7 +306,11 @@ export const adminService = {
       form.append("files", f);
     }
     const url = `${API_BASE_URL}/products/upload-images`;
-    const res = await fetch(url, { method: "POST", body: form });
+    const res = await fetch(url, {
+      method: "POST",
+      headers: withTenantHeaders(undefined, url),
+      body: form,
+    });
     if (!res.ok) throw new Error(await readFetchError(res));
     const j = (await res.json()) as { urls?: string[] };
     return Array.isArray(j.urls) ? j.urls : [];
@@ -312,7 +324,7 @@ export const adminService = {
     const url = `${API_BASE_URL}/orders/${id}`;
     const res = await fetch(url, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: withTenantHeaders({ "Content-Type": "application/json" }, url),
       body: JSON.stringify({ status, userId }),
     });
     console.log("PUT /orders/:id (status)", res.status);
@@ -332,7 +344,7 @@ export const adminService = {
     const url = `${API_BASE_URL}/orders/${id}`;
     const res = await fetch(url, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: withTenantHeaders({ "Content-Type": "application/json" }, url),
       body: JSON.stringify({ tracking, userId }),
     });
     console.log("PUT /orders/:id (tracking)", res.status);
@@ -353,7 +365,10 @@ export const adminService = {
     url.searchParams.set("userId", String(userId));
     const res = await fetch(url.toString(), {
       method: "DELETE",
-      headers: { "Content-Type": "application/json" },
+      headers: withTenantHeaders(
+        { "Content-Type": "application/json" },
+        url.toString(),
+      ),
       body: JSON.stringify({ userId }),
     });
     if (!res.ok) throw new Error(await readFetchError(res));
@@ -412,7 +427,10 @@ export const adminService = {
     const url = new URL(resolveAdminUrl("/api/memberships"));
     url.searchParams.set("userId", String(userId));
     url.searchParams.set("shop", String(businessId));
-    const res = await fetch(url.toString(), { method: "GET" });
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      headers: withTenantHeaders(undefined, url.toString(), { businessId }),
+    });
     if (!res.ok) throw new Error(await readFetchError(res));
     const data = (await res.json().catch(() => [])) as unknown;
     return Array.isArray(data) ? (data as AdminMembershipRow[]) : [];
@@ -432,8 +450,14 @@ export const adminService = {
     const res = await fetch(url.toString(), {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        "x-telegram-id": String(telegramUserId),
+        ...withTenantHeaders(
+          {
+            "Content-Type": "application/json",
+            "x-telegram-id": String(telegramUserId),
+          },
+          url.toString(),
+          { businessId: input.businessId },
+        ),
       },
       body: JSON.stringify({
         userId: input.targetUserId,

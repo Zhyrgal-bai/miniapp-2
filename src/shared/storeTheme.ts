@@ -1,5 +1,9 @@
 /** Общие дефолты, готовые шаблоны и слияние темы витрины (backend + frontend). */
 
+import { resolveThemeTokensV2 } from "../theme/resolver.js";
+import { presetTokens } from "../theme/presets.js";
+import type { ThemeTokensV2 } from "../theme/tokens.js";
+
 export type StoreBannerConfig = {
   enabled: boolean;
   title: string;
@@ -16,6 +20,8 @@ export type ResolvedStoreTheme = {
   logoUrl: string | null;
   layout: StoreLayout;
   banner: StoreBannerConfig;
+  /** Design tokens v2 for builder/UX system (safe, schema-driven). */
+  tokens: ThemeTokensV2;
 };
 
 export const STORE_TEMPLATE_IDS = ["red", "dark", "light", "luxury"] as const;
@@ -51,6 +57,7 @@ export const TEMPLATES: Record<StoreTemplateId, ResolvedStoreTheme> = {
       title: "🔥 Скидка на первый заказ",
       subtitle: "Промокод RED10",
     },
+    tokens: presetTokens("red"),
   },
   dark: {
     primaryColor: "#6366f1",
@@ -64,6 +71,7 @@ export const TEMPLATES: Record<StoreTemplateId, ResolvedStoreTheme> = {
       title: "Ночной режим — бонус для вас",
       subtitle: "Код DARK10",
     },
+    tokens: presetTokens("dark"),
   },
   light: {
     primaryColor: "#3b82f6",
@@ -77,6 +85,7 @@ export const TEMPLATES: Record<StoreTemplateId, ResolvedStoreTheme> = {
       title: "Добро пожаловать",
       subtitle: "Скидка 10% — LIGHT10",
     },
+    tokens: presetTokens("light"),
   },
   luxury: {
     primaryColor: "#d4af37",
@@ -90,6 +99,7 @@ export const TEMPLATES: Record<StoreTemplateId, ResolvedStoreTheme> = {
       title: "Премиум-коллекция",
       subtitle: "Промокод GOLD10",
     },
+    tokens: presetTokens("luxury"),
   },
 };
 
@@ -97,6 +107,7 @@ export const TEMPLATES: Record<StoreTemplateId, ResolvedStoreTheme> = {
 export const DEFAULT_STORE_THEME: ResolvedStoreTheme = {
   ...TEMPLATES.dark,
   banner: { ...TEMPLATES.dark.banner },
+  tokens: { ...TEMPLATES.dark.tokens },
 };
 
 const HEX6 = /^#([0-9A-Fa-f]{6})$/;
@@ -121,6 +132,7 @@ function cloneResolved(t: ResolvedStoreTheme): ResolvedStoreTheme {
   return {
     ...t,
     banner: { ...t.banner },
+    tokens: JSON.parse(JSON.stringify(t.tokens)) as ThemeTokensV2,
   };
 }
 
@@ -187,6 +199,11 @@ export function mergeThemeFromUnknown(
       banner.subtitle = b.subtitle.slice(0, 280);
   }
 
+  const tokens = resolveThemeTokensV2({
+    templateId: (stored as any).templateId ?? null,
+    stored,
+  });
+
   return {
     primaryColor: pickColor("primaryColor"),
     bgColor: pickColor("bgColor"),
@@ -195,6 +212,7 @@ export function mergeThemeFromUnknown(
     logoUrl,
     layout,
     banner,
+    tokens,
   };
 }
 

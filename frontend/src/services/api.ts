@@ -1,4 +1,5 @@
-import axios from "axios";
+import axios, { AxiosHeaders } from "axios";
+import { getBusinessIdNumber } from "../utils/storeParams";
 
 function normalizeBaseUrl(url: string): string {
   return url.replace(/\/$/, "");
@@ -54,4 +55,159 @@ export function apiAbsoluteUrl(path: string): string {
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
+});
+
+export const TENANT_HEADER = "x-business-id";
+
+export const TENANT_MISSING_ERROR =
+  "Магазин не найден. Откройте Mini App через ссылку ?shop=<id> или Telegram start_param.";
+
+/** Источник tenant НЕ из React state: Telegram start_param → URL → sessionStorage. */
+export function getCurrentBusinessId(): number | null {
+  return getBusinessIdNumber();
+}
+
+function isPlatformAdminPath(pathname: string): boolean {
+  return pathname.startsWith("/api/platform/admin/");
+}
+
+export function isTenantScopedPath(pathname: string): boolean {
+  if (!pathname.startsWith("/")) return false;
+  if (isPlatformAdminPath(pathname)) return false;
+  return (
+    pathname.startsWith("/api/storefront/") ||
+    pathname.startsWith("/api/business/") ||
+    pathname.startsWith("/api/merchant/") ||
+    pathname === "/categories" ||
+    pathname.startsWith("/categories/") ||
+    pathname === "/products" ||
+    pathname.startsWith("/products/") ||
+    pathname === "/orders" ||
+    pathname.startsWith("/orders/") ||
+    pathname === "/analytics" ||
+    pathname.startsWith("/analytics/")
+  );
+}
+
+function toPathname(urlOrPath: string): string {
+  const raw = String(urlOrPath ?? "").trim();
+  if (raw === "") return "";
+  try {
+    // Relative URLs are resolved against current origin.
+    const u = new URL(
+      raw,
+      typeof window !== "undefined" ? window.location.origin : "http://localhost",
+    );
+    return u.pathname || "";
+  } catch {
+    return "";
+  }
+}
+
+function hasTenantHeader(headers: unknown): boolean {
+  if (!headers) return false;
+  if (typeof Headers !== "undefined" && headers instanceof Headers) {
+    return headers.has(TENANT_HEADER);
+  }
+  if (Array.isArray(headers)) {
+    return headers.some(
+      (kv) => Array.isArray(kv) && String(kv[0]).toLowerCase() === TENANT_HEADER,
+    );
+  }
+  if (typeof headers === "object") {
+    return Object.keys(headers as Record<string, unknown>).some(
+      (k) => k.toLowerCase() === TENANT_HEADER,
+    );
+  }
+  return false;
+}
+
+export function withTenantHeaders(
+  headers: HeadersInit | undefined,
+  urlOrPath: string,
+  opts?: { businessId?: number | null; requireTenant?: boolean },
+): HeadersInit {
+  const pathname = toPathname(urlOrPath);
+  const tenantScoped = isTenantScopedPath(pathname);
+  if (!tenantScoped) return headers ?? {};
+
+  if (hasTenantHeader(headers)) return headers ?? {};
+
+  const businessId =
+    typeof opts?.businessId === "number" ? opts.businessId : getCurrentBusinessId();
+
+  if (!businessId || !Number.isInteger(businessId) || businessId <= 0) {
+    if (opts?.requireTenant !== false) {
+      throw new Error(TENANT_MISSING_ERROR);
+    }
+    return headers ?? {};
+  }
+
+  const out: Record<string, string> = {};
+  if (headers) {
+    if (typeof Headers !== "undefined" && headers instanceof Headers) {
+      headers.forEach((v, k) => {
+        out[k] = v;
+      });
+    } else if (Array.isArray(headers)) {
+      for (const kv of headers) {
+        if (Array.isArray(kv) && kv.length >= 2) {
+          out[String(kv[0])] = String(kv[1]);
+        }
+      }
+    } else if (typeof headers === "object") {
+      Object.assign(out, headers as Record<string, string>);
+    }
+  }
+  out[TENANT_HEADER] = String(businessId);
+  return out;
+}
+
+api.interceptors.request.use((config) => {
+  const url = typeof config.url === "string" ? config.url : "";
+  const base =
+    typeof config.baseURL === "string" && config.baseURL.trim() !== ""
+      ? config.baseURL
+      : (API_BASE_URL || "");
+  const full = (() => {
+    try {
+      return new URL(
+        url,
+        base || (typeof window !== "undefined" ? window.location.origin : "http://localhost"),
+      ).toString();
+    } catch {
+      return url;
+    }
+  })();
+  const pathname = toPathname(full);
+  if (!isTenantScopedPath(pathname)) return config;
+
+  const existing = config.headers;
+  const alreadySet =
+    existing != null &&
+    typeof existing === "object" &&
+    Object.keys(existing as Record<string, unknown>).some(
+      (k) => k.toLowerCase() === TENANT_HEADER,
+    );
+  if (alreadySet) return config;
+
+  const businessId = getCurrentBusinessId();
+  if (!businessId || !Number.isInteger(businessId) || businessId <= 0) {
+    // Prevent broken tenant-scoped requests (backend returns 400 otherwise).
+    throw new Error(TENANT_MISSING_ERROR);
+  }
+
+  const bid = String(businessId);
+  if (existing instanceof AxiosHeaders) {
+    existing.set(TENANT_HEADER, bid);
+    config.headers = existing;
+    return config;
+  }
+
+  const h = new AxiosHeaders(
+    (existing as Record<string, string> | undefined) ?? {},
+  );
+  h.set(TENANT_HEADER, bid);
+  config.headers = h;
+  return config;
 });

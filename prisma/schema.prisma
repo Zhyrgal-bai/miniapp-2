@@ -99,6 +99,13 @@ model Business {
   storefrontConfigVersion Int @default(1)
   featureFlags Json? @default("{}")
 
+  /// Visual Storefront Builder (Stage 4): draft/publish configs.
+  /// Draft edited in builder; published served to public storefront.
+  storefrontDraftConfig Json? @default("{}")
+  storefrontPublishedConfig Json? @default("{}")
+  storefrontPublishedAt DateTime?
+  storefrontDraftUpdatedAt DateTime?
+
   createdAt DateTime @default(now())
 
   memberships Membership[]
