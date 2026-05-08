@@ -224,7 +224,7 @@
 
 /* ---------------- Header base ---------------- */
 .sf-header__inner {
-  padding: 0 var(--sf-space-sm, 12px);
+  padding: var(--sf-header-pad-y, 0px) var(--sf-header-pad-x, var(--sf-space-sm, 12px));
   display: grid;
   grid-template-columns: 44px 1fr auto;
   align-items: center;

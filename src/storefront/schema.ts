@@ -67,15 +67,20 @@ export type ResolvedStorefrontPayload = {
 };
 
 export type StorefrontHeaderConfig = {
-  variant: "centered" | "split" | "minimal" | "luxury" | "commerce";
+  variant: "centered" | "split" | "minimal" | "luxury" | "neon" | "commerce";
   titleText: string;
   showAvatar: boolean;
   showSearch: boolean;
   sticky: boolean;
   glass: boolean;
+  blur: boolean;
+  showDivider: boolean;
   alignment: "left" | "center";
   height: "compact" | "normal" | "large";
   logoSize: number;
+  avatarSize: number;
+  padX: number;
+  padY: number;
   titleStyle: "normal" | "uppercase" | "wide";
   shadow: boolean;
   border: boolean;
@@ -255,15 +260,20 @@ const PromoConfigSchema = z
 
 const StorefrontHeaderConfigSchema = z
   .object({
-    variant: z.enum(["centered", "split", "minimal", "luxury", "commerce"]).default("commerce"),
+    variant: z.enum(["centered", "split", "minimal", "luxury", "neon", "commerce"]).default("commerce"),
     titleText: z.string().trim().max(32).optional().default(""),
     showAvatar: z.boolean().default(true),
     showSearch: z.boolean().default(false),
     sticky: z.boolean().default(true),
     glass: z.boolean().default(false),
+    blur: z.boolean().default(true),
+    showDivider: z.boolean().default(true),
     alignment: z.enum(["left", "center"]).default("center"),
     height: z.enum(["compact", "normal", "large"]).default("normal"),
     logoSize: z.number().int().min(18).max(64).default(34),
+    avatarSize: z.number().int().min(18).max(56).default(36),
+    padX: z.number().int().min(6).max(24).default(12),
+    padY: z.number().int().min(0).max(18).default(8),
     titleStyle: z.enum(["normal", "uppercase", "wide"]).default("wide"),
     shadow: z.boolean().default(true),
     border: z.boolean().default(false),
@@ -275,9 +285,14 @@ const StorefrontHeaderConfigSchema = z
     showSearch: false,
     sticky: true,
     glass: false,
+    blur: true,
+    showDivider: true,
     alignment: "center",
     height: "normal",
     logoSize: 34,
+    avatarSize: 36,
+    padX: 12,
+    padY: 8,
     titleStyle: "wide",
     shadow: true,
     border: false,

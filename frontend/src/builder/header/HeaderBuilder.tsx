@@ -16,20 +16,35 @@ function normalize(input: unknown): StorefrontHeaderConfig {
       getStr("variant") === "split" ||
       getStr("variant") === "minimal" ||
       getStr("variant") === "luxury" ||
+      getStr("variant") === "neon" ||
       getStr("variant") === "commerce"
-        ? (getStr("variant") as "centered" | "split" | "minimal" | "luxury" | "commerce")
+        ? (getStr("variant") as "centered" | "split" | "minimal" | "luxury" | "neon" | "commerce")
         : "commerce",
     titleText: typeof c.titleText === "string" ? (c.titleText as string).slice(0, 32) : undefined,
     showAvatar: getBool("showAvatar") !== false,
     showSearch: getBool("showSearch") === true,
     sticky: getBool("sticky") !== false,
     glass: getBool("glass") === true,
+    blur: getBool("blur") !== false,
+    showDivider: getBool("showDivider") !== false,
     alignment: getStr("alignment") === "left" ? "left" : "center",
     height: getStr("height") === "compact" || getStr("height") === "large" ? (getStr("height") as "compact" | "large") : "normal",
     logoSize:
       getNum("logoSize") != null
         ? Math.min(64, Math.max(18, Math.round(getNum("logoSize") as number)))
         : 34,
+    avatarSize:
+      getNum("avatarSize") != null
+        ? Math.min(56, Math.max(18, Math.round(getNum("avatarSize") as number)))
+        : 36,
+    padX:
+      getNum("padX") != null
+        ? Math.min(24, Math.max(6, Math.round(getNum("padX") as number)))
+        : 12,
+    padY:
+      getNum("padY") != null
+        ? Math.min(18, Math.max(0, Math.round(getNum("padY") as number)))
+        : 8,
     titleStyle: getStr("titleStyle") === "uppercase" || getStr("titleStyle") === "wide" ? (getStr("titleStyle") as "uppercase" | "wide") : "normal",
     shadow: getBool("shadow") !== false,
     border: getBool("border") === true,

@@ -4,15 +4,20 @@ import { telegramDisplayInitial, telegramDisplayName } from "../../../utils/tele
 import type { ResolvedStoreTheme } from "@repo-shared/storeTheme";
 
 type StorefrontHeaderConfig = {
-  variant?: "centered" | "split" | "minimal" | "luxury" | "commerce";
+  variant?: "centered" | "split" | "minimal" | "luxury" | "neon" | "commerce";
   titleText?: string;
   showAvatar?: boolean;
   showSearch?: boolean;
   sticky?: boolean;
   glass?: boolean;
+  blur?: boolean;
+  showDivider?: boolean;
   alignment?: "left" | "center";
   height?: "compact" | "normal" | "large";
   logoSize?: number;
+  avatarSize?: number;
+  padX?: number;
+  padY?: number;
   titleStyle?: "normal" | "uppercase" | "wide";
   shadow?: boolean;
   border?: boolean;
@@ -26,6 +31,7 @@ function normalize(cfg: Record<string, unknown> | undefined): Required<Storefron
     c.variant === "split" ||
     c.variant === "minimal" ||
     c.variant === "luxury" ||
+    c.variant === "neon" ||
     c.variant === "commerce"
       ? c.variant
       : "commerce";
@@ -36,6 +42,18 @@ function normalize(cfg: Record<string, unknown> | undefined): Required<Storefron
     typeof c.logoSize === "number" && Number.isFinite(c.logoSize)
       ? Math.min(64, Math.max(18, Math.round(c.logoSize)))
       : 34;
+  const avatarSize =
+    typeof c.avatarSize === "number" && Number.isFinite(c.avatarSize)
+      ? Math.min(56, Math.max(18, Math.round(c.avatarSize)))
+      : 36;
+  const padX =
+    typeof c.padX === "number" && Number.isFinite(c.padX)
+      ? Math.min(24, Math.max(6, Math.round(c.padX)))
+      : 12;
+  const padY =
+    typeof c.padY === "number" && Number.isFinite(c.padY)
+      ? Math.min(18, Math.max(0, Math.round(c.padY)))
+      : 8;
   return {
     variant,
     titleText: typeof c.titleText === "string" ? c.titleText.trim().slice(0, 32) : "",
@@ -43,9 +61,14 @@ function normalize(cfg: Record<string, unknown> | undefined): Required<Storefron
     showSearch: c.showSearch === true,
     sticky: c.sticky !== false,
     glass: c.glass === true,
+    blur: c.blur !== false,
+    showDivider: c.showDivider !== false,
     alignment,
     height,
     logoSize,
+    avatarSize,
+    padX,
+    padY,
     titleStyle,
     shadow: c.shadow !== false,
     border: c.border === true,
@@ -116,24 +139,36 @@ function HeaderLuxury(props: {
       </button>
       <div
         className="sf-header__brand sf-header__brand--center"
-        style={{ ["--sf-logo-size"]: `${props.cfg.logoSize}px` } as React.CSSProperties}
+        style={
+          {
+            ["--sf-logo-size"]: `${props.cfg.logoSize}px`,
+            ["--sf-avatar-size"]: `${props.cfg.avatarSize}px`,
+          } as React.CSSProperties
+        }
       >
         <div className="sf-header__title sf-header__title--luxury" style={props.titleCss}>
           {props.title}
         </div>
-        <div className="sf-header__divider" aria-hidden />
+        {props.cfg.showDivider ? <div className="sf-header__divider" aria-hidden /> : null}
       </div>
       <div className="sf-header__right">
-        <div className="sf-header__user" style={{ minWidth: 0 }}>
-          <div className="sf-header__avatar" aria-hidden title={props.userName ?? undefined}>
-            {props.photoUrl ? (
-              <img src={props.photoUrl} alt={props.userName ?? ""} width={36} height={36} />
-            ) : (
-              <span style={{ fontWeight: 900, opacity: 0.9 }}>{props.initial}</span>
-            )}
+        {props.cfg.showAvatar ? (
+          <div className="sf-header__user" style={{ minWidth: 0 }}>
+            <div className="sf-header__avatar" aria-hidden title={props.userName ?? undefined}>
+              {props.photoUrl ? (
+                <img
+                  src={props.photoUrl}
+                  alt={props.userName ?? ""}
+                  width={props.cfg.avatarSize}
+                  height={props.cfg.avatarSize}
+                />
+              ) : (
+                <span style={{ fontWeight: 900, opacity: 0.9 }}>{props.initial}</span>
+              )}
+            </div>
+            {props.userName ? <div className="sf-header__user-name">{props.userName}</div> : null}
           </div>
-          {props.userName ? <div className="sf-header__user-name">{props.userName}</div> : null}
-        </div>
+        ) : null}
       </div>
     </div>
   );
@@ -169,13 +204,20 @@ function HeaderFashion(props: {
         </div>
       </div>
       <div className="sf-header__right">
-        <div className="sf-header__avatar sf-header__avatar--accent" aria-hidden title={props.userName ?? undefined}>
-          {props.photoUrl ? (
-            <img src={props.photoUrl} alt={props.userName ?? ""} width={36} height={36} />
-          ) : (
-            <span style={{ fontWeight: 900, opacity: 0.9 }}>{props.initial}</span>
-          )}
-        </div>
+        {props.cfg.showAvatar ? (
+          <div className="sf-header__avatar sf-header__avatar--accent" aria-hidden title={props.userName ?? undefined}>
+            {props.photoUrl ? (
+              <img
+                src={props.photoUrl}
+                alt={props.userName ?? ""}
+                width={props.cfg.avatarSize}
+                height={props.cfg.avatarSize}
+              />
+            ) : (
+              <span style={{ fontWeight: 900, opacity: 0.9 }}>{props.initial}</span>
+            )}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -199,7 +241,7 @@ function HeaderNeon(props: {
       </button>
       <div className="sf-header__brand sf-header__brand--neon">
         <div className="sf-header__title sf-header__title--neon">{props.title}</div>
-        <div className="sf-header__neon-line" aria-hidden />
+        {props.cfg.showDivider ? <div className="sf-header__neon-line" aria-hidden /> : null}
       </div>
       <div className="sf-header__right" />
     </div>
@@ -226,7 +268,7 @@ export function StorefrontHeader(props: {
             : kit === "fashion"
               ? "split"
               : kit === "neon"
-                ? "centered"
+                ? "neon"
                 : base.variant
         : base.variant;
     if (kit === "minimal") {
@@ -279,6 +321,7 @@ export function StorefrontHeader(props: {
         alignment: "center" as const,
         titleStyle: "uppercase",
         showAvatar: false,
+        showDivider: true,
       };
     }
     return { ...base, variant };
@@ -344,7 +387,7 @@ export function StorefrontHeader(props: {
           ? { letterSpacing: "0.02em" }
           : { letterSpacing: "0.08em" };
 
-  const headerClass = `sf-header sf-header--${kit}`;
+  const headerClass = `sf-header sf-header--${kit}${cfg.showDivider ? "" : " sf-header--no-divider"}`;
 
   return (
     <div
@@ -354,17 +397,17 @@ export function StorefrontHeader(props: {
         // Safe-area is embedded into header (Telegram Mini App production-safe behavior).
         paddingTop: `max(env(safe-area-inset-top, 0px), ${safeTop}px)`,
         height: `calc(${heightPx}px + max(env(safe-area-inset-top, 0px), ${safeTop}px))`,
+        ["--sf-header-pad-x" as string]: `${cfg.padX}px`,
+        ["--sf-header-pad-y" as string]: `${cfg.padY}px`,
         background: bg,
-        backdropFilter: cfg.glass ? "blur(12px)" : undefined,
-        WebkitBackdropFilter: cfg.glass ? "blur(12px)" : undefined,
+        backdropFilter: cfg.glass && cfg.blur ? "blur(12px)" : undefined,
+        WebkitBackdropFilter: cfg.glass && cfg.blur ? "blur(12px)" : undefined,
         borderBottom: border,
         boxShadow: shadow,
       }}
     >
       <div style={{ height: heightPx }}>
-        {kit === "minimal" ? (
-          <HeaderMinimal cfg={cfg} title={title} titleCss={titleCss} />
-        ) : kit === "luxury" ? (
+        {cfg.variant === "luxury" ? (
           <HeaderLuxury
             cfg={cfg}
             title={title}
@@ -373,7 +416,7 @@ export function StorefrontHeader(props: {
             initial={initial}
             photoUrl={user?.photo_url ?? null}
           />
-        ) : kit === "fashion" ? (
+        ) : cfg.variant === "split" ? (
           <HeaderFashion
             cfg={cfg}
             title={title}
@@ -381,7 +424,7 @@ export function StorefrontHeader(props: {
             initial={initial}
             photoUrl={user?.photo_url ?? null}
           />
-        ) : kit === "neon" ? (
+        ) : cfg.variant === "neon" ? (
           <HeaderNeon cfg={cfg} title={title} />
         ) : (
           <HeaderMinimal cfg={cfg} title={title} titleCss={titleCss} />

@@ -1,15 +1,20 @@
 import React from "react";
 
 export type StorefrontHeaderConfig = {
-  variant: "centered" | "split" | "minimal" | "luxury" | "commerce";
+  variant: "centered" | "split" | "minimal" | "luxury" | "neon" | "commerce";
   titleText?: string;
   showAvatar: boolean;
   showSearch: boolean;
   sticky: boolean;
   glass: boolean;
+  blur: boolean;
+  showDivider: boolean;
   alignment: "left" | "center";
   height: "compact" | "normal" | "large";
   logoSize: number;
+  avatarSize: number;
+  padX: number;
+  padY: number;
   titleStyle: "normal" | "uppercase" | "wide";
   shadow: boolean;
   border: boolean;
@@ -59,6 +64,7 @@ export function HeaderControls(props: {
           <option value="split">Split</option>
           <option value="minimal">Minimal</option>
           <option value="luxury">Luxury</option>
+          <option value="neon">Neon</option>
           <option value="commerce">Commerce</option>
         </select>
       </label>
@@ -95,6 +101,22 @@ export function HeaderControls(props: {
             onChange={(e) => patch({ glass: e.target.checked })}
           />
           Glass
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, opacity: 0.9 }}>
+          <input
+            type="checkbox"
+            checked={v.blur}
+            onChange={(e) => patch({ blur: e.target.checked })}
+          />
+          Blur
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, opacity: 0.9 }}>
+          <input
+            type="checkbox"
+            checked={v.showDivider}
+            onChange={(e) => patch({ showDivider: e.target.checked })}
+          />
+          Divider
         </label>
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, opacity: 0.9 }}>
           <input
@@ -180,6 +202,40 @@ export function HeaderControls(props: {
           onChange={(e) => patch({ logoSize: Number(e.target.value) })}
         />
       </label>
+
+      <label style={{ display: "grid", gap: 6, fontSize: 12, opacity: 0.9 }}>
+        Avatar size: {v.avatarSize}px
+        <input
+          type="range"
+          min={18}
+          max={56}
+          value={v.avatarSize}
+          onChange={(e) => patch({ avatarSize: Number(e.target.value) })}
+        />
+      </label>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <label style={{ display: "grid", gap: 6, fontSize: 12, opacity: 0.9 }}>
+          Padding X: {v.padX}px
+          <input
+            type="range"
+            min={6}
+            max={24}
+            value={v.padX}
+            onChange={(e) => patch({ padX: Number(e.target.value) })}
+          />
+        </label>
+        <label style={{ display: "grid", gap: 6, fontSize: 12, opacity: 0.9 }}>
+          Padding Y: {v.padY}px
+          <input
+            type="range"
+            min={0}
+            max={18}
+            value={v.padY}
+            onChange={(e) => patch({ padY: Number(e.target.value) })}
+          />
+        </label>
+      </div>
     </div>
   );
 }
