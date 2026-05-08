@@ -13,6 +13,7 @@
     "db:baseline-init-migration": "prisma migrate resolve --applied 20250430120000_init",
     "db:unmark-init-then-deploy": "prisma db execute --file prisma/sql/repair_init_baseline_if_needed.sql && prisma migrate deploy",
     "db:danger-reset-public": "prisma db execute --file prisma/sql/reset_public_schema.sql && prisma migrate deploy",
+    "db:backfill-enable-storefront": "prisma db execute --file prisma/sql/backfill_enable_storefront_active.sql",
     "dev": "tsx src/server/index.ts",
     "seed": "tsx prisma/seed.ts"
   },
