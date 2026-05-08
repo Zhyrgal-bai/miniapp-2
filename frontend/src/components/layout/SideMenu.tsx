@@ -241,20 +241,6 @@ export default function SideMenu({
 
                 <button
                   type="button"
-                  className={`app-drawer__link${connectBotActive ? " app-drawer__link--active" : ""}`}
-                  onClick={() => {
-                    onNavToConnectBot();
-                    onClose();
-                  }}
-                >
-                  <span className="app-drawer__link-icon" aria-hidden>
-                    🤖
-                  </span>
-                  Подключить бота
-                </button>
-
-                <button
-                  type="button"
                   className={`app-drawer__link${faqActive ? " app-drawer__link--active" : ""}`}
                   onClick={() => {
                     onNavToFaq();
@@ -265,13 +251,6 @@ export default function SideMenu({
                     ❓
                   </span>
                   FAQ
-                </button>
-
-                <button type="button" className="app-drawer__link" onClick={openSupport}>
-                  <span className="app-drawer__link-icon" aria-hidden>
-                    💬
-                  </span>
-                  Поддержка
                 </button>
               </nav>
             </div>
