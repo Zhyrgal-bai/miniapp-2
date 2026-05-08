@@ -22,6 +22,9 @@ import SideMenu from "./components/layout/SideMenu";
 import FloatingCart from "./components/layout/FloatingCart";
 import { StickyCartBar } from "./components/storefront/cart/StickyCartBar";
 import "./components/storefront/cart/stickyCart.css";
+import { ThemeVarsProvider } from "./components/storefront/theme/ThemeVarsProvider";
+import { useTheme } from "./context/ThemeContext";
+import { useStorefrontPayload } from "./components/storefront/runtime/StorefrontPayloadContext";
 
 type AppNavPage =
   | "home"
@@ -48,6 +51,8 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const { businessId, shopIdString } = useShop();
+  const { theme, templateId } = useTheme();
+  const { payload } = useStorefrontPayload();
   const [page, setPage] = useState<AppNavPage>(initialPageFromPath);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [myOrdersAttention, setMyOrdersAttention] = useState(false);
@@ -88,6 +93,61 @@ export default function App() {
 
   const items = useCartStore((state) => state.items);
   const totalQuantity = items.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
+
+  const isStorefrontUi =
+    page === "home" || page === "cart" || page === "checkout" || page === "my-orders" || page === "faq";
+
+  const kitFromTemplateId = (tid: string | null | undefined): string => {
+    const t = typeof tid === "string" ? tid.trim().toLowerCase() : "";
+    if (t === "minimal" || t === "light") return "minimal";
+    if (t === "luxury") return "luxury";
+    if (t === "fashion") return "fashion";
+    if (t === "neon") return "neon";
+    return "default";
+  };
+  const sfKit = kitFromTemplateId(templateId ?? payload?.templateId ?? null);
+
+  const styleCfg = (payload?.storefrontStyleConfig ?? {}) as Record<string, unknown>;
+  const layout =
+    styleCfg.layout && typeof styleCfg.layout === "object" && !Array.isArray(styleCfg.layout)
+      ? (styleCfg.layout as Record<string, unknown>)
+      : {};
+  const typo =
+    styleCfg.typography && typeof styleCfg.typography === "object" && !Array.isArray(styleCfg.typography)
+      ? (styleCfg.typography as Record<string, unknown>)
+      : {};
+  const chips =
+    styleCfg.chips && typeof styleCfg.chips === "object" && !Array.isArray(styleCfg.chips)
+      ? (styleCfg.chips as Record<string, unknown>)
+      : {};
+  const buttons =
+    styleCfg.buttons && typeof styleCfg.buttons === "object" && !Array.isArray(styleCfg.buttons)
+      ? (styleCfg.buttons as Record<string, unknown>)
+      : {};
+  const hero =
+    styleCfg.hero && typeof styleCfg.hero === "object" && !Array.isArray(styleCfg.hero)
+      ? (styleCfg.hero as Record<string, unknown>)
+      : {};
+
+  const sfVars: Record<string, string> = {
+    "--sf-section-pad": typeof layout.sectionSpacing === "number" ? `${layout.sectionSpacing}px` : "",
+    "--sf-grid-gap": typeof layout.productGap === "number" ? `${layout.productGap}px` : "",
+    "--sf-mobile-pad": typeof layout.mobilePadding === "number" ? `${layout.mobilePadding}px` : "",
+    "--sf-typo-title-size": typeof typo.titleSize === "number" ? `${typo.titleSize}px` : "",
+    "--sf-typo-section-title-size": typeof typo.sectionTitleSize === "number" ? `${typo.sectionTitleSize}px` : "",
+    "--sf-typo-button-size": typeof typo.buttonSize === "number" ? `${typo.buttonSize}px` : "",
+    "--sf-typo-title-weight": typeof typo.titleWeight === "number" ? String(typo.titleWeight) : "",
+    "--sf-typo-title-transform":
+      typeof typo.uppercaseTitles === "boolean" ? (typo.uppercaseTitles ? "uppercase" : "none") : "",
+    "--sf-typo-title-letter-spacing": typeof typo.letterSpacing === "number" ? `${typo.letterSpacing}em` : "",
+    "--sf-typo-title-line-height": typeof typo.lineHeight === "number" ? String(typo.lineHeight) : "",
+    "--sf-chip-radius": typeof chips.radius === "number" ? `${chips.radius}px` : "",
+    "--sf-chip-gap": typeof chips.gap === "number" ? `${chips.gap}px` : "",
+    "--sf-button-radius": typeof buttons.radius === "number" ? `${buttons.radius}px` : "",
+    "--sf-button-height": typeof buttons.height === "number" ? `${buttons.height}px` : "",
+    "--sf-hero-height": typeof hero.height === "number" ? `${hero.height}px` : "",
+    "--sf-hero-radius": typeof hero.radius === "number" ? `${hero.radius}px` : "",
+  };
 
   const commitPage = useCallback(
     (next: AppNavPage) => {
@@ -270,8 +330,8 @@ export default function App() {
     );
   }
 
-  return (
-    <div className="app">
+  const content = (
+    <div className={isStorefrontUi ? "app sf-app" : "app"}>
       {page !== "home" ? (
         <Header
           menuOpen={isMenuOpen}
@@ -334,5 +394,13 @@ export default function App() {
         onCheckout={handleCheckoutQuick}
       />
     </div>
+  );
+  if (!isStorefrontUi) return content;
+  return (
+    <ThemeVarsProvider theme={theme}>
+      <div data-sf-kit={sfKit} style={sfVars as unknown as React.CSSProperties}>
+        {content}
+      </div>
+    </ThemeVarsProvider>
   );
 }

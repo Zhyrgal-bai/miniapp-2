@@ -1,12 +1,12 @@
 .checkout {
   position: relative;
-  padding: 12px;
-  color: #fff;
+  padding: var(--sf-mobile-pad, 12px);
+  color: var(--sf-color-text);
   max-width: 430px;
   margin: 0 auto;
   min-height: 100dvh;
   box-sizing: border-box;
-  background: #0b0f1a;
+  background: var(--sf-color-background);
 }
 
 .checkout-finik-overlay {
@@ -17,7 +17,7 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(11, 15, 26, 0.88);
+  background: color-mix(in srgb, var(--sf-color-background) 88%, transparent);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
@@ -26,7 +26,7 @@
   margin: 0;
   font-size: 1.1rem;
   font-weight: 800;
-  color: #fff;
+  color: var(--sf-color-text);
   text-align: center;
   letter-spacing: 0.02em;
 }
@@ -45,7 +45,7 @@
   padding: 6px 0;
   border: none;
   background: none;
-  color: #9ca3af;
+  color: var(--sf-color-muted);
   font-size: 15px;
   cursor: pointer;
 }
@@ -61,7 +61,7 @@
 
 .checkout-empty-text {
   margin: 0 0 16px;
-  color: #9ca3af;
+  color: var(--sf-color-muted);
   font-size: 15px;
 }
 
@@ -75,10 +75,11 @@
 .checkout .form select,
 .checkout .form textarea {
   padding: 10px;
-  border-radius: 12px;
+  border-radius: calc(var(--sf-button-radius, 14px) - 2px);
   border: none;
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
+  background: color-mix(in srgb, var(--sf-color-surface) 85%, transparent);
+  color: var(--sf-color-text);
+  outline: 1px solid color-mix(in srgb, var(--sf-color-border) 55%, transparent);
   width: 100%;
   box-sizing: border-box;
   font-family: inherit;
@@ -87,7 +88,7 @@
 
 .checkout .form input::placeholder,
 .checkout .form textarea::placeholder {
-  color: #6b7280;
+  color: color-mix(in srgb, var(--sf-color-muted) 80%, transparent);
 }
 
 .checkout .form select {
@@ -114,7 +115,7 @@
   margin: 4px 0 0;
   font-size: 0.82rem;
   font-weight: 600;
-  color: rgba(147, 197, 253, 0.95);
+  color: color-mix(in srgb, var(--sf-color-accent, var(--sf-color-primary)) 70%, white);
 }
 
 .checkout-address-suggest__list {
@@ -126,8 +127,8 @@
   max-height: 220px;
   overflow-y: auto;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: #1a2235;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 65%, transparent);
+  background: var(--sf-color-surface);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
 }
 
@@ -137,9 +138,9 @@
   margin: 0;
   padding: 10px 12px;
   border: none;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid color-mix(in srgb, var(--sf-color-border) 55%, transparent);
   background: transparent;
-  color: #e5e7eb;
+  color: var(--sf-color-text);
   font-size: 0.88rem;
   font-weight: 600;
   text-align: left;
@@ -155,7 +156,7 @@
 
 .checkout-address-suggest__item:hover,
 .checkout-address-suggest__item:focus-visible {
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface)) 88%, transparent);
   outline: none;
 }
 
@@ -169,10 +170,10 @@
 .checkout-loc-btn {
   align-self: flex-start;
   padding: 10px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  border-radius: var(--sf-button-radius, 14px);
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 65%, transparent);
+  background: color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface)) 86%, transparent);
+  color: var(--sf-color-text);
   font-size: 0.9rem;
   font-weight: 700;
   cursor: pointer;
@@ -181,8 +182,8 @@
 }
 
 .checkout-loc-btn:hover:not(:disabled) {
-  background: rgba(220, 38, 38, 0.25);
-  border-color: rgba(248, 113, 113, 0.35);
+  background: color-mix(in srgb, var(--sf-color-primary) 18%, transparent);
+  border-color: color-mix(in srgb, var(--sf-color-primary) 40%, transparent);
 }
 
 .checkout-loc-btn:disabled {
@@ -191,14 +192,14 @@
 }
 
 .checkout-loc-btn--map {
-  border-color: rgba(96, 165, 250, 0.35);
+  border-color: color-mix(in srgb, var(--sf-color-accent, var(--sf-color-primary)) 35%, transparent);
 }
 
 .checkout-map-wrap {
   border-radius: 14px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 55%, transparent);
+  background: color-mix(in srgb, var(--sf-color-surface) 65%, transparent);
 }
 
 .checkout-map-hint {
@@ -206,7 +207,7 @@
   padding: 8px 10px 10px;
   font-size: 0.78rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.55);
+  color: color-mix(in srgb, var(--sf-color-muted) 85%, transparent);
   line-height: 1.35;
 }
 

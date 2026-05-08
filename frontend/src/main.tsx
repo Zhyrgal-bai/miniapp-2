@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import App from "./App";
 import { ShopProvider } from "./context/ShopContext";
 import { ThemeProvider } from "./context/ThemeContext";
+import { StorefrontPayloadProvider } from "./components/storefront/runtime/StorefrontPayloadContext";
 import MerchantDashboardPage from "./pages/MerchantDashboardPage";
 import MerchantRegisterPage from "./pages/MerchantRegisterPage";
 import PlatformAdminPage from "./pages/PlatformAdminPage";
@@ -20,21 +21,23 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <BrowserRouter>
       <ShopProvider>
         <ThemeProvider>
-          <Routes>
-            <Route
-              path="/merchant/register"
-              element={<MerchantRegisterPage />}
-            />
-            <Route path="/merchant" element={<MerchantDashboardPage />} />
-            <Route path="/merchant/builder" element={<BuilderPage />} />
-            <Route
-              path="/platform"
-              element={<Navigate to="/merchant" replace />}
-            />
-            <Route path="/platform-admin" element={<PlatformAdminPage />} />
-            <Route path="/" element={<RootAppOrPlatform />} />
-            <Route path="*" element={<App />} />
-          </Routes>
+          <StorefrontPayloadProvider>
+            <Routes>
+              <Route
+                path="/merchant/register"
+                element={<MerchantRegisterPage />}
+              />
+              <Route path="/merchant" element={<MerchantDashboardPage />} />
+              <Route path="/merchant/builder" element={<BuilderPage />} />
+              <Route
+                path="/platform"
+                element={<Navigate to="/merchant" replace />}
+              />
+              <Route path="/platform-admin" element={<PlatformAdminPage />} />
+              <Route path="/" element={<RootAppOrPlatform />} />
+              <Route path="*" element={<App />} />
+            </Routes>
+          </StorefrontPayloadProvider>
         </ThemeProvider>
       </ShopProvider>
     </BrowserRouter>
