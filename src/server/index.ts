@@ -3940,7 +3940,8 @@ app.post(
       if (!merchant) return;
       if (!isCloudinaryConfigured()) {
         return res.status(503).json({
-          error: "Cloudinary не настроен (CLOUD_NAME, CLOUD_KEY, CLOUD_SECRET)",
+          error:
+            "Cloudinary не настроен (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET)",
         });
       }
       const file = req.file;

@@ -13,12 +13,19 @@ export async function uploadReceiptToCloudinary(
   }
   const isPdf =
     mimetype === "application/pdf" || mimetype === "application/x-pdf";
-  const mime = isPdf ? "application/pdf" : mimetype || "image/jpeg";
-  const b64 = buffer.toString("base64");
-  const dataUri = `data:${mime};base64,${b64}`;
-  const result = await cloudinary.uploader.upload(dataUri, {
-    folder: "telegram-miniapp/receipts",
-    resource_type: isPdf ? "raw" : "image",
+  const result = await new Promise<any>((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: "telegram-miniapp/receipts",
+        resource_type: isPdf ? "raw" : "image",
+        secure: true,
+      },
+      (err, res) => {
+        if (err) return reject(err);
+        return resolve(res);
+      },
+    );
+    stream.end(buffer);
   });
   return {
     secureUrl: result.secure_url,
