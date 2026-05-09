@@ -516,6 +516,10 @@
   border-color: var(--sf-color-surface);
 }
 
+.sf-app .app-drawer__pull {
+  background: color-mix(in srgb, var(--sf-color-border) 65%, transparent);
+}
+
 .app-drawer__divider {
   height: 1px;
   margin: 10px 0 6px;
@@ -636,5 +640,9 @@
 .sf-app .app-drawer__link-icon,
 .sf-app .app-drawer__brand-tag {
   color: var(--sf-color-muted);
+}
+
+.sf-app .app-drawer__footer {
+  color: var(--sf-color-text);
 }
 

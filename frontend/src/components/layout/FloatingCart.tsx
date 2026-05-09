@@ -213,16 +213,12 @@ export default function FloatingCart({
   return (
     <button
       type="button"
-      className="floating-cart cart-float"
+      className="floating-cart cart-float floating-cart--storefront"
       style={{
         left: pos.x,
         top: pos.y,
         right: "auto",
         bottom: "auto",
-        background: "var(--sf-color-primary, var(--store-primary, #dc2626))",
-        backgroundImage: "none",
-        color: "#fff",
-        borderColor: "color-mix(in srgb, var(--sf-color-primary, #dc2626) 60%, transparent)",
       }}
       onMouseDown={onMouseDown}
       onTouchStart={onTouchStart}

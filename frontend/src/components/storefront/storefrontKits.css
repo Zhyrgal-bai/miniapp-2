@@ -5,6 +5,13 @@
   --sf-section-radius: var(--sf-radius-lg, 18px);
 }
 
+.sf-container-state {
+  padding: var(--sf-space-md, 16px);
+  opacity: 0.8;
+  color: var(--sf-color-text);
+  font-family: var(--sf-font-body);
+}
+
 /* content width */
 .sf-root {
   max-width: var(--sf-content-max, 100%);

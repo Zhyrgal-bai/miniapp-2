@@ -2,7 +2,7 @@
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: color-mix(in srgb, var(--sf-color-background, #000) 60%, transparent);
   backdrop-filter: blur(4px);
   opacity: 0;
   pointer-events: none;
@@ -21,7 +21,7 @@
   left: 0;
   width: 240px;
   height: 100%;
-  background: #06069a;
+  background: var(--sf-color-surface, #06069a);
   padding: 80px 20px;
   display: flex;
   flex-direction: column;
@@ -36,11 +36,11 @@
 }
 
 .side-menu button {
-  background: #14163f;
+  background: color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface, #14163f)) 90%, transparent);
   border: none;
-  border-radius: 16px;
-  color: #fff;
-  font-size: 16px;
+  border-radius: var(--sf-button-radius, 16px);
+  color: var(--sf-color-text, #fff);
+  font-size: var(--sf-typo-button-size, 16px);
   text-align: left;
   font-weight: 600;
   cursor: pointer;
@@ -50,12 +50,12 @@
 
 .layout {
   min-height: 100vh;
-  background: linear-gradient(180deg, #3a0000 30%, #1a1220 100%);
-  padding: 0 16px;
+  background: var(--sf-color-background, #1a1220);
+  padding: 0 var(--sf-mobile-pad, 16px);
 }
 
 .home {
   min-height: 100vh;
-  background: linear-gradient(180deg, #3a0000 30%, #1a1220 100%);
-  padding: 0 16px;
+  background: var(--sf-color-background, #1a1220);
+  padding: 0 var(--sf-mobile-pad, 16px);
 }

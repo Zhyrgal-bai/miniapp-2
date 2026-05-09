@@ -213,8 +213,8 @@
 
 .home-page--modern .search-input {
   border-radius: 16px;
-  border: 1px solid color-mix(in srgb, var(--store-primary, #ef4444) 22%, transparent);
-  background: color-mix(in srgb, var(--store-card, #1e293b) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sf-color-primary) 22%, transparent);
+  background: color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface)) 92%, transparent);
 }
 
 .home-page--modern .categories button {
