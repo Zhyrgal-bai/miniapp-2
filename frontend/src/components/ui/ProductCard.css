@@ -248,13 +248,13 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.4);
+  background: color-mix(in srgb, var(--sf-color-text) 45%, transparent);
   cursor: pointer;
   transition: background 0.2s ease, transform 0.2s ease;
 }
 
 .dots span.active {
-  background: #fff;
+  background: var(--sf-color-text);
   transform: scale(1.15);
 }
 
@@ -272,12 +272,12 @@
   top: 10px;
   left: 10px;
   padding: 6px 10px;
-  border-radius: 999px;
+  border-radius: var(--sf-radius-full, 999px);
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  background: rgba(0, 0, 0, 0.35);
+  background: color-mix(in srgb, var(--sf-color-surface) 68%, black);
   color: var(--sf-color-text, #fff);
   border: 1px solid var(--sf-color-border, rgba(255,255,255,0.12));
   backdrop-filter: blur(10px);
@@ -288,28 +288,28 @@
   border-color: color-mix(in srgb, var(--sf-color-primary) 30%, transparent);
 }
 .product-badge--new {
-  background: rgba(255, 62, 165, 0.20);
-  border-color: rgba(255, 62, 165, 0.45);
+  background: color-mix(in srgb, var(--sf-color-accent) 20%, transparent);
+  border-color: color-mix(in srgb, var(--sf-color-accent) 45%, transparent);
 }
 .product-badge--hot {
-  background: rgba(34, 211, 238, 0.12);
-  border-color: rgba(34, 211, 238, 0.40);
+  background: color-mix(in srgb, var(--sf-color-secondary) 16%, transparent);
+  border-color: color-mix(in srgb, var(--sf-color-secondary) 40%, transparent);
 }
 .product-badge--sale {
-  background: rgba(239, 68, 68, 0.18);
-  border-color: rgba(239, 68, 68, 0.45);
+  background: color-mix(in srgb, var(--sf-color-danger, var(--sf-color-primary)) 18%, transparent);
+  border-color: color-mix(in srgb, var(--sf-color-danger, var(--sf-color-primary)) 45%, transparent);
 }
 .product-badge--best {
-  background: rgba(34, 197, 94, 0.18);
-  border-color: rgba(34, 197, 94, 0.45);
+  background: color-mix(in srgb, var(--sf-color-success) 18%, transparent);
+  border-color: color-mix(in srgb, var(--sf-color-success) 45%, transparent);
 }
 .product-badge--low {
-  background: rgba(245, 158, 11, 0.16);
-  border-color: rgba(245, 158, 11, 0.40);
+  background: color-mix(in srgb, var(--sf-color-warning) 16%, transparent);
+  border-color: color-mix(in srgb, var(--sf-color-warning) 40%, transparent);
 }
 .product-badge--limited {
-  background: rgba(148, 163, 184, 0.18);
-  border-color: rgba(148, 163, 184, 0.40);
+  background: color-mix(in srgb, var(--sf-color-muted) 18%, transparent);
+  border-color: color-mix(in srgb, var(--sf-color-muted) 40%, transparent);
 }
 
 .product-bottom--luxury {
@@ -332,13 +332,14 @@
 }
 .product-price-label {
   font-size: 10px;
-  opacity: 0.75;
+  opacity: 0.8;
+  color: var(--sf-color-muted);
   letter-spacing: 0.22em;
 }
 .product-add-btn--icon {
   width: 42px;
   height: 42px;
-  border-radius: 999px;
+  border-radius: var(--sf-radius-full, 999px);
   padding: 0;
   font-size: 18px;
   font-weight: 900;
@@ -357,7 +358,7 @@
   opacity: 0.78;
 }
 .product-add-btn--neutral {
-  background: rgba(255, 255, 255, 0.06);
+  background: color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface)) 88%, transparent);
 }
 .product-add-btn--ghost {
   background: transparent;
@@ -386,23 +387,23 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.25);
+  border: 2px solid color-mix(in srgb, var(--sf-color-text) 28%, transparent);
   padding: 0;
   cursor: pointer;
   flex-shrink: 0;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, black 18%, transparent);
 }
 
 .colors button:hover {
-  border-color: rgba(255, 255, 255, 0.5);
+  border-color: color-mix(in srgb, var(--sf-color-text) 55%, transparent);
   transform: scale(1.06);
 }
 
 .colors button.active {
   border-color: var(--sf-color-primary, #ff2d2d);
   box-shadow:
-    0 0 0 2px rgba(11, 15, 26, 0.9),
-    0 0 0 3px rgba(255, 255, 255, 0.35);
+    0 0 0 2px color-mix(in srgb, var(--sf-color-background) 90%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--sf-color-text) 35%, transparent);
 }
 
 .sizes {
@@ -413,9 +414,9 @@
 
 .sizes button {
   padding: 4px 8px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--sf-radius-sm, 8px);
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 68%, transparent);
+  background: color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface)) 90%, transparent);
   color: var(--sf-color-text, #ffffff);
   font-size: 11px;
   font-weight: 600;
@@ -423,8 +424,8 @@
 }
 
 .sizes button:hover:not(:disabled) {
-  background: rgba(255, 45, 45, 0.15);
-  border-color: rgba(255, 45, 45, 0.25);
+  background: color-mix(in srgb, var(--sf-color-primary) 15%, transparent);
+  border-color: color-mix(in srgb, var(--sf-color-primary) 28%, transparent);
 }
 
 .sizes button.active {
@@ -443,7 +444,7 @@
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
-  color: #9ca3af;
+  color: var(--sf-color-muted);
   padding: 6px 0;
 }
 
@@ -491,7 +492,7 @@
 
 .product-price-old {
   font-size: 11px;
-  color: #6b7280;
+  color: var(--sf-color-muted);
   text-decoration: line-through;
   font-weight: 500;
   white-space: nowrap;
@@ -499,13 +500,13 @@
 
 .product-price {
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--sf-color-muted);
   font-weight: 500;
   white-space: nowrap;
 }
 
 .product-price--sale {
-  color: #ff6b6b;
+  color: var(--sf-color-danger, var(--sf-color-primary));
   font-weight: 700;
 }
 
@@ -523,7 +524,7 @@
 .product-qty {
   min-width: 16px;
   text-align: center;
-  color: #ffffff;
+  color: var(--sf-color-text);
   font-size: 13px;
   font-weight: 600;
 }
@@ -533,10 +534,10 @@
 .add-button {
   width: 26px;
   height: 26px;
-  border-radius: 8px;
+  border-radius: var(--sf-radius-sm, 8px);
   border: none;
-  background: rgba(255, 255, 255, 0.05);
-  color: #ffffff;
+  background: color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface)) 90%, transparent);
+  color: var(--sf-color-text);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -557,24 +558,25 @@
   width: auto;
   min-height: 36px;
   padding: 8px 14px;
-  border-radius: 12px;
+  border-radius: var(--sf-button-radius, 12px);
   font-size: 12px;
   font-weight: 700;
-  color: #fff;
-  background: linear-gradient(135deg, #dc2626, #b91c1c);
-  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35);
+  color: var(--sf-btn-fg, #fff);
+  background: var(--sf-btn-bg, var(--sf-color-primary));
+  border: 1px solid var(--sf-btn-border, color-mix(in srgb, var(--sf-color-primary) 55%, transparent));
+  box-shadow: var(--sf-btn-shadow, 0 4px 14px rgba(0, 0, 0, 0.28));
 }
 
 .product-action-btn:hover,
 .product-add-btn:hover,
 .add-button:hover {
-  background: rgba(255, 45, 45, 0.2);
+  background: color-mix(in srgb, var(--sf-color-primary) 20%, transparent);
 }
 
 .product-add-btn:hover,
 .add-button:hover {
   filter: brightness(1.06);
-  box-shadow: 0 6px 18px rgba(220, 38, 38, 0.45);
+  box-shadow: var(--sf-btn-shadow, 0 6px 18px rgba(0, 0, 0, 0.35));
 }
 
 .product-action-btn:active,

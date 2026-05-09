@@ -1,13 +1,16 @@
 .home-page {
   min-height: 100vh;
-  padding: 0 16px;
+  padding: 0 var(--sf-mobile-pad, 16px);
+  color: var(--sf-color-text);
+  background: var(--sf-color-background);
+  font-family: var(--sf-font-body);
 }
 
 .home-page--classic {
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--store-bg, #0f172a) 82%, transparent) 0%,
-    var(--store-bg, #0f172a) 72%
+    color-mix(in srgb, var(--sf-color-background) 82%, transparent) 0%,
+    var(--sf-color-background) 72%
   );
 }
 
@@ -17,17 +20,17 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin: 8px 0 16px;
-  padding: 14px 16px;
-  border-radius: 16px;
+  margin: var(--sf-space-sm, 10px) 0 var(--sf-space-md, 16px);
+  padding: var(--sf-space-sm, 10px) var(--sf-space-md, 16px);
+  border-radius: var(--sf-radius-lg, 16px);
   background: linear-gradient(
     125deg,
-    rgba(220, 38, 38, 0.22) 0%,
-    rgba(15, 23, 42, 0.75) 55%,
-    rgba(255, 255, 255, 0.06) 100%
+    color-mix(in srgb, var(--sf-color-primary) 22%, transparent) 0%,
+    color-mix(in srgb, var(--sf-color-surface) 88%, transparent) 55%,
+    color-mix(in srgb, var(--sf-color-text) 10%, transparent) 100%
   );
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.22);
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 75%, transparent);
+  box-shadow: var(--sf-shadow-card, 0 10px 32px rgba(0, 0, 0, 0.22));
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -43,19 +46,19 @@
 }
 
 .home-discount-banner__title {
-  font-size: 0.95rem;
-  font-weight: 800;
-  color: #fff;
+  font-size: var(--sf-font-size-body, 0.95rem);
+  font-weight: var(--sf-font-weight-heading, 800);
+  color: var(--sf-color-text);
   letter-spacing: 0.02em;
 }
 
 .home-discount-banner__promo {
-  font-size: 0.82rem;
-  color: rgba(255, 255, 255, 0.72);
+  font-size: var(--sf-font-size-small, 0.82rem);
+  color: color-mix(in srgb, var(--sf-color-muted) 85%, transparent);
 }
 
 .home-discount-banner__promo strong {
-  color: #fecaca;
+  color: color-mix(in srgb, var(--sf-color-primary) 65%, white);
   font-weight: 800;
   letter-spacing: 0.06em;
 }
@@ -65,14 +68,15 @@
   min-height: 40px;
   padding: 10px 16px;
   border: none;
-  border-radius: 14px;
-  font-size: 0.75rem;
+  border-radius: var(--sf-button-radius, 14px);
+  font-size: var(--sf-font-size-small, 0.75rem);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #fff;
-  background: linear-gradient(135deg, #dc2626, #b91c1c);
-  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.35);
+  color: var(--sf-btn-fg, #fff);
+  background: var(--sf-btn-bg, var(--sf-color-primary));
+  border: 1px solid var(--sf-btn-border, color-mix(in srgb, var(--sf-color-primary) 55%, transparent));
+  box-shadow: var(--sf-btn-shadow, 0 4px 16px rgba(0, 0, 0, 0.28));
   cursor: pointer;
   transition: all 0.3s ease;
 }
@@ -84,7 +88,7 @@
 /* HERO */
 .hero {
   padding: 2px 0;
-  margin-bottom: 20px;
+  margin-bottom: var(--sf-section-pad, 20px);
   animation: fadeIn 0.4s ease;
 }
 
@@ -100,14 +104,14 @@
 }
 
 .hero-title {
-  font-size: 32px;
-  font-weight: 800;
+  font-size: var(--sf-typo-title-size, 32px);
+  font-weight: var(--sf-typo-title-weight, 800);
   letter-spacing: 0.03em;
   margin-bottom: 6px;
-  color: #fff;
+  color: var(--sf-color-text);
   text-align: center;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-  font-family: 'Roboto', sans-serif;
+  font-family: var(--sf-font-heading);
   font-style: italic;
   font-weight: 900;
   text-transform: uppercase;
@@ -124,33 +128,34 @@
 }
 
 .hero-subtitle {
-  font-size: 16px;
+  font-size: var(--sf-font-size-body, 16px);
   opacity: 0.7;
-  color: #fff;
+  color: var(--sf-color-text);
   text-align: center;
 }
 
 .search-input {
   width: calc(100% - 24px);
-  margin: 12px;
-  padding: 10px;
-  border-radius: 12px;
+  margin: var(--sf-space-sm, 12px);
+  padding: var(--sf-space-sm, 10px);
+  border-radius: var(--sf-radius-md, 12px);
   border: none;
-  background: rgba(255, 255, 255, 0.04);
-  color: #ffffff;
-  font-size: 14px;
+  background: color-mix(in srgb, var(--sf-color-surface) 85%, transparent);
+  color: var(--sf-color-text);
+  font-size: var(--sf-font-size-body, 14px);
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 55%, transparent);
   outline: none;
 }
 
 .search-input::placeholder {
-  color: #6b7280;
+  color: var(--sf-color-muted);
 }
 
 .categories {
   display: flex;
-  gap: 8px;
+  gap: var(--sf-chip-gap, 8px);
   overflow-x: auto;
-  padding: 10px 12px;
+  padding: var(--sf-space-sm, 10px) var(--sf-space-sm, 12px);
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
@@ -162,12 +167,12 @@
 
 .categories button {
   padding: 8px 14px;
-  min-height: 36px;
-  border-radius: 14px;
+  min-height: var(--sf-button-height, 36px);
+  border-radius: var(--sf-chip-radius, 14px);
   border: none;
-  background: rgba(255, 255, 255, 0.05);
-  color: #9ca3af;
-  font-size: 12px;
+  background: color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface)) 90%, transparent);
+  color: var(--sf-color-muted);
+  font-size: var(--sf-chip-font-size, 12px);
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
@@ -175,8 +180,8 @@
 }
 
 .categories button:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.85);
+  background: color-mix(in srgb, var(--sf-color-surface) 98%, transparent);
+  color: var(--sf-color-text);
 }
 
 .categories button:active {
@@ -184,8 +189,8 @@
 }
 
 .categories button.active {
-  background: rgba(255, 45, 45, 0.2);
-  color: #ff2d2d;
+  background: color-mix(in srgb, var(--sf-color-primary) 20%, transparent);
+  color: var(--sf-color-primary);
 }
 
 /* ===== Макет Modern (пресет + ручной выбор в админке) ===== */

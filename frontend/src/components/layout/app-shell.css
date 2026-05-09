@@ -48,6 +48,27 @@
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
 }
 
+.sf-app .app-header {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--sf-color-surface) 92%, transparent) 0%,
+    color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface)) 96%, transparent) 100%
+  );
+  border-bottom: 1px solid color-mix(in srgb, var(--sf-color-border) 60%, transparent);
+  box-shadow: var(--sf-shadow-card, 0 8px 20px rgba(0, 0, 0, 0.3));
+}
+
+.sf-app .app-header__logo {
+  color: var(--sf-color-text);
+  font-family: var(--sf-font-heading);
+  font-size: var(--sf-typo-section-title-size, 1.05rem);
+}
+
+.sf-app .app-header__user-name {
+  color: var(--sf-color-text);
+  font-family: var(--sf-font-body);
+}
+
 .app-header__cell {
   min-width: 0;
   display: flex;
@@ -318,7 +339,7 @@
   background: none;
   cursor: pointer;
   text-align: left;
-  border-radius: 12px;
+  border-radius: var(--sf-radius-md, 12px);
   transition: opacity 0.2s ease;
   -webkit-tap-highlight-color: transparent;
 }
@@ -336,7 +357,9 @@
   font-weight: 800;
   letter-spacing: 0.32em;
   text-transform: uppercase;
-  color: #fff;
+  color: var(--sf-color-text);
+  font-family: var(--sf-font-heading);
+  font-size: var(--sf-typo-section-title-size, 1.35rem);
   line-height: 1.2;
 }
 
@@ -429,7 +452,7 @@
   color: #fff !important;
   background: var(--app-accent) !important;
   border-color: rgba(220, 38, 38, 0.5) !important;
-  box-shadow: 0 8px 24px rgba(220, 38, 38, 0.25);
+  box-shadow: var(--sf-shadow-button, 0 8px 24px rgba(220, 38, 38, 0.25));
 }
 
 .sf-app .app-drawer__link--active {
@@ -531,8 +554,12 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: linear-gradient(145deg, rgba(220, 38, 38, 0.4), rgba(15, 23, 42, 0.95));
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 70%, transparent);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--sf-color-primary) 40%, transparent),
+    color-mix(in srgb, var(--sf-color-surface) 95%, transparent)
+  );
   font-weight: 800;
   font-size: 1rem;
   color: #fff;
@@ -552,7 +579,8 @@
 .app-drawer__user-name {
   font-size: 0.9rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--sf-color-text);
+  font-family: var(--sf-font-body);
   line-height: 1.25;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -562,9 +590,51 @@
 .app-drawer__user-handle {
   margin-top: 2px;
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--sf-color-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Strong storefront token overrides for legacy shell bits */
+.sf-app .app-header__notify-dot {
+  background: var(--sf-color-danger, var(--sf-color-primary));
+  border-color: color-mix(in srgb, var(--sf-color-background) 90%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sf-color-danger, var(--sf-color-primary)) 55%, transparent);
+}
+
+.sf-app .app-header__burger {
+  background: color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface)) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 65%, transparent);
+  border-radius: var(--sf-button-radius, 12px);
+}
+
+.sf-app .app-header__burger:hover {
+  background: color-mix(in srgb, var(--sf-color-surface) 96%, transparent);
+}
+
+.sf-app .app-header__burger-line {
+  background: color-mix(in srgb, var(--sf-color-text) 90%, transparent);
+}
+
+.sf-app .app-header__mark {
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 70%, transparent);
+  box-shadow: var(--sf-shadow-card, 0 4px 14px rgba(0, 0, 0, 0.35));
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--sf-color-primary) 35%, transparent),
+    color-mix(in srgb, var(--sf-color-surface) 92%, transparent)
+  );
+}
+
+.sf-app .app-drawer__orders-attention-dot {
+  background: var(--sf-color-danger, var(--sf-color-primary));
+  border-color: var(--sf-drawer-bg-resolved, var(--sf-color-surface));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sf-color-danger, var(--sf-color-primary)) 50%, transparent);
+}
+
+.sf-app .app-drawer__link-icon,
+.sf-app .app-drawer__brand-tag {
+  color: var(--sf-color-muted);
 }
 

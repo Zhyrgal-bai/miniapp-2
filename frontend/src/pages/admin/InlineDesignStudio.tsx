@@ -20,6 +20,29 @@ function ensureUserId(): number {
   return id;
 }
 
+function normalizeDraftForSave(draft: BuilderConfig): BuilderConfig {
+  const styleRaw = draft.storefrontStyleConfig;
+  if (styleRaw == null || typeof styleRaw !== "object" || Array.isArray(styleRaw)) return draft;
+  const style = styleRaw as Record<string, unknown>;
+  const chipsRaw = style.chips;
+  if (chipsRaw == null || typeof chipsRaw !== "object" || Array.isArray(chipsRaw)) return draft;
+  const chips = chipsRaw as Record<string, unknown>;
+  const radiusRaw = chips.radius;
+  if (typeof radiusRaw !== "number" || !Number.isFinite(radiusRaw)) return draft;
+  const normalizedRadius = Math.min(32, Math.max(0, Math.round(radiusRaw)));
+  if (normalizedRadius === radiusRaw) return draft;
+  return {
+    ...draft,
+    storefrontStyleConfig: {
+      ...style,
+      chips: {
+        ...chips,
+        radius: normalizedRadius,
+      },
+    },
+  };
+}
+
 export function InlineDesignStudio(): React.ReactElement {
   const [draft, setDraft] = useState<BuilderConfig | null>(null);
   const [saving, setSaving] = useState(false);
@@ -56,7 +79,9 @@ export function InlineDesignStudio(): React.ReactElement {
     setMsg(null);
     try {
       const userId = ensureUserId();
-      await saveStorefrontBuilderDraft({ userId, draftConfig: draft });
+      const normalizedDraft = normalizeDraftForSave(draft);
+      await saveStorefrontBuilderDraft({ userId, draftConfig: normalizedDraft });
+      setDraft(normalizedDraft);
       setMsg("Сохранено ✓");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Ошибка сохранения");

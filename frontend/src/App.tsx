@@ -395,7 +395,7 @@ export default function App() {
   }
 
   const content = (
-    <div className={isStorefrontUi ? "app sf-app" : "app"}>
+    <div className="app">
       {page !== "home" ? (
         <Header
           menuOpen={isMenuOpen}
@@ -462,7 +462,11 @@ export default function App() {
   if (!isStorefrontUi) return content;
   return (
     <ThemeVarsProvider theme={theme}>
-      <div data-sf-kit={sfKit} style={sfVars as unknown as React.CSSProperties}>
+      <div
+        data-sf-kit={sfKit}
+        className="sf-root sf-app"
+        style={sfVars as unknown as React.CSSProperties}
+      >
         {content}
       </div>
     </ThemeVarsProvider>

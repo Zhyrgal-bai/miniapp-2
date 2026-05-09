@@ -460,14 +460,14 @@ const StorefrontStyleConfigSchema = z
         shape: z.enum(["pill", "square"]).default("pill"),
         style: z.enum(["outline", "filled"]).default("outline"),
         size: z.enum(["sm", "md", "lg"]).default("md"),
-        radius: z.number().int().min(0).max(32).default(999),
+        radius: z.number().int().min(0).max(32).default(32),
         gap: z.number().int().min(0).max(20).default(8),
       })
       .default({
         shape: "pill",
         style: "outline",
         size: "md",
-        radius: 999,
+        radius: 32,
         gap: 8,
       }),
     buttons: z
@@ -563,7 +563,7 @@ const StorefrontStyleConfigSchema = z
       shape: "pill",
       style: "outline",
       size: "md",
-      radius: 999,
+      radius: 32,
       gap: 8,
     },
     buttons: {

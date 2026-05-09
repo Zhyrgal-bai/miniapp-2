@@ -31,7 +31,7 @@ export function ChipsControls(props: {
       readString(props.value, "size", "md") === "sm" || readString(props.value, "size", "md") === "lg"
         ? (readString(props.value, "size", "md") as "sm" | "lg")
         : "md",
-    radius: readNumber(props.value, "radius", 999),
+    radius: readNumber(props.value, "radius", 32),
     gap: readNumber(props.value, "gap", 8),
   };
 

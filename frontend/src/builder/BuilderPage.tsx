@@ -645,7 +645,7 @@ export default function BuilderPage(): React.ReactElement {
                               shape: "pill",
                               style: "outline",
                               size: "md",
-                              radius: 999,
+                              radius: 32,
                               gap: 8,
                             },
                             buttons: {
