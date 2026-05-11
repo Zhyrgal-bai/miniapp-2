@@ -23,16 +23,9 @@ export function FeaturedProductsSection(props: {
   if (!props.products?.length) return null;
 
   return (
-    <section className="sf-section sf-section--featured" style={{ padding: "var(--sf-section-pad)" }}>
+    <section className="sf-section sf-section--featured sf-section--padded">
       <div className="sf-section__title">{title}</div>
-      <div
-        style={{
-          borderRadius: "var(--sf-section-radius)",
-          border: "1px solid var(--sf-color-border)",
-          background: "transparent",
-          padding: 6,
-        }}
-      >
+      <div className="sf-section-card sf-section-card--transparent sf-section-card--inset">
         <ProductGrid
           products={props.products}
           catalogProductCount={props.products.length}

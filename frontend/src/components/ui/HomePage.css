@@ -30,7 +30,7 @@
     color-mix(in srgb, var(--sf-color-text) 10%, transparent) 100%
   );
   border: 1px solid color-mix(in srgb, var(--sf-color-border) 75%, transparent);
-  box-shadow: var(--sf-shadow-card, 0 10px 32px rgba(0, 0, 0, 0.22));
+  box-shadow: var(--sf-shadow-card);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -76,7 +76,7 @@
   color: var(--sf-btn-fg, #fff);
   background: var(--sf-btn-bg, var(--sf-color-primary));
   border: 1px solid var(--sf-btn-border, color-mix(in srgb, var(--sf-color-primary) 55%, transparent));
-  box-shadow: var(--sf-btn-shadow, 0 4px 16px rgba(0, 0, 0, 0.28));
+  box-shadow: var(--sf-btn-shadow);
   cursor: pointer;
   transition: all 0.3s ease;
 }
@@ -110,17 +110,17 @@
   margin-bottom: 6px;
   color: var(--sf-color-text);
   text-align: center;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  text-shadow: none;
   font-family: var(--sf-font-heading);
   font-style: italic;
   font-weight: 900;
   text-transform: uppercase;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  text-shadow: none;
   font-family: 'Roboto', sans-serif;
   font-style: italic;
   font-weight: 900;
   text-transform: uppercase;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  text-shadow: none;
   font-family: 'Roboto', sans-serif;
   font-style: italic;
   font-weight: 900;

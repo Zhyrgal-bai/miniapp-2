@@ -19,7 +19,7 @@ export function CategoriesSection(props: {
   if (!props.categories?.length) return null;
 
   return (
-    <section className="sf-section sf-section--categories" style={{ padding: "var(--sf-section-pad)" }}>
+    <section className="sf-section sf-section--categories sf-section--padded">
       <div className="sf-section__title">{title}</div>
       <div className="sf-chips">
         {props.categories.map((c) => (

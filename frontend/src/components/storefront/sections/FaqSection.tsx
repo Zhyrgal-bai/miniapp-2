@@ -25,24 +25,16 @@ export function FaqSection(props: {
   if (items.length === 0) return null;
 
   return (
-    <section className="sf-section sf-section--faq" style={{ padding: "var(--sf-section-pad)" }}>
+    <section className="sf-section sf-section--faq sf-section--padded">
       <div className="sf-section__title">{title}</div>
-      <div style={{ display: "grid", gap: 8 }}>
+      <div className="sf-section-grid">
         {items.map((it, idx) => {
           const q = typeof it.q === "string" ? it.q : "";
           const a = typeof it.a === "string" ? it.a : "";
           return (
-            <div
-              key={idx}
-              style={{
-                borderRadius: 14,
-                border: "1px solid var(--sf-color-border)",
-                background: "transparent",
-                padding: 12,
-              }}
-            >
-              <div style={{ fontWeight: 800 }}>{q}</div>
-              <div style={{ marginTop: 6, opacity: 0.85 }}>{a}</div>
+            <div key={idx} className="sf-section-card sf-section-card--transparent sf-section-card--inset">
+              <div className="sf-section-card__title">{q}</div>
+              <div className="sf-section-card__text">{a}</div>
             </div>
           );
         })}

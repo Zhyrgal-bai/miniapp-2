@@ -19,9 +19,9 @@ body {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  background: var(--sf-color-background, #0b0f1a);
+  background: var(--sf-color-background, Canvas);
   font-family: var(--sf-font-body, -apple-system, BlinkMacSystemFont, sans-serif);
-  color: var(--sf-color-text, #fff);
+  color: var(--sf-color-text, CanvasText);
 }
 
 #root {

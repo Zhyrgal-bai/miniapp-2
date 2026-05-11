@@ -21,35 +21,25 @@ export function PromoSection(props: {
   if (blocks.length === 0) return null;
 
   return (
-    <section className="sf-section sf-section--promo" style={{ padding: "var(--sf-section-pad)" }}>
-      <div style={{ display: "grid", gap: "var(--sf-section-gap)" }}>
+    <section className="sf-section sf-section--promo sf-section--padded">
+      <div className="sf-section-grid">
         {blocks.map((b, idx) => {
           const title = readString(b, "title");
           const subtitle = readString(b, "subtitle");
           const imageUrl = buildCloudinaryResponsiveUrl(readString(b, "imageUrl"), "storefront");
           return (
-            <div
-              key={`${idx}-${title}`}
-              style={{
-                borderRadius: "var(--sf-section-radius)",
-                border: "1px solid var(--sf-color-border)",
-                background: "var(--sf-color-card)",
-                overflow: "hidden",
-              }}
-            >
+            <div key={`${idx}-${title}`} className="sf-section-card">
               {imageUrl ? (
                 <img
                   src={imageUrl}
                   alt=""
-                  style={{ width: "100%", maxHeight: 160, objectFit: "cover" }}
+                  className="sf-section-media"
                   loading="lazy"
                 />
               ) : null}
-              <div style={{ padding: "var(--sf-space-md)" }}>
-                <div style={{ fontWeight: 700 }}>{title}</div>
-                {subtitle ? (
-                  <div style={{ marginTop: 4, opacity: 0.8 }}>{subtitle}</div>
-                ) : null}
+              <div className="sf-section-card__body">
+                <div className="sf-section-card__title">{title}</div>
+                {subtitle ? <div className="sf-section-card__text">{subtitle}</div> : null}
               </div>
             </div>
           );

@@ -48,11 +48,11 @@ export function DiscoveryRails(props: Props): React.ReactElement | null {
   if (!rails.length) return null;
 
   return (
-    <section className="sf-section sf-section--discovery" style={{ padding: "var(--sf-section-pad)" }}>
-      <div style={{ display: "grid", gap: "var(--sf-space-md)" }}>
+    <section className="sf-section sf-section--discovery sf-section--padded">
+      <div className="sf-section-grid sf-section-grid--md">
         {rails.map((r) => (
           <div key={r.id}>
-            <div style={{ fontWeight: 900, marginBottom: "var(--sf-space-sm)" }}>{r.title}</div>
+            <div className="sf-section__title">{r.title}</div>
             <div className="sf-rail" role="list">
               {r.products.map((p) => (
                 <div key={String(p.id)} className="sf-rail__item" role="listitem">

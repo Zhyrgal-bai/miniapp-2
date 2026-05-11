@@ -14,20 +14,12 @@ export function FooterSection(props: {
   if (!text && !phone && !insta) return null;
 
   return (
-    <footer style={{ padding: 16, opacity: 0.9 }}>
-      <div
-        style={{
-          borderTop: "1px solid var(--sf-color-border)",
-          paddingTop: 12,
-          fontSize: 14,
-          display: "grid",
-          gap: 6,
-        }}
-      >
+    <footer className="sf-footer">
+      <div className="sf-footer__inner">
         {text ? <div>{text}</div> : null}
         {phone ? <div>Тел: {phone}</div> : null}
         {insta ? (
-          <a href={insta} target="_blank" rel="noreferrer" style={{ color: "var(--sf-color-primary)" }}>
+          <a href={insta} target="_blank" rel="noreferrer">
             Instagram
           </a>
         ) : null}

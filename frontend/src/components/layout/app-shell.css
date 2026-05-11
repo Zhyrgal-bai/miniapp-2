@@ -1,10 +1,14 @@
 ﻿/* App shell — premium header + drawer */
 
 :root {
-  --app-base: #0b0f1a;
-  --app-surface: #0f172a;
-  --app-accent: #dc2626;
-  --app-accent-hover: #ef4444;
+  --app-base: var(--sf-color-background, Canvas);
+  --app-surface: var(--sf-color-surface, Canvas);
+  --app-surface-alt: var(--sf-color-surfaceAlt, Canvas);
+  --app-text: var(--sf-color-text, CanvasText);
+  --app-muted: var(--sf-color-muted, GrayText);
+  --app-border: var(--sf-color-border, currentColor);
+  --app-accent: var(--sf-color-primary, Highlight);
+  --app-accent-hover: var(--sf-color-danger, Highlight);
   --app-header-pad-y: 12px;
   --app-header-pad-x: 16px;
   --app-header-approx: 56px;
@@ -41,11 +45,11 @@
   padding: max(var(--app-header-pad-y), env(safe-area-inset-top, 0px))
     var(--app-header-pad-x) var(--app-header-pad-y);
   min-height: var(--app-header-approx);
-  background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%);
+  background: linear-gradient(90deg, var(--app-surface) 0%, var(--app-surface-alt) 100%);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid color-mix(in srgb, var(--app-border) 82%, transparent);
+  box-shadow: var(--sf-shadow-card, 0 8px 20px color-mix(in srgb, black 30%, transparent));
 }
 
 .sf-app .app-header {
@@ -55,7 +59,7 @@
     color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface)) 96%, transparent) 100%
   );
   border-bottom: 1px solid color-mix(in srgb, var(--sf-color-border) 60%, transparent);
-  box-shadow: var(--sf-shadow-card, 0 8px 20px rgba(0, 0, 0, 0.3));
+  box-shadow: var(--sf-shadow-card, 0 8px 20px color-mix(in srgb, black 30%, transparent));
 }
 
 .sf-app .app-header__logo {
@@ -97,9 +101,9 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #ef4444;
-  border: 2px solid rgba(11, 15, 26, 0.95);
-  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.5);
+  background: var(--app-accent-hover);
+  border: 2px solid color-mix(in srgb, var(--app-base) 95%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-accent-hover) 50%, transparent);
   pointer-events: none;
 }
 
@@ -115,7 +119,7 @@
 .app-header__user-name {
   font-size: 0.8rem;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.92);
+  color: color-mix(in srgb, var(--app-text) 92%, transparent);
   line-height: 1.2;
   text-align: left;
   max-width: 38vw;
@@ -135,14 +139,14 @@
   margin: 0;
   border: none;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
+  background: color-mix(in srgb, var(--app-text) 4%, transparent);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: background 0.2s ease, transform 0.15s ease;
 }
 
 .app-header__burger:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--app-text) 8%, transparent);
 }
 
 .app-header__burger:active {
@@ -154,7 +158,7 @@
   height: 2px;
   width: 100%;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.88);
+  background: color-mix(in srgb, var(--app-text) 88%, transparent);
   transform-origin: center;
   transition:
     transform 0.32s cubic-bezier(0.4, 0, 0.2, 1),
@@ -183,7 +187,7 @@
   font-weight: 800;
   letter-spacing: 0.35em;
   text-transform: uppercase;
-  color: #fff;
+  color: var(--app-text);
   user-select: none;
   text-align: center;
   line-height: 1;
@@ -198,14 +202,18 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border: 2px solid rgba(255, 255, 255, 0.14);
+  border: 2px solid color-mix(in srgb, var(--app-border) 82%, transparent);
   box-shadow:
-    0 0 0 1px rgba(220, 38, 38, 0.25),
-    0 4px 14px rgba(0, 0, 0, 0.35);
-  background: linear-gradient(145deg, rgba(220, 38, 38, 0.35), rgba(15, 23, 42, 0.9));
+    0 0 0 1px color-mix(in srgb, var(--app-accent) 25%, transparent),
+    0 4px 14px color-mix(in srgb, black 35%, transparent);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--app-accent) 35%, transparent),
+    color-mix(in srgb, var(--app-surface) 90%, transparent)
+  );
   font-size: 0.95rem;
   font-weight: 800;
-  color: #fff;
+  color: var(--app-text);
   letter-spacing: 0.02em;
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
@@ -239,7 +247,7 @@
   position: fixed;
   inset: 0;
   z-index: 1980;
-  background: rgba(2, 6, 23, 0.62);
+  background: color-mix(in srgb, var(--app-base) 62%, transparent);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
@@ -263,11 +271,11 @@
   display: flex;
   flex-direction: column;
   background: var(--app-surface);
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  border-right: 1px solid color-mix(in srgb, var(--app-border) 60%, transparent);
   border-radius: 0 22px 22px 0;
   box-shadow:
-    16px 0 48px rgba(0, 0, 0, 0.45),
-    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+    16px 0 48px color-mix(in srgb, black 45%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--app-border) 40%, transparent) inset;
   overflow: hidden;
 }
 
@@ -300,8 +308,8 @@
   height: 5px;
   width: 40px;
   margin: 10px auto 4px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
+  border-radius: var(--sf-radius-full, 999px);
+  background: color-mix(in srgb, var(--app-border) 80%, transparent);
   pointer-events: none;
 }
 
@@ -323,7 +331,7 @@
 .app-drawer__brand {
   margin-bottom: 8px;
   padding-bottom: 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid color-mix(in srgb, var(--app-border) 68%, transparent);
 }
 
 .sf-app .app-drawer__brand {
@@ -374,7 +382,7 @@
   font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: lowercase;
-  color: rgba(255, 255, 255, 0.45);
+  color: color-mix(in srgb, var(--app-muted) 82%, transparent);
 }
 
 .sf-app .app-drawer__brand-tag {
@@ -400,8 +408,8 @@
   font-weight: 600;
   text-align: left;
   cursor: pointer;
-  color: rgba(255, 255, 255, 0.7);
-  background: rgba(255, 255, 255, 0.03);
+  color: color-mix(in srgb, var(--app-text) 70%, transparent);
+  background: color-mix(in srgb, var(--app-text) 3%, transparent);
   border: 1px solid transparent;
   transition: all 0.3s ease;
   -webkit-tap-highlight-color: transparent;
@@ -427,16 +435,16 @@
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #ef4444;
+  background: var(--app-accent-hover);
   border: 2px solid var(--app-surface);
-  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.45);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-accent-hover) 45%, transparent);
   pointer-events: none;
 }
 
 .app-drawer__link:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.06);
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-text) 6%, transparent);
+  border-color: color-mix(in srgb, var(--app-border) 60%, transparent);
 }
 
 .sf-app .app-drawer__link:hover {
@@ -449,16 +457,16 @@
 }
 
 .app-drawer__link--active {
-  color: #fff !important;
+  color: var(--sf-on-primary, var(--app-text)) !important;
   background: var(--app-accent) !important;
-  border-color: rgba(220, 38, 38, 0.5) !important;
-  box-shadow: var(--sf-shadow-button, 0 8px 24px rgba(220, 38, 38, 0.25));
+  border-color: color-mix(in srgb, var(--app-accent) 50%, transparent) !important;
+  box-shadow: var(--sf-shadow-button, 0 8px 24px color-mix(in srgb, var(--app-accent) 25%, transparent));
 }
 
 .sf-app .app-drawer__link--active {
   background: var(--sf-color-primary) !important;
   border-color: color-mix(in srgb, var(--sf-color-primary) 55%, transparent) !important;
-  box-shadow: var(--sf-shadow-button, 0 8px 24px rgba(0,0,0,0.25));
+  box-shadow: var(--sf-shadow-button, 0 8px 24px color-mix(in srgb, black 25%, transparent));
 }
 
 .sf-app[style*="--sf-drawer-active-style:outline"] .app-drawer__link--active {
@@ -504,9 +512,9 @@
   justify-content: center;
   font-size: 0.65rem;
   font-weight: 800;
-  color: #fff;
-  background: #dc2626;
-  border-radius: 999px;
+  color: var(--sf-on-primary, var(--app-text));
+  background: var(--app-accent);
+  border-radius: var(--sf-radius-full, 999px);
   border: 2px solid var(--app-surface);
   line-height: 1;
 }
@@ -523,7 +531,7 @@
 .app-drawer__divider {
   height: 1px;
   margin: 10px 0 6px;
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--app-border) 68%, transparent);
 }
 
 .sf-app .app-drawer__divider {
@@ -533,8 +541,8 @@
 .app-drawer__footer {
   flex-shrink: 0;
   padding: 14px 18px max(16px, env(safe-area-inset-bottom, 0px));
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(11, 15, 26, 0.55);
+  border-top: 1px solid color-mix(in srgb, var(--app-border) 68%, transparent);
+  background: color-mix(in srgb, var(--app-base) 55%, transparent);
 }
 
 .sf-app .app-drawer__footer {
@@ -566,7 +574,7 @@
   );
   font-weight: 800;
   font-size: 1rem;
-  color: #fff;
+  color: var(--app-text);
 }
 
 .app-drawer__user-avatar img {
@@ -623,7 +631,7 @@
 
 .sf-app .app-header__mark {
   border: 1px solid color-mix(in srgb, var(--sf-color-border) 70%, transparent);
-  box-shadow: var(--sf-shadow-card, 0 4px 14px rgba(0, 0, 0, 0.35));
+  box-shadow: var(--sf-shadow-card, 0 4px 14px color-mix(in srgb, black 35%, transparent));
   background: linear-gradient(
     145deg,
     color-mix(in srgb, var(--sf-color-primary) 35%, transparent),

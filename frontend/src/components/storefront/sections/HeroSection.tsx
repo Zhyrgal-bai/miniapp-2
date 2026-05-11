@@ -69,14 +69,14 @@ export function HeroSection(props: {
   // Structural divergence: editorial split for fashion, boutique overlay for luxury.
   if (kit === "fashion") {
     return (
-      <section className="sf-section sf-section--hero" style={{ padding: "var(--sf-section-pad)" }}>
+      <section className="sf-section sf-section--hero sf-section--padded">
         <div className={`${heroClass} sf-hero--fashion`}>
           <div className="sf-hero__copy">
             <div className="sf-hero__kicker">EDITORIAL</div>
             <div className="sf-hero__title">{title}</div>
             {subtitle ? <div className="sf-hero__subtitle">{subtitle}</div> : null}
             {ctaText && ctaPosition !== "hidden" ? (
-              <div style={{ marginTop: 10 }}>
+              <div className="sf-hero__cta-wrap">
                 <button type="button" className="sf-hero__cta">
                   {ctaText}
                 </button>
@@ -93,7 +93,7 @@ export function HeroSection(props: {
 
   if (kit === "luxury") {
     return (
-      <section className="sf-section sf-section--hero" style={{ padding: "var(--sf-section-pad)" }}>
+      <section className="sf-section sf-section--hero sf-section--padded">
         <div className={`${heroClass} sf-hero--luxury`}>
           {imageUrl ? (
             <div className="sf-hero__media">
@@ -102,7 +102,7 @@ export function HeroSection(props: {
                 <div className="sf-hero__title">{title}</div>
                 {subtitle ? <div className="sf-hero__subtitle">{subtitle}</div> : null}
                 {ctaText && ctaPosition !== "hidden" ? (
-                  <div style={{ marginTop: 10 }}>
+                  <div className="sf-hero__cta-wrap">
                     <button type="button" className="sf-hero__cta">
                       {ctaText}
                     </button>
@@ -115,7 +115,7 @@ export function HeroSection(props: {
               <div className="sf-hero__title">{title}</div>
               {subtitle ? <div className="sf-hero__subtitle">{subtitle}</div> : null}
               {ctaText && ctaPosition !== "hidden" ? (
-                <div style={{ marginTop: 10 }}>
+                <div className="sf-hero__cta-wrap">
                   <button type="button" className="sf-hero__cta">
                     {ctaText}
                   </button>
@@ -129,7 +129,7 @@ export function HeroSection(props: {
   }
 
   return (
-    <section className="sf-section sf-section--hero" style={{ padding: "var(--sf-section-pad)" }}>
+    <section className="sf-section sf-section--hero sf-section--padded">
       <div className={`${heroClass} sf-hero--centered`}>
         <div className="sf-hero__media">
           {imageUrl ? <img src={imageUrl} alt="" loading="lazy" /> : null}

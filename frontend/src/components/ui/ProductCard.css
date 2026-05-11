@@ -1,7 +1,7 @@
 .product-card {
-  background: var(--sf-color-card, rgba(255, 255, 255, 0.04));
-  color: var(--sf-color-text, #fff);
-  border: 1px solid var(--sf-card-border-color, var(--sf-color-border, rgba(255,255,255,0.10)));
+  background: var(--sf-color-card);
+  color: var(--sf-color-text);
+  border: 1px solid var(--sf-card-border-color, var(--sf-color-border));
   border-radius: var(--sf-card-radius, var(--sf-radius-lg, 20px));
   overflow: hidden;
   backdrop-filter: blur(12px);
@@ -11,13 +11,13 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  box-shadow: var(--sf-card-shadow, var(--sf-shadow-card, 0 8px 28px rgba(0, 0, 0, 0.35)));
+  box-shadow: var(--sf-card-shadow, var(--sf-shadow-card));
 }
 
 .product-card:hover {
   transform: var(--sf-card-hover-transform, translateY(-2px));
-  box-shadow: var(--sf-card-hover-shadow, var(--sf-card-hover-shadow, var(--sf-shadow-card, 0 16px 40px rgba(0, 0, 0, 0.45))));
-  border-color: var(--sf-color-border, rgba(255,255,255,0.12));
+  box-shadow: var(--sf-card-hover-shadow, var(--sf-shadow-card));
+  border-color: var(--sf-color-border);
 }
 
 .product-card:active {
@@ -66,7 +66,7 @@
 }
 
 .product-card--img-shadow .product-image-wrapper {
-  box-shadow: 0 18px 44px color-mix(in srgb, black 35%, transparent);
+  box-shadow: var(--sf-shadow-card);
 }
 
 .product-card--density-compact .product-info {
@@ -111,7 +111,7 @@
   backdrop-filter: blur(10px);
 }
 .product-badge--style-luxury {
-  background: rgba(0, 0, 0, 0.45);
+  background: color-mix(in srgb, var(--sf-color-surface) 55%, black);
   border-color: color-mix(in srgb, var(--sf-color-primary) 30%, transparent);
 }
 .product-badge--style-glow {
@@ -121,10 +121,10 @@
 }
 
 .product-add-btn--cta-pill {
-  border-radius: 999px;
+  border-radius: var(--sf-radius-full, 999px);
 }
 .product-add-btn--cta-square {
-  border-radius: 10px;
+  border-radius: var(--sf-radius-sm, 10px);
 }
 .product-add-btn--cta-outline {
   background: transparent !important;
@@ -162,8 +162,8 @@
 }
 
 .product-card--shadow {
-  --sf-card-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
-  --sf-card-hover-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  --sf-card-shadow: var(--sf-shadow-card);
+  --sf-card-hover-shadow: var(--sf-shadow-card);
 }
 
 .product-card--ratio-square {
@@ -278,13 +278,13 @@
   letter-spacing: 0.22em;
   text-transform: uppercase;
   background: color-mix(in srgb, var(--sf-color-surface) 68%, black);
-  color: var(--sf-color-text, #fff);
-  border: 1px solid var(--sf-color-border, rgba(255,255,255,0.12));
+  color: var(--sf-color-text);
+  border: 1px solid var(--sf-color-border);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
 .product-badge--luxury {
-  background: rgba(0, 0, 0, 0.45);
+  background: color-mix(in srgb, var(--sf-color-surface) 55%, black);
   border-color: color-mix(in srgb, var(--sf-color-primary) 30%, transparent);
 }
 .product-badge--new {
@@ -362,7 +362,7 @@
 }
 .product-add-btn--ghost {
   background: transparent;
-  border-color: var(--sf-color-border, rgba(255,255,255,0.12));
+  border-color: var(--sf-color-border);
 }
 
 .product-bottom--minimal {
@@ -400,7 +400,7 @@
 }
 
 .colors button.active {
-  border-color: var(--sf-color-primary, #ff2d2d);
+  border-color: var(--sf-color-primary);
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--sf-color-background) 90%, transparent),
     0 0 0 3px color-mix(in srgb, var(--sf-color-text) 35%, transparent);
@@ -417,7 +417,7 @@
   border-radius: var(--sf-radius-sm, 8px);
   border: 1px solid color-mix(in srgb, var(--sf-color-border) 68%, transparent);
   background: color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface)) 90%, transparent);
-  color: var(--sf-color-text, #ffffff);
+  color: var(--sf-color-text);
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
@@ -429,9 +429,9 @@
 }
 
 .sizes button.active {
-  background: color-mix(in srgb, var(--sf-color-primary, #ef4444) 22%, transparent);
-  border-color: color-mix(in srgb, var(--sf-color-primary, #ef4444) 40%, transparent);
-  color: var(--sf-color-primary, #ff6b6b);
+  background: color-mix(in srgb, var(--sf-color-primary) 22%, transparent);
+  border-color: color-mix(in srgb, var(--sf-color-primary) 40%, transparent);
+  color: var(--sf-color-primary);
 }
 
 .sizes button:disabled {
@@ -450,7 +450,7 @@
 
 .product-title {
   margin: 0 0 6px;
-  color: var(--sf-color-text, #ffffff);
+  color: var(--sf-color-text);
   font-size: 14px;
   font-weight: 600;
   text-transform: uppercase;
@@ -465,13 +465,13 @@
 }
 
 .product-add-btn {
-  background: var(--sf-color-primary, #ef4444);
-  color: #fff;
+  background: var(--sf-btn-bg, var(--sf-color-primary));
+  color: var(--sf-btn-fg);
 }
 
 .product-action-btn {
-  color: var(--sf-color-primary, #ef4444);
-  border-color: var(--sf-color-primary, #ef4444);
+  color: var(--sf-color-primary);
+  border-color: var(--sf-color-primary);
 }
 
 .product-bottom {
@@ -561,10 +561,10 @@
   border-radius: var(--sf-button-radius, 12px);
   font-size: 12px;
   font-weight: 700;
-  color: var(--sf-btn-fg, #fff);
+  color: var(--sf-btn-fg);
   background: var(--sf-btn-bg, var(--sf-color-primary));
   border: 1px solid var(--sf-btn-border, color-mix(in srgb, var(--sf-color-primary) 55%, transparent));
-  box-shadow: var(--sf-btn-shadow, 0 4px 14px rgba(0, 0, 0, 0.28));
+  box-shadow: var(--sf-btn-shadow);
 }
 
 .product-action-btn:hover,
@@ -576,7 +576,7 @@
 .product-add-btn:hover,
 .add-button:hover {
   filter: brightness(1.06);
-  box-shadow: var(--sf-btn-shadow, 0 6px 18px rgba(0, 0, 0, 0.35));
+  box-shadow: var(--sf-btn-shadow);
 }
 
 .product-action-btn:active,

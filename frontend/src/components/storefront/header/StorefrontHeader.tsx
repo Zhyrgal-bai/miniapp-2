@@ -153,7 +153,7 @@ function HeaderLuxury(props: {
       </div>
       <div className="sf-header__right">
         {props.cfg.showAvatar ? (
-          <div className="sf-header__user" style={{ minWidth: 0 }}>
+          <div className="sf-header__user sf-header__user--min">
             <div className="sf-header__avatar" aria-hidden title={props.userName ?? undefined}>
               {props.photoUrl ? (
                 <img
@@ -163,7 +163,7 @@ function HeaderLuxury(props: {
                   height={props.cfg.avatarSize}
                 />
               ) : (
-                <span style={{ fontWeight: 900, opacity: 0.9 }}>{props.initial}</span>
+                <span className="sf-header__initial">{props.initial}</span>
               )}
             </div>
             {props.userName ? <div className="sf-header__user-name">{props.userName}</div> : null}
@@ -214,7 +214,7 @@ function HeaderFashion(props: {
                 height={props.cfg.avatarSize}
               />
             ) : (
-              <span style={{ fontWeight: 900, opacity: 0.9 }}>{props.initial}</span>
+              <span className="sf-header__initial">{props.initial}</span>
             )}
           </div>
         ) : null}
@@ -357,10 +357,10 @@ export function StorefrontHeader(props: {
   const bg =
     cfg.glass
       ? kit === "luxury"
-        ? "rgba(10,9,8,0.58)"
+        ? "color-mix(in srgb, var(--sf-color-surface) 58%, transparent)"
         : kit === "neon"
-          ? "rgba(2,6,23,0.55)"
-          : "rgba(15,23,42,0.55)"
+          ? "color-mix(in srgb, var(--sf-color-background) 55%, transparent)"
+          : "color-mix(in srgb, var(--sf-color-surface) 55%, transparent)"
       : "var(--sf-color-background)";
   const border =
     cfg.border
@@ -371,10 +371,10 @@ export function StorefrontHeader(props: {
   const shadow =
     cfg.shadow
       ? kit === "neon"
-        ? "0 18px 70px rgba(0,0,0,0.55), 0 0 0 1px rgba(34,211,238,0.10)"
+        ? "var(--sf-shadow-card), 0 0 0 1px color-mix(in srgb, var(--sf-color-primary) 18%, transparent)"
         : kit === "luxury"
-          ? "0 18px 70px rgba(0,0,0,0.55)"
-          : "0 10px 26px rgba(0,0,0,0.22)"
+          ? "var(--sf-shadow-card)"
+          : "var(--sf-shadow-card)"
       : "none";
 
   const title = titleText(cfg, props.storeName ?? null);

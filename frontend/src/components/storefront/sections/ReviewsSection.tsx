@@ -25,28 +25,20 @@ export function ReviewsSection(props: {
   if (items.length === 0) return null;
 
   return (
-    <section className="sf-section sf-section--reviews" style={{ padding: "var(--sf-section-pad)" }}>
+    <section className="sf-section sf-section--reviews sf-section--padded">
       <div className="sf-section__title">{title}</div>
-      <div style={{ display: "grid", gap: 10 }}>
+      <div className="sf-section-grid">
         {items.map((it, idx) => {
           const author = typeof it.author === "string" ? it.author : "";
           const text = typeof it.text === "string" ? it.text : "";
           const rating = typeof it.rating === "number" ? it.rating : 5;
           return (
-            <div
-              key={idx}
-              style={{
-                borderRadius: 14,
-                border: "1px solid var(--sf-color-border)",
-                background: "var(--sf-color-card)",
-                padding: 12,
-              }}
-            >
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <div style={{ fontWeight: 800 }}>{author || "Клиент"}</div>
-                <div style={{ opacity: 0.7, fontSize: 12 }}>★ {rating}</div>
+            <div key={idx} className="sf-section-card sf-section-card--inset">
+              <div className="sf-section-row">
+                <div className="sf-section-card__title">{author || "Клиент"}</div>
+                <div className="sf-section-card__meta">★ {rating}</div>
               </div>
-              <div style={{ marginTop: 6, opacity: 0.92 }}>{text}</div>
+              <div className="sf-section-card__text">{text}</div>
             </div>
           );
         })}
