@@ -1,11 +1,11 @@
 .faq {
-  max-width: 36rem;
+  max-width: var(--sf-content-max, 36rem);
   margin: 0 auto;
-  padding: 20px 18px 32px;
-  padding-bottom: max(32px, env(safe-area-inset-bottom, 0));
+  padding: var(--sf-mobile-pad, 16px) var(--sf-mobile-pad, 18px) max(32px, env(safe-area-inset-bottom, 0));
   box-sizing: border-box;
   color: var(--sf-color-text);
   font-family: var(--sf-font-body);
+  background: transparent;
 }
 
 /* Legacy plain FAQ (if reused) */

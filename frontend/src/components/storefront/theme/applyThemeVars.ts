@@ -162,23 +162,59 @@ export function applyThemeVars(theme: ResolvedStoreTheme): Record<string, string
     };
   }
 
-  // Fallback (V2)
+  // Fallback (V2) — same CSS vars as V3 branch so shell + Cart/Orders/FAQ/Checkout never lose tokens.
   const legacyPrimary = pick(theme.primaryColor, "#6366f1");
+  const bg = pick(theme.bgColor, "#0f172a");
+  const card = pick(theme.cardColor, "#1e293b");
+  const txt = pick(theme.textColor, "#ffffff");
+  const t = theme.tokens;
+  const sp = t.spacing;
+  const rad = t.radius;
+  const cardStyle = t.card;
+  const btn = t.button;
+  const shadows = t.shadows;
+  const cardRadiusPx = cardStyle?.radius ?? 18;
+  const btnRadiusPx = btn?.radius ?? 14;
+  const borderOp = cardStyle?.borderOpacity ?? 0.08;
   return {
-    "--sf-color-background": pick(theme.bgColor, "#0f172a"),
-    "--sf-color-card": pick(theme.cardColor, "#1e293b"),
-    "--sf-color-text": pick(theme.textColor, "#ffffff"),
+    "--sf-color-background": bg,
+    "--sf-color-surface": bg,
+    "--sf-color-surfaceAlt": card,
+    "--sf-color-card": card,
+    "--sf-color-text": txt,
     "--sf-color-muted": "rgba(148,163,184,0.92)",
     "--sf-color-primary": legacyPrimary,
     "--sf-on-primary": onPrimaryForHex(legacyPrimary),
     "--sf-color-border": "rgba(255,255,255,0.10)",
-    "--sf-font-body": theme.tokens?.typography?.fontFamily ?? "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, Noto Sans, sans-serif",
-    "--sf-font-heading": theme.tokens?.typography?.fontFamily ?? "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, Noto Sans, sans-serif",
-    "--sf-font-button": theme.tokens?.typography?.fontFamily ?? "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, Noto Sans, sans-serif",
-    "--sf-card-border-opacity": String(theme.tokens?.card?.borderOpacity ?? 0.08),
-    "--sf-card-border-color": `rgba(255,255,255,${theme.tokens?.card?.borderOpacity ?? 0.08})`,
-    "--sf-button-padding-y": `${theme.tokens?.button?.paddingY ?? 12}px`,
-    "--sf-button-padding-x": `${theme.tokens?.button?.paddingX ?? 16}px`,
+    "--sf-color-secondary": "#22c55e",
+    "--sf-color-accent": "#f97316",
+    "--sf-color-success": "#22c55e",
+    "--sf-color-warning": "#f59e0b",
+    "--sf-color-danger": "#ef4444",
+    "--sf-font-body": t.typography.fontFamily,
+    "--sf-font-heading": t.typography.fontFamily,
+    "--sf-font-button": t.typography.fontFamily,
+    "--sf-space-xs": `${sp.xs}px`,
+    "--sf-space-sm": `${sp.sm}px`,
+    "--sf-space-md": `${sp.md}px`,
+    "--sf-space-lg": `${sp.lg}px`,
+    "--sf-space-xl": `${sp.xl}px`,
+    "--sf-space-xxl": `${sp.xl + 8}px`,
+    "--sf-radius-xs": `${Math.max(6, rad.sm - 4)}px`,
+    "--sf-radius-sm": `${rad.sm}px`,
+    "--sf-radius-md": `${rad.md}px`,
+    "--sf-radius-lg": `${rad.lg}px`,
+    "--sf-radius-xl": `${rad.lg + 6}px`,
+    "--sf-radius-full": `${rad.pill}px`,
+    "--sf-shadow-card": shadows.md,
+    "--sf-card-radius": `${cardRadiusPx}px`,
+    "--sf-card-border-opacity": String(borderOp),
+    "--sf-card-border-color": `rgba(255,255,255,${borderOp})`,
+    "--sf-card-shadow": shadows.md,
+    "--sf-card-hover-shadow": shadows.lg,
+    "--sf-button-padding-y": `${btn.paddingY}px`,
+    "--sf-button-padding-x": `${btn.paddingX}px`,
+    "--sf-button-radius": `${btnRadiusPx}px`,
   };
 }
 

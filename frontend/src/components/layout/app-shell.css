@@ -42,6 +42,13 @@
   min-height: 100%;
 }
 
+/* Non-home storefront routes: same canvas as ThemeVarsProvider + Design Studio tokens */
+.sf-app .app__content {
+  background: var(--sf-color-background);
+  color: var(--sf-color-text);
+  font-family: var(--sf-font-body);
+}
+
 /* Storefront page uses its own header + safe-area; no platform header spacing. */
 .app__content--storefront {
   padding-top: 0;
