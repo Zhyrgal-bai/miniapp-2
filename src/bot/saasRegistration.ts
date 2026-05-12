@@ -291,12 +291,6 @@ function miniAppMerchantCabinetUrl(): string | null {
   return `${base}/merchant`;
 }
 
-function miniAppPlatformAdminUrl(): string | null {
-  const base = merchantMiniAppBaseUrl();
-  if (base === "") return null;
-  return `${base}/platform-admin`;
-}
-
 /** Магазины, где пользователь — OWNER или ADMIN. */
 async function findMerchantMembershipsForTelegram(telegramId: string) {
   const identity = await prisma.user.findUnique({
@@ -377,14 +371,6 @@ async function replyMerchantStoreDashboard(
   keyboard.push([
     { text: "➕ Добавить магазин", callback_data: "saas_new_store" },
   ]);
-
-  const tidStr = telegramIdString(ctx);
-  const adminUrl = miniAppPlatformAdminUrl();
-  if (base && adminUrl != null && adminTelegramNumericIds().includes(tidStr)) {
-    keyboard.push([
-      { text: "🛠 Админ панель", web_app: { url: adminUrl } },
-    ]);
-  }
 
   await ctx.reply(lines.join("\n"), {
     reply_markup: { inline_keyboard: keyboard },

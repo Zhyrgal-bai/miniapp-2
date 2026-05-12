@@ -7,9 +7,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 import { StorefrontPayloadProvider } from "./components/storefront/runtime/StorefrontPayloadContext";
 import MerchantDashboardPage from "./pages/MerchantDashboardPage";
 import MerchantRegisterPage from "./pages/MerchantRegisterPage";
-import PlatformAdminPage from "./pages/PlatformAdminPage";
 import RootAppOrPlatform from "./pages/RootAppOrPlatform";
-import BuilderPage from "./builder/BuilderPage";
 import "leaflet/dist/leaflet.css";
 import "./index.css";
 
@@ -28,12 +26,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 element={<MerchantRegisterPage />}
               />
               <Route path="/merchant" element={<MerchantDashboardPage />} />
-              <Route path="/merchant/builder" element={<BuilderPage />} />
               <Route
                 path="/platform"
                 element={<Navigate to="/merchant" replace />}
               />
-              <Route path="/platform-admin" element={<PlatformAdminPage />} />
               <Route path="/" element={<RootAppOrPlatform />} />
               <Route path="*" element={<App />} />
             </Routes>

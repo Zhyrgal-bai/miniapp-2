@@ -3,7 +3,6 @@ import AdminLayout from "./AdminLayout";
 import AdminOrdersPage from "./AdminOrdersPage";
 import AdminProductsPage from "./AdminProductsPage";
 import AdminAnalyticsPage from "./AdminAnalyticsPage";
-import AdminSettingsPage from "./AdminSettingsPage";
 import AdminProductManagePage from "./AdminProductManagePage";
 import AdminCategoriesPage from "./AdminCategoriesPage";
 import AdminUsersPage from "./AdminUsersPage";
@@ -42,6 +41,11 @@ export default function AdminApp({ onExit }: AdminAppProps) {
     window.location.hash = "#/admin/orders";
   }, [path, gateStatus, merchantRole]);
 
+  useEffect(() => {
+    if (!path.includes("/admin/settings")) return;
+    window.location.hash = "#/admin/orders";
+  }, [path]);
+
   const page = useMemo(() => {
     if (path.includes("/admin/users")) {
       if (merchantRole === "OWNER") {
@@ -64,9 +68,6 @@ export default function AdminApp({ onExit }: AdminAppProps) {
     }
     if (path.includes("/admin/categories")) {
       return <AdminCategoriesPage key="categories" />;
-    }
-    if (path.includes("/admin/settings")) {
-      return <AdminSettingsPage key="settings" />;
     }
     return <AdminOrdersPage key="orders" />;
   }, [path, merchantRole]);

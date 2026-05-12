@@ -22,8 +22,7 @@ type AdminSection =
   | "orders"
   | "products"
   | "categories"
-  | "analytics"
-  | "settings";
+  | "analytics";
 
 type SideMenuProps = {
   open: boolean;
@@ -52,7 +51,6 @@ function readHash(): string {
 function activeAdminSection(hash: string): AdminSection | null {
   if (!hash.includes("/admin")) return null;
   if (hash.includes("/analytics")) return "analytics";
-  if (hash.includes("/settings")) return "settings";
   if (hash.includes("/categories")) return "categories";
   if (hash.includes("/products")) return "products";
   if (hash.includes("/orders")) return "orders";
@@ -69,7 +67,6 @@ const ADMIN_LINKS: {
   { section: "products", hash: "#/admin/products", icon: "🏷️", label: "Товары" },
   { section: "categories", hash: "#/admin/categories", icon: "🗂", label: "Категории" },
   { section: "analytics", hash: "#/admin/analytics", icon: "📊", label: "Аналитика" },
-  { section: "settings", hash: "#/admin/settings", icon: "🎨", label: "Оформление витрины" },
 ];
 
 export default function SideMenu({

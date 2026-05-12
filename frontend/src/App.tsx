@@ -152,7 +152,7 @@ export default function App() {
     }
     if (v === "merchant-settings") {
       setPage("admin");
-      window.location.hash = "#/admin/settings";
+      window.location.hash = "#/admin/orders";
       if (location.pathname === "/faq") {
         navigate(
           {
@@ -258,7 +258,7 @@ export default function App() {
   };
 
   const goAdminSection = (
-    section: "orders" | "products" | "categories" | "analytics" | "settings"
+    section: "orders" | "products" | "categories" | "analytics"
   ) => {
     setPage("admin");
     if (location.pathname === "/faq") {
@@ -278,7 +278,6 @@ export default function App() {
       products: "#/admin/products",
       categories: "#/admin/categories",
       analytics: "#/admin/analytics",
-      settings: "#/admin/settings",
     };
     window.location.hash = paths[section];
     setIsMenuOpen(false);

@@ -641,29 +641,6 @@ export default function PlatformPage() {
             subtitle="Управляйте своими магазинами"
           />
 
-        {platformAdminAccess === "yes" ? (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.05 }}
-            className="mp-panel mp-panel--admin px-4 py-4"
-            role="region"
-            aria-label="Панель администратора платформы"
-          >
-            <p className="mp-muted leading-relaxed">
-              Заявки на регистрацию, все магазины, подписки, отключение ботов —
-              только для администратора платформы.
-            </p>
-            <button
-              type="button"
-              onClick={() => navigate("/platform-admin")}
-              className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg mt-3"
-            >
-              Админ-панель платформы
-            </button>
-          </motion.div>
-        ) : null}
-
         {successFlash ? (
           <p className="mp-flash mp-flash--ok" role="status">
             ⏳ Заявка отправлена. Ожидайте подтверждения администратора
