@@ -26,6 +26,10 @@ services:
       # Если задать API_URL вручную — имеет приоритет над RENDER_EXTERNAL_URL
       - key: API_URL
         sync: false
+      # Сборка Vite: публичный URL API без слэша в конце (как API_URL). Если SPA с того же хоста
+      # что и API — можно оставить пустым: axios пойдёт на текущий origin.
+      - key: VITE_API_URL
+        sync: false
       # Заполните в Dashboard после первого деплоя:
       # - BOT_TOKEN или BOT_TOKENS (бот регистрации / платформы; первый токен — проверка Mini App initData)
       # - PLATFORM_WEBAPP_BOT_TOKEN — если Mini App открывается не с того бота что первый в BOT_TOKENS

@@ -13,6 +13,7 @@ export function FeaturedProductsSection(props: {
   textConfig?: Record<string, unknown>;
   kit?: "minimal" | "luxury" | "fashion" | "neon" | "default";
   businessId?: number;
+  onOpenProduct?: (product: Product) => void;
 }): React.ReactElement | null {
   const cfgTitle = readTitle(props.config, "");
   const txtTitle =
@@ -30,7 +31,7 @@ export function FeaturedProductsSection(props: {
           products={props.products}
           catalogProductCount={props.products.length}
           showToast={() => undefined}
-          onProductSelect={() => undefined}
+          onProductSelect={props.onOpenProduct}
           cardConfig={props.cardConfig}
           textConfig={props.textConfig}
           kit={props.kit}

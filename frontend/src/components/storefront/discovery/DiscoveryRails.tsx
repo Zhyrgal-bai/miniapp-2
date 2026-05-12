@@ -11,30 +11,37 @@ type Props = {
   featuredProducts: Product[];
   cardConfig?: Record<string, unknown>;
   textConfig?: Record<string, unknown>;
+  /** Если задан (включая пустой массив) — внутренний GET /products не выполняется. */
+  catalogProducts?: Product[] | null;
+  onOpenProduct?: (product: Product) => void;
 };
 
 export function DiscoveryRails(props: Props): React.ReactElement | null {
-  const [catalog, setCatalog] = useState<Product[] | null>(null);
+  const [fetchedCatalog, setFetchedCatalog] = useState<Product[] | null>(null);
 
   useEffect(() => {
+    if (props.catalogProducts !== undefined) return;
     let alive = true;
     void (async () => {
       try {
         const res = await api.get<Product[]>("/products");
         if (!alive) return;
-        setCatalog(Array.isArray(res.data) ? res.data : []);
+        setFetchedCatalog(Array.isArray(res.data) ? res.data : []);
       } catch {
         if (!alive) return;
-        setCatalog([]);
+        setFetchedCatalog([]);
       }
     })();
     return () => {
       alive = false;
     };
-  }, []);
+  }, [props.catalogProducts]);
 
   const rails = useMemo(() => {
-    const catalogProducts = catalog ?? [];
+    const catalogProducts =
+      props.catalogProducts !== undefined
+        ? props.catalogProducts ?? []
+        : fetchedCatalog ?? [];
     return buildDiscoveryRails({
       kit: props.kit,
       businessType: props.businessType,
@@ -43,7 +50,15 @@ export function DiscoveryRails(props: Props): React.ReactElement | null {
       catalogProducts,
       textConfig: props.textConfig,
     });
-  }, [props.kit, props.businessType, props.businessId, props.featuredProducts, props.textConfig, catalog]);
+  }, [
+    props.kit,
+    props.businessType,
+    props.businessId,
+    props.featuredProducts,
+    props.textConfig,
+    props.catalogProducts,
+    fetchedCatalog,
+  ]);
 
   if (!rails.length) return null;
 
@@ -59,6 +74,7 @@ export function DiscoveryRails(props: Props): React.ReactElement | null {
                   <ProductCard
                     product={p}
                     showToast={() => undefined}
+                    onOpenDetail={props.onOpenProduct}
                     cardConfig={props.cardConfig}
                     textConfig={props.textConfig}
                     kit={props.kit}

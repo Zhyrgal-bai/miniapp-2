@@ -1,8 +1,8 @@
 .product-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: var(--sf-grid-gap, 10px);
-  padding: var(--sf-mobile-pad, 10px) var(--sf-mobile-pad, 10px) 20px;
+  gap: max(6px, calc(var(--sf-grid-gap, 10px) * 0.92));
+  padding: var(--sf-mobile-pad, 10px) var(--sf-mobile-pad, 10px) 16px;
   align-items: stretch;
   /* Telegram Mini App: one main scroll container. Avoid nested scrolling. */
   overflow: visible;

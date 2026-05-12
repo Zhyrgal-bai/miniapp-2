@@ -106,15 +106,6 @@ export default function App() {
   const items = useCartStore((state) => state.items);
   const totalQuantity = items.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
 
-  const isStorefrontUi =
-    page === "home" ||
-    page === "cart" ||
-    page === "checkout" ||
-    page === "my-orders" ||
-    page === "support" ||
-    page === "faq" ||
-    page === "about-shop";
-
   const sfKit = kitFromTemplateId(templateId ?? payload?.templateId ?? null);
 
   const sfVars = useMemo(
@@ -276,6 +267,16 @@ export default function App() {
     return () =>
       window.removeEventListener("sf:toggleMenu", onToggle as unknown as EventListener);
   }, []);
+
+  useEffect(() => {
+    const onOpenSupport = () => {
+      commitPage("support");
+      setIsMenuOpen(false);
+    };
+    window.addEventListener("sf:openSupport", onOpenSupport as EventListener);
+    return () =>
+      window.removeEventListener("sf:openSupport", onOpenSupport as EventListener);
+  }, [commitPage]);
 
   const handleNav = (target: AppNavPage) => {
     commitPage(target);
@@ -453,7 +454,6 @@ export default function App() {
       />
     </div>
   );
-  if (!isStorefrontUi) return content;
   return (
     <ThemeVarsProvider theme={theme}>
       <div
@@ -461,6 +461,7 @@ export default function App() {
         className="sf-root sf-app"
         style={sfVars as unknown as React.CSSProperties}
       >
+        <div id="sf-theme-portal-root" data-sf-portal-host />
         {content}
       </div>
     </ThemeVarsProvider>

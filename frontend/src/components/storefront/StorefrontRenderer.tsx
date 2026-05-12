@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Category, Product } from "../../types";
+import { api, TENANT_HEADER } from "../../services/api";
 import { useTheme } from "../../context/ThemeContext";
 import { ThemeVarsProvider } from "./theme/ThemeVarsProvider";
 import { HeroSection } from "./sections/HeroSection";
@@ -10,6 +11,7 @@ import { FooterSection } from "./sections/FooterSection";
 import { ReviewsSection } from "./sections/ReviewsSection";
 import { FaqSection } from "./sections/FaqSection";
 import { DiscoveryRails } from "./discovery/DiscoveryRails";
+import { ProductDetailSheet } from "./product/ProductDetailSheet";
 import "./storefrontKits.css";
 import {
   buildStorefrontLayoutCssVars,
@@ -57,6 +59,41 @@ export function StorefrontRenderer(props: {
 }): React.ReactElement {
   const { theme } = useTheme();
   const kit = kitFromTemplateId(props.payload.templateId) as StorefrontKitId;
+  const [catalog, setCatalog] = useState<Product[] | null>(null);
+  const [sheetProduct, setSheetProduct] = useState<Product | null>(null);
+
+  useEffect(() => {
+    const bid = props.payload.businessId;
+    if (!Number.isFinite(bid) || bid <= 0) {
+      setCatalog([]);
+      return;
+    }
+    let alive = true;
+    setCatalog(null);
+    void (async () => {
+      try {
+        const res = await api.get<Product[]>("/products", {
+          headers: { [TENANT_HEADER]: String(bid) },
+        });
+        if (!alive) return;
+        setCatalog(Array.isArray(res.data) ? res.data : []);
+      } catch {
+        if (!alive) return;
+        setCatalog([]);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [props.payload.businessId]);
+
+  useEffect(() => {
+    setSheetProduct(null);
+  }, [props.payload.businessId]);
+
+  const openProduct = useCallback((p: Product) => {
+    setSheetProduct(p);
+  }, []);
 
   const cssVars = useMemo(
     () =>
@@ -109,6 +146,7 @@ export function StorefrontRenderer(props: {
                   textConfig={props.payload.storefrontTextConfig ?? undefined}
                   kit={kit}
                   businessId={props.payload.businessId}
+                  onOpenProduct={openProduct}
                 />
               );
             case "footer":
@@ -141,8 +179,21 @@ export function StorefrontRenderer(props: {
           featuredProducts={props.payload.featuredProducts ?? []}
           cardConfig={props.payload.storefrontCardConfig ?? undefined}
           textConfig={props.payload.storefrontTextConfig ?? undefined}
+          catalogProducts={catalog === null ? undefined : catalog}
+          onOpenProduct={openProduct}
         />
       </div>
+
+      {sheetProduct ? (
+        <ProductDetailSheet
+          product={sheetProduct}
+          businessId={props.payload.businessId}
+          featuredProducts={props.payload.featuredProducts ?? []}
+          catalogProducts={catalog ?? []}
+          onClose={() => setSheetProduct(null)}
+          onSelectProduct={setSheetProduct}
+        />
+      ) : null}
     </ThemeVarsProvider>
   );
 }

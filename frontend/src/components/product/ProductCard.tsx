@@ -123,7 +123,6 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const touchStartX = useRef<number | null>(null);
-  const [ctaBump, setCtaBump] = useState(false);
 
   const hasCustomColors = Boolean(
     (product.colors && product.colors.length > 0) ||
@@ -140,7 +139,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
         hex: getVariantCssBackground(v),
       }));
     }
-    return [{ name: "default", hex: "#ffffff" }];
+    return [{ name: "default", hex: "var(--sf-color-muted)" }];
   }, [product]);
 
   const sizes = useMemo<Size[]>(() => {
@@ -294,8 +293,6 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
     if (businessId && product.id) recordRecentlyViewed({ businessId, product });
     upsertQuantity(1);
     showToast("Добавлено в корзину");
-    setCtaBump(true);
-    window.setTimeout(() => setCtaBump(false), 240);
   };
 
   const handleIncrement = () => {
@@ -389,7 +386,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   const AddToCartButton =
     quantity <= 0 ? (
       <button
-        className={`product-add-btn product-add-btn--${cta.emphasis} product-add-btn--cta-${cfg.ctaStyle}${ctaBump ? " product-add-btn--bump" : ""}`}
+        className={`product-add-btn product-add-btn--${cta.emphasis} product-add-btn--cta-${cfg.ctaStyle}`}
         onClick={handleAddToCart}
         disabled={cta.disabled}
         type="button"

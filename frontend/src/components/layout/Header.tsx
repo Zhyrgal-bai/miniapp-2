@@ -288,7 +288,7 @@ export default function Header({
               </>
             ) : null}
           </AnimatePresence>,
-          document.body
+          document.getElementById("sf-theme-portal-root") ?? document.body
         )
       : null;
 

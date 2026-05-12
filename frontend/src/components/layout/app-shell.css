@@ -743,6 +743,18 @@
   }
 }
 
+/* Host for createPortal — must stay inside .sf-app for --sf-* inheritance */
+#sf-theme-portal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 2300;
+  pointer-events: none;
+}
+
+#sf-theme-portal-root > * {
+  pointer-events: auto;
+}
+
 /* ——— Drawer overlay ——— */
 .app-overlay {
   position: fixed;
