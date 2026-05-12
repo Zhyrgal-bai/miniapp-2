@@ -92,11 +92,6 @@ import {
   plainBotTokenFromStored,
 } from "./businessBotToken.js";
 import { connectDatabase, logPrismaError, prisma } from "./db.js";
-
-const __serverDir = path.dirname(fileURLToPath(import.meta.url));
-const FRONTEND_DIST = path.resolve(__serverDir, "../../frontend/dist");
-const SPA_INDEX = path.join(FRONTEND_DIST, "index.html");
-const SPA_AVAILABLE = fs.existsSync(SPA_INDEX);
 import {
   clearPaymentFieldByRowId,
   listPaymentDetailsFromDb,
@@ -140,6 +135,21 @@ import { jsonBodyLimits } from "../middleware/jsonBodyLimits.js";
 import { requireNonEmptyJsonBody } from "../middleware/requireNonEmptyJsonBody.js";
 import { requireTelegramAuth } from "../middleware/requireTelegramAuth.js";
 import { isStorefrontClosedForCustomers } from "./subscriptionAccess.js";
+
+const __serverDir = path.dirname(fileURLToPath(import.meta.url));
+const FRONTEND_DIST = path.resolve(__serverDir, "../../frontend/dist");
+const SPA_INDEX = path.join(FRONTEND_DIST, "index.html");
+const SPA_AVAILABLE = fs.existsSync(SPA_INDEX);
+
+function sendSpaIndexHtml(res: Response, next: NextFunction) {
+  res.set({
+    "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    Pragma: "no-cache",
+  });
+  res.sendFile(SPA_INDEX, (err) => {
+    if (err) next(err);
+  });
+}
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -2525,9 +2535,9 @@ app.post("/connect-bot", async (req: Request, res: Response) => {
 });
 
 // ================== ROOT ==================
-app.get("/", (_req: Request, res: Response) => {
+app.get("/", (_req: Request, res: Response, next: NextFunction) => {
   if (SPA_AVAILABLE) {
-    res.sendFile(SPA_INDEX);
+    sendSpaIndexHtml(res, next);
   } else {
     res.type("text").send("Server is working 🚀");
   }
@@ -4236,9 +4246,7 @@ if (SPA_AVAILABLE) {
     ) {
       return next();
     }
-    res.sendFile(SPA_INDEX, (err) => {
-      if (err) next(err);
-    });
+    sendSpaIndexHtml(res, next);
   });
 }
 
