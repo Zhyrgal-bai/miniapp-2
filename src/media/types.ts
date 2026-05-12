@@ -1,4 +1,10 @@
-export type MediaEntityKind = "products" | "storefront" | "blocks" | "avatars" | "receipts";
+export type MediaEntityKind =
+  | "products"
+  | "storefront"
+  | "blocks"
+  | "avatars"
+  | "receipts"
+  | "support";
 
 export type CloudinaryImageAsset = {
   url: string; // secure_url

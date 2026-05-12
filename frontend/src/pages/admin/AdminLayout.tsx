@@ -34,6 +34,7 @@ const navAll: NavItem[] = [
     icon: "🗂️",
   },
   { href: "#/admin/analytics", match: "analytics", label: "Аналитика", icon: "📊" },
+  { href: "#/admin/support", match: "support", label: "Поддержка", icon: "💬" },
 ];
 
 type AdminLayoutProps = {

@@ -285,3 +285,149 @@
 .my-orders__items li {
   margin-bottom: 2px;
 }
+
+.my-orders__open-order {
+  width: 100%;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--sf-color-border, #555);
+  border-radius: 2px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--sf-color-card, transparent);
+  color: inherit;
+}
+
+.my-orders__back {
+  display: inline-block;
+  margin: 0 0 12px;
+  padding: 8px 0;
+  border: none;
+  background: none;
+  color: var(--sf-color-primary, #6366f1);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.my-orders__section {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--sf-color-border, #444);
+}
+
+.my-orders__section-title {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.my-orders__scenario-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.my-orders__scenario-btn {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 2px;
+  border: 1px solid var(--sf-color-border, #555);
+  background: var(--sf-color-card, transparent);
+  color: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.my-orders__scenario-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.my-orders__ticket-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.my-orders__linkish {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 0;
+  border: none;
+  background: none;
+  color: var(--sf-color-primary, #6366f1);
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.my-orders__ticket-msgs {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.my-orders__ticket-msg {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--sf-color-border, #444);
+  border-radius: 2px;
+  font-size: 13px;
+}
+
+.my-orders__ticket-sender {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--sf-color-muted, #888);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.my-orders__ticket-text {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.4;
+}
+
+.my-orders__ticket-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 8px 0;
+  padding: 8px;
+  font-size: 14px;
+  border: 1px solid var(--sf-color-border, #555);
+  border-radius: 2px;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+}
+
+.my-orders__ticket-actions {
+  margin-bottom: 4px;
+}
+
+.my-orders__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.my-orders__select {
+  padding: 10px 8px;
+  font-size: 14px;
+  border: 1px solid var(--sf-color-border, #555);
+  border-radius: 2px;
+  background: transparent;
+  color: inherit;
+}

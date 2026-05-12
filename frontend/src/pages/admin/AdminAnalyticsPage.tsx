@@ -7,6 +7,7 @@ const STATUS_LABELS: Record<string, string> = {
   PAID_PENDING: "Ожидают оплату",
   CONFIRMED: "Оплачены",
   SHIPPED: "Отправлены",
+  DELIVERED: "Доставлены",
   CANCELLED: "Отменены",
 };
 
@@ -16,6 +17,8 @@ export default function AdminAnalyticsPage() {
     totalRevenue: number;
     accepted: number;
     pending: number;
+    shipped?: number;
+    delivered?: number;
     done: number;
     byStatus: Record<string, number>;
   } | null>(null);
@@ -29,6 +32,8 @@ export default function AdminAnalyticsPage() {
         totalRevenue: a.totalRevenue,
         accepted: a.accepted,
         pending: a.pending ?? 0,
+        shipped: a.shipped,
+        delivered: a.delivered,
         done: a.done,
         byStatus: a.byStatus ?? {},
       });
@@ -60,7 +65,7 @@ export default function AdminAnalyticsPage() {
         <h1 className="admin-dash-page__title">Аналитика</h1>
         <p className="admin-dash-page__subtitle">
           По заказам в базе данных (Prisma). Выручка — сумма заказов в статусах
-          CONFIRMED и SHIPPED.
+          CONFIRMED, SHIPPED и DELIVERED.
         </p>
       </header>
 
@@ -94,9 +99,21 @@ export default function AdminAnalyticsPage() {
               <span className="admin-kpi-card__value">{data.pending}</span>
             </div>
             <div className="admin-kpi-card">
-              <span className="admin-kpi-card__label">Отправлено</span>
+              <span className="admin-kpi-card__label">В пути / доставлено</span>
               <span className="admin-kpi-card__value">{data.done}</span>
             </div>
+            {typeof data.shipped === "number" && (
+              <div className="admin-kpi-card">
+                <span className="admin-kpi-card__label">Отправлено (SHIPPED)</span>
+                <span className="admin-kpi-card__value">{data.shipped}</span>
+              </div>
+            )}
+            {typeof data.delivered === "number" && (
+              <div className="admin-kpi-card">
+                <span className="admin-kpi-card__label">Доставлено</span>
+                <span className="admin-kpi-card__value">{data.delivered}</span>
+              </div>
+            )}
           </div>
 
           <section className="admin-dash-section">

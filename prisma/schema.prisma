@@ -125,6 +125,10 @@ model Business {
 
   merchantChangeRequests MerchantChangeRequest[]
 
+  supportTickets  SupportTicket[]
+  supportMessages SupportMessage[]
+  returnRequests  ReturnRequest[]
+
   @@index([isActive])
   @@index([subscriptionStatus])
   @@index([isBlocked])
@@ -224,8 +228,10 @@ model User {
   /// После первого выданного trial новые магазины этого аккаунта без trial до оплаты.
   hasUsedTrial Boolean @default(false)
 
-  memberships Membership[]
-  orders      Order[]     @relation("OrderBuyer")
+  memberships    Membership[]
+  orders         Order[]         @relation("OrderBuyer")
+  supportTickets SupportTicket[]
+  returnRequests ReturnRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -331,7 +337,50 @@ enum OrderStatus {
   PAID_PENDING
   CONFIRMED
   SHIPPED
+  DELIVERED
   CANCELLED
+}
+
+enum SupportTicketStatus {
+  OPEN
+  PENDING_CUSTOMER
+  PENDING_MERCHANT
+  RESOLVED
+  CLOSED
+}
+
+enum SupportTicketType {
+  GENERAL
+  DELIVERY
+  QUALITY
+  RETURN
+  EXCHANGE
+  CANCEL_REQUEST
+  ADDRESS_CHANGE
+  TRACKING
+  OTHER
+}
+
+enum SupportSenderType {
+  CUSTOMER
+  MERCHANT
+  SYSTEM
+}
+
+enum ReturnRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REFUNDED
+  RETURNED
+}
+
+enum ReturnReason {
+  SIZE
+  DAMAGE
+  WRONG_ITEM
+  QUALITY
+  OTHER
 }
 
 /// Customer order — always anchored to Business; line items optionally reference Product snapshots.
@@ -363,7 +412,9 @@ model Order {
   buyerUserId Int?
   buyerUser   User?   @relation("OrderBuyer", fields: [buyerUserId], references: [id], onDelete: SetNull)
 
-  items OrderItem[]
+  items            OrderItem[]
+  supportTickets   SupportTicket[]
+  returnRequests   ReturnRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -394,7 +445,67 @@ model OrderItem {
 
   options Json? @default("{}")
 
+  returnRequests ReturnRequest[]
+
   @@index([businessId])
+  @@index([orderId])
+}
+
+model SupportTicket {
+  id           Int                 @id @default(autoincrement())
+  businessId   Int
+  business     Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId       Int
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId      Int
+  order        Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status       SupportTicketStatus @default(OPEN)
+  type         SupportTicketType   @default(GENERAL)
+  priority     Int                 @default(0)
+  internalNote String?
+  messages     SupportMessage[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@index([businessId, status])
+  @@index([businessId, orderId])
+  @@index([orderId])
+}
+
+model SupportMessage {
+  id           Int               @id @default(autoincrement())
+  ticketId     Int
+  ticket       SupportTicket     @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  businessId   Int
+  business     Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  senderType   SupportSenderType
+  senderId     Int?
+  text         String            @default("")
+  attachments  Json              @default("[]")
+  createdAt    DateTime          @default(now())
+
+  @@index([businessId, ticketId])
+}
+
+model ReturnRequest {
+  id           Int                 @id @default(autoincrement())
+  businessId   Int
+  business     Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orderId      Int
+  order        Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId       Int
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderItemId  Int?
+  orderItem    OrderItem?          @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+  reason       ReturnReason
+  status       ReturnRequestStatus @default(PENDING)
+  photos       Json                @default("[]")
+  refundAmount Int?
+  comment      String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@index([businessId, status])
   @@index([orderId])
 }
 

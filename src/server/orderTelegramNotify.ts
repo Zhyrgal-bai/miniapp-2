@@ -18,6 +18,9 @@ function customerTextForStatus(
   if (status === "SHIPPED") {
     return `🚚 Заказ отправлен!\n\nВаш заказ #${orderId} уже в пути 📦`;
   }
+  if (status === "DELIVERED") {
+    return `✅ Заказ доставлен!\n\nВаш заказ #${orderId} — можете оформить возврат при необходимости в «Мои заказы».`;
+  }
   return null;
 }
 

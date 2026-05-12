@@ -4,6 +4,7 @@ export type OrderStatus =
   | "PAID_PENDING"
   | "CONFIRMED"
   | "SHIPPED"
+  | "DELIVERED"
   | "CANCELLED";
 
 const VALID_STATUSES: OrderStatus[] = [
@@ -12,6 +13,7 @@ const VALID_STATUSES: OrderStatus[] = [
   "PAID_PENDING",
   "CONFIRMED",
   "SHIPPED",
+  "DELIVERED",
   "CANCELLED",
 ];
 
@@ -30,7 +32,8 @@ const STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   ACCEPTED: ["PAID_PENDING"],
   PAID_PENDING: ["CONFIRMED", "CANCELLED"],
   CONFIRMED: ["SHIPPED"],
-  SHIPPED: [],
+  SHIPPED: ["DELIVERED"],
+  DELIVERED: [],
   CANCELLED: [],
 };
 

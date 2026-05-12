@@ -135,6 +135,7 @@ import { jsonBodyLimits } from "../middleware/jsonBodyLimits.js";
 import { requireNonEmptyJsonBody } from "../middleware/requireNonEmptyJsonBody.js";
 import { requireTelegramAuth } from "../middleware/requireTelegramAuth.js";
 import { isStorefrontClosedForCustomers } from "./subscriptionAccess.js";
+import { attachSupportRoutes } from "./supportRoutes.js";
 
 const __serverDir = path.dirname(fileURLToPath(import.meta.url));
 const FRONTEND_DIST = path.resolve(__serverDir, "../../frontend/dist");
@@ -3421,14 +3422,14 @@ app.delete("/orders/clear", async (req: Request, res: Response) => {
     const type = String(rawType ?? "all").toLowerCase();
 
     // Исторические алиасы из UI:
-    // - completed -> SHIPPED (финальный успешный статус)
+    // - completed -> SHIPPED | DELIVERED (финальные успешные статусы)
     // - rejected  -> CANCELLED (отклонён/отменён)
     const baseWhere: Prisma.OrderWhereInput = {
       businessId: merchant.businessId,
     };
     let statusFilter: Prisma.EnumOrderStatusFilter | undefined;
     if (type === "completed") {
-      statusFilter = { equals: "SHIPPED" };
+      statusFilter = { in: ["SHIPPED", "DELIVERED"] };
     } else if (type === "rejected") {
       statusFilter = { equals: "CANCELLED" };
     } else if (type !== "all") {
@@ -3456,12 +3457,18 @@ app.post("/analytics", async (req: Request, res: Response) => {
 
     const totalOrders = orders.length;
     const totalRevenue = orders
-      .filter((o) => o.status === "CONFIRMED" || o.status === "SHIPPED")
+      .filter(
+        (o) =>
+          o.status === "CONFIRMED" ||
+          o.status === "SHIPPED" ||
+          o.status === "DELIVERED"
+      )
       .reduce((sum, o) => sum + o.total, 0);
     const accepted = orders.filter((o) => o.status === "ACCEPTED").length;
     const pending = orders.filter((o) => o.status === "PAID_PENDING").length;
     const shipped = orders.filter((o) => o.status === "SHIPPED").length;
-    const done = shipped;
+    const delivered = orders.filter((o) => o.status === "DELIVERED").length;
+    const done = shipped + delivered;
 
     const byStatus: Record<string, number> = {};
     for (const o of orders) {
@@ -3474,6 +3481,7 @@ app.post("/analytics", async (req: Request, res: Response) => {
       accepted,
       pending,
       shipped,
+      delivered,
       done,
       byStatus,
     });
@@ -3491,6 +3499,7 @@ function orderStatusRu(status: string): string {
     PAID_PENDING: "Ожидает подтверждения оплаты",
     CONFIRMED: "Оплачен",
     SHIPPED: "Отправлен",
+    DELIVERED: "Доставлен",
     CANCELLED: "Отменён",
     processing: "В обработке",
     shipped: "Отправлен",
@@ -3614,6 +3623,13 @@ app.get("/orders/my", async (req: Request, res: Response) => {
     console.error("GET /orders/my:", e);
     res.status(500).json({ error: "Ошибка загрузки заказов" });
   }
+});
+
+attachSupportRoutes(app, {
+  upload,
+  telegramIdFromRequest,
+  resolveCatalogBusinessId,
+  requireMerchantStaff,
 });
 
 // ================== LIST ORDERS (admin, Prisma) ==================

@@ -305,7 +305,11 @@ async function handleFinikWebhookForBusiness(
     }
 
     const cur = String(order.status ?? "").toUpperCase();
-    if (cur === "CONFIRMED" || cur === "SHIPPED") {
+    if (
+      cur === "CONFIRMED" ||
+      cur === "SHIPPED" ||
+      cur === "DELIVERED"
+    ) {
       res.json({ ok: true, duplicate: true });
       return;
     }

@@ -7,6 +7,7 @@ import AdminProductManagePage from "./AdminProductManagePage";
 import AdminCategoriesPage from "./AdminCategoriesPage";
 import AdminUsersPage from "./AdminUsersPage";
 import AdminDesignPage from "./AdminDesignPage";
+import AdminSupportPage from "./AdminSupportPage";
 import AdminErrorBoundary from "./AdminErrorBoundary";
 import {
   adminPathFromHash,
@@ -72,6 +73,9 @@ export default function AdminApp({ onExit }: AdminAppProps) {
     }
     if (path.includes("/admin/design")) {
       return <AdminDesignPage key="design" />;
+    }
+    if (path.includes("/admin/support")) {
+      return <AdminSupportPage key="support" />;
     }
     return <AdminOrdersPage key="orders" />;
   }, [path, merchantRole]);

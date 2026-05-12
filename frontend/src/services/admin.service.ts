@@ -63,6 +63,18 @@ async function adminGet<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function adminPatch<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const userId = requireAdminUserId();
+  const url = resolveAdminUrl(path);
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: withTenantHeaders({ "Content-Type": "application/json" }, url),
+    body: JSON.stringify({ ...body, userId }),
+  });
+  if (!res.ok) throw new Error(await readFetchError(res));
+  return res.json() as Promise<T>;
+}
+
 async function adminDelete(path: string): Promise<void> {
   const userId = requireAdminUserId();
   const resolved = resolveAdminUrl(path);
@@ -119,6 +131,7 @@ export type AdminAnalytics = {
   done: number;
   pending?: number;
   shipped?: number;
+  delivered?: number;
   byStatus?: Record<string, number>;
 };
 
@@ -321,7 +334,12 @@ export const adminService = {
 
   async updateOrderStatus(
     id: number,
-    status: "ACCEPTED" | "CONFIRMED" | "SHIPPED" | "CANCELLED"
+    status:
+      | "ACCEPTED"
+      | "CONFIRMED"
+      | "SHIPPED"
+      | "DELIVERED"
+      | "CANCELLED"
   ): Promise<unknown> {
     const userId = requireAdminUserId();
     const url = `${API_BASE_URL}/orders/${id}`;
@@ -437,6 +455,46 @@ export const adminService = {
     if (!res.ok) throw new Error(await readFetchError(res));
     const data = (await res.json().catch(() => [])) as unknown;
     return Array.isArray(data) ? (data as AdminMembershipRow[]) : [];
+  },
+
+  async listSupportTickets(status?: string): Promise<unknown[]> {
+    const q = new URLSearchParams();
+    if (status) q.set("status", status);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    const data = await adminGet<unknown[]>(`/merchant/support/tickets${suffix}`);
+    return Array.isArray(data) ? data : [];
+  },
+
+  async getSupportTicket(id: number): Promise<unknown> {
+    return adminGet<unknown>(`/merchant/support/tickets/${id}`);
+  },
+
+  async patchSupportTicket(
+    id: number,
+    patch: { status?: string; internalNote?: string | null }
+  ): Promise<unknown> {
+    return adminPatch<unknown>(`/merchant/support/tickets/${id}`, patch as Record<string, unknown>);
+  },
+
+  async postSupportTicketMessage(id: number, text: string): Promise<unknown> {
+    return adminPost<unknown>(`/merchant/support/tickets/${id}/messages`, {
+      text,
+    });
+  },
+
+  async listReturnRequests(status?: string): Promise<unknown[]> {
+    const q = new URLSearchParams();
+    if (status) q.set("status", status);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    const data = await adminGet<unknown[]>(`/merchant/support/returns${suffix}`);
+    return Array.isArray(data) ? data : [];
+  },
+
+  async patchReturnRequest(
+    id: number,
+    patch: { status: string; refundAmount?: number | null }
+  ): Promise<unknown> {
+    return adminPatch<unknown>(`/merchant/support/returns/${id}`, patch as Record<string, unknown>);
   },
 
   async updateMembershipRole(input: {

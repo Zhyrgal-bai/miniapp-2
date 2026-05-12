@@ -11,6 +11,7 @@ const FILTER_TABS = [
   "PAID_PENDING",
   "CONFIRMED",
   "SHIPPED",
+  "DELIVERED",
 ] as const;
 
 type FilterTab = (typeof FILTER_TABS)[number];
@@ -33,6 +34,7 @@ const ORDER_STATUS_LABEL_RU: Record<string, string> = {
   PAID_PENDING: "Ожидает подтверждения оплаты",
   CONFIRMED: "Оплачен",
   SHIPPED: "Отправлен",
+  DELIVERED: "Доставлен",
   CANCELLED: "Отменён",
 };
 
@@ -100,7 +102,12 @@ export default function AdminOrdersPage() {
 
   async function applyStatus(
     id: number,
-    status: "ACCEPTED" | "CONFIRMED" | "SHIPPED" | "CANCELLED"
+    status:
+      | "ACCEPTED"
+      | "CONFIRMED"
+      | "SHIPPED"
+      | "DELIVERED"
+      | "CANCELLED"
   ) {
     setBusyId(id);
     try {
@@ -462,6 +469,19 @@ export default function AdminOrdersPage() {
                     onClick={() => void applyStatus(order.id, "SHIPPED")}
                   >
                     Отправлено
+                  </button>
+                  <button
+                    type="button"
+                    className="admin-order-card__btn admin-order-card__btn--confirm"
+                    disabled={busy || canon !== "SHIPPED"}
+                    title={
+                      canon !== "SHIPPED"
+                        ? "Сначала отметьте отправку"
+                        : "Клиент сможет оформить возврат"
+                    }
+                    onClick={() => void applyStatus(order.id, "DELIVERED")}
+                  >
+                    Доставлено
                   </button>
                 </div>
               </article>

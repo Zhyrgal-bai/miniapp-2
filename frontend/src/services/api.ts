@@ -85,7 +85,9 @@ export function isTenantScopedPath(pathname: string): boolean {
     pathname === "/orders" ||
     pathname.startsWith("/orders/") ||
     pathname === "/analytics" ||
-    pathname.startsWith("/analytics/")
+    pathname.startsWith("/analytics/") ||
+    pathname.startsWith("/support/") ||
+    pathname.startsWith("/merchant/")
   );
 }
 
