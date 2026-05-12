@@ -12,7 +12,6 @@ import { ReviewsSection } from "./sections/ReviewsSection";
 import { FaqSection } from "./sections/FaqSection";
 import { DiscoveryRails } from "./discovery/DiscoveryRails";
 import "./storefrontKits.css";
-import "./storefrontBones.css";
 import {
   buildStorefrontLayoutCssVars,
   kitFromTemplateId,

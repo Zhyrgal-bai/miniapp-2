@@ -10,6 +10,8 @@ import MerchantRegisterPage from "./pages/MerchantRegisterPage";
 import RootAppOrPlatform from "./pages/RootAppOrPlatform";
 import "leaflet/dist/leaflet.css";
 import "./index.css";
+/** Последним в бандле: перебивает ProductCard.css / ProductGrid.css / kits (порядок каскада). */
+import "./components/storefront/storefrontBones.css";
 
 const tg = window.Telegram?.WebApp;
 tg?.ready();

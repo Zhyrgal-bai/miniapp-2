@@ -1,22 +1,25 @@
 /**
- * Витрина (каталог): только разметка и читаемость — без китов, теней, блюра, hover-драмы.
- * Подключается после storefrontKits.css / ProductCard.
+ * Витрина: «только кости». Подключается ПОСЛЕДНИМ из main.tsx, чтобы перебить
+ * ProductCard.css / ProductGrid.css / storefrontKits (порядок в бандле Vite).
  */
 .sf-root {
   padding-bottom: 88px;
 }
 
 .sf-root .sf-section__title {
-  font-weight: 600;
-  font-size: 1rem;
-  letter-spacing: normal;
-  text-transform: none;
-  margin-bottom: 8px;
+  font-weight: 600 !important;
+  font-size: 1rem !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  margin-bottom: 8px !important;
 }
 
 .sf-root .sf-chip {
-  border-radius: 4px;
-  opacity: 1;
+  border-radius: 2px !important;
+  opacity: 1 !important;
+  background: transparent !important;
+  border: 1px solid var(--sf-color-border, #666) !important;
+  box-shadow: none !important;
 }
 
 .sf-root .sf-hero,
@@ -24,33 +27,81 @@
 .sf-root .sf-section--hero > div,
 .sf-root .sf-section--featured > div,
 .sf-root .sf-section--promo > div {
-  border-radius: 4px !important;
+  border-radius: 2px !important;
   box-shadow: none !important;
   transition: none !important;
   transform: none !important;
 }
 
 .sf-root .sf-hero {
-  border: 1px solid var(--sf-color-border, #444);
-  background: var(--sf-color-card, var(--sf-color-background));
+  border: 1px solid var(--sf-color-border, #555) !important;
+  background: var(--sf-color-background, #111) !important;
+}
+
+.sf-root .sf-hero__title {
+  font-weight: 600 !important;
+  font-size: 1.25rem !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  font-style: normal !important;
+}
+
+.sf-root .sf-hero__subtitle {
+  opacity: 1 !important;
+  font-weight: 400 !important;
+  font-size: 0.9rem !important;
+}
+
+.sf-root .sf-hero__kicker,
+.sf-root .sf-hero__copy .sf-hero__kicker {
+  display: none !important;
 }
 
 .sf-root .sf-section-grid {
-  gap: 8px;
+  gap: 8px !important;
 }
 
 .sf-root .sf-section--padded {
-  padding: 8px 0;
+  padding: 8px 0 !important;
 }
 
-.sf-root .product-card {
-  border-radius: 4px !important;
+/* Сетка каталога */
+.sf-root .product-grid {
+  gap: 8px !important;
+  padding: 8px 8px 12px !important;
+}
+
+.sf-root .product-grid--empty {
+  border-radius: 2px !important;
+  background: transparent !important;
+  border: 1px dashed var(--sf-color-border, #555) !important;
   box-shadow: none !important;
+  margin: 8px !important;
+  min-height: 120px !important;
+}
+
+.sf-root .product-grid__empty-title {
+  font-weight: 600 !important;
+  font-size: 1rem !important;
+}
+
+/* Карточка товара — сброс всех модификаторов из ProductCard.css */
+.sf-root .product-card,
+.sf-root .product-card.product-card--rounded,
+.sf-root .product-card.product-card--square,
+.sf-root .product-card.product-card--shadow,
+.sf-root .product-card.product-card--flat {
+  border-radius: 2px !important;
+  box-shadow: none !important;
+  --sf-card-radius: 2px !important;
+  --sf-card-shadow: none !important;
+  --sf-card-hover-shadow: none !important;
+  --sf-card-hover-transform: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   transition: none !important;
-  border: 1px solid var(--sf-color-border, #444);
-  background: var(--sf-color-card, #1a1a1a);
+  border: 1px solid var(--sf-color-border, #555) !important;
+  background: var(--sf-color-background, #111) !important;
 }
 
 .sf-root .product-card:hover,
@@ -58,40 +109,76 @@
 .sf-root .product-card.out:hover {
   transform: none !important;
   box-shadow: none !important;
+  border-color: var(--sf-color-border, #555) !important;
 }
 
 .sf-root .product-card:hover .image-slide img {
   transform: none !important;
 }
 
-.sf-root .product-badge {
-  border-radius: 4px;
-  letter-spacing: normal;
+.sf-root .product-image-wrapper,
+.sf-root .product-card--img-shadow .product-image-wrapper {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.sf-root .product-badge,
+.sf-root .product-badge--new,
+.sf-root .product-badge--hot,
+.sf-root .product-badge--sale,
+.sf-root .product-badge--luxury,
+.sf-root .product-badge--style-glow,
+.sf-root .product-badge--style-minimal {
+  border-radius: 2px !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  font-size: 10px;
-  font-weight: 600;
+  box-shadow: none !important;
+  border: 1px solid var(--sf-color-border, #666) !important;
+  background: var(--sf-color-background, #111) !important;
+  color: var(--sf-color-text, #fff) !important;
 }
 
 .sf-root .product-title {
-  text-transform: none;
-  letter-spacing: normal;
-  font-weight: 500;
-  font-size: 14px;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  font-weight: 500 !important;
+  font-size: 14px !important;
 }
 
+.sf-root .product-price,
+.sf-root .product-price--sale {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--sf-color-muted, #aaa) !important;
+}
+
+/* Кнопки CTA / количество — без «фирменной» заливки */
 .sf-root .product-add-btn,
+.sf-root .product-add-btn--cta-pill,
+.sf-root .product-add-btn--cta-square,
+.sf-root .product-add-btn--cta-glow,
+.sf-root .product-add-btn--cta-outline,
+.sf-root .product-add-btn--cta-full,
 .sf-root .add-button {
-  border-radius: 4px !important;
+  border-radius: 2px !important;
   box-shadow: none !important;
-  font-weight: 600;
-  min-height: 36px;
+  filter: none !important;
+  font-weight: 600 !important;
+  min-height: 34px !important;
+  background: var(--sf-color-background, #111) !important;
+  color: var(--sf-color-text, #fff) !important;
+  border: 1px solid var(--sf-color-border, #666) !important;
 }
 
 .sf-root .product-add-btn:hover,
 .sf-root .add-button:hover {
   filter: none !important;
   box-shadow: none !important;
+  background: var(--sf-color-surface, #1a1a1a) !important;
 }
 
 .sf-root .product-add-btn:active,
@@ -99,34 +186,64 @@
   transform: none !important;
 }
 
-.sf-root .sf-hero__cta {
-  border-radius: 4px !important;
+.sf-root .product-action-btn {
+  border-radius: 2px !important;
+  background: transparent !important;
+  border: 1px solid var(--sf-color-border, #555) !important;
+  color: var(--sf-color-text) !important;
+}
+
+.sf-root .sizes button,
+.sf-root .colors button {
+  border-radius: 2px !important;
   box-shadow: none !important;
-  font-weight: 600;
+}
+
+.sf-root .sizes button.active {
+  box-shadow: none !important;
+}
+
+.sf-root .dots span {
+  border-radius: 2px !important;
+}
+
+.sf-root .sf-hero__cta {
+  border-radius: 2px !important;
+  box-shadow: none !important;
+  font-weight: 600 !important;
+  background: var(--sf-color-background, #111) !important;
+  color: var(--sf-color-text) !important;
+  border: 1px solid var(--sf-color-border, #666) !important;
 }
 
 .sf-root .sf-footer__inner {
-  border-top: 1px solid var(--sf-color-border, #444);
-  padding-top: 8px;
+  border-top: 1px solid var(--sf-color-border, #444) !important;
+  padding-top: 8px !important;
 }
 
 .sf-sticky-cart {
-  border-radius: 4px !important;
+  border-radius: 2px !important;
   box-shadow: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  border: 1px solid var(--sf-color-border, #444);
-  background: var(--sf-color-card, #222);
+  border: 1px solid var(--sf-color-border, #444) !important;
+  background: var(--sf-color-background, #111) !important;
 }
 
 .sf-sticky-cart__cta {
-  border-radius: 4px !important;
+  border-radius: 2px !important;
   box-shadow: none !important;
+  background: var(--sf-color-background, #111) !important;
+  color: var(--sf-color-text) !important;
+  border: 1px solid var(--sf-color-border, #666) !important;
 }
 
 .sf-app .floating-cart.cart-float {
-  border-radius: 4px !important;
+  border-radius: 2px !important;
   box-shadow: none !important;
+  background: var(--sf-color-background, #111) !important;
+  color: var(--sf-color-text) !important;
+  border: 1px solid var(--sf-color-border, #666) !important;
 }
 
 .sf-app .floating-cart.cart-float:hover {
@@ -134,7 +251,7 @@
   box-shadow: none !important;
 }
 
-/* Шапка витрины — без стекла и тени (инлайн-стили гасим через !important) */
+/* Шапка витрины */
 .sf-root .sf-header {
   background: var(--sf-color-background, #111) !important;
   box-shadow: none !important;
@@ -150,9 +267,27 @@
   letter-spacing: normal !important;
   text-transform: none !important;
   font-weight: 600 !important;
+  font-style: normal !important;
 }
 
 .sf-root .sf-header__eyebrow,
 .sf-root .sf-header__neon-line {
   display: none !important;
+}
+
+.sf-root .sf-header__burger {
+  border-radius: 2px !important;
+  box-shadow: none !important;
+  border: 1px solid var(--sf-color-border, #555) !important;
+  background: transparent !important;
+}
+
+.sf-root .sf-header__logo {
+  border-radius: 2px !important;
+}
+
+.sf-root .sf-header__avatar,
+.sf-root .sf-header__avatar--accent {
+  border-radius: 2px !important;
+  box-shadow: none !important;
 }
