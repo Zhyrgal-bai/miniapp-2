@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { adminService } from "../../services/admin.service";
+import { SF_ADMIN_SUPPORT_TAB_KEY } from "../../utils/accountMenuStorage";
 
 type Tab = "tickets" | "returns";
 
@@ -74,6 +75,14 @@ export default function AdminSupportPage() {
   useEffect(() => {
     void loadAll();
   }, [loadAll]);
+
+  useEffect(() => {
+    const raw = sessionStorage.getItem(SF_ADMIN_SUPPORT_TAB_KEY);
+    if (raw === "returns") setTab("returns");
+    if (raw === "returns" || raw === "tickets") {
+      sessionStorage.removeItem(SF_ADMIN_SUPPORT_TAB_KEY);
+    }
+  }, []);
 
   useEffect(() => {
     if (selectedTicketId == null) {

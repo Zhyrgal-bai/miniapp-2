@@ -8,6 +8,59 @@
   background: transparent;
 }
 
+.my-orders__intent-banner {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: var(--sf-card-radius, var(--sf-radius-lg, 14px));
+  border: 1px solid
+    color-mix(
+      in srgb,
+      var(--sf-color-primary, var(--app-accent)) 35%,
+      transparent
+    );
+  background: color-mix(
+    in srgb,
+    var(--sf-color-primary, var(--app-accent)) 10%,
+    transparent
+  );
+  box-shadow: var(
+    --sf-shadow-soft,
+    0 2px 12px color-mix(in srgb, black 8%, transparent)
+  );
+}
+
+.my-orders__intent-banner--returns {
+  border-color: color-mix(
+    in srgb,
+    var(--sf-color-text, var(--app-text)) 22%,
+    transparent
+  );
+  background: color-mix(
+    in srgb,
+    var(--sf-color-text, var(--app-text)) 6%,
+    transparent
+  );
+}
+
+.my-orders__intent-banner-title {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--sf-color-text, var(--store-text, var(--app-text)));
+  margin-bottom: 6px;
+}
+
+.my-orders__intent-banner-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: color-mix(
+    in srgb,
+    var(--sf-color-text, var(--store-text, var(--app-text))) 88%,
+    transparent
+  );
+}
+
 .my-orders__head {
   margin-bottom: 12px;
 }

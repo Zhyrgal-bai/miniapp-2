@@ -18,6 +18,11 @@ import type { MyOrderRow } from "./types/myOrder";
 import "./App.css";
 import "./components/ui/Admin.css";
 import Header from "./components/layout/Header";
+import {
+  SF_ADMIN_SUPPORT_TAB_KEY,
+  SF_ORDERS_INTENT_KEY,
+  type AdminSupportTabIntent,
+} from "./utils/accountMenuStorage";
 import SideMenu from "./components/layout/SideMenu";
 import FloatingCart from "./components/layout/FloatingCart";
 import { StickyCartBar } from "./components/storefront/cart/StickyCartBar";
@@ -62,6 +67,10 @@ export default function App() {
   const [page, setPage] = useState<AppNavPage>(initialPageFromPath);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [myOrdersAttention, setMyOrdersAttention] = useState(false);
+  /** Повторное чтение intent «Поддержка» / «Возвраты» из профиля. */
+  const [myOrdersIntentNonce, setMyOrdersIntentNonce] = useState(0);
+  /** Вход «Мои заказы» из профиля — сброс баннера. */
+  const [myOrdersPlainNonce, setMyOrdersPlainNonce] = useState(0);
   const [adminByHash, setAdminByHash] = useState(
     () =>
       typeof window !== "undefined" &&
@@ -283,7 +292,13 @@ export default function App() {
   };
 
   const goAdminSection = (
-    section: "orders" | "products" | "categories" | "analytics" | "design"
+    section:
+      | "orders"
+      | "products"
+      | "categories"
+      | "analytics"
+      | "design"
+      | "support"
   ) => {
     setPage("admin");
     if (location.pathname === "/faq" || location.pathname === "/about") {
@@ -304,9 +319,15 @@ export default function App() {
       products: "#/admin/products",
       categories: "#/admin/categories",
       analytics: "#/admin/analytics",
+      support: "#/admin/support",
     };
     window.location.hash = paths[section];
     setIsMenuOpen(false);
+  };
+
+  const openAdminSupportTab = (tab: AdminSupportTabIntent) => {
+    sessionStorage.setItem(SF_ADMIN_SUPPORT_TAB_KEY, tab);
+    goAdminSection("support");
   };
 
   const showHeaderAttentionDot =
@@ -334,9 +355,39 @@ export default function App() {
         menuOpen={isMenuOpen}
         onMenuToggle={handleMenuToggle}
         attentionDot={showHeaderAttentionDot}
+        ordersAttentionDot={myOrdersAttention}
         title={payload?.storeName?.trim() || undefined}
-        onNavigateFaq={() => handleNav("faq")}
-        onNavigateAbout={() => handleNav("about-shop")}
+        storeName={payload?.storeName?.trim() || undefined}
+        isMerchantStaff={adminAllowed}
+        accountMenu={{
+          onMyOrders: () => {
+            sessionStorage.removeItem(SF_ORDERS_INTENT_KEY);
+            setMyOrdersPlainNonce((n) => n + 1);
+            handleNav("my-orders");
+          },
+          onSupport: () => {
+            sessionStorage.setItem(SF_ORDERS_INTENT_KEY, "support");
+            setMyOrdersIntentNonce((n) => n + 1);
+            handleNav("my-orders");
+          },
+          onReturns: () => {
+            sessionStorage.setItem(SF_ORDERS_INTENT_KEY, "returns");
+            setMyOrdersIntentNonce((n) => n + 1);
+            handleNav("my-orders");
+          },
+          onFaq: () => handleNav("faq"),
+          onAbout: () => handleNav("about-shop"),
+        }}
+        merchantMenu={
+          adminAllowed
+            ? {
+                onCustomerSupport: () => openAdminSupportTab("tickets"),
+                onReturns: () => openAdminSupportTab("returns"),
+                onTickets: () => openAdminSupportTab("tickets"),
+                onSupportAnalytics: () => goAdminSection("analytics"),
+              }
+            : undefined
+        }
       />
 
       <SideMenu
@@ -356,7 +407,12 @@ export default function App() {
         {page === "home" && <HomePage />}
         {page === "faq" && <FAQ />}
         {page === "about-shop" && <AboutShopPage />}
-        {page === "my-orders" && <MyOrders />}
+        {page === "my-orders" && (
+          <MyOrders
+            profileIntentNonce={myOrdersIntentNonce}
+            profilePlainNonce={myOrdersPlainNonce}
+          />
+        )}
         {page === "cart" && (
           <CartPage onGoToCheckout={() => commitPage("checkout")} />
         )}

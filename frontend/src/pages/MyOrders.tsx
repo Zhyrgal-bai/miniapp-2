@@ -7,6 +7,10 @@ import { getWebAppUserId } from "../utils/telegramUserId";
 import type { MyOrderRow } from "../types/myOrder";
 import { orderSupportPhase } from "@repo-shared/supportPhase";
 import {
+  SF_ORDERS_INTENT_KEY,
+  type OrdersListIntent,
+} from "../utils/accountMenuStorage";
+import {
   createReturnRequest,
   createSupportTicket,
   fetchMyOrderDetail,
@@ -330,7 +334,15 @@ function TicketThreadView({
   );
 }
 
-export default function MyOrders() {
+type MyOrdersProps = {
+  profileIntentNonce?: number;
+  profilePlainNonce?: number;
+};
+
+export default function MyOrders({
+  profileIntentNonce = 0,
+  profilePlainNonce = 0,
+}: MyOrdersProps) {
   const [orders, setOrders] = useState<MyOrderRow[]>([]);
   const [settings, setSettings] = useState<GlobalSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -348,6 +360,9 @@ export default function MyOrders() {
   const [returnItemId, setReturnItemId] = useState<number | "">("");
   const [returnComment, setReturnComment] = useState("");
   const [returnPhotos, setReturnPhotos] = useState<string[]>([]);
+  const [listIntentHint, setListIntentHint] = useState<OrdersListIntent | null>(
+    null
+  );
 
   const { shopIdString, businessId } = useShop();
   const { payload } = useStorefrontPayload();
@@ -406,6 +421,22 @@ export default function MyOrders() {
     }, 5000);
     return () => clearInterval(interval);
   }, [load]);
+
+  useEffect(() => {
+    const raw = sessionStorage.getItem(SF_ORDERS_INTENT_KEY);
+    if (raw === "support" || raw === "returns") {
+      setListIntentHint(raw);
+      sessionStorage.removeItem(SF_ORDERS_INTENT_KEY);
+    }
+  }, [profileIntentNonce]);
+
+  useEffect(() => {
+    setListIntentHint(null);
+  }, [profilePlainNonce]);
+
+  useEffect(() => {
+    if (screen.kind !== "list") setListIntentHint(null);
+  }, [screen.kind]);
 
   const refreshOrderContext = useCallback(
     async (orderId: number) => {
@@ -953,6 +984,30 @@ export default function MyOrders() {
         <h1 className="my-orders__title">{readTxt("menuOrdersLabel", "Мои заказы")}</h1>
         <p className="my-orders__subtitle">Автообновление каждые 5 с</p>
       </header>
+
+      {listIntentHint === "support" ? (
+        <div className="my-orders__intent-banner" role="status">
+          <strong className="my-orders__intent-banner-title">
+            Поддержка
+          </strong>
+          <p className="my-orders__intent-banner-text">
+            Откройте заказ ниже → «Подробнее и поддержка» — там сценарии и чат с
+            магазином.
+          </p>
+        </div>
+      ) : null}
+      {listIntentHint === "returns" ? (
+        <div
+          className="my-orders__intent-banner my-orders__intent-banner--returns"
+          role="status"
+        >
+          <strong className="my-orders__intent-banner-title">Возвраты</strong>
+          <p className="my-orders__intent-banner-text">
+            Выберите доставленный заказ → «Подробнее» → раздел «Возврат»
+            (после статуса «Доставлен»).
+          </p>
+        </div>
+      ) : null}
 
       {loading && <p className="my-orders__muted">Загрузка...</p>}
       {error && (
