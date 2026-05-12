@@ -16,6 +16,7 @@ type AppNavPage =
   | "checkout"
   | "admin"
   | "faq"
+  | "about-shop"
   | "my-orders";
 
 type AdminSection =

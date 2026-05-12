@@ -3,6 +3,7 @@ import CartPage from "./pages/CartPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import AdminApp from "./pages/admin/AdminApp";
 import FAQ from "./pages/FAQ";
+import AboutShopPage from "./pages/AboutShopPage";
 import MyOrders from "./pages/MyOrders";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -35,6 +36,7 @@ type AppNavPage =
   | "checkout"
   | "admin"
   | "faq"
+  | "about-shop"
   | "my-orders";
 
 function myOrdersNeedAttention(rows: MyOrderRow[]): boolean {
@@ -46,7 +48,9 @@ function myOrdersNeedAttention(rows: MyOrderRow[]): boolean {
 
 function initialPageFromPath(): AppNavPage {
   if (typeof window === "undefined") return "home";
-  return window.location.pathname === "/faq" ? "faq" : "home";
+  if (window.location.pathname === "/faq") return "faq";
+  if (window.location.pathname === "/about") return "about-shop";
+  return "home";
 }
 
 export default function App() {
@@ -94,7 +98,12 @@ export default function App() {
   const totalQuantity = items.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
 
   const isStorefrontUi =
-    page === "home" || page === "cart" || page === "checkout" || page === "my-orders" || page === "faq";
+    page === "home" ||
+    page === "cart" ||
+    page === "checkout" ||
+    page === "my-orders" ||
+    page === "faq" ||
+    page === "about-shop";
 
   const sfKit = kitFromTemplateId(templateId ?? payload?.templateId ?? null);
 
@@ -119,8 +128,19 @@ export default function App() {
         setPage("faq");
         return;
       }
+      if (next === "about-shop") {
+        navigate({
+          pathname: "/about",
+          search:
+            tenantMergedSearch && tenantMergedSearch !== "?"
+              ? tenantMergedSearch
+              : "",
+        });
+        setPage("about-shop");
+        return;
+      }
       setPage(next);
-      if (location.pathname === "/faq") {
+      if (location.pathname === "/faq" || location.pathname === "/about") {
         navigate(
           {
             pathname: "/",
@@ -139,6 +159,8 @@ export default function App() {
   useEffect(() => {
     if (location.pathname === "/faq") {
       setPage("faq");
+    } else if (location.pathname === "/about") {
+      setPage("about-shop");
     }
   }, [location.pathname]);
 
@@ -153,7 +175,7 @@ export default function App() {
     if (v === "merchant-settings") {
       setPage("admin");
       window.location.hash = "#/admin/design";
-      if (location.pathname === "/faq") {
+      if (location.pathname === "/faq" || location.pathname === "/about") {
         navigate(
           {
             pathname: "/",
@@ -218,8 +240,11 @@ export default function App() {
   useEffect(() => {
     const onPop = () => {
       queueMicrotask(() => {
-        if (window.location.pathname !== "/faq") {
-          setPage((p) => (p === "faq" ? "home" : p));
+        const path = window.location.pathname;
+        if (path !== "/faq" && path !== "/about") {
+          setPage((p) =>
+            p === "faq" || p === "about-shop" ? "home" : p,
+          );
         }
       });
     };
@@ -261,7 +286,7 @@ export default function App() {
     section: "orders" | "products" | "categories" | "analytics" | "design"
   ) => {
     setPage("admin");
-    if (location.pathname === "/faq") {
+    if (location.pathname === "/faq" || location.pathname === "/about") {
       navigate(
         {
           pathname: "/",
@@ -305,13 +330,14 @@ export default function App() {
 
   const content = (
     <div className="app">
-      {page !== "home" ? (
-        <Header
-          menuOpen={isMenuOpen}
-          onMenuToggle={handleMenuToggle}
-          attentionDot={showHeaderAttentionDot}
-        />
-      ) : null}
+      <Header
+        menuOpen={isMenuOpen}
+        onMenuToggle={handleMenuToggle}
+        attentionDot={showHeaderAttentionDot}
+        title={payload?.storeName?.trim() || undefined}
+        onNavigateFaq={() => handleNav("faq")}
+        onNavigateAbout={() => handleNav("about-shop")}
+      />
 
       <SideMenu
         open={isMenuOpen}
@@ -326,9 +352,10 @@ export default function App() {
         onNavToAdmin={goAdminSection}
       />
 
-      <div className={`content app__content${page === "home" ? " app__content--storefront" : ""}`}>
+      <div className="content app__content">
         {page === "home" && <HomePage />}
         {page === "faq" && <FAQ />}
+        {page === "about-shop" && <AboutShopPage />}
         {page === "my-orders" && <MyOrders />}
         {page === "cart" && (
           <CartPage onGoToCheckout={() => commitPage("checkout")} />

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { getTelegramUser } from "../../utils/telegram";
 import { telegramDisplayInitial } from "../../utils/telegramUserMark";
@@ -10,6 +10,10 @@ type HeaderProps = {
   onMenuToggle?: () => void;
   /** Красная точка на кнопке меню (например, есть заказы, требующие внимания). */
   attentionDot?: boolean;
+  /** Заголовок по центру (например, название магазина на витрине). */
+  title?: string;
+  onNavigateFaq?: () => void;
+  onNavigateAbout?: () => void;
 };
 
 function telegramDisplayName(user: ReturnType<typeof getTelegramUser>): string | null {
@@ -24,10 +28,38 @@ export default function Header({
   menuOpen = false,
   onMenuToggle,
   attentionDot = false,
+  title,
+  onNavigateFaq,
+  onNavigateAbout,
 }: HeaderProps) {
   const user = useMemo(() => getTelegramUser(), []);
   const initial = telegramDisplayInitial(user);
   const displayName = useMemo(() => telegramDisplayName(user), [user]);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userWrapRef = useRef<HTMLDivElement>(null);
+
+  const centerTitle = (title?.trim() || APP_NAME).toUpperCase();
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const onDoc = (e: MouseEvent | TouchEvent) => {
+      const el = userWrapRef.current;
+      if (el && !el.contains(e.target as Node)) setUserMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setUserMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("touchstart", onDoc, { passive: true });
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("touchstart", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [userMenuOpen]);
+
+  const showUserMenu = Boolean(onNavigateFaq || onNavigateAbout);
 
   return (
     <header className="app-header">
@@ -51,28 +83,73 @@ export default function Header({
         </div>
       </div>
 
-      <h1 className="app-header__logo">{APP_NAME}</h1>
+      <h1 className="app-header__logo">{centerTitle}</h1>
 
       <div className="app-header__cell app-header__cell--right">
-        <div className="app-header__user" title={displayName ?? undefined}>
-          <div
-            className="app-header__mark"
-            aria-hidden={displayName ? true : undefined}
-            title={user?.first_name?.trim() || user?.username || undefined}
+        <div
+          className={`app-header__user-wrap${userMenuOpen ? " app-header__user-wrap--open" : ""}`}
+          ref={userWrapRef}
+        >
+          <button
+            type="button"
+            className="app-header__user-trigger"
+            aria-expanded={userMenuOpen}
+            aria-haspopup={showUserMenu ? "menu" : undefined}
+            title={displayName ?? "Профиль"}
+            onClick={() => {
+              if (showUserMenu) setUserMenuOpen((o) => !o);
+            }}
           >
-            {user?.photo_url ? (
-              <img
-                src={user.photo_url}
-                alt={displayName ?? user.first_name ?? ""}
-                width={40}
-                height={40}
-              />
-            ) : (
-              initial
-            )}
-          </div>
-          {displayName ? (
-            <span className="app-header__user-name">{displayName}</span>
+            <span className="app-header__user app-header__user--trigger-inner">
+              <span
+                className="app-header__mark"
+                aria-hidden={displayName ? true : undefined}
+              >
+                {user?.photo_url ? (
+                  <img
+                    src={user.photo_url}
+                    alt={displayName ?? user.first_name ?? ""}
+                    width={40}
+                    height={40}
+                  />
+                ) : (
+                  initial
+                )}
+              </span>
+              {displayName ? (
+                <span className="app-header__user-name">{displayName}</span>
+              ) : null}
+            </span>
+          </button>
+          {showUserMenu && userMenuOpen ? (
+            <div className="app-header__user-menu" role="menu">
+              {onNavigateFaq ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="app-header__user-menu-item"
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    onNavigateFaq();
+                  }}
+                >
+                  FAQ
+                </button>
+              ) : null}
+              {onNavigateAbout ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="app-header__user-menu-item"
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    onNavigateAbout();
+                  }}
+                >
+                  О магазине
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </div>

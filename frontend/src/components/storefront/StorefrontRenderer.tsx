@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import type { Category, Product } from "../../types";
 import { useTheme } from "../../context/ThemeContext";
 import { ThemeVarsProvider } from "./theme/ThemeVarsProvider";
-import { StorefrontHeader } from "./header/StorefrontHeader";
 import { HeroSection } from "./sections/HeroSection";
 import { PromoSection } from "./sections/PromoSection";
 import { CategoriesSection } from "./sections/CategoriesSection";
@@ -75,12 +74,6 @@ export function StorefrontRenderer(props: {
   return (
     <ThemeVarsProvider theme={theme}>
       <div data-sf-kit={kit} className="sf-root" style={cssVars as unknown as React.CSSProperties}>
-        <StorefrontHeader
-          theme={theme}
-          storeName={props.payload.storeName ?? null}
-          config={props.payload.storefrontHeaderConfig ?? undefined}
-          kit={kit}
-        />
         {sections.map((s) => {
           switch (s.type) {
             case "hero":
