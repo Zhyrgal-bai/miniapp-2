@@ -1,31 +1,8 @@
 /**
  * Витрина: «только кости». Подключается ПОСЛЕДНИМ из main.tsx, чтобы перебить
  * ProductCard.css / ProductGrid.css / storefrontKits (порядок в бандле Vite).
- *
- * Нейтральная палитра на обёртке темы: иначе inline --sf-color-* из applyThemeVars
- * оставляет фирменный тёмный фон, а «кости» только упрощают форму.
+ * Цвета идут из темы мерчанта (applyThemeVars); здесь только упрощение формы.
  */
-.sf-theme-vars {
-  --sf-color-background: #e8e8e8 !important;
-  --sf-color-surface: #f2f2f2 !important;
-  --sf-color-surfaceAlt: #ececec !important;
-  --sf-color-card: #ffffff !important;
-  --sf-color-text: #141414 !important;
-  --sf-color-muted: #5a5a5a !important;
-  --sf-color-border: #7a7a7a !important;
-  --sf-color-primary: #2a2a2a !important;
-  --sf-on-primary: #ffffff !important;
-  --sf-color-secondary: #3d3d3d !important;
-  --sf-color-accent: #3d3d3d !important;
-  --sf-color-success: #2d5a2d !important;
-  --sf-color-warning: #6b5a1a !important;
-  --sf-color-danger: #7a2222 !important;
-  --sf-shadow-card: none !important;
-  --sf-card-shadow: none !important;
-  --sf-card-hover-shadow: none !important;
-  --sf-card-border-color: rgba(0, 0, 0, 0.14) !important;
-}
-
 .sf-root {
   padding-bottom: 88px;
 }

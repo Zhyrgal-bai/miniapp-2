@@ -12,6 +12,7 @@ type NavItem = {
 
 const navAll: NavItem[] = [
   { href: "#/admin/orders", match: "orders", label: "Заказы", icon: "📦" },
+  { href: "#/admin/design", match: "design", label: "Оформление", icon: "🎨" },
   {
     href: "#/admin/users",
     match: "users",

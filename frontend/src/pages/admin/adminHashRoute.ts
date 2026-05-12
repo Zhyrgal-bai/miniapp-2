@@ -13,10 +13,12 @@ export type AdminNavKey =
   | "products"
   | "manage"
   | "categories"
-  | "analytics";
+  | "analytics"
+  | "design";
 
 export function adminNavKeyFromPath(path: string): AdminNavKey {
   if (path.includes("/admin/users")) return "users";
+  if (path.includes("/admin/design")) return "design";
   if (path.includes("/admin/categories")) return "categories";
   if (path.includes("/admin/products/manage")) return "manage";
   if (path.includes("/admin/products")) return "products";

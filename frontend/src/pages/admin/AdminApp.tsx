@@ -6,6 +6,7 @@ import AdminAnalyticsPage from "./AdminAnalyticsPage";
 import AdminProductManagePage from "./AdminProductManagePage";
 import AdminCategoriesPage from "./AdminCategoriesPage";
 import AdminUsersPage from "./AdminUsersPage";
+import AdminDesignPage from "./AdminDesignPage";
 import AdminErrorBoundary from "./AdminErrorBoundary";
 import {
   adminPathFromHash,
@@ -43,7 +44,7 @@ export default function AdminApp({ onExit }: AdminAppProps) {
 
   useEffect(() => {
     if (!path.includes("/admin/settings")) return;
-    window.location.hash = "#/admin/orders";
+    window.location.hash = "#/admin/design";
   }, [path]);
 
   const page = useMemo(() => {
@@ -68,6 +69,9 @@ export default function AdminApp({ onExit }: AdminAppProps) {
     }
     if (path.includes("/admin/categories")) {
       return <AdminCategoriesPage key="categories" />;
+    }
+    if (path.includes("/admin/design")) {
+      return <AdminDesignPage key="design" />;
     }
     return <AdminOrdersPage key="orders" />;
   }, [path, merchantRole]);
