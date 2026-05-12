@@ -1,4 +1,6 @@
 import { useMemo } from "react";
+import { getTelegramUser } from "../../../utils/telegram";
+import { telegramDisplayInitial, telegramDisplayName } from "../../../utils/telegramUserMark";
 import type { ResolvedStoreTheme } from "@repo-shared/storeTheme";
 
 type StorefrontHeaderConfig = {
@@ -115,32 +117,218 @@ function HeaderMinimal(props: {
   );
 }
 
+function HeaderLuxury(props: {
+  cfg: Required<StorefrontHeaderConfig>;
+  title: string;
+  titleCss: React.CSSProperties;
+  userName: string | null;
+  initial: string;
+  photoUrl: string | null;
+}): React.ReactElement {
+  // Luxury: centered brand, avatar on right, hierarchy: brand first.
+  return (
+    <div className="sf-header__inner sf-header__inner--luxury">
+      <button
+        type="button"
+        onClick={() => window.dispatchEvent(new CustomEvent("sf:toggleMenu"))}
+        className="sf-header__burger"
+        aria-label="Меню"
+        title="Меню"
+      >
+        ☰
+      </button>
+      <div
+        className="sf-header__brand sf-header__brand--center"
+        style={
+          {
+            ["--sf-logo-size"]: `${props.cfg.logoSize}px`,
+            ["--sf-avatar-size"]: `${props.cfg.avatarSize}px`,
+          } as React.CSSProperties
+        }
+      >
+        <div className="sf-header__title sf-header__title--luxury" style={props.titleCss}>
+          {props.title}
+        </div>
+        {props.cfg.showDivider ? <div className="sf-header__divider" aria-hidden /> : null}
+      </div>
+      <div className="sf-header__right">
+        {props.cfg.showAvatar ? (
+          <div className="sf-header__user sf-header__user--min">
+            <div className="sf-header__avatar" aria-hidden title={props.userName ?? undefined}>
+              {props.photoUrl ? (
+                <img
+                  src={props.photoUrl}
+                  alt={props.userName ?? ""}
+                  width={props.cfg.avatarSize}
+                  height={props.cfg.avatarSize}
+                />
+              ) : (
+                <span className="sf-header__initial">{props.initial}</span>
+              )}
+            </div>
+            {props.userName ? <div className="sf-header__user-name">{props.userName}</div> : null}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function HeaderFashion(props: {
+  cfg: Required<StorefrontHeaderConfig>;
+  title: string;
+  userName: string | null;
+  initial: string;
+  photoUrl: string | null;
+}): React.ReactElement {
+  // Fashion: asymmetric editorial split (logo+title on left, avatar as accent).
+  return (
+    <div className="sf-header__inner sf-header__inner--fashion">
+      <button
+        type="button"
+        onClick={() => window.dispatchEvent(new CustomEvent("sf:toggleMenu"))}
+        className="sf-header__burger"
+        aria-label="Меню"
+        title="Меню"
+      >
+        ☰
+      </button>
+      <div
+        className="sf-header__brand sf-header__brand--fashion"
+        style={{ ["--sf-logo-size"]: `${props.cfg.logoSize}px` } as React.CSSProperties}
+      >
+        <div className="sf-header__logo" aria-hidden />
+        <div className="sf-header__stack">
+          <div className="sf-header__eyebrow">NEW DROP</div>
+          <div className="sf-header__title sf-header__title--fashion">{props.title}</div>
+        </div>
+      </div>
+      <div className="sf-header__right">
+        {props.cfg.showAvatar ? (
+          <div className="sf-header__avatar sf-header__avatar--accent" aria-hidden title={props.userName ?? undefined}>
+            {props.photoUrl ? (
+              <img
+                src={props.photoUrl}
+                alt={props.userName ?? ""}
+                width={props.cfg.avatarSize}
+                height={props.cfg.avatarSize}
+              />
+            ) : (
+              <span className="sf-header__initial">{props.initial}</span>
+            )}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function HeaderNeon(props: {
+  cfg: Required<StorefrontHeaderConfig>;
+  title: string;
+}): React.ReactElement {
+  // Neon: centered cyber bar, title only, no avatar. Emphasis on glow divider.
+  return (
+    <div className="sf-header__inner sf-header__inner--neon">
+      <button
+        type="button"
+        onClick={() => window.dispatchEvent(new CustomEvent("sf:toggleMenu"))}
+        className="sf-header__burger"
+        aria-label="Меню"
+        title="Меню"
+      >
+        ☰
+      </button>
+      <div className="sf-header__brand sf-header__brand--neon">
+        <div className="sf-header__title sf-header__title--neon">{props.title}</div>
+        {props.cfg.showDivider ? <div className="sf-header__neon-line" aria-hidden /> : null}
+      </div>
+      <div className="sf-header__right" />
+    </div>
+  );
+}
+
 export function StorefrontHeader(props: {
   theme: ResolvedStoreTheme;
   storeName?: string | null;
   config?: Record<string, unknown>;
   kit?: StorefrontKitId;
 }): React.ReactElement {
-  void props.theme;
-  void props.kit;
   const rawCfg = useMemo(() => normalize(props.config), [props.config]);
-  const kit = "minimal";
+  const kit = props.kit ?? "default";
   const cfg: Required<StorefrontHeaderConfig> = useMemo(() => {
+    // Kit-driven defaults (merchant can still override via builder config).
     const base = rawCfg;
-    return {
-      ...base,
-      variant: "minimal",
-      glass: false,
-      blur: false,
-      shadow: false,
-      border: true,
-      showDivider: false,
-      showAvatar: false,
-      alignment: "left",
-      height: base.height === "normal" ? "compact" : base.height,
-      titleStyle: base.titleStyle === "normal" ? "uppercase" : base.titleStyle,
-    };
-  }, [rawCfg]);
+    const variant =
+      base.variant === "commerce" && kit !== "default"
+        ? kit === "minimal"
+          ? "minimal"
+          : kit === "luxury"
+            ? "luxury"
+            : kit === "fashion"
+              ? "split"
+              : kit === "neon"
+                ? "neon"
+                : base.variant
+        : base.variant;
+    if (kit === "minimal") {
+      return {
+        ...base,
+        variant,
+        glass: base.glass || false,
+        shadow: false,
+        border: true,
+        height: base.height === "normal" ? "compact" : base.height,
+        alignment: "left" as const,
+        titleStyle: base.titleStyle === "normal" ? "uppercase" : base.titleStyle,
+        showAvatar: false,
+      };
+    }
+    if (kit === "luxury") {
+      return {
+        ...base,
+        variant,
+        glass: true,
+        shadow: true,
+        border: true,
+        height: base.height === "normal" ? "large" : base.height,
+        alignment: "center" as const,
+        titleStyle: "wide",
+        showAvatar: true,
+      };
+    }
+    if (kit === "fashion") {
+      return {
+        ...base,
+        variant,
+        glass: false,
+        shadow: false,
+        border: false,
+        height: base.height === "normal" ? "large" : base.height,
+        alignment: "left" as const,
+        titleStyle: "normal",
+        showAvatar: true,
+      };
+    }
+    if (kit === "neon") {
+      return {
+        ...base,
+        variant,
+        glass: true,
+        shadow: true,
+        border: true,
+        height: base.height === "normal" ? "compact" : base.height,
+        alignment: "center" as const,
+        titleStyle: "uppercase",
+        showAvatar: false,
+        showDivider: true,
+      };
+    }
+    return { ...base, variant };
+  }, [rawCfg, kit]);
+  const user = useMemo(() => getTelegramUser(), []);
+  const name = useMemo(() => telegramDisplayName(user), [user]);
+  const initial = telegramDisplayInitial(user);
 
   const heightPx = cfg.height === "compact" ? 52 : cfg.height === "large" ? 76 : 64;
   const safeTop = useMemo(() => {
@@ -166,17 +354,38 @@ export function StorefrontHeader(props: {
       } as const)
     : null;
 
-  const bg = "var(--sf-color-background)";
-  const border = cfg.border ? "1px solid var(--sf-color-border)" : "1px solid transparent";
-  const shadow = "none";
+  const bg =
+    cfg.glass
+      ? kit === "luxury"
+        ? "color-mix(in srgb, var(--sf-color-surface) 58%, transparent)"
+        : kit === "neon"
+          ? "color-mix(in srgb, var(--sf-color-background) 55%, transparent)"
+          : "color-mix(in srgb, var(--sf-color-surface) 55%, transparent)"
+      : "var(--sf-color-background)";
+  const border =
+    cfg.border
+      ? kit === "neon"
+        ? "1px solid color-mix(in srgb, var(--sf-color-primary) 45%, transparent)"
+        : "1px solid var(--sf-color-border)"
+      : "1px solid transparent";
+  const shadow =
+    cfg.shadow
+      ? kit === "neon"
+        ? "var(--sf-shadow-card), 0 0 0 1px color-mix(in srgb, var(--sf-color-primary) 18%, transparent)"
+        : kit === "luxury"
+          ? "var(--sf-shadow-card)"
+          : "var(--sf-shadow-card)"
+      : "none";
 
   const title = titleText(cfg, props.storeName ?? null);
   const titleCss: React.CSSProperties =
     cfg.titleStyle === "uppercase"
-      ? { textTransform: "uppercase", letterSpacing: "0.12em" }
+      ? { textTransform: "uppercase", letterSpacing: kit === "minimal" ? "0.22em" : "0.24em" }
       : cfg.titleStyle === "wide"
-        ? { textTransform: "uppercase", letterSpacing: "0.2em" }
-        : { letterSpacing: "0.04em" };
+        ? { textTransform: "uppercase", letterSpacing: kit === "luxury" ? "0.32em" : "0.28em" }
+        : kit === "fashion"
+          ? { letterSpacing: "0.02em" }
+          : { letterSpacing: "0.08em" };
 
   const headerClass = `sf-header sf-header--${kit}${cfg.showDivider ? "" : " sf-header--no-divider"}`;
 
@@ -191,14 +400,35 @@ export function StorefrontHeader(props: {
         ["--sf-header-pad-x" as string]: `${cfg.padX}px`,
         ["--sf-header-pad-y" as string]: `${cfg.padY}px`,
         background: bg,
-        backdropFilter: undefined,
-        WebkitBackdropFilter: undefined,
+        backdropFilter: cfg.glass && cfg.blur ? "blur(12px)" : undefined,
+        WebkitBackdropFilter: cfg.glass && cfg.blur ? "blur(12px)" : undefined,
         borderBottom: border,
         boxShadow: shadow,
       }}
     >
       <div style={{ height: heightPx }}>
-        <HeaderMinimal cfg={cfg} title={title} titleCss={titleCss} />
+        {cfg.variant === "luxury" ? (
+          <HeaderLuxury
+            cfg={cfg}
+            title={title}
+            titleCss={titleCss}
+            userName={name}
+            initial={initial}
+            photoUrl={user?.photo_url ?? null}
+          />
+        ) : cfg.variant === "split" ? (
+          <HeaderFashion
+            cfg={cfg}
+            title={title}
+            userName={name}
+            initial={initial}
+            photoUrl={user?.photo_url ?? null}
+          />
+        ) : cfg.variant === "neon" ? (
+          <HeaderNeon cfg={cfg} title={title} />
+        ) : (
+          <HeaderMinimal cfg={cfg} title={title} titleCss={titleCss} />
+        )}
       </div>
     </div>
   );

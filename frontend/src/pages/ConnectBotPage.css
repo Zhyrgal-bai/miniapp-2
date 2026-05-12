@@ -1,0 +1,86 @@
+.connect-bot-page__lead {
+  max-width: 32rem;
+  margin: 0 0 1.25rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--app-muted, #666);
+}
+
+.connect-bot-page__code {
+  font-size: 0.9em;
+  background: var(--app-surface-2, rgba(0, 0, 0, 0.06));
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
+.connect-bot-page__ok {
+  max-width: 32rem;
+  margin-bottom: 1.25rem;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  background: var(--app-success-bg, rgba(34, 160, 80, 0.12));
+  color: var(--app-text, inherit);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.connect-bot-page__ok p {
+  margin: 0 0 0.5rem;
+}
+
+.connect-bot-page__ok p:last-child {
+  margin-bottom: 0;
+}
+
+.connect-bot-page__link {
+  color: var(--app-accent, #0a6);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.connect-bot-page__form {
+  max-width: 32rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.connect-bot-page__label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--app-muted, #666);
+}
+
+.connect-bot-page__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.75rem 0.9rem;
+  font-size: 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--app-border, rgba(0, 0, 0, 0.12));
+  background: var(--app-surface, #fff);
+  color: inherit;
+}
+
+.connect-bot-page__err {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--app-danger, #c22);
+}
+
+.connect-bot-page__submit {
+  margin-top: 0.5rem;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  background: var(--app-accent, #0a6);
+  color: #fff;
+  cursor: pointer;
+}
+
+.connect-bot-page__submit:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}

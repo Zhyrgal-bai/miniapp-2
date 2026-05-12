@@ -4,13 +4,14 @@ function getObj(v: unknown): Record<string, unknown> {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 }
 
-/**
- * Plain storefront chrome only: one neutral kit so layout works without
- * luxury/fashion/neon visual systems (rebuild-friendly).
- */
-export function kitFromTemplateId(templateId: string | null | undefined): string {
-  void templateId;
-  return "minimal";
+/** Aligns with `data-sf-kit` / storefront kits. */
+export function kitFromTemplateId(tid: string | null | undefined): string {
+  const t = typeof tid === "string" ? tid.trim().toLowerCase() : "";
+  if (t === "minimal" || t === "light") return "minimal";
+  if (t === "luxury") return "luxury";
+  if (t === "fashion") return "fashion";
+  if (t === "neon") return "neon";
+  return "default";
 }
 
 /**

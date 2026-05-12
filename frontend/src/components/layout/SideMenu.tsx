@@ -16,7 +16,9 @@ type AppNavPage =
   | "checkout"
   | "admin"
   | "faq"
-  | "my-orders";
+  | "my-orders"
+  // keep for deep links / legacy routes (menu item removed)
+  | "connect-bot";
 
 type AdminSection =
   | "orders"
