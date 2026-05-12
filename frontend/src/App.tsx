@@ -99,7 +99,12 @@ export default function App() {
   const totalQuantity = items.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
 
   const isStorefrontUi =
-    page === "home" || page === "cart" || page === "checkout" || page === "my-orders" || page === "faq";
+    page === "home" ||
+    page === "cart" ||
+    page === "checkout" ||
+    page === "my-orders" ||
+    page === "faq" ||
+    page === "connect-bot";
 
   const sfKit = kitFromTemplateId(templateId ?? payload?.templateId ?? null);
 
@@ -170,6 +175,20 @@ export default function App() {
           { replace: true }
         );
       }
+      return;
+    }
+    if (v === "connect-bot") {
+      const sp2 = new URLSearchParams(location.search);
+      sp2.delete("view");
+      const qs = sp2.toString();
+      navigate(
+        {
+          pathname: location.pathname === "/faq" ? "/" : location.pathname,
+          search: qs ? `?${qs}` : "",
+        },
+        { replace: true },
+      );
+      setPage("connect-bot");
     }
   }, [
     location.search,
