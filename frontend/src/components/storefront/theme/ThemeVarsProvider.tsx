@@ -9,6 +9,7 @@ export function ThemeVarsProvider(props: {
   const style = useMemo(() => applyThemeVars(props.theme), [props.theme]);
   return (
     <div
+      className="sf-theme-vars"
       style={{
         ...style,
         background: "var(--sf-color-background)",

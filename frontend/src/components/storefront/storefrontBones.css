@@ -1,7 +1,31 @@
 /**
  * Витрина: «только кости». Подключается ПОСЛЕДНИМ из main.tsx, чтобы перебить
  * ProductCard.css / ProductGrid.css / storefrontKits (порядок в бандле Vite).
+ *
+ * Нейтральная палитра на обёртке темы: иначе inline --sf-color-* из applyThemeVars
+ * оставляет фирменный тёмный фон, а «кости» только упрощают форму.
  */
+.sf-theme-vars {
+  --sf-color-background: #e8e8e8 !important;
+  --sf-color-surface: #f2f2f2 !important;
+  --sf-color-surfaceAlt: #ececec !important;
+  --sf-color-card: #ffffff !important;
+  --sf-color-text: #141414 !important;
+  --sf-color-muted: #5a5a5a !important;
+  --sf-color-border: #7a7a7a !important;
+  --sf-color-primary: #2a2a2a !important;
+  --sf-on-primary: #ffffff !important;
+  --sf-color-secondary: #3d3d3d !important;
+  --sf-color-accent: #3d3d3d !important;
+  --sf-color-success: #2d5a2d !important;
+  --sf-color-warning: #6b5a1a !important;
+  --sf-color-danger: #7a2222 !important;
+  --sf-shadow-card: none !important;
+  --sf-card-shadow: none !important;
+  --sf-card-hover-shadow: none !important;
+  --sf-card-border-color: rgba(0, 0, 0, 0.14) !important;
+}
+
 .sf-root {
   padding-bottom: 88px;
 }
@@ -35,7 +59,7 @@
 
 .sf-root .sf-hero {
   border: 1px solid var(--sf-color-border, #555) !important;
-  background: var(--sf-color-background, #111) !important;
+  background: var(--sf-color-card, #fff) !important;
 }
 
 .sf-root .sf-hero__title {
@@ -101,7 +125,7 @@
   -webkit-backdrop-filter: none !important;
   transition: none !important;
   border: 1px solid var(--sf-color-border, #555) !important;
-  background: var(--sf-color-background, #111) !important;
+  background: var(--sf-color-card, #fff) !important;
 }
 
 .sf-root .product-card:hover,
@@ -138,7 +162,7 @@
   -webkit-backdrop-filter: none !important;
   box-shadow: none !important;
   border: 1px solid var(--sf-color-border, #666) !important;
-  background: var(--sf-color-background, #111) !important;
+  background: var(--sf-color-card, #fff) !important;
   color: var(--sf-color-text, #fff) !important;
 }
 
@@ -169,7 +193,7 @@
   filter: none !important;
   font-weight: 600 !important;
   min-height: 34px !important;
-  background: var(--sf-color-background, #111) !important;
+  background: var(--sf-color-surface, #f0f0f0) !important;
   color: var(--sf-color-text, #fff) !important;
   border: 1px solid var(--sf-color-border, #666) !important;
 }
@@ -178,7 +202,7 @@
 .sf-root .add-button:hover {
   filter: none !important;
   box-shadow: none !important;
-  background: var(--sf-color-surface, #1a1a1a) !important;
+  background: var(--sf-color-surfaceAlt, #ececec) !important;
 }
 
 .sf-root .product-add-btn:active,
@@ -211,7 +235,7 @@
   border-radius: 2px !important;
   box-shadow: none !important;
   font-weight: 600 !important;
-  background: var(--sf-color-background, #111) !important;
+  background: var(--sf-color-surface, #f0f0f0) !important;
   color: var(--sf-color-text) !important;
   border: 1px solid var(--sf-color-border, #666) !important;
 }
@@ -227,13 +251,13 @@
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   border: 1px solid var(--sf-color-border, #444) !important;
-  background: var(--sf-color-background, #111) !important;
+  background: var(--sf-color-card, #fff) !important;
 }
 
 .sf-sticky-cart__cta {
   border-radius: 2px !important;
   box-shadow: none !important;
-  background: var(--sf-color-background, #111) !important;
+  background: var(--sf-color-surface, #f0f0f0) !important;
   color: var(--sf-color-text) !important;
   border: 1px solid var(--sf-color-border, #666) !important;
 }
@@ -241,7 +265,7 @@
 .sf-app .floating-cart.cart-float {
   border-radius: 2px !important;
   box-shadow: none !important;
-  background: var(--sf-color-background, #111) !important;
+  background: var(--sf-color-card, #fff) !important;
   color: var(--sf-color-text) !important;
   border: 1px solid var(--sf-color-border, #666) !important;
 }
@@ -253,7 +277,7 @@
 
 /* Шапка витрины */
 .sf-root .sf-header {
-  background: var(--sf-color-background, #111) !important;
+  background: var(--sf-color-surface, #f2f2f2) !important;
   box-shadow: none !important;
   border-bottom: 1px solid var(--sf-color-border, #444) !important;
   backdrop-filter: none !important;
