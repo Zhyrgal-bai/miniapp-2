@@ -113,7 +113,10 @@ export function safeParseStorefrontPublicApiResponse(
   const r = StorefrontPublicApiResponseSchema.safeParse(data);
   if (!r.success) {
     const detail = r.error.issues
-      .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
+      .map(
+        (issue: (typeof r.error.issues)[number]) =>
+          `${issue.path.join(".") || "(root)"}: ${issue.message}`,
+      )
       .join("; ");
     return { ok: false, error: detail || r.error.message };
   }
