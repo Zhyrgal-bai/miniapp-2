@@ -11,6 +11,10 @@ import {
 import { uploadImageBuffer } from "../media/cloudinary.js";
 import { isCloudinaryConfigured } from "./cloudinary.js";
 import { prisma } from "./db.js";
+import {
+  orderSupportPhase,
+  type SupportPhase,
+} from "../shared/supportPhase.js";
 
 type Deps = {
   upload: multer.Multer;
@@ -90,6 +94,148 @@ async function assertCustomerOrder(
       buyerUserId,
     },
     include: { items: true },
+  });
+}
+
+type CustomerOrderWithItems = NonNullable<
+  Awaited<ReturnType<typeof assertCustomerOrder>>
+>;
+
+function phaseLabelRu(phase: SupportPhase): string {
+  switch (phase) {
+    case "PROCESSING":
+      return "в обработке";
+    case "SHIPPING":
+      return "в пути";
+    case "DELIVERED":
+      return "доставлен";
+    case "CANCELLED":
+      return "отменён";
+    default:
+      return phase;
+  }
+}
+
+/** Temu-style auto-intro for GENERAL support tickets (Russian). */
+function buildOrderSupportIntro(order: CustomerOrderWithItems): string {
+  const phase = orderSupportPhase(String(order.status));
+  const itemUnits = order.items.reduce((s, it) => s + it.quantity, 0);
+  const lines: string[] = [];
+  lines.push(
+    `Здравствуйте! Чат поддержки магазина по заказу №${String(order.id)}.`
+  );
+  lines.push(
+    `Сумма заказа: ${String(order.total)} сом · позиций: ${String(itemUnits)} · статус: ${phaseLabelRu(phase)}.`
+  );
+  const tr = order.tracking?.trim();
+  if (tr) {
+    lines.push(`Трек-номер отправления: ${tr}.`);
+  }
+  switch (phase) {
+    case "PROCESSING":
+      lines.push(
+        "Заказ собирается. Можем помочь с отменой, обменом размера или уточнить срок отправки."
+      );
+      break;
+    case "SHIPPING":
+      lines.push(
+        "Посылка в пути. Можем подсказать по треку, доставке или оформить вопрос по возврату до получения."
+      );
+      break;
+    case "DELIVERED":
+      lines.push(
+        "Заказ доставлен. Доступны возврат, обмен и решение вопросов по качеству — напишите, что случилось."
+      );
+      break;
+    case "CANCELLED":
+      lines.push(
+        "Заказ отменён. Если нужна помощь или уточнение по возврату средств — напишите здесь."
+      );
+      break;
+    default:
+      lines.push("Опишите вопрос — ответит магазин.");
+  }
+  lines.push("Напишите сообщение ниже.");
+  return lines.join("\n\n");
+}
+
+function customerFirstMessageForTicketType(
+  type: SupportTicketType,
+  fallbackText: string
+): string {
+  if (fallbackText.trim()) return fallbackText.trim();
+  switch (type) {
+    case SupportTicketType.CANCEL_REQUEST:
+      return "Запрос на отмену заказа";
+    case SupportTicketType.ADDRESS_CHANGE:
+      return "Нужно изменить адрес доставки";
+    case SupportTicketType.DELIVERY:
+      return "Вопрос по доставке";
+    case SupportTicketType.TRACKING:
+      return "Вопрос по трек-номеру";
+    case SupportTicketType.QUALITY:
+      return "Вопрос по качеству товара";
+    case SupportTicketType.RETURN:
+      return "Вопрос по возврату";
+    case SupportTicketType.EXCHANGE:
+      return "Запрос на обмен";
+    default:
+      return "Обращение в поддержку";
+  }
+}
+
+async function insertFirstTicketMessages(
+  tx: Prisma.TransactionClient,
+  opts: {
+    ticketId: number;
+    businessId: number;
+    userId: number;
+    type: SupportTicketType;
+    text: string;
+    order: CustomerOrderWithItems;
+  }
+): Promise<void> {
+  const { ticketId, businessId, userId, type, text, order } = opts;
+  if (type === SupportTicketType.GENERAL) {
+    await tx.supportMessage.create({
+      data: {
+        ticketId,
+        businessId,
+        senderType: SupportSenderType.SYSTEM,
+        senderId: null,
+        text: buildOrderSupportIntro(order),
+        attachments: [],
+      },
+    });
+    const trimmed = text.trim();
+    if (trimmed) {
+      await tx.supportMessage.create({
+        data: {
+          ticketId,
+          businessId,
+          senderType: SupportSenderType.CUSTOMER,
+          senderId: userId,
+          text: trimmed,
+          attachments: [],
+        },
+      });
+    }
+  } else {
+    const firstText = customerFirstMessageForTicketType(type, text);
+    await tx.supportMessage.create({
+      data: {
+        ticketId,
+        businessId,
+        senderType: SupportSenderType.CUSTOMER,
+        senderId: userId,
+        text: firstText,
+        attachments: [],
+      },
+    });
+  }
+  await tx.supportTicket.update({
+    where: { id: ticketId },
+    data: { updatedAt: new Date() },
   });
 }
 
@@ -189,6 +335,80 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
     }
   });
 
+  /** OPEN GENERAL ticket for order, or create with SYSTEM intro (Temu-style). */
+  app.get("/support/session", async (req: Request, res: Response) => {
+    try {
+      const userId = await customerUserId(req, res);
+      if (userId == null) return;
+      const businessId = await resolveCatalogBusinessId(req, res);
+      if (!businessId) return;
+
+      const orderId = parseOrderId(
+        Array.isArray(req.query.orderId) ? req.query.orderId[0] : req.query.orderId
+      );
+      if (orderId == null) {
+        return res.status(400).json({ error: "Нужен orderId" });
+      }
+
+      const order = await assertCustomerOrder(orderId, businessId, userId);
+      if (!order) {
+        return res.status(404).json({ error: NOT_FOUND });
+      }
+
+      const existing = await prisma.supportTicket.findFirst({
+        where: {
+          businessId,
+          userId,
+          orderId,
+          status: SupportTicketStatus.OPEN,
+          type: SupportTicketType.GENERAL,
+        },
+        orderBy: { id: "desc" },
+        include: {
+          messages: { orderBy: { createdAt: "asc" } },
+          order: { include: { items: true } },
+        },
+      });
+
+      if (existing) {
+        return res.json(jsonWithBigInt(stripInternal(existing, false)));
+      }
+
+      const ticket = await prisma.$transaction(async (tx) => {
+        const t = await tx.supportTicket.create({
+          data: {
+            businessId,
+            userId,
+            orderId,
+            type: SupportTicketType.GENERAL,
+            status: SupportTicketStatus.OPEN,
+          },
+        });
+        await insertFirstTicketMessages(tx, {
+          ticketId: t.id,
+          businessId,
+          userId,
+          type: SupportTicketType.GENERAL,
+          text: "",
+          order,
+        });
+        return t;
+      });
+
+      const full = await prisma.supportTicket.findFirst({
+        where: { id: ticket.id, businessId, userId },
+        include: {
+          messages: { orderBy: { createdAt: "asc" } },
+          order: { include: { items: true } },
+        },
+      });
+      return res.status(201).json(jsonWithBigInt(stripInternal(full!, false)));
+    } catch (e) {
+      console.error("GET /support/session:", e);
+      res.status(500).json({ error: "Ошибка" });
+    }
+  });
+
   app.post("/support/tickets", async (req: Request, res: Response) => {
     try {
       const userId = await customerUserId(req, res);
@@ -228,41 +448,13 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
             status: "OPEN",
           },
         });
-        const firstText =
-          text ||
-          (() => {
-            switch (typeRaw) {
-              case "CANCEL_REQUEST":
-                return "Запрос на отмену заказа";
-              case "ADDRESS_CHANGE":
-                return "Нужно изменить адрес доставки";
-              case "DELIVERY":
-                return "Вопрос по доставке";
-              case "TRACKING":
-                return "Вопрос по трек-номеру";
-              case "QUALITY":
-                return "Вопрос по качеству товара";
-              case "RETURN":
-                return "Вопрос по возврату";
-              case "EXCHANGE":
-                return "Запрос на обмен";
-              default:
-                return "Обращение в поддержку";
-            }
-          })();
-        await tx.supportMessage.create({
-          data: {
-            ticketId: t.id,
-            businessId,
-            senderType: SupportSenderType.CUSTOMER,
-            senderId: userId,
-            text: firstText,
-            attachments: [],
-          },
-        });
-        await tx.supportTicket.update({
-          where: { id: t.id },
-          data: { updatedAt: new Date() },
+        await insertFirstTicketMessages(tx, {
+          ticketId: t.id,
+          businessId,
+          userId,
+          type: typeRaw,
+          text,
+          order,
         });
         return t;
       });

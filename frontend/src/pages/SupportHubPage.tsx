@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchMyOrders } from "../services/myOrdersApi";
 import { useShop } from "../context/ShopContext";
 import { useStorefrontPayload } from "../components/storefront/runtime/StorefrontPayloadContext";
@@ -8,6 +8,7 @@ import { orderSupportPhase, type SupportPhase } from "@repo-shared/supportPhase"
 import {
   createReturnRequest,
   createSupportTicket,
+  ensureGeneralSupportSession,
   fetchSupportTicket,
   fetchSupportTicketsForOrder,
   postSupportTicketMessage,
@@ -18,10 +19,12 @@ import {
 } from "../services/supportCustomerApi";
 import "./SupportHubPage.css";
 
-type HubScreen =
-  | { kind: "hub" }
-  | { kind: "ticket"; orderId: number; ticketId: number }
-  | { kind: "return"; order: MyOrderRow };
+type HubScreen = { kind: "chat" } | { kind: "return"; order: MyOrderRow };
+
+type QuickChip =
+  | { key: string; label: string; kind: "ticket"; ticketType: SupportTicketType }
+  | { key: string; label: string; kind: "return" }
+  | { key: string; label: string; kind: "draft"; text: string };
 
 function phaseLabelRu(phase: SupportPhase): string {
   switch (phase) {
@@ -38,65 +41,108 @@ function phaseLabelRu(phase: SupportPhase): string {
   }
 }
 
-function ChatThread({
-  ticket,
-  busy,
-  draft,
-  onDraft,
-  onSend,
-  onAddPhoto,
-}: {
-  ticket: SupportTicketRow;
-  busy: boolean;
-  draft: string;
-  onDraft: (s: string) => void;
-  onSend: () => void;
-  onAddPhoto: () => void;
-}) {
-  const msgs = Array.isArray(ticket.messages) ? ticket.messages : [];
+function quickChipsForOrder(order: MyOrderRow): QuickChip[] {
+  const phase = orderSupportPhase(order.status);
+  switch (phase) {
+    case "PROCESSING":
+      return [
+        { key: "cancel", label: "Отмена", kind: "ticket", ticketType: "CANCEL_REQUEST" },
+        { key: "ex", label: "Обмен", kind: "ticket", ticketType: "EXCHANGE" },
+        { key: "q", label: "Проблема", kind: "ticket", ticketType: "QUALITY" },
+        { key: "tr", label: "Где посылка", kind: "ticket", ticketType: "TRACKING" },
+      ];
+    case "SHIPPING":
+      return [
+        { key: "tr", label: "Трекинг", kind: "ticket", ticketType: "TRACKING" },
+        { key: "del", label: "Доставка", kind: "ticket", ticketType: "DELIVERY" },
+        { key: "ret", label: "Возврат", kind: "ticket", ticketType: "RETURN" },
+        { key: "q", label: "Проблема", kind: "ticket", ticketType: "QUALITY" },
+      ];
+    case "DELIVERED":
+      return [
+        { key: "retf", label: "Возврат", kind: "return" },
+        { key: "ex", label: "Обмен", kind: "ticket", ticketType: "EXCHANGE" },
+        { key: "q", label: "Проблема", kind: "ticket", ticketType: "QUALITY" },
+      ];
+    case "CANCELLED":
+      return [
+        {
+          key: "ask",
+          label: "Вопрос по отмене",
+          kind: "draft",
+          text: `Вопрос по отменённому заказу №${order.id}`,
+        },
+      ];
+    default:
+      return [];
+  }
+}
+
+function OrderContextCard({ order }: { order: MyOrderRow }) {
+  const phase = orderSupportPhase(order.status);
+  const items = order.items ?? [];
+  const thumbs = items.slice(0, 4);
+  const n = items.reduce((s, it) => s + it.quantity, 0);
   return (
-    <div className="sf-support-chat__thread">
-      <ul className="sf-support-chat__msgs">
-        {msgs.map((m, i) => (
-          <li key={m.id ?? i} className="sf-support-chat__msg">
-            <span className="sf-support-chat__msg-sender">{m.senderType}</span>
-            <p className="sf-support-chat__msg-text">{m.text}</p>
-          </li>
-        ))}
-      </ul>
-      <div className="sf-support-chat__composer-tools">
-        <button
-          type="button"
-          className="sf-support-chat__chip-btn"
-          disabled={busy}
-          onClick={() => onAddPhoto()}
-        >
-          📎 Фото
-        </button>
+    <div className="sf-support-order-card" role="group" aria-label="Заказ">
+      <div className="sf-support-order-card__status">{phaseLabelRu(phase)}</div>
+      <div className="sf-support-order-card__row">
+        <span className="sf-support-order-card__price">{order.total} сом</span>
+        <span className="sf-support-order-card__count">
+          {n} {n === 1 ? "товар" : "тов."}
+        </span>
       </div>
-      <textarea
-        className="sf-support-chat__input"
-        rows={3}
-        placeholder="Сообщение магазину…"
-        value={draft}
-        disabled={busy}
-        onChange={(e) => onDraft(e.target.value)}
-      />
-      <button
-        type="button"
-        className="sf-support-chat__send"
-        disabled={busy || !draft.trim()}
-        onClick={() => onSend()}
-      >
-        Отправить
-      </button>
+      {thumbs.length > 0 ? (
+        <div className="sf-support-order-card__thumbs">
+          {thumbs.map((it) => (
+            <div
+              key={it.id}
+              className="sf-support-order-card__thumb"
+              title={it.name}
+            >
+              <span className="sf-support-order-card__thumb-fallback" aria-hidden>
+                {it.name.slice(0, 1).toUpperCase()}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <div className="sf-support-order-card__id">Заказ №{order.id}</div>
     </div>
+  );
+}
+
+function MessageList({
+  messages,
+}: {
+  messages: NonNullable<SupportTicketRow["messages"]>;
+}) {
+  return (
+    <ul className="sf-support-msgs" aria-live="polite">
+      {messages.map((m, i) => {
+        const st = String(m.senderType ?? "").toUpperCase();
+        const isMine = st === "CUSTOMER";
+        const isSystem = st === "SYSTEM";
+        return (
+          <li
+            key={m.id ?? `m-${i}`}
+            className={`sf-support-msg${isMine ? " sf-support-msg--mine" : ""}${isSystem ? " sf-support-msg--system" : ""}`}
+          >
+            {!isMine ? (
+              <span className="sf-support-msg__who">
+                {isSystem ? "Поддержка" : st === "MERCHANT" ? "Магазин" : st}
+              </span>
+            ) : null}
+            <p className="sf-support-msg__text">{m.text}</p>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
 type SupportHubPageProps = {
   onBack: () => void;
-  /** Когда нет заказов — переход в витрину. */
   onGoShopping?: () => void;
 };
 
@@ -106,18 +152,23 @@ export default function SupportHubPage({
 }: SupportHubPageProps) {
   const [orders, setOrders] = useState<MyOrderRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sessionLoading, setSessionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [screen, setScreen] = useState<HubScreen>({ kind: "hub" });
-  const [ticketRow, setTicketRow] = useState<SupportTicketRow | null>(null);
+  const [screen, setScreen] = useState<HubScreen>({ kind: "chat" });
+  const [generalTicket, setGeneralTicket] = useState<SupportTicketRow | null>(null);
+  const [topicTicket, setTopicTicket] = useState<SupportTicketRow | null>(null);
   const [ticketsForOrder, setTicketsForOrder] = useState<SupportTicketRow[]>([]);
   const [ticketDraft, setTicketDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [orderPickerOpen, setOrderPickerOpen] = useState(false);
 
   const [returnReason, setReturnReason] = useState<ReturnReason>("OTHER");
   const [returnItemId, setReturnItemId] = useState<number | "">("");
   const [returnComment, setReturnComment] = useState("");
   const [returnPhotos, setReturnPhotos] = useState<string[]>([]);
+
+  const endRef = useRef<HTMLDivElement>(null);
 
   const { shopIdString, businessId } = useShop();
   const { payload } = useStorefrontPayload();
@@ -168,7 +219,7 @@ export default function SupportHubPage({
     [orders, selectedId]
   );
 
-  const refreshTickets = useCallback(
+  const refreshSessionAndTickets = useCallback(
     async (orderId: number) => {
       if (
         !Number.isFinite(userId) ||
@@ -178,70 +229,58 @@ export default function SupportHubPage({
       ) {
         return;
       }
+      setSessionLoading(true);
       try {
-        const tix = await fetchSupportTicketsForOrder(
-          userId,
-          shopIdString,
-          orderId
-        );
+        const [session, tix] = await Promise.all([
+          ensureGeneralSupportSession(userId, shopIdString, orderId),
+          fetchSupportTicketsForOrder(userId, shopIdString, orderId),
+        ]);
+        setGeneralTicket(session);
         setTicketsForOrder(tix);
       } catch (e) {
         console.error(e);
+        setGeneralTicket(null);
+      } finally {
+        setSessionLoading(false);
       }
     },
     [userId, shopIdString]
   );
 
   useEffect(() => {
-    if (selectedOrder) void refreshTickets(selectedOrder.id);
-  }, [selectedOrder, refreshTickets]);
+    if (selectedId == null) return;
+    setTopicTicket(null);
+    void refreshSessionAndTickets(selectedId);
+  }, [selectedId, refreshSessionAndTickets]);
+
+  const activeTicket = topicTicket ?? generalTicket;
+  const displayOrder: MyOrderRow | null =
+    activeTicket?.order != null
+      ? (activeTicket.order as MyOrderRow)
+      : selectedOrder;
 
   useEffect(() => {
-    if (screen.kind !== "ticket") return;
-    let cancelled = false;
-    void (async () => {
-      if (
-        !Number.isFinite(userId) ||
-        userId <= 0 ||
-        shopIdString == null ||
-        !/^\d+$/.test(shopIdString)
-      ) {
-        return;
-      }
-      try {
-        const t = await fetchSupportTicket(
-          userId,
-          shopIdString,
-          screen.ticketId
-        );
-        if (!cancelled) setTicketRow(t);
-      } catch (e) {
-        console.error(e);
-        if (!cancelled) setTicketRow(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [screen, userId, shopIdString]);
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [activeTicket?.messages, topicTicket?.id, generalTicket?.id]);
 
-  async function openScenario(order: MyOrderRow, type: SupportTicketType) {
-    if (
-      !Number.isFinite(userId) ||
-      userId <= 0 ||
-      shopIdString == null ||
-      !/^\d+$/.test(shopIdString)
-    ) {
-      return;
-    }
+  const canUseApi =
+    Number.isFinite(userId) &&
+    userId > 0 &&
+    shopIdString != null &&
+    /^\d+$/.test(shopIdString) &&
+    selectedId != null;
+
+  async function openTopicTicket(type: SupportTicketType) {
+    if (!canUseApi || selectedOrder == null) return;
     setBusy(true);
     try {
-      const t = await createSupportTicket(userId, shopIdString, {
-        orderId: order.id,
+      const t = await createSupportTicket(userId, shopIdString!, {
+        orderId: selectedOrder.id,
         type,
       });
-      setScreen({ kind: "ticket", orderId: order.id, ticketId: t.id });
-      await refreshTickets(order.id);
+      const full = await fetchSupportTicket(userId, shopIdString!, t.id);
+      setTopicTicket(full);
+      await refreshSessionAndTickets(selectedOrder.id);
     } catch (e) {
       alert(e instanceof Error ? e.message : "Не удалось создать обращение");
     } finally {
@@ -249,27 +288,33 @@ export default function SupportHubPage({
     }
   }
 
-  async function sendMessage() {
-    if (
-      screen.kind !== "ticket" ||
-      !Number.isFinite(userId) ||
-      userId <= 0 ||
-      shopIdString == null ||
-      !/^\d+$/.test(shopIdString)
-    ) {
-      return;
+  async function openExistingTicket(ticketId: number) {
+    if (!canUseApi || selectedOrder == null) return;
+    setBusy(true);
+    try {
+      const full = await fetchSupportTicket(userId, shopIdString!, ticketId);
+      setTopicTicket(full);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Ошибка");
+    } finally {
+      setBusy(false);
     }
+  }
+
+  async function sendMessage() {
+    if (!canUseApi || activeTicket == null) return;
     const text = ticketDraft.trim();
     if (!text) return;
     setBusy(true);
     try {
       const t = await postSupportTicketMessage(
         userId,
-        shopIdString,
-        screen.ticketId,
+        shopIdString!,
+        activeTicket.id,
         text
       );
-      setTicketRow(t);
+      if (topicTicket && topicTicket.id === t.id) setTopicTicket(t);
+      else setGeneralTicket(t);
       setTicketDraft("");
     } catch (e) {
       alert(e instanceof Error ? e.message : "Ошибка");
@@ -278,15 +323,8 @@ export default function SupportHubPage({
     }
   }
 
-  function pickPhoto(orderId: number) {
-    if (
-      !Number.isFinite(userId) ||
-      userId <= 0 ||
-      shopIdString == null ||
-      !/^\d+$/.test(shopIdString)
-    ) {
-      return;
-    }
+  function pickPhoto() {
+    if (!canUseApi || activeTicket == null || selectedId == null) return;
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
@@ -298,27 +336,19 @@ export default function SupportHubPage({
         try {
           const { url } = await uploadSupportPhoto(
             userId,
-            shopIdString,
-            orderId,
+            shopIdString!,
+            selectedId,
             file
           );
-          if (screen.kind === "return") {
-            setReturnPhotos((p) => [...p, url].slice(0, 8));
-          } else if (screen.kind === "ticket") {
-            await postSupportTicketMessage(
-              userId,
-              shopIdString,
-              screen.ticketId,
-              "Фото",
-              [url]
-            );
-            const t = await fetchSupportTicket(
-              userId,
-              shopIdString,
-              screen.ticketId
-            );
-            setTicketRow(t);
-          }
+          const t = await postSupportTicketMessage(
+            userId,
+            shopIdString!,
+            activeTicket.id,
+            "Фото",
+            [url]
+          );
+          if (topicTicket && topicTicket.id === t.id) setTopicTicket(t);
+          else setGeneralTicket(t);
         } catch (e) {
           alert(e instanceof Error ? e.message : "Загрузка не удалась");
         } finally {
@@ -330,17 +360,10 @@ export default function SupportHubPage({
   }
 
   async function submitReturn(order: MyOrderRow) {
-    if (
-      !Number.isFinite(userId) ||
-      userId <= 0 ||
-      shopIdString == null ||
-      !/^\d+$/.test(shopIdString)
-    ) {
-      return;
-    }
+    if (!canUseApi) return;
     setBusy(true);
     try {
-      await createReturnRequest(userId, shopIdString, {
+      await createReturnRequest(userId, shopIdString!, {
         orderId: order.id,
         orderItemId: returnItemId === "" ? null : returnItemId,
         reason: returnReason,
@@ -350,8 +373,8 @@ export default function SupportHubPage({
       alert("Заявка отправлена");
       setReturnPhotos([]);
       setReturnComment("");
-      await refreshTickets(order.id);
-      setScreen({ kind: "hub" });
+      setScreen({ kind: "chat" });
+      await refreshSessionAndTickets(order.id);
       await load();
     } catch (e) {
       alert(e instanceof Error ? e.message : "Ошибка");
@@ -360,71 +383,40 @@ export default function SupportHubPage({
     }
   }
 
-  if (screen.kind === "ticket") {
-    if (!ticketRow) {
-      return (
-        <div className="sf-support-hub">
-          <button
-            type="button"
-            className="sf-support-hub__back"
-            onClick={() => {
-              setTicketRow(null);
-              setScreen({ kind: "hub" });
-            }}
-          >
-            ← К сценариям
-          </button>
-          <p className="sf-support-hub__muted">Загрузка диалога…</p>
-        </div>
-      );
+  function onChip(c: QuickChip) {
+    if (c.kind === "return") {
+      if (!selectedOrder) return;
+      setReturnItemId("");
+      setReturnReason("OTHER");
+      setReturnPhotos([]);
+      setScreen({ kind: "return", order: selectedOrder });
+      return;
     }
-    return (
-      <div className="sf-support-hub sf-support-hub--chat">
-        <header className="sf-support-hub__chat-top">
-          <button
-            type="button"
-            className="sf-support-hub__back sf-support-hub__back--inline"
-            onClick={() => {
-              setTicketRow(null);
-              setScreen({ kind: "hub" });
-            }}
-          >
-            ←
-          </button>
-          <div className="sf-support-hub__chat-top-meta">
-            <h1 className="sf-support-hub__chat-title">
-              Диалог · #{screen.ticketId}
-            </h1>
-            <p className="sf-support-hub__chat-sub">Заказ #{screen.orderId}</p>
-          </div>
-        </header>
-        <ChatThread
-          ticket={ticketRow}
-          busy={busy}
-          draft={ticketDraft}
-          onDraft={setTicketDraft}
-          onSend={() => void sendMessage()}
-          onAddPhoto={() => pickPhoto(screen.orderId)}
-        />
-        <button
-          type="button"
-          className="sf-support-hub__text-exit"
-          onClick={onBack}
-        >
-          На главную
-        </button>
-      </div>
-    );
+    if (c.kind === "draft") {
+      setTicketDraft(c.text);
+      return;
+    }
+    void openTopicTicket(c.ticketType);
   }
+
+  const otherOpenTickets = useMemo(() => {
+    const open = ticketsForOrder.filter(
+      (t) =>
+        String(t.status).toUpperCase() === "OPEN" &&
+        String(t.type).toUpperCase() !== "GENERAL"
+    );
+    if (topicTicket == null) return open;
+    return open.filter((t) => t.id !== topicTicket.id);
+  }, [ticketsForOrder, topicTicket]);
 
   if (screen.kind === "return") {
     const order = screen.order;
     return (
-      <div className="sf-support-hub">
+      <div className="sf-support-hub sf-support-hub--return">
         <button
           type="button"
-          className="sf-support-hub__back"
-          onClick={() => setScreen({ kind: "hub" })}
+          className="sf-support-temu__back"
+          onClick={() => setScreen({ kind: "chat" })}
         >
           ← Назад
         </button>
@@ -482,7 +474,32 @@ export default function SupportHubPage({
             type="button"
             className="sf-support-hub__action"
             disabled={busy}
-            onClick={() => pickPhoto(order.id)}
+            onClick={() => {
+              const input = document.createElement("input");
+              input.type = "file";
+              input.accept = "image/*";
+              input.onchange = () => {
+                const file = input.files?.[0];
+                if (!file || !canUseApi) return;
+                void (async () => {
+                  setBusy(true);
+                  try {
+                    const { url } = await uploadSupportPhoto(
+                      userId,
+                      shopIdString!,
+                      order.id,
+                      file
+                    );
+                    setReturnPhotos((p) => [...p, url].slice(0, 8));
+                  } catch (e) {
+                    alert(e instanceof Error ? e.message : "Ошибка");
+                  } finally {
+                    setBusy(false);
+                  }
+                })();
+              };
+              input.click();
+            }}
           >
             Добавить фото
           </button>
@@ -499,310 +516,210 @@ export default function SupportHubPage({
     );
   }
 
-  const renderScenarioGrid = (order: MyOrderRow) => {
-    const phase = orderSupportPhase(order.status);
-    const tracking =
-      order.tracking != null && String(order.tracking).trim() !== ""
-        ? String(order.tracking).trim()
-        : null;
+  return (
+    <div className="sf-support-hub sf-support-hub--temu">
+      <header className="sf-support-temu__topbar">
+        <button
+          type="button"
+          className="sf-support-temu__icon-btn"
+          onClick={onBack}
+          aria-label="Закрыть"
+        >
+          ←
+        </button>
+        <div className="sf-support-temu__brand">
+          <span className="sf-support-temu__brand-name">
+            {readTxt("supportHubTitle", "Поддержка")}
+          </span>
+          <span className="sf-support-temu__brand-sub">
+            {readTxt("supportHubSubtitle", "Служба поддержки")}
+          </span>
+        </div>
+        <span className="sf-support-temu__topbar-spacer" aria-hidden />
+      </header>
 
-    return (
-      <div className="sf-support-hub__scenarios">
-        {phase === "CANCELLED" && (
-          <button
-            type="button"
-            className="sf-support-hub__scenario"
-            disabled={busy}
-            onClick={() => void openScenario(order, "GENERAL")}
-          >
-            <span className="sf-support-hub__scenario-title">
-              Связаться с поддержкой
-            </span>
-            <span className="sf-support-hub__scenario-desc">
-              Уточнение по отменённому заказу
-            </span>
-          </button>
+      {topicTicket ? (
+        <button
+          type="button"
+          className="sf-support-temu__back-to-general"
+          onClick={() => setTopicTicket(null)}
+        >
+          ← К чату заказа
+        </button>
+      ) : null}
+
+      <div className="sf-support-temu__scroll">
+        {loading && (
+          <p className="sf-support-hub__muted">{readTxt("loading", "Загрузка…")}</p>
+        )}
+        {error && (
+          <p className="sf-support-hub__error" role="alert">
+            {error}
+          </p>
         )}
 
-        {phase === "PROCESSING" && (
+        {!loading && !error && orders.length === 0 && (
           <>
-            <button
-              type="button"
-              className="sf-support-hub__scenario"
-              disabled={busy}
-              onClick={() => void openScenario(order, "CANCEL_REQUEST")}
-            >
-              <span className="sf-support-hub__scenario-title">
-                Отмена заказа
-              </span>
-            </button>
-            <button
-              type="button"
-              className="sf-support-hub__scenario"
-              disabled={busy}
-              onClick={() => void openScenario(order, "EXCHANGE")}
-            >
-              <span className="sf-support-hub__scenario-title">
-                Обмен размера
-              </span>
-            </button>
-            <button
-              type="button"
-              className="sf-support-hub__scenario"
-              disabled={busy}
-              onClick={() => void openScenario(order, "QUALITY")}
-            >
-              <span className="sf-support-hub__scenario-title">
-                Проблема с заказом
-              </span>
-            </button>
-            <button
-              type="button"
-              className="sf-support-hub__scenario"
-              disabled={busy}
-              onClick={() => void openScenario(order, "TRACKING")}
-            >
-              <span className="sf-support-hub__scenario-title">
-                Где моя посылка
-              </span>
-              <span className="sf-support-hub__scenario-desc">
-                Статус отправки
-              </span>
-            </button>
-            <button
-              type="button"
-              className="sf-support-hub__scenario"
-              disabled={busy}
-              onClick={() => void openScenario(order, "GENERAL")}
-            >
-              <span className="sf-support-hub__scenario-title">
-                Связаться с поддержкой
-              </span>
-            </button>
+            <ul className="sf-support-msgs">
+              <li className="sf-support-msg sf-support-msg--system">
+                <span className="sf-support-msg__who">Поддержка</span>
+                <p className="sf-support-msg__text">
+                  Здравствуйте! Чат по заказу доступен после оформления покупки.
+                </p>
+              </li>
+              <li className="sf-support-msg sf-support-msg--system">
+                <span className="sf-support-msg__who">Поддержка</span>
+                <p className="sf-support-msg__text">
+                  Справка и контакты — в боковом меню. Закройте экран или
+                  перейдите в каталог.
+                </p>
+              </li>
+            </ul>
+            {onGoShopping ? (
+              <button
+                type="button"
+                className="sf-support-hub__empty-cta sf-support-hub__empty-cta--chat"
+                onClick={onGoShopping}
+              >
+                В каталог
+              </button>
+            ) : null}
           </>
         )}
 
-        {phase === "SHIPPING" && (
+        {!loading && !error && orders.length > 0 && displayOrder && (
           <>
-            {tracking ? (
-              <div className="sf-support-hub__tracking-card">
-                <span className="sf-support-hub__tracking-label">Трек-номер</span>
-                <span className="sf-support-hub__tracking-value">{tracking}</span>
-              </div>
+            <OrderContextCard order={displayOrder} />
+            {sessionLoading && !activeTicket ? (
+              <p className="sf-support-hub__muted">Подключаем чат…</p>
             ) : null}
-            <button
-              type="button"
-              className="sf-support-hub__scenario sf-support-hub__scenario--accent"
-              disabled={busy}
-              onClick={() => void openScenario(order, "TRACKING")}
-            >
-              <span className="sf-support-hub__scenario-title">
-                Где моя посылка
-              </span>
-            </button>
-            <button
-              type="button"
-              className="sf-support-hub__scenario"
-              disabled={busy}
-              onClick={() => void openScenario(order, "DELIVERY")}
-            >
-              <span className="sf-support-hub__scenario-title">
-                Проблема с доставкой
-              </span>
-            </button>
-            <button
-              type="button"
-              className="sf-support-hub__scenario"
-              disabled={busy}
-              onClick={() => void openScenario(order, "RETURN")}
-            >
-              <span className="sf-support-hub__scenario-title">
-                Возврат товара
-              </span>
-              <span className="sf-support-hub__scenario-desc">
-                Вопрос до получения
-              </span>
-            </button>
-            <button
-              type="button"
-              className="sf-support-hub__scenario"
-              disabled={busy}
-              onClick={() => void openScenario(order, "QUALITY")}
-            >
-              <span className="sf-support-hub__scenario-title">
-                Проблема с заказом
-              </span>
-            </button>
-            <button
-              type="button"
-              className="sf-support-hub__scenario"
-              disabled={busy}
-              onClick={() => void openScenario(order, "GENERAL")}
-            >
-              <span className="sf-support-hub__scenario-title">
-                Связаться с поддержкой
-              </span>
-            </button>
-          </>
-        )}
-
-        {phase === "DELIVERED" && (
-          <>
-            {tracking ? (
-              <div className="sf-support-hub__tracking-card">
-                <span className="sf-support-hub__tracking-label">Был отправлен</span>
-                <span className="sf-support-hub__tracking-value">{tracking}</span>
-              </div>
+            {activeTicket?.messages && activeTicket.messages.length > 0 ? (
+              <MessageList messages={activeTicket.messages} />
             ) : null}
-            <button
-              type="button"
-              className="sf-support-hub__scenario sf-support-hub__scenario--accent"
-              disabled={busy}
-              onClick={() => {
-                setReturnItemId("");
-                setReturnReason("OTHER");
-                setReturnPhotos([]);
-                setScreen({ kind: "return", order });
-              }}
-            >
-              <span className="sf-support-hub__scenario-title">
-                Возврат товара
-              </span>
-            </button>
-            <button
-              type="button"
-              className="sf-support-hub__scenario"
-              disabled={busy}
-              onClick={() => void openScenario(order, "EXCHANGE")}
-            >
-              <span className="sf-support-hub__scenario-title">
-                Обмен размера
-              </span>
-            </button>
-            <button
-              type="button"
-              className="sf-support-hub__scenario"
-              disabled={busy}
-              onClick={() => void openScenario(order, "QUALITY")}
-            >
-              <span className="sf-support-hub__scenario-title">
-                Проблема с заказом
-              </span>
-            </button>
-            <button
-              type="button"
-              className="sf-support-hub__scenario"
-              disabled={busy}
-              onClick={() => void openScenario(order, "GENERAL")}
-            >
-              <span className="sf-support-hub__scenario-title">
-                Связаться с поддержкой
-              </span>
-            </button>
+            <div ref={endRef} />
           </>
         )}
       </div>
-    );
-  };
-
-  return (
-    <div className="sf-support-hub">
-      <button type="button" className="sf-support-hub__back" onClick={onBack}>
-        ← {readTxt("supportHubBackLabel", "Закрыть")}
-      </button>
-      <header className="sf-support-hub__header">
-        <h1 className="sf-support-hub__title">
-          {readTxt("supportHubTitle", "Поддержка")}
-        </h1>
-        <p className="sf-support-hub__lead">
-          {readTxt(
-            "supportHubLead",
-            "Выберите заказ и сценарий — ответит магазин в чате."
-          )}
-        </p>
-      </header>
-
-      {loading && (
-        <p className="sf-support-hub__muted">{readTxt("loading", "Загрузка…")}</p>
-      )}
-      {error && (
-        <p className="sf-support-hub__error" role="alert">
-          {error}
-        </p>
-      )}
-
-      {!loading && !error && orders.length === 0 && (
-        <div className="sf-support-hub__empty">
-          <p className="sf-support-hub__empty-title">Пока нет заказов</p>
-          <p className="sf-support-hub__empty-text">
-            Чат по заказу откроется после покупки. Справка и контакты — в боковом
-            меню.
-          </p>
-          {onGoShopping ? (
-            <button
-              type="button"
-              className="sf-support-hub__empty-cta"
-              onClick={onGoShopping}
-            >
-              В каталог
-            </button>
-          ) : null}
-        </div>
-      )}
 
       {!loading && !error && orders.length > 0 && selectedOrder && (
         <>
-          <label className="sf-support-hub__field">
-            <span>Заказ для обращения</span>
-            <select
-              className="sf-support-hub__select"
-              value={String(selectedId ?? "")}
-              onChange={(e) => setSelectedId(Number(e.target.value))}
-            >
-              {orders.map((o) => (
-                <option key={o.id} value={o.id}>
-                  #{o.id} · {o.total} сом · {o.status}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="sf-support-hub__phase-pill">
-            <span className="sf-support-hub__phase-label">Статус</span>
-            <span className="sf-support-hub__phase-value">
-              {phaseLabelRu(orderSupportPhase(selectedOrder.status))}
-            </span>
-          </div>
-
-          <h2 className="sf-support-hub__section-title">Чем помочь?</h2>
-          {renderScenarioGrid(selectedOrder)}
-
-          {ticketsForOrder.length > 0 && (
-            <section className="sf-support-hub__cases">
-              <h2 className="sf-support-hub__section-title">Ваши обращения</h2>
-              <ul className="sf-support-hub__case-list">
-                {ticketsForOrder.map((t) => (
-                  <li key={t.id}>
-                    <button
-                      type="button"
-                      className="sf-support-hub__case-btn"
-                      onClick={() =>
-                        setScreen({
-                          kind: "ticket",
-                          orderId: selectedOrder.id,
-                          ticketId: t.id,
-                        })
-                      }
-                    >
-                      #{t.id} · {t.type} · {t.status}
-                    </button>
-                  </li>
+          {otherOpenTickets.length > 0 ? (
+            <div className="sf-support-temu__open-threads" role="navigation">
+              <span className="sf-support-temu__open-threads-label">
+                Открытые темы
+              </span>
+              <div className="sf-support-temu__chips-row">
+                {otherOpenTickets.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className="sf-support-chip sf-support-chip--ghost"
+                    disabled={busy}
+                    onClick={() => void openExistingTicket(t.id)}
+                  >
+                    {String(t.type)} · #{t.id}
+                  </button>
                 ))}
-              </ul>
-            </section>
-          )}
+              </div>
+            </div>
+          ) : null}
+
+          {!topicTicket ? (
+            <div className="sf-support-temu__chips-wrap">
+              <div className="sf-support-temu__chips-row">
+                {quickChipsForOrder(selectedOrder).map((c) => (
+                  <button
+                    key={c.key}
+                    type="button"
+                    className="sf-support-chip"
+                    disabled={busy}
+                    onClick={() => onChip(c)}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="sf-support-temu__composer">
+            <button
+              type="button"
+              className="sf-support-temu__composer-icon"
+              disabled={busy || !activeTicket}
+              onClick={() => pickPhoto()}
+              aria-label="Прикрепить фото"
+            >
+              🖼
+            </button>
+            <button
+              type="button"
+              className="sf-support-temu__composer-icon"
+              disabled={busy}
+              onClick={() => setOrderPickerOpen(true)}
+              aria-label="Выбрать заказ"
+            >
+              📦
+            </button>
+            <input
+              type="text"
+              className="sf-support-temu__composer-input"
+              placeholder={
+                activeTicket
+                  ? "Введите ваш запрос…"
+                  : "Подождите загрузки чата…"
+              }
+              value={ticketDraft}
+              disabled={busy || !activeTicket}
+              onChange={(e) => setTicketDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void sendMessage();
+              }}
+            />
+            <button
+              type="button"
+              className="sf-support-temu__composer-send"
+              disabled={busy || !activeTicket || !ticketDraft.trim()}
+              onClick={() => void sendMessage()}
+            >
+              →
+            </button>
+          </div>
         </>
       )}
+
+      {orderPickerOpen ? (
+        <div
+          className="sf-support-sheet-backdrop"
+          role="presentation"
+          onClick={() => setOrderPickerOpen(false)}
+        />
+      ) : null}
+      {orderPickerOpen ? (
+        <div className="sf-support-sheet" role="dialog" aria-label="Выбор заказа">
+          <div className="sf-support-sheet__handle" aria-hidden />
+          <div className="sf-support-sheet__title">Ваш заказ</div>
+          <ul className="sf-support-sheet__list">
+            {orders.map((o) => (
+              <li key={o.id}>
+                <button
+                  type="button"
+                  className={`sf-support-sheet__item${o.id === selectedId ? " sf-support-sheet__item--current" : ""}`}
+                  onClick={() => {
+                    setSelectedId(o.id);
+                    setOrderPickerOpen(false);
+                  }}
+                >
+                  <span className="sf-support-sheet__item-id">№{o.id}</span>
+                  <span className="sf-support-sheet__item-meta">
+                    {o.total} сом · {phaseLabelRu(orderSupportPhase(o.status))}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }

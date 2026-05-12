@@ -70,6 +70,18 @@ export async function fetchSupportTicketsForOrder(
   return Array.isArray(res.data) ? res.data : [];
 }
 
+/** OPEN GENERAL ticket for order or create with SYSTEM intro (201/200). */
+export async function ensureGeneralSupportSession(
+  userId: number,
+  shop: string,
+  orderId: number
+): Promise<SupportTicketRow> {
+  const res = await api.get<SupportTicketRow>("/support/session", {
+    params: { ...tenantParams(userId, shop), orderId },
+  });
+  return res.data;
+}
+
 export async function createSupportTicket(
   userId: number,
   shop: string,
