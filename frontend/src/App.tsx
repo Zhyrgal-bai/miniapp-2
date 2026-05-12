@@ -4,7 +4,6 @@ import CheckoutPage from "./pages/CheckoutPage";
 import AdminApp from "./pages/admin/AdminApp";
 import FAQ from "./pages/FAQ";
 import MyOrders from "./pages/MyOrders";
-import ConnectBotPage from "./pages/ConnectBotPage";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShop } from "./context/ShopContext";
@@ -36,8 +35,7 @@ type AppNavPage =
   | "checkout"
   | "admin"
   | "faq"
-  | "my-orders"
-  | "connect-bot";
+  | "my-orders";
 
 function myOrdersNeedAttention(rows: MyOrderRow[]): boolean {
   return rows.some((o) => {
@@ -89,22 +87,14 @@ export default function App() {
   }, []);
 
   const allowWithoutShop =
-    page === "admin" ||
-    adminByHash ||
-    page === "connect-bot" ||
-    page === "faq";
+    page === "admin" || adminByHash || page === "faq";
   const shopMissing = !allowWithoutShop && businessId == null;
 
   const items = useCartStore((state) => state.items);
   const totalQuantity = items.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
 
   const isStorefrontUi =
-    page === "home" ||
-    page === "cart" ||
-    page === "checkout" ||
-    page === "my-orders" ||
-    page === "faq" ||
-    page === "connect-bot";
+    page === "home" || page === "cart" || page === "checkout" || page === "my-orders" || page === "faq";
 
   const sfKit = kitFromTemplateId(templateId ?? payload?.templateId ?? null);
 
@@ -177,6 +167,8 @@ export default function App() {
       }
       return;
     }
+    // Не открываем экран регистрации бота в витрине: старые ссылки ?view=connect-bot из BotFather
+    // вели всех покупателей на форму токена. Сбрасываем на главную витрины.
     if (v === "connect-bot") {
       const sp2 = new URLSearchParams(location.search);
       sp2.delete("view");
@@ -188,7 +180,7 @@ export default function App() {
         },
         { replace: true },
       );
-      setPage("connect-bot");
+      setPage("home");
     }
   }, [
     location.search,
@@ -338,7 +330,6 @@ export default function App() {
         {page === "home" && <HomePage />}
         {page === "faq" && <FAQ />}
         {page === "my-orders" && <MyOrders />}
-        {page === "connect-bot" && <ConnectBotPage />}
         {page === "cart" && (
           <CartPage onGoToCheckout={() => commitPage("checkout")} />
         )}
