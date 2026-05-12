@@ -5,6 +5,7 @@ import AdminApp from "./pages/admin/AdminApp";
 import FAQ from "./pages/FAQ";
 import AboutShopPage from "./pages/AboutShopPage";
 import MyOrders from "./pages/MyOrders";
+import SupportHubPage from "./pages/SupportHubPage";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShop } from "./context/ShopContext";
@@ -42,7 +43,8 @@ type AppNavPage =
   | "admin"
   | "faq"
   | "about-shop"
-  | "my-orders";
+  | "my-orders"
+  | "support";
 
 function myOrdersNeedAttention(rows: MyOrderRow[]): boolean {
   return rows.some((o) => {
@@ -67,8 +69,6 @@ export default function App() {
   const [page, setPage] = useState<AppNavPage>(initialPageFromPath);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [myOrdersAttention, setMyOrdersAttention] = useState(false);
-  /** Повторное чтение intent «Поддержка» / «Возвраты» из профиля. */
-  const [myOrdersIntentNonce, setMyOrdersIntentNonce] = useState(0);
   /** Вход «Мои заказы» из профиля — сброс баннера. */
   const [myOrdersPlainNonce, setMyOrdersPlainNonce] = useState(0);
   const [adminByHash, setAdminByHash] = useState(
@@ -111,6 +111,7 @@ export default function App() {
     page === "cart" ||
     page === "checkout" ||
     page === "my-orders" ||
+    page === "support" ||
     page === "faq" ||
     page === "about-shop";
 
@@ -179,6 +180,10 @@ export default function App() {
     const v = sp.get("view");
     if (v === "my-orders") {
       commitPage("my-orders");
+      return;
+    }
+    if (v === "support") {
+      commitPage("support");
       return;
     }
     if (v === "merchant-settings") {
@@ -360,23 +365,13 @@ export default function App() {
         storeName={payload?.storeName?.trim() || undefined}
         isMerchantStaff={adminAllowed}
         accountMenu={{
+          onGoToStore: () => handleNav("home"),
           onMyOrders: () => {
             sessionStorage.removeItem(SF_ORDERS_INTENT_KEY);
             setMyOrdersPlainNonce((n) => n + 1);
             handleNav("my-orders");
           },
-          onSupport: () => {
-            sessionStorage.setItem(SF_ORDERS_INTENT_KEY, "support");
-            setMyOrdersIntentNonce((n) => n + 1);
-            handleNav("my-orders");
-          },
-          onReturns: () => {
-            sessionStorage.setItem(SF_ORDERS_INTENT_KEY, "returns");
-            setMyOrdersIntentNonce((n) => n + 1);
-            handleNav("my-orders");
-          },
-          onFaq: () => handleNav("faq"),
-          onAbout: () => handleNav("about-shop"),
+          onOpenSupportHub: () => handleNav("support"),
         }}
         merchantMenu={
           adminAllowed
@@ -399,6 +394,7 @@ export default function App() {
         cartCount={totalQuantity}
         myOrdersAttentionDot={myOrdersAttention}
         onNavToMyOrders={() => handleNav("my-orders")}
+        onNavToSupport={() => handleNav("support")}
         onNavToFaq={() => handleNav("faq")}
         onNavToAdmin={goAdminSection}
       />
@@ -408,9 +404,12 @@ export default function App() {
         {page === "faq" && <FAQ />}
         {page === "about-shop" && <AboutShopPage />}
         {page === "my-orders" && (
-          <MyOrders
-            profileIntentNonce={myOrdersIntentNonce}
-            profilePlainNonce={myOrdersPlainNonce}
+          <MyOrders profilePlainNonce={myOrdersPlainNonce} />
+        )}
+        {page === "support" && (
+          <SupportHubPage
+            onBack={() => commitPage("home")}
+            onGoShopping={() => commitPage("home")}
           />
         )}
         {page === "cart" && (
@@ -438,7 +437,11 @@ export default function App() {
       </div>
 
       <FloatingCart
-        visible={page !== "checkout" && !(page === "home" && totalQuantity > 0)}
+        visible={
+          page !== "support" &&
+          page !== "checkout" &&
+          !(page === "home" && totalQuantity > 0)
+        }
         totalQuantity={totalQuantity}
         onOpen={handleFloatingCartClick}
       />

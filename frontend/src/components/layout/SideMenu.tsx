@@ -17,7 +17,8 @@ type AppNavPage =
   | "admin"
   | "faq"
   | "about-shop"
-  | "my-orders";
+  | "my-orders"
+  | "support";
 
 type AdminSection =
   | "orders"
@@ -38,6 +39,8 @@ type SideMenuProps = {
   /** Красная точка у «Мои заказы», если есть заказы, требующие внимания. */
   myOrdersAttentionDot?: boolean;
   onNavToMyOrders: () => void;
+  /** Центр поддержки (чат по заказу), не FAQ. */
+  onNavToSupport: () => void;
   onNavToFaq: () => void;
   onNavToAdmin: (section: AdminSection) => void;
 };
@@ -90,6 +93,7 @@ export default function SideMenu({
   cartCount = 0,
   myOrdersAttentionDot = false,
   onNavToMyOrders,
+  onNavToSupport,
   onNavToFaq,
   onNavToAdmin,
 }: SideMenuProps) {
@@ -117,6 +121,7 @@ export default function SideMenu({
   const cartActive = currentPage === "cart";
   const myOrdersActive = currentPage === "my-orders";
   const faqActive = currentPage === "faq";
+  const supportActive = currentPage === "support";
 
   return (
     <AnimatePresence>
@@ -214,6 +219,20 @@ export default function SideMenu({
                     )}
                   </span>
                   {readTxt("menuCartLabel", "Корзина")}
+                </button>
+
+                <button
+                  type="button"
+                  className={`app-drawer__link${supportActive ? " app-drawer__link--active" : ""}`}
+                  onClick={() => {
+                    onNavToSupport();
+                    onClose();
+                  }}
+                >
+                  <span className="app-drawer__link-icon" aria-hidden>
+                    💬
+                  </span>
+                  {readTxt("menuSupportLabel", "Поддержка")}
                 </button>
 
                 {admin && (

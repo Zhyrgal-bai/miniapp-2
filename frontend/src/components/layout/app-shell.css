@@ -220,38 +220,6 @@
   z-index: 1500;
 }
 
-.app-header__account-panel {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  left: auto;
-  z-index: 1501;
-  width: min(300px, calc(100vw - max(16px, env(safe-area-inset-right, 0px) + env(safe-area-inset-left, 0px) + 16px)));
-  max-height: min(70vh, 520px);
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-  border-radius: var(--sf-card-radius, var(--sf-radius-lg, 18px));
-  overflow: hidden;
-  background: color-mix(
-    in srgb,
-    var(--sf-color-card, var(--app-surface)) 94%,
-    transparent
-  );
-  border: 1px solid
-    color-mix(
-      in srgb,
-      var(--sf-color-border, var(--app-border)) 55%,
-      transparent
-    );
-  box-shadow: var(
-    --sf-shadow-card,
-    0 16px 48px color-mix(in srgb, black 28%, transparent)
-  );
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-}
-
 .app-header__account-profile {
   display: flex;
   align-items: center;
@@ -484,6 +452,145 @@
       var(--sf-color-card, var(--app-surface)) 90%,
       transparent
     );
+}
+
+/* Bottom sheet (Telegram-style) — portal to body, above drawer */
+.app-header__sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2400;
+  background: color-mix(
+    in srgb,
+    var(--sf-color-text, var(--app-text)) 32%,
+    transparent
+  );
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-header__sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2410;
+  max-height: min(88dvh, 640px);
+  display: flex;
+  flex-direction: column;
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  border-radius: var(--sf-card-radius, var(--sf-radius-xl, 22px))
+    var(--sf-card-radius, var(--sf-radius-xl, 22px)) 0 0;
+  overflow: hidden;
+  background: color-mix(
+    in srgb,
+    var(--sf-color-card, var(--app-surface)) 97%,
+    var(--sf-color-background, var(--app-base)) 3%
+  );
+  border: 1px solid
+    color-mix(
+      in srgb,
+      var(--sf-color-border, var(--app-border)) 50%,
+      transparent
+    );
+  border-bottom: none;
+  box-shadow: var(
+    --sf-shadow-card,
+    0 -8px 40px color-mix(in srgb, black 22%, transparent)
+  );
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.app-header__sheet-handle {
+  width: 40px;
+  height: 4px;
+  margin: 10px auto 6px;
+  border-radius: 999px;
+  background: color-mix(
+    in srgb,
+    var(--sf-color-text, var(--app-text)) 22%,
+    transparent
+  );
+  flex-shrink: 0;
+}
+
+.app-header__sheet .app-header__account-profile {
+  flex-shrink: 0;
+}
+
+.app-header__sheet .app-header__account-scroll {
+  flex: 1;
+  min-height: 0;
+  max-height: min(46dvh, 320px);
+  padding-bottom: 6px;
+}
+
+.app-header__sheet-support-cap {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 10px 4px;
+  padding: 12px 12px 14px;
+  border-radius: var(--sf-button-radius, var(--sf-radius-md, 14px));
+  background: color-mix(
+    in srgb,
+    var(--sf-color-primary, var(--app-accent)) 10%,
+    var(--sf-color-card, var(--app-surface)) 90%
+  );
+  border: 1px solid
+    color-mix(
+      in srgb,
+      var(--sf-color-primary, var(--app-accent)) 28%,
+      transparent
+    );
+}
+
+.app-header__sheet-support-cap-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.app-header__sheet-support-cap-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--sf-color-text, var(--app-text));
+  letter-spacing: 0.01em;
+}
+
+.app-header__sheet-support-cap-sub {
+  font-size: 12px;
+  font-weight: 600;
+  color: color-mix(
+    in srgb,
+    var(--sf-color-text, var(--app-text)) 58%,
+    transparent
+  );
+  line-height: 1.3;
+}
+
+.app-header__sheet-support-cap-cta {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--sf-button-radius, var(--sf-radius-md, 14px));
+  background: var(--sf-color-primary, var(--app-accent));
+  color: var(--sf-on-primary, #fff);
+  font-size: 13px;
+  font-weight: 800;
+  font-family: var(--sf-font-button, inherit);
+  cursor: pointer;
+  min-height: 40px;
+  box-shadow: 0 2px 12px
+    color-mix(in srgb, var(--sf-color-primary, var(--app-accent)) 22%, transparent);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-header__sheet-support-cap-cta:active {
+  transform: scale(0.98);
 }
 
 .app-header__user {
