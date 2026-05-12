@@ -14,10 +14,13 @@
 .cart-title {
   margin: 0;
   padding: var(--sf-mobile-pad, 12px) var(--sf-mobile-pad, 12px) 12px;
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-size: var(--sf-typo-title-size, var(--sf-typo-section-title-size, 1.45rem));
+  font-weight: var(--sf-typo-title-weight, 700);
+  letter-spacing: var(--sf-typo-title-letter-spacing, -0.03em);
+  text-transform: var(--sf-typo-title-transform, none);
+  line-height: var(--sf-typo-title-line-height, 1.15);
   color: var(--sf-color-text);
+  font-family: var(--sf-font-heading);
 }
 
 /* Scrollable list — отступ снизу под fixed footer */
@@ -222,7 +225,7 @@
   border-radius: var(--sf-button-radius, 14px);
   min-height: var(--sf-button-height, 44px);
   background: var(--sf-btn-bg, var(--sf-color-primary));
-  color: var(--sf-btn-fg, var(--sf-on-primary, #fff));
+  color: var(--sf-btn-fg, var(--sf-on-primary));
   border: 1px solid var(--sf-btn-border, color-mix(in srgb, var(--sf-color-primary) 55%, transparent));
   font-size: 15px;
   font-weight: 600;

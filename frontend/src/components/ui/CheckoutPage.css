@@ -294,7 +294,7 @@
 .checkout-payment__opt--active {
   border-color: var(--sf-btn-border, color-mix(in srgb, var(--sf-color-primary) 55%, transparent));
   background: var(--sf-btn-bg, var(--sf-color-primary));
-  color: var(--sf-btn-fg, #fff);
+  color: var(--sf-btn-fg, var(--sf-on-primary));
   box-shadow: var(--sf-btn-shadow);
 }
 
@@ -312,7 +312,7 @@
 }
 
 .checkout-payment__opt--active .checkout-payment__opt-sub {
-  color: color-mix(in srgb, var(--sf-btn-fg, #fff) 88%, transparent);
+  color: color-mix(in srgb, var(--sf-btn-fg, var(--sf-on-primary)) 88%, transparent);
 }
 
 .checkout-payment__summary {
@@ -397,7 +397,7 @@
   border-radius: var(--sf-button-radius, 12px);
   border: 1px solid var(--sf-btn-border, color-mix(in srgb, var(--sf-color-primary) 55%, transparent));
   background: var(--sf-btn-bg, var(--sf-color-primary));
-  color: var(--sf-btn-fg, #fff);
+  color: var(--sf-btn-fg, var(--sf-on-primary));
   font-weight: 600;
   cursor: pointer;
   min-height: var(--sf-button-height, 44px);

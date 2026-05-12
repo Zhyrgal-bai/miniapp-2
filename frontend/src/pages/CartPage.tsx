@@ -52,7 +52,7 @@ export default function CartPage({ onGoToCheckout }: Props) {
 
   return (
     <div className="cart">
-      <h1 className="cart-title">Корзина</h1>
+      <h1 className="cart-title">{readTxt("menuCartLabel", "Корзина")}</h1>
 
       {items.length === 0 && (
         <div className="cart-empty">

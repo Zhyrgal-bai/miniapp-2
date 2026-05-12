@@ -197,8 +197,8 @@
 .floating-cart.cart-float {
   position: fixed;
   z-index: 1950;
-  background: var(--sf-btn-bg, var(--sf-color-primary, #dc2626));
-  color: var(--sf-btn-fg, #fff);
+  background: var(--sf-btn-bg, var(--sf-color-primary));
+  color: var(--sf-btn-fg, var(--sf-on-primary));
   border-radius: var(--sf-radius-full, 50%);
   width: 56px;
   height: 56px;
@@ -206,8 +206,8 @@
   align-items: center;
   justify-content: center;
   font-size: 2rem;
-  box-shadow: var(--sf-btn-shadow, 0 4px 18px rgba(0, 0, 0, 0.35));
-  border: 1px solid var(--sf-btn-border, color-mix(in srgb, var(--sf-color-primary, #dc2626) 55%, transparent));
+  box-shadow: var(--sf-btn-shadow, var(--sf-shadow-card));
+  border: 1px solid var(--sf-btn-border, color-mix(in srgb, var(--sf-color-primary) 55%, transparent));
   cursor: grab;
   touch-action: none;
   user-select: none;
@@ -217,19 +217,27 @@
 
 .floating-cart--storefront {
   background-image: none;
-  background: var(--sf-btn-bg, var(--sf-color-primary, #dc2626));
-  color: var(--sf-btn-fg, #fff);
-  border-color: var(--sf-btn-border, color-mix(in srgb, var(--sf-color-primary, #dc2626) 60%, transparent));
+  background: var(--sf-btn-bg, var(--sf-color-primary));
+  color: var(--sf-btn-fg, var(--sf-on-primary));
+  border-color: var(--sf-btn-border, color-mix(in srgb, var(--sf-color-primary) 60%, transparent));
 }
 
 .floating-cart.cart-float:hover {
-  box-shadow: var(--sf-btn-shadow, 0 8px 28px rgba(0, 0, 0, 0.4));
+  box-shadow: var(--sf-btn-shadow, var(--sf-shadow-card));
   transform: scale(1.04);
 }
 
 .floating-cart.cart-float:active {
   cursor: grabbing;
   transform: none;
+}
+
+@media (max-width: 480px) {
+  .floating-cart.cart-float {
+    width: 52px;
+    height: 52px;
+    font-size: 1.7rem;
+  }
 }
 
 .cart-icon {
@@ -240,8 +248,8 @@
   position: absolute;
   top: -5px;
   right: -5px;
-  background: var(--sf-color-danger, var(--sf-color-primary, #ff2d2d));
-  color: var(--sf-on-primary, #fff);
+  background: var(--sf-color-danger, var(--sf-color-primary));
+  color: var(--sf-on-primary);
   font-size: 10px;
   padding: 2px 6px;
   border-radius: var(--sf-radius-full, 999px);
@@ -267,7 +275,7 @@ button:active {
 .shop-missing {
   max-width: 420px;
   text-align: center;
-  color: var(--text, #e8e8e8);
+  color: var(--app-text, var(--sf-color-text, CanvasText));
 }
 
 .shop-missing__title {

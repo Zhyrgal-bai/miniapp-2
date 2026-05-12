@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchMyOrders } from "../services/myOrdersApi";
 import { apiAbsoluteUrl } from "../services/api";
 import { useShop } from "../context/ShopContext";
+import { useStorefrontPayload } from "../components/storefront/runtime/StorefrontPayloadContext";
 import { getWebAppUserId } from "../utils/telegramUserId";
 import type { MyOrderRow } from "../types/myOrder";
 import "./MyOrders.css";
@@ -248,7 +249,14 @@ export default function MyOrders() {
   const [error, setError] = useState<string | null>(null);
 
   const { shopIdString, businessId } = useShop();
+  const { payload } = useStorefrontPayload();
   const userId = getWebAppUserId();
+
+  const txt = payload?.storefrontTextConfig ?? {};
+  const readTxt = (k: string, fb: string) => {
+    const v = (txt as Record<string, unknown>)[k];
+    return typeof v === "string" && v.trim() !== "" ? v : fb;
+  };
 
   const load = useCallback(async () => {
     if (!Number.isFinite(userId) || userId <= 0) {
@@ -301,7 +309,7 @@ export default function MyOrders() {
   return (
     <div className="my-orders">
       <header className="my-orders__head">
-        <h1 className="my-orders__title">Мои заказы</h1>
+        <h1 className="my-orders__title">{readTxt("menuOrdersLabel", "Мои заказы")}</h1>
         <p className="my-orders__subtitle">Автообновление каждые 5 с</p>
       </header>
 
@@ -314,8 +322,12 @@ export default function MyOrders() {
 
       {!loading && !error && orders.length === 0 && (
         <div className="my-orders__empty" role="status">
-          <p className="my-orders__empty-title">У вас пока нет заказов 😔</p>
-          <p className="my-orders__empty-hint">Заказы появятся здесь после оформления</p>
+          <p className="my-orders__empty-title">
+            {readTxt("emptyOrdersTitle", "У вас пока нет заказов 😔")}
+          </p>
+          <p className="my-orders__empty-hint">
+            {readTxt("emptyOrdersHint", "Заказы появятся здесь после оформления")}
+          </p>
         </div>
       )}
 

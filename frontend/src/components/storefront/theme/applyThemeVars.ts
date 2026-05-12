@@ -17,24 +17,46 @@ function getString(v: unknown, fallback: string): string {
   return typeof v === "string" && v.trim() ? v.trim() : fallback;
 }
 
-function hexToRgba(hex: string, alpha01: number): string {
-  const a = Math.max(0, Math.min(1, alpha01));
+/** Parses #RGB / #RRGGBB; returns null if not a hex color. */
+function parseHexRgb(hex: string): { r: number; g: number; b: number } | null {
   const h = hex.trim();
   const m6 = /^#([0-9a-fA-F]{6})$/.exec(h);
   const m3 = /^#([0-9a-fA-F]{3})$/.exec(h);
-  let r = 255, g = 255, b = 255;
   if (m6) {
     const n = m6[1]!;
-    r = parseInt(n.slice(0, 2), 16);
-    g = parseInt(n.slice(2, 4), 16);
-    b = parseInt(n.slice(4, 6), 16);
-  } else if (m3) {
-    const n = m3[1]!;
-    r = parseInt(n.slice(0, 1).repeat(2), 16);
-    g = parseInt(n.slice(1, 2).repeat(2), 16);
-    b = parseInt(n.slice(2, 3).repeat(2), 16);
+    return {
+      r: parseInt(n.slice(0, 2), 16),
+      g: parseInt(n.slice(2, 4), 16),
+      b: parseInt(n.slice(4, 6), 16),
+    };
   }
+  if (m3) {
+    const n = m3[1]!;
+    return {
+      r: parseInt(n.slice(0, 1).repeat(2), 16),
+      g: parseInt(n.slice(1, 2).repeat(2), 16),
+      b: parseInt(n.slice(2, 3).repeat(2), 16),
+    };
+  }
+  return null;
+}
+
+function hexToRgba(hex: string, alpha01: number): string {
+  const a = Math.max(0, Math.min(1, alpha01));
+  const rgb = parseHexRgb(hex);
+  const r = rgb?.r ?? 255;
+  const g = rgb?.g ?? 255;
+  const b = rgb?.b ?? 255;
   return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
+
+/** Light text on dark primaries, near-black on light primaries (simple luminance). */
+function onPrimaryForHex(hex: string): string {
+  const rgb = parseHexRgb(hex);
+  if (!rgb) return "#ffffff";
+  const { r, g, b } = rgb;
+  const y = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return y > 0.55 ? "#0f172a" : "#ffffff";
 }
 
 function shadowFor(id: string, primaryHex: string): string {
@@ -82,6 +104,7 @@ export function applyThemeVars(theme: ResolvedStoreTheme): Record<string, string
     const radius = getObj(t3obj.radius);
 
     const primaryHex = getString(palette.primary, theme.primaryColor);
+    const onPrimary = onPrimaryForHex(primaryHex);
     const borderHex = getString(palette.border, "#334155");
     const cardBorderOpacity = getNumber(cards?.borderOpacity, 0.08);
     const cardBorderColor = hexToRgba(borderHex, cardBorderOpacity);
@@ -107,6 +130,7 @@ export function applyThemeVars(theme: ResolvedStoreTheme): Record<string, string
       "--sf-color-text": p("text", theme.textColor),
       "--sf-color-muted": p("muted", "rgba(148,163,184,1)"),
       "--sf-color-primary": primaryHex,
+      "--sf-on-primary": onPrimary,
       "--sf-color-secondary": p("secondary", "#22c55e"),
       "--sf-color-accent": p("accent", "#f97316"),
       "--sf-color-success": p("success", "#22c55e"),
@@ -139,11 +163,14 @@ export function applyThemeVars(theme: ResolvedStoreTheme): Record<string, string
   }
 
   // Fallback (V2)
+  const legacyPrimary = pick(theme.primaryColor, "#6366f1");
   return {
     "--sf-color-background": pick(theme.bgColor, "#0f172a"),
     "--sf-color-card": pick(theme.cardColor, "#1e293b"),
     "--sf-color-text": pick(theme.textColor, "#ffffff"),
-    "--sf-color-primary": pick(theme.primaryColor, "#6366f1"),
+    "--sf-color-muted": "rgba(148,163,184,0.92)",
+    "--sf-color-primary": legacyPrimary,
+    "--sf-on-primary": onPrimaryForHex(legacyPrimary),
     "--sf-color-border": "rgba(255,255,255,0.10)",
     "--sf-font-body": theme.tokens?.typography?.fontFamily ?? "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, Noto Sans, sans-serif",
     "--sf-font-heading": theme.tokens?.typography?.fontFamily ?? "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, Noto Sans, sans-serif",

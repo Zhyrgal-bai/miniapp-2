@@ -25,7 +25,10 @@ import "./components/storefront/cart/stickyCart.css";
 import { ThemeVarsProvider } from "./components/storefront/theme/ThemeVarsProvider";
 import { useTheme } from "./context/ThemeContext";
 import { useStorefrontPayload } from "./components/storefront/runtime/StorefrontPayloadContext";
-import { FONT_ALLOWLIST, isFontId } from "./themeStudio/fonts";
+import {
+  buildStorefrontLayoutCssVars,
+  kitFromTemplateId,
+} from "./storefront/buildStorefrontLayoutCssVars";
 
 type AppNavPage =
   | "home"
@@ -98,120 +101,15 @@ export default function App() {
   const isStorefrontUi =
     page === "home" || page === "cart" || page === "checkout" || page === "my-orders" || page === "faq";
 
-  const kitFromTemplateId = (tid: string | null | undefined): string => {
-    const t = typeof tid === "string" ? tid.trim().toLowerCase() : "";
-    if (t === "minimal" || t === "light") return "minimal";
-    if (t === "luxury") return "luxury";
-    if (t === "fashion") return "fashion";
-    if (t === "neon") return "neon";
-    return "default";
-  };
   const sfKit = kitFromTemplateId(templateId ?? payload?.templateId ?? null);
 
-  const styleCfg = (payload?.storefrontStyleConfig ?? {}) as Record<string, unknown>;
-  const layout =
-    styleCfg.layout && typeof styleCfg.layout === "object" && !Array.isArray(styleCfg.layout)
-      ? (styleCfg.layout as Record<string, unknown>)
-      : {};
-  const typo =
-    styleCfg.typography && typeof styleCfg.typography === "object" && !Array.isArray(styleCfg.typography)
-      ? (styleCfg.typography as Record<string, unknown>)
-      : {};
-  const chips =
-    styleCfg.chips && typeof styleCfg.chips === "object" && !Array.isArray(styleCfg.chips)
-      ? (styleCfg.chips as Record<string, unknown>)
-      : {};
-  const buttons =
-    styleCfg.buttons && typeof styleCfg.buttons === "object" && !Array.isArray(styleCfg.buttons)
-      ? (styleCfg.buttons as Record<string, unknown>)
-      : {};
-  const hero =
-    styleCfg.hero && typeof styleCfg.hero === "object" && !Array.isArray(styleCfg.hero)
-      ? (styleCfg.hero as Record<string, unknown>)
-      : {};
-  const cart =
-    styleCfg.cart && typeof styleCfg.cart === "object" && !Array.isArray(styleCfg.cart)
-      ? (styleCfg.cart as Record<string, unknown>)
-      : {};
-  const drawer =
-    styleCfg.drawer && typeof styleCfg.drawer === "object" && !Array.isArray(styleCfg.drawer)
-      ? (styleCfg.drawer as Record<string, unknown>)
-      : {};
-
-  const fontStack = (id: unknown): string => {
-    const v = isFontId(id) ? id : "system";
-    const found = FONT_ALLOWLIST.find((f) => f.id === v);
-    return found?.cssFamily ?? FONT_ALLOWLIST[0].cssFamily;
-  };
-
-  const densityScale =
-    layout.density === "compact" ? 0.86 : layout.density === "comfortable" ? 1.14 : 1;
-
-  const scaledPx = (v: unknown): string => {
-    if (typeof v !== "number" || !Number.isFinite(v)) return "";
-    return `${Math.round(v * densityScale)}px`;
-  };
-
-  const contentMax =
-    layout.contentWidth === "narrow"
-      ? "430px"
-      : "100%";
-
-  const sfVars: Record<string, string> = {
-    "--sf-density-scale": String(densityScale),
-    "--sf-content-max": contentMax,
-    "--sf-section-pad": scaledPx(layout.sectionSpacing) || (typeof layout.sectionSpacing === "number" ? `${layout.sectionSpacing}px` : ""),
-    "--sf-grid-gap": scaledPx(layout.productGap) || (typeof layout.productGap === "number" ? `${layout.productGap}px` : ""),
-    "--sf-mobile-pad": scaledPx(layout.mobilePadding) || (typeof layout.mobilePadding === "number" ? `${layout.mobilePadding}px` : ""),
-    "--sf-font-body": fontStack(typo.fontBody),
-    "--sf-font-heading": fontStack(typo.fontTitle),
-    "--sf-font-button": fontStack(typo.fontButton),
-    "--sf-typo-title-size": typeof typo.titleSize === "number" ? `${typo.titleSize}px` : "",
-    "--sf-typo-section-title-size": typeof typo.sectionTitleSize === "number" ? `${typo.sectionTitleSize}px` : "",
-    "--sf-typo-button-size": typeof typo.buttonSize === "number" ? `${typo.buttonSize}px` : "",
-    "--sf-typo-title-weight": typeof typo.titleWeight === "number" ? String(typo.titleWeight) : "",
-    "--sf-typo-title-transform":
-      typeof typo.uppercaseTitles === "boolean" ? (typo.uppercaseTitles ? "uppercase" : "none") : "",
-    "--sf-typo-title-letter-spacing": typeof typo.letterSpacing === "number" ? `${typo.letterSpacing}em` : "",
-    "--sf-typo-title-line-height": typeof typo.lineHeight === "number" ? String(typo.lineHeight) : "",
-    "--sf-chip-radius": typeof chips.radius === "number" ? `${chips.radius}px` : "",
-    "--sf-chip-gap": scaledPx(chips.gap) || (typeof chips.gap === "number" ? `${chips.gap}px` : ""),
-    "--sf-chip-shape": typeof chips.shape === "string" ? String(chips.shape) : "",
-    "--sf-chip-style": typeof chips.style === "string" ? String(chips.style) : "",
-    "--sf-chip-size": typeof chips.size === "string" ? String(chips.size) : "",
-    "--sf-button-radius": typeof buttons.radius === "number" ? `${buttons.radius}px` : "",
-    "--sf-button-height": typeof buttons.height === "number" ? `${buttons.height}px` : "",
-    "--sf-button-variant": typeof buttons.variant === "string" ? String(buttons.variant) : "",
-    "--sf-button-shadow-enabled":
-      typeof buttons.shadow === "boolean" ? (buttons.shadow ? "1" : "0") : "",
-    "--sf-button-glow-enabled":
-      typeof buttons.glow === "boolean" ? (buttons.glow ? "1" : "0") : "",
-    "--sf-button-compact":
-      typeof buttons.compact === "boolean" ? (buttons.compact ? "1" : "0") : "",
-    "--sf-motion-level": typeof buttons.animationLevel === "string" ? String(buttons.animationLevel) : "",
-    "--sf-cart-item-style": typeof cart.itemStyle === "string" ? String(cart.itemStyle) : "",
-    "--sf-cart-empty-style": typeof cart.emptyStyle === "string" ? String(cart.emptyStyle) : "",
-    "--sf-cart-footer-style": typeof cart.footerStyle === "string" ? String(cart.footerStyle) : "",
-    "--sf-cart-qty-style": typeof cart.qtyStyle === "string" ? String(cart.qtyStyle) : "",
-    "--sf-drawer-bg": typeof drawer.background === "string" ? String(drawer.background) : "",
-    "--sf-drawer-blur": typeof drawer.blur === "boolean" ? (drawer.blur ? "1" : "0") : "",
-    "--sf-drawer-active-style": typeof drawer.activeStyle === "string" ? String(drawer.activeStyle) : "",
-    "--sf-drawer-avatar-shape": typeof drawer.avatarShape === "string" ? String(drawer.avatarShape) : "",
-    "--sf-drawer-density": typeof drawer.density === "string" ? String(drawer.density) : "",
-    "--sf-hero-height": typeof hero.height === "number" ? `${hero.height}px` : "",
-    "--sf-hero-radius": typeof hero.radius === "number" ? `${hero.radius}px` : "",
-    "--sf-hero-layout": typeof hero.layout === "string" ? String(hero.layout) : "",
-    "--sf-hero-overlay":
-      typeof hero.overlay === "boolean" ? (hero.overlay ? "1" : "0") : "",
-    "--sf-hero-overlay-strength":
-      typeof hero.overlayStrength === "number" ? String(hero.overlayStrength) : "",
-    "--sf-hero-alignment":
-      typeof hero.alignment === "string" ? String(hero.alignment) : "",
-    "--sf-hero-cta-position":
-      typeof hero.ctaPosition === "string" ? String(hero.ctaPosition) : "",
-    "--sf-hero-shadow":
-      typeof hero.shadow === "boolean" ? (hero.shadow ? "1" : "0") : "",
-  };
+  const sfVars = useMemo(
+    () =>
+      buildStorefrontLayoutCssVars(
+        (payload?.storefrontStyleConfig ?? null) as Record<string, unknown> | null,
+      ),
+    [payload?.storefrontStyleConfig],
+  );
 
   const commitPage = useCallback(
     (next: AppNavPage) => {

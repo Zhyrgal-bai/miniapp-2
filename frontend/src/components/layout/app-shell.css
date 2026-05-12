@@ -1,17 +1,33 @@
 ﻿/* App shell — premium header + drawer */
 
+/*
+ * --sf-* are set on ThemeVarsProvider (not on :root). Defining --app-* only on :root
+ * made var(--sf-*) resolve to Canvas/neutral wrong values. Re-bind under .sf-app so
+ * header/drawer inherit merchant tokens from the provider ancestor.
+ */
 :root {
-  --app-base: var(--sf-color-background, Canvas);
-  --app-surface: var(--sf-color-surface, Canvas);
-  --app-surface-alt: var(--sf-color-surfaceAlt, Canvas);
-  --app-text: var(--sf-color-text, CanvasText);
-  --app-muted: var(--sf-color-muted, GrayText);
-  --app-border: var(--sf-color-border, currentColor);
-  --app-accent: var(--sf-color-primary, Highlight);
-  --app-accent-hover: var(--sf-color-danger, Highlight);
+  --app-base: Canvas;
+  --app-surface: Canvas;
+  --app-surface-alt: Canvas;
+  --app-text: CanvasText;
+  --app-muted: GrayText;
+  --app-border: currentColor;
+  --app-accent: Highlight;
+  --app-accent-hover: Highlight;
   --app-header-pad-y: 12px;
   --app-header-pad-x: 16px;
   --app-header-approx: 56px;
+}
+
+.sf-app {
+  --app-base: var(--sf-color-background);
+  --app-surface: var(--sf-color-surface);
+  --app-surface-alt: var(--sf-color-surfaceAlt, var(--sf-color-surface));
+  --app-text: var(--sf-color-text);
+  --app-muted: var(--sf-color-muted);
+  --app-border: var(--sf-color-border);
+  --app-accent: var(--sf-color-primary);
+  --app-accent-hover: var(--sf-color-danger);
 }
 
 .app {
@@ -42,8 +58,10 @@
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 10px;
-  padding: max(var(--app-header-pad-y), env(safe-area-inset-top, 0px))
-    var(--app-header-pad-x) var(--app-header-pad-y);
+  padding-top: max(var(--app-header-pad-y), env(safe-area-inset-top, 0px));
+  padding-bottom: var(--app-header-pad-y);
+  padding-left: max(var(--app-header-pad-x), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--app-header-pad-x), env(safe-area-inset-right, 0px));
   min-height: var(--app-header-approx);
   background: linear-gradient(90deg, var(--app-surface) 0%, var(--app-surface-alt) 100%);
   backdrop-filter: blur(14px);
@@ -71,6 +89,14 @@
 .sf-app .app-header__user-name {
   color: var(--sf-color-text);
   font-family: var(--sf-font-body);
+}
+
+.sf-app .app-header__burger {
+  border-radius: var(--sf-button-radius, 12px);
+}
+
+.sf-app .app-header__mark {
+  border-radius: var(--sf-radius-full, 50%);
 }
 
 .app-header__cell {
@@ -230,6 +256,11 @@
     --app-header-pad-x: 12px;
   }
 
+  .sf-app {
+    --app-header-approx: 52px;
+    --app-header-pad-x: 12px;
+  }
+
   .app-header__logo {
     font-size: 0.95rem;
     letter-spacing: 0.28em;
@@ -265,6 +296,7 @@
   top: 0;
   left: 0;
   bottom: 0;
+  padding-left: env(safe-area-inset-left, 0px);
   z-index: 1990;
   width: min(280px, 88vw);
   max-width: 280px;
@@ -416,11 +448,11 @@
 }
 
 .sf-app .app-drawer__link {
-  color: color-mix(in srgb, var(--sf-color-text) 72%, transparent);
+  color: var(--sf-color-muted);
   background: color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface)) 82%, transparent);
   border: 1px solid transparent;
   border-radius: var(--sf-button-radius, 14px);
-  min-height: var(--sf-button-height, 44px);
+  min-height: max(44px, var(--sf-button-height, 44px));
   font-family: var(--sf-font-body);
 }
 
@@ -448,6 +480,7 @@
 }
 
 .sf-app .app-drawer__link:hover {
+  color: var(--sf-color-text);
   background: color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface)) 92%, transparent);
   border-color: color-mix(in srgb, var(--sf-color-border) 40%, transparent);
 }
@@ -464,9 +497,14 @@
 }
 
 .sf-app .app-drawer__link--active {
+  color: var(--sf-on-primary, #ffffff) !important;
   background: var(--sf-color-primary) !important;
   border-color: color-mix(in srgb, var(--sf-color-primary) 55%, transparent) !important;
   box-shadow: var(--sf-shadow-button, 0 8px 24px color-mix(in srgb, black 25%, transparent));
+}
+
+.sf-app .app-drawer__link--active .app-drawer__link-icon {
+  color: inherit;
 }
 
 .sf-app[style*="--sf-drawer-active-style:outline"] .app-drawer__link--active {
@@ -479,6 +517,7 @@
 .sf-app[style*="--sf-drawer-density:compact"] .app-drawer__link {
   padding: 10px 12px;
   font-size: 0.9rem;
+  min-height: max(44px, var(--sf-button-height, 44px));
 }
 
 .sf-app[style*="--sf-drawer-avatar-shape:rounded"] .app-drawer__user-avatar {
@@ -548,6 +587,7 @@
 .sf-app .app-drawer__footer {
   border-top: 1px solid color-mix(in srgb, var(--sf-color-border) 60%, transparent);
   background: color-mix(in srgb, var(--sf-color-surface) 75%, transparent);
+  color: var(--sf-color-text);
 }
 
 .app-drawer__user {
@@ -649,8 +689,3 @@
 .sf-app .app-drawer__brand-tag {
   color: var(--sf-color-muted);
 }
-
-.sf-app .app-drawer__footer {
-  color: var(--sf-color-text);
-}
-

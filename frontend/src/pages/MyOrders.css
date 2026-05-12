@@ -12,7 +12,7 @@
 
 .my-orders__title {
   margin: 0 0 6px;
-  font-size: 1.35rem;
+  font-size: var(--sf-typo-section-title-size, 1.35rem);
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;

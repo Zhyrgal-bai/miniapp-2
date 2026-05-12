@@ -57,7 +57,7 @@
 .sf-sticky-cart__cta {
   border: 1px solid color-mix(in srgb, var(--sf-color-primary) 55%, transparent);
   background: var(--sf-btn-bg, var(--sf-color-primary));
-  color: var(--sf-btn-fg, #fff);
+  color: var(--sf-btn-fg, var(--sf-on-primary));
   font-weight: 900;
   border-radius: var(--sf-button-radius, var(--sf-radius-full, 999px));
   padding: 10px 14px;
@@ -77,3 +77,24 @@
   }
 }
 
+@media (max-width: 480px) {
+  .sf-sticky-cart {
+    left: max(10px, env(safe-area-inset-left, 0px));
+    right: max(10px, env(safe-area-inset-right, 0px));
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    gap: 8px;
+    padding: var(--sf-space-xs, 8px);
+  }
+
+  .sf-sticky-cart__main {
+    padding: var(--sf-space-xs, 8px) 4px;
+    min-height: 44px;
+    align-content: center;
+  }
+
+  .sf-sticky-cart__cta {
+    min-width: 88px;
+    padding: var(--sf-space-xs, 8px) var(--sf-space-sm, 10px);
+    font-size: 0.85rem;
+  }
+}
