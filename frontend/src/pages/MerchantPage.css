@@ -1,0 +1,544 @@
+/**
+ * Маршрут /merchant (PlatformPage) — та же палитра, что и MerchantRegisterPage:
+ * фон #0f172a, карточки #1e293b, разделители #334155, акцент #22c55e.
+ */
+
+.mp-page {
+  box-sizing: border-box;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: #0f172a;
+  color: #f8fafc;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  border-top: 3px solid #22c55e;
+  padding-bottom: 5rem;
+}
+
+.mp-page *,
+.mp-page *::before,
+.mp-page *::after {
+  box-sizing: inherit;
+}
+
+.mp-shell {
+  margin-left: auto;
+  margin-right: auto;
+  display: flex;
+  width: 100%;
+  max-width: 32rem;
+  flex-direction: column;
+  gap: 1rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  padding-top: 1.75rem;
+  padding-bottom: 6rem;
+}
+
+@media (min-width: 640px) {
+  .mp-shell {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+}
+
+/* Нижняя «Создать магазин» — дополнительный отступ под док */
+.mp-shell--dock {
+  padding-bottom: max(10rem, calc(5.5rem + env(safe-area-inset-bottom)));
+}
+
+.mp-top-header h1 {
+  color: #ffffff;
+}
+
+.mp-top-header > div > p:first-of-type {
+  color: #94a3b8;
+}
+
+/* Карточки / панели */
+.mp-panel {
+  border: 1px solid #334155;
+  background: #1e293b;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+}
+
+.mp-panel--admin {
+  border-color: rgba(34, 197, 94, 0.35);
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.08);
+}
+
+.mp-panel--empty {
+  padding: 3rem 1.5rem;
+  text-align: center;
+}
+
+.mp-store {
+  padding: 1rem 1.25rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+@media (max-width: 639px) {
+  .mp-store {
+    padding: 1rem;
+  }
+}
+
+.mp-store:hover {
+  border-color: rgba(34, 197, 94, 0.4);
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.12),
+    0 18px 40px rgba(0, 0, 0, 0.35);
+}
+
+.mp-store-avatar {
+  display: flex;
+  height: 3.5rem;
+  width: 3.5rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(15, 23, 42, 0.85);
+}
+
+.mp-store:hover .mp-store-avatar {
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.mp-store-avatar img {
+  height: 2.5rem;
+  width: 2.5rem;
+  object-fit: cover;
+  opacity: 0.9;
+}
+
+/* Баннеры */
+.mp-flash {
+  padding: 0.85rem 1rem;
+  text-align: center;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  border: 1px solid #334155;
+}
+
+.mp-flash--ok {
+  border-color: rgba(34, 197, 94, 0.4);
+  background: rgba(34, 197, 94, 0.1);
+  color: #bbf7d0;
+}
+
+.mp-flash--err {
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(69, 10, 10, 0.35);
+  color: #fecaca;
+}
+
+.mp-flash--info {
+  border-color: rgba(34, 197, 94, 0.25);
+  background: rgba(30, 41, 59, 0.9);
+  color: #bbf7d0;
+}
+
+.mp-muted {
+  font-size: 0.875rem;
+  color: #94a3b8;
+}
+
+/* Нижний док */
+.mp-dock {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 49;
+  border-top: 1px solid #334155;
+  background: rgba(15, 23, 42, 0.97);
+  backdrop-filter: blur(10px);
+  padding: max(14px, env(safe-area-inset-bottom)) 1rem 1rem;
+}
+
+@media (min-width: 640px) {
+  .mp-dock {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+}
+
+.mp-dock-inner {
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 32rem;
+}
+
+/* Кнопки (совпадают с логикой .mr__submit на регистрации) */
+.mp-btn {
+  margin: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+  font-family: inherit;
+  font-weight: 600;
+  transition: filter 0.15s ease, opacity 0.15s ease, background 0.15s ease;
+}
+
+.mp-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.mp-btn--block {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+}
+
+.mp-btn--primary {
+  display: inline-flex;
+  border: 1px solid #0f172a;
+  background: #22c55e;
+  color: #0f172a;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.mp-btn--primary:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.mp-btn--primary:active:not(:disabled) {
+  filter: brightness(0.97);
+}
+
+.mp-btn--lg {
+  min-height: 3rem;
+  padding: 0.875rem 1rem;
+}
+
+.mp-btn--sm {
+  display: inline-flex;
+  flex: 1;
+  min-height: 2.85rem;
+  padding: 0.65rem 1rem;
+  font-size: 0.875rem;
+}
+
+.mp-btn--secondary {
+  display: inline-flex;
+  flex: 1;
+  justify-content: center;
+  align-items: center;
+  border: 1px solid #334155;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
+  font-size: 0.875rem;
+}
+
+.mp-btn--secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(148, 163, 184, 0.45);
+}
+
+.mp-btn--danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  background: rgba(69, 10, 10, 0.35);
+  color: #fecaca;
+  font-size: 0.75rem;
+}
+
+.mp-btn--ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.5rem;
+  padding: 0 0.875rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.mp-btn--ghost:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mp-btn-enable {
+  display: inline-flex;
+  height: 2.5rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid #0f172a;
+  background: #22c55e;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.mp-btn-enable:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.mp-btn-enable:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.mp-btn-enable:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* Онбординг */
+.mp-onboard-backdrop {
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(8px);
+}
+
+.mp-onboard-card {
+  border-radius: 14px;
+  border: 1px solid #334155;
+  background: #1e293b;
+  padding: 1.5rem 1.75rem;
+  box-shadow: 0 28px 64px rgba(0, 0, 0, 0.5);
+}
+
+@media (min-width: 640px) {
+  .mp-onboard-card {
+    padding: 2rem;
+  }
+}
+
+.mp-onboard-card h2 {
+  color: #ffffff;
+}
+
+.mp-onboard-card .mp-onboard-muted {
+  color: #cbd5e1;
+}
+
+.mp-onboard-card .mp-onboard-soft {
+  font-size: 0.875rem;
+  color: #94a3b8;
+}
+
+.mp-onboarding-link {
+  font-weight: 500;
+  color: #4ade80;
+  text-decoration: underline;
+  text-decoration-color: rgba(34, 197, 94, 0.45);
+  text-underline-offset: 2px;
+}
+
+.mp-onboarding-link:hover {
+  color: #86efac;
+}
+
+/* Вложенный блок в модалке настроек (Finik) */
+.mp-settings-slab {
+  border: 1px solid #334155;
+  background: rgba(15, 23, 42, 0.45);
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+/* Список карточек магазинов — без маркера ul */
+.mp-store-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Теги статуса на карточке */
+.mp-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+}
+
+.mp-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.6rem;
+  margin-top: 0.85rem;
+}
+
+.mp-tag--run-ok {
+  background: rgba(34, 197, 94, 0.2);
+  color: #bbf7d0;
+}
+
+.mp-tag--run-off {
+  background: rgba(248, 113, 113, 0.16);
+  color: #fca5a5;
+}
+
+.mp-tag--run-blocked {
+  background: rgba(234, 179, 8, 0.15);
+  color: #fde047;
+}
+
+.mp-tag--sub-trial {
+  background: rgba(16, 185, 129, 0.16);
+  color: #a7f3d0;
+}
+
+.mp-tag--sub-active {
+  background: rgba(34, 197, 94, 0.22);
+  color: #bbf7d0;
+}
+
+.mp-tag--sub-muted {
+  background: rgba(100, 116, 139, 0.28);
+  color: #cbd5e1;
+}
+
+.mp-tag--sub-warn {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fcd34d;
+}
+
+.mp-tag--hook-ok {
+  background: rgba(34, 197, 94, 0.16);
+  color: #bbf7d0;
+}
+
+.mp-tag--hook-bad {
+  background: rgba(248, 113, 113, 0.16);
+  color: #fecaca;
+}
+
+.mp-webhook-block {
+  margin-top: 0.85rem;
+}
+
+.mp-webhook-label {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 0.35rem;
+}
+
+.mp-webhook-url {
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid rgba(51, 65, 85, 0.9);
+  background: rgba(15, 23, 42, 0.75);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.65rem;
+  line-height: 1.45;
+  color: #e2e8f0;
+  word-break: break-all;
+  max-height: 4.75rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mp-store-actions-primary {
+  margin-top: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  .mp-store-actions-primary {
+    flex-direction: row;
+    align-items: stretch;
+    gap: 0.625rem;
+  }
+}
+
+.mp-store-actions-secondary {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  .mp-store-actions-secondary {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .mp-store-actions-secondary .mp-btn--ghost {
+    flex: 1;
+    min-width: 11rem;
+  }
+}
+
+.mp-btn-wide-mobile {
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .mp-btn-wide-mobile.mp-btn--ghost,
+  .mp-btn-wide-mobile.mp-btn--danger {
+    width: auto;
+  }
+}
+
+/* Модалка настроек: портал в body, поверх Telegram WebView */
+.mp-settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 1rem;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(10px);
+}
+
+@media (min-width: 640px) {
+  .mp-settings-backdrop {
+    align-items: center;
+  }
+}
+
+.mp-settings-dialog-shell {
+  max-height: calc(90vh - env(safe-area-inset-bottom));
+  width: 100%;
+  max-width: 26rem;
+  overflow: hidden auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 14px;
+  border: 1px solid #334155 !important;
+  background: #1e293b !important;
+  color: #f8fafc;
+  padding: 1.35rem !important;
+  box-shadow: 0 28px 64px rgba(0, 0, 0, 0.55);
+}
+
+@media (min-width: 640px) {
+  .mp-settings-dialog-shell {
+    padding: 1.5rem !important;
+  }
+}

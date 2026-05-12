@@ -1,0 +1,82 @@
+.faq {
+  max-width: 36rem;
+  margin: 0 auto;
+  padding: 20px 18px 32px;
+  padding-bottom: max(32px, env(safe-area-inset-bottom, 0));
+  box-sizing: border-box;
+  color: var(--sf-color-text);
+  font-family: var(--sf-font-body);
+}
+
+/* Legacy plain FAQ (if reused) */
+.faq h2 {
+  margin: 0 0 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--sf-color-muted);
+}
+
+.faq p {
+  margin: 0 0 28px;
+  font-size: 15px;
+  line-height: 1.65;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--sf-color-text) 82%, transparent);
+}
+
+.faq p:last-of-type {
+  margin-bottom: 0;
+}
+
+/* FAQ page — карточки */
+.faq-page__title {
+  margin: 0 0 22px;
+  font-size: var(--sf-typo-title-size, 1.45rem);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--sf-color-text);
+  font-family: var(--sf-font-heading);
+}
+
+.faq-page__list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.faq-page__card {
+  padding: 16px 18px;
+  border-radius: var(--sf-card-radius, var(--sf-radius-lg, 16px));
+  background: linear-gradient(
+    155deg,
+    color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface)) 96%, transparent) 0%,
+    color-mix(in srgb, var(--sf-color-surface) 92%, transparent) 100%
+  );
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 65%, transparent);
+  box-shadow: var(--sf-shadow-card);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.faq-page__card:hover {
+  border-color: color-mix(in srgb, var(--sf-color-border) 82%, transparent);
+  box-shadow: var(--sf-shadow-card);
+}
+
+.faq-page__card-title {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--sf-color-text);
+  letter-spacing: 0.02em;
+}
+
+.faq-page__card-body {
+  margin: 0;
+  font-size: 0.94rem;
+  line-height: 1.6;
+  color: color-mix(in srgb, var(--sf-color-text) 88%, transparent);
+}
