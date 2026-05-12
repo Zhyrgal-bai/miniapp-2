@@ -2,11 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
-/**
- * Не цеплять body/#root к `height: 100%`: тогда контент выше вьюпорта не даёт
- * скролла (типично в Telegram Mini App и при localhost /merchant).
- * Минимум — высота экрана, рост — по контенту.
- */
+:root {
+  --app-bg: #f4f5f7;
+  --app-text: #1a1a1a;
+  --app-muted: #5c6370;
+  --app-surface: #ffffff;
+  --app-surface-2: rgba(0, 0, 0, 0.06);
+  --app-border: rgba(0, 0, 0, 0.12);
+  --app-accent: #0a7a4d;
+  --app-accent-hover: #086640;
+  --app-danger: #c22;
+  --app-success-bg: rgba(34, 160, 80, 0.12);
+}
+
 html {
   min-height: 100%;
   min-height: 100dvh;
@@ -19,9 +27,9 @@ body {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  background: var(--sf-color-background, Canvas);
-  font-family: var(--sf-font-body, -apple-system, BlinkMacSystemFont, sans-serif);
-  color: var(--sf-color-text, CanvasText);
+  background: var(--app-bg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--app-text);
 }
 
 #root {

@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { postConnectBot } from "../services/admin.service";
-import "../components/ui/FAQPage.css";
+import { postConnectBot } from "../services/connectBot.service";
 import "./ConnectBotPage.css";
 
 export default function ConnectBotPage() {
@@ -33,16 +32,19 @@ export default function ConnectBotPage() {
   };
 
   return (
-    <div className="faq faq-page connect-bot-page">
-      <h1 className="faq-page__title">🤖 Подключить бота</h1>
+    <div className="connect-bot-page">
+      <h1 className="connect-bot-page__title">🤖 Подключить бота</h1>
       <p className="connect-bot-page__lead">
-        Создайте бота в @BotFather, вставьте токен сюда — в команде <code className="connect-bot-page__code">/start</code> покупатели увидят
-        кнопку «Открыть» с вашим магазином.
+        Создайте бота в @BotFather, вставьте токен сюда — в команде{" "}
+        <code className="connect-bot-page__code">/start</code> покупатели увидят кнопку «Открыть» с
+        вашим магазином.
       </p>
 
       {done && (
         <div className="connect-bot-page__ok" role="status">
-          <p>Бот подключён. Магазин: <strong>id {done.shopId}</strong></p>
+          <p>
+            Бот подключён. Магазин: <strong>id {done.shopId}</strong>
+          </p>
           {done.botUsername ? (
             <p>
               <a
