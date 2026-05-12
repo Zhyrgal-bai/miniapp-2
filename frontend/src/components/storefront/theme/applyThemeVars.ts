@@ -103,7 +103,7 @@ export function applyThemeVars(theme: ResolvedStoreTheme): Record<string, string
     const spacing = getObj(t3obj.spacing);
     const radius = getObj(t3obj.radius);
 
-    const primaryHex = getString(palette.primary, theme.primaryColor);
+    const primaryHex = theme.primaryColor;
     const onPrimary = onPrimaryForHex(primaryHex);
     const borderHex = getString(palette.border, "#334155");
     const cardBorderOpacity = getNumber(cards?.borderOpacity, 0.08);
@@ -121,13 +121,14 @@ export function applyThemeVars(theme: ResolvedStoreTheme): Record<string, string
       full: `${getNumber(radius?.full, 999)}px`,
     };
 
+    /** Базовые цвета витрины — из сохранённой темы мерчанта, не из palette tokensV3 (иначе админка «не меняет» UI). */
     return {
-      "--sf-color-background": p("background", theme.bgColor),
-      "--sf-color-surface": p("surface", theme.bgColor),
-      "--sf-color-surfaceAlt": p("surfaceAlt", theme.cardColor),
+      "--sf-color-background": theme.bgColor,
+      "--sf-color-surface": theme.bgColor,
+      "--sf-color-surfaceAlt": theme.cardColor,
       "--sf-color-border": p("border", "#334155"),
-      "--sf-color-card": p("card", theme.cardColor),
-      "--sf-color-text": p("text", theme.textColor),
+      "--sf-color-card": theme.cardColor,
+      "--sf-color-text": theme.textColor,
       "--sf-color-muted": p("muted", "rgba(148,163,184,1)"),
       "--sf-color-primary": primaryHex,
       "--sf-on-primary": onPrimary,

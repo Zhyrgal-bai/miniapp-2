@@ -7,6 +7,7 @@ import {
 } from "@repo-shared/storeTheme";
 import { useShop } from "../../context/ShopContext";
 import { useTheme } from "../../context/ThemeContext";
+import { useStorefrontPayload } from "../../components/storefront/runtime/StorefrontPayloadContext";
 import { saveBusinessThemePut } from "../../services/businessThemeApi";
 
 const TEMPLATE_LABELS: Record<StoreTemplateId, string> = {
@@ -31,6 +32,7 @@ export default function AdminDesignPage(): ReactElement {
   const { businessId } = useShop();
   const { theme, templateId: serverTemplateId, refresh, loading: themeLoading } =
     useTheme();
+  const { refresh: refreshStorefrontPayload } = useStorefrontPayload();
 
   const [templateId, setTemplateId] = useState<StoreTemplateId | null>(null);
   const [primaryColor, setPrimaryColor] = useState("#6366f1");
@@ -112,8 +114,8 @@ export default function AdminDesignPage(): ReactElement {
         ...(templateId != null ? { templateId } : {}),
       };
       await saveBusinessThemePut(businessId, patch);
-      await refresh();
-      setOk("Сохранено. Вернитесь в магазин — витрина подтянет новую тему.");
+      await Promise.all([refresh(), refreshStorefrontPayload()]);
+      setOk("Сохранено. Откройте «Магазин» — цвета обновятся сразу.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось сохранить");
     } finally {
@@ -124,7 +126,7 @@ export default function AdminDesignPage(): ReactElement {
   const onReloadFromServer = () => {
     setError(null);
     setOk(null);
-    void refresh();
+    void Promise.all([refresh(), refreshStorefrontPayload()]);
   };
 
   if (businessId == null) {

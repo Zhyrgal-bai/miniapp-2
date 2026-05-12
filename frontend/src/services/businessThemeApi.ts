@@ -19,6 +19,7 @@ export async function fetchBusinessPublic(
 ): Promise<BusinessPublicPayload> {
   const url = apiAbsoluteUrl(`/api/business/${businessId}`);
   const res = await fetch(url, {
+    cache: "no-store",
     headers: withTenantHeaders(undefined, url, { businessId }),
   });
   if (!res.ok) {

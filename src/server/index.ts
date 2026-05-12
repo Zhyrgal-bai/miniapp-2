@@ -1895,6 +1895,8 @@ app.put("/api/business/:businessId/theme", async (req: Request, res: Response) =
       }
     });
 
+    invalidateStorefrontCache(bid);
+
     res.json({
       ok: true,
       themeConfig: result.merged,
@@ -1956,6 +1958,8 @@ app.put("/api/business/template", async (req: Request, res: Response) => {
         templateId: result.templateId,
       },
     });
+
+    invalidateStorefrontCache(bid);
 
     res.json({
       ok: true,

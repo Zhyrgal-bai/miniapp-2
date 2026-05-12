@@ -201,12 +201,17 @@ export function resolveStoreTheme(
   stored: unknown,
 ): ResolvedStoreTheme {
   const base = templatePresetResolved(templateId);
-  return mergeThemeFromUnknown(stored, base);
+  return mergeThemeFromUnknown(stored, base, templateId);
 }
 
+/**
+ * @param rowTemplateId — `Business.templateId` из строки БД. В JSON `themeConfig` поля `templateId` нет,
+ *   поэтому без этого аргумента `tokensV3` всегда резолвился как тёмный пресет и перекрывал цвета витрины.
+ */
 export function mergeThemeFromUnknown(
   stored: unknown,
   basePreset?: ResolvedStoreTheme,
+  rowTemplateId?: string | null,
 ): ResolvedStoreTheme {
   const base = cloneResolved(basePreset ?? DEFAULT_STORE_THEME);
   if (!isPlainObject(stored)) return base;
@@ -247,13 +252,19 @@ export function mergeThemeFromUnknown(
       banner.subtitle = b.subtitle.slice(0, 280);
   }
 
+  const tidFromStored =
+    typeof (stored as { templateId?: unknown }).templateId === "string"
+      ? (stored as { templateId: string }).templateId
+      : null;
+  const templateIdForTokens = normTemplateId(rowTemplateId ?? tidFromStored);
+
   const tokens = resolveThemeTokensV2({
-    templateId: (stored as any).templateId ?? null,
+    templateId: templateIdForTokens,
     stored,
   });
 
   const tokensV3 = resolveThemeTokensV3({
-    templateId: (stored as any).templateId ?? null,
+    templateId: templateIdForTokens,
     stored,
   });
 

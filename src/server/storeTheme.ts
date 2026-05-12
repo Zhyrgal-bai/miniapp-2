@@ -114,7 +114,7 @@ export function applyThemePatchAndValidate(
       banner: { ...tpl.banner },
     });
   } else if (tidParsed.changed && nextTemplateId == null) {
-    next = mergeThemeFromUnknown(currentJson);
+    next = mergeThemeFromUnknown(currentJson, undefined, null);
   } else {
     next = resolveStoreTheme(nextTemplateId, currentJson);
   }
