@@ -49,6 +49,7 @@ import {
   StorefrontConfigSchema,
   defaultStorefrontConfig,
   resolveStorefrontConfig,
+  type ResolvedStorefrontPayload,
 } from "../storefront/schema.js";
 import { validateUx } from "../ux/validators.js";
 import { validateImageFile, uploadTenantImage } from "../media/upload.js";
@@ -58,6 +59,7 @@ import {
   invalidateStorefrontCache,
   setCachedStorefrontPayload,
 } from "./storefrontCache.js";
+import { safeParseStorefrontPublicApiResponse } from "../storefront/storefrontPublicApiResponseSchema.js";
 import {
   adminBlockBusiness,
   adminDeactivateBusiness,
@@ -623,7 +625,14 @@ app.get("/api/storefront/:businessId", async (req: Request, res: Response) => {
 
     const cached = getCachedStorefrontPayload(businessId);
     if (cached) {
-      return res.json(cached);
+      const cachedOk = safeParseStorefrontPublicApiResponse(cached);
+      if (cachedOk.ok) {
+        return res.json(cachedOk.data);
+      }
+      console.warn(
+        `GET /api/storefront/${businessId}: cached payload failed validation, rebuilding:`,
+        cachedOk.error,
+      );
     }
 
     const b = await prisma.business.findUnique({
@@ -751,8 +760,20 @@ app.get("/api/storefront/:businessId", async (req: Request, res: Response) => {
       }));
     }
 
-    setCachedStorefrontPayload({ businessId, payload });
-    return res.json(payload);
+    const payloadOk = safeParseStorefrontPublicApiResponse(payload);
+    if (!payloadOk.ok) {
+      console.error(
+        `GET /api/storefront/${businessId}: payload failed validation:`,
+        payloadOk.error,
+      );
+      return res.status(500).json({ error: "Storefront payload invalid" });
+    }
+
+    setCachedStorefrontPayload({
+      businessId,
+      payload: payloadOk.data as ResolvedStorefrontPayload,
+    });
+    return res.json(payloadOk.data);
   } catch (e) {
     console.error("GET /api/storefront/:businessId:", e);
     res.status(500).json({ error: "Server error" });

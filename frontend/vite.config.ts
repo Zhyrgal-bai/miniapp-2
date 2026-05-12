@@ -13,6 +13,7 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
       "@repo-shared": path.resolve(__dirname, "../src/shared"),
+      "@repo-storefront": path.resolve(__dirname, "../src/storefront"),
     },
   },
 });

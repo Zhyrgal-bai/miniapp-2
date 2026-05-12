@@ -3,7 +3,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@repo-shared/*": ["../src/shared/*"]
+      "@repo-shared/*": ["../src/shared/*"],
+      "@repo-storefront/*": ["../src/storefront/*"]
     },
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
     "target": "ES2023",

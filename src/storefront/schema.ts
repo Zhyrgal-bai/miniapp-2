@@ -39,6 +39,8 @@ export type ResolvedStorefrontSection = {
 
 export type ResolvedStorefrontPayload = {
   businessId: number;
+  /** Denormalized for Mini App header; optional on older cached rows. */
+  storeName?: string;
   businessType: string;
   templateId: string | null;
   theme: ResolvedStoreTheme;

@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { api } from "../../../services/api";
 import { useShop } from "../../../context/ShopContext";
 import type { ResolvedStorefrontPayload } from "../StorefrontRenderer";
+import { safeParseStorefrontPublicApiResponse } from "@repo-storefront/storefrontPublicApiResponseSchema";
 
 type StorefrontPayloadCtx = {
   payload: ResolvedStorefrontPayload | null;
@@ -35,7 +36,14 @@ export function StorefrontPayloadProvider(props: { children: React.ReactNode }):
     try {
       const res = await api.get(`/api/storefront/${businessId}`, { signal: ac.signal });
       if (ac.signal.aborted) return;
-      setPayload(res.data as ResolvedStorefrontPayload);
+      const parsed = safeParseStorefrontPublicApiResponse(res.data);
+      if (!parsed.ok) {
+        console.error("[StorefrontPayload]", parsed.error);
+        setPayload(null);
+        setError("Некорректный ответ витрины");
+        return;
+      }
+      setPayload(parsed.data as ResolvedStorefrontPayload);
     } catch (e) {
       if (ac.signal.aborted) return;
       console.error(e);
