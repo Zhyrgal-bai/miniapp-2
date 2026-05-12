@@ -1,12 +1,18 @@
 /**
- * Витрина: «только кости». Подключается ПОСЛЕДНИМ из main.tsx, чтобы перебить
- * ProductCard.css / ProductGrid.css / storefrontKits (порядок в бандле Vite).
- * Цвета идут из темы мерчанта (applyThemeVars); здесь только упрощение формы.
+ * Витрина: «только кости» — soft-premium version.
+ * Loaded LAST from main.tsx so it wins over ProductCard.css / storefrontKits.
+ * Colors come from merchant theme (applyThemeVars); here we only tune shape.
+ *
+ * Design language: 4/8/12/16/20/24 spacing rhythm; pill chips; 20–24px card
+ * radius; 16px button radius; subtle layered shadows; no harsh borders.
  */
+
+/* Vertical padding for sticky cart bar */
 .sf-root {
   padding-bottom: 88px;
 }
 
+/* ── Section titles ── */
 .sf-root .sf-section__title {
   font-weight: 600 !important;
   font-size: 1rem !important;
@@ -15,32 +21,35 @@
   margin-bottom: 8px !important;
 }
 
+/* ── Chips — always pill-shaped, lighter border ── */
 .sf-root .sf-chip {
-  border-radius: 2px !important;
+  border-radius: var(--sf-radius-full, 999px) !important;
   opacity: 1 !important;
   background: transparent !important;
-  border: 1px solid var(--sf-color-border, #666) !important;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border, #666) 55%, transparent) !important;
   box-shadow: none !important;
 }
 
+/* ── Hero + section containers — soft radii, subtle shadow ── */
 .sf-root .sf-hero,
 .sf-root .sf-section-card,
 .sf-root .sf-section--hero > div,
 .sf-root .sf-section--featured > div,
 .sf-root .sf-section--promo > div {
-  border-radius: 2px !important;
-  box-shadow: none !important;
-  transition: none !important;
+  border-radius: var(--sf-radius-lg, 18px) !important;
+  box-shadow: var(--sf-shadow-card, 0 2px 10px rgba(0, 0, 0, 0.1)) !important;
+  transition: box-shadow 200ms ease !important;
   transform: none !important;
 }
 
 .sf-root .sf-hero {
-  border: 1px solid var(--sf-color-border, #555) !important;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border, #555) 38%, transparent) !important;
   background: var(--sf-color-card, #fff) !important;
 }
 
+/* ── Hero typography — calmer weight, no all-caps ── */
 .sf-root .sf-hero__title {
-  font-weight: 600 !important;
+  font-weight: 700 !important;
   font-size: 1.25rem !important;
   letter-spacing: normal !important;
   text-transform: none !important;
@@ -58,6 +67,7 @@
   display: none !important;
 }
 
+/* ── Section grid ── */
 .sf-root .sf-section-grid {
   gap: 8px !important;
 }
@@ -66,16 +76,16 @@
   padding: 8px 0 !important;
 }
 
-/* Сетка каталога */
+/* ── Product grid ── */
 .sf-root .product-grid {
-  gap: 8px !important;
-  padding: 8px 8px 12px !important;
+  gap: 10px !important;
+  padding: 8px 12px 12px !important;
 }
 
 .sf-root .product-grid--empty {
-  border-radius: 2px !important;
+  border-radius: var(--sf-radius-md, 14px) !important;
   background: transparent !important;
-  border: 1px dashed var(--sf-color-border, #555) !important;
+  border: 1px dashed color-mix(in srgb, var(--sf-color-border, #555) 50%, transparent) !important;
   box-shadow: none !important;
   margin: 8px !important;
   min-height: 120px !important;
@@ -86,22 +96,18 @@
   font-size: 1rem !important;
 }
 
-/* Карточка товара — сброс всех модификаторов из ProductCard.css */
+/* ── Product cards — soft radii, subtle shadow, thin border ── */
 .sf-root .product-card,
 .sf-root .product-card.product-card--rounded,
 .sf-root .product-card.product-card--square,
 .sf-root .product-card.product-card--shadow,
 .sf-root .product-card.product-card--flat {
-  border-radius: 2px !important;
-  box-shadow: none !important;
-  --sf-card-radius: 2px !important;
-  --sf-card-shadow: none !important;
-  --sf-card-hover-shadow: none !important;
-  --sf-card-hover-transform: none !important;
+  border-radius: var(--sf-card-radius, var(--sf-radius-lg, 20px)) !important;
+  box-shadow: var(--sf-card-shadow, var(--sf-shadow-card, 0 2px 8px rgba(0, 0, 0, 0.08))) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  transition: none !important;
-  border: 1px solid var(--sf-color-border, #555) !important;
+  transition: box-shadow 200ms ease !important;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border, #555) 32%, transparent) !important;
   background: var(--sf-color-card, #fff) !important;
 }
 
@@ -109,20 +115,22 @@
 .sf-root .product-card:active,
 .sf-root .product-card.out:hover {
   transform: none !important;
-  box-shadow: none !important;
-  border-color: var(--sf-color-border, #555) !important;
+  box-shadow: var(--sf-card-hover-shadow, var(--sf-shadow-card, 0 4px 16px rgba(0, 0, 0, 0.12))) !important;
+  border-color: color-mix(in srgb, var(--sf-color-border, #555) 48%, transparent) !important;
 }
 
 .sf-root .product-card:hover .image-slide img {
   transform: none !important;
 }
 
+/* Image wrapper — flush inside card (card radius clips corners) */
 .sf-root .product-image-wrapper,
 .sf-root .product-card--img-shadow .product-image-wrapper {
   border-radius: 0 !important;
   box-shadow: none !important;
 }
 
+/* ── Badges — pill-shaped, lighter feel ── */
 .sf-root .product-badge,
 .sf-root .product-badge--new,
 .sf-root .product-badge--hot,
@@ -130,7 +138,7 @@
 .sf-root .product-badge--luxury,
 .sf-root .product-badge--style-glow,
 .sf-root .product-badge--style-minimal {
-  border-radius: 2px !important;
+  border-radius: var(--sf-radius-full, 999px) !important;
   letter-spacing: normal !important;
   text-transform: none !important;
   font-size: 10px !important;
@@ -138,11 +146,12 @@
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   box-shadow: none !important;
-  border: 1px solid var(--sf-color-border, #666) !important;
-  background: var(--sf-color-card, #fff) !important;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border, #666) 42%, transparent) !important;
+  background: color-mix(in srgb, var(--sf-color-card, #fff) 85%, transparent) !important;
   color: var(--sf-color-text, #fff) !important;
 }
 
+/* ── Product title — no all-caps, calmer ── */
 .sf-root .product-title {
   text-transform: none !important;
   letter-spacing: normal !important;
@@ -150,6 +159,7 @@
   font-size: 14px !important;
 }
 
+/* ── Price ── */
 .sf-root .product-price,
 .sf-root .product-price--sale {
   font-size: 13px !important;
@@ -157,7 +167,7 @@
   color: var(--sf-color-muted, #aaa) !important;
 }
 
-/* Кнопки CTA / количество — без «фирменной» заливки */
+/* ── CTA buttons — soft rounded, no filter ── */
 .sf-root .product-add-btn,
 .sf-root .product-add-btn--cta-pill,
 .sf-root .product-add-btn--cta-square,
@@ -165,14 +175,14 @@
 .sf-root .product-add-btn--cta-outline,
 .sf-root .product-add-btn--cta-full,
 .sf-root .add-button {
-  border-radius: 2px !important;
+  border-radius: var(--sf-button-radius, 16px) !important;
   box-shadow: none !important;
   filter: none !important;
   font-weight: 600 !important;
   min-height: 34px !important;
   background: var(--sf-color-surface, #f0f0f0) !important;
   color: var(--sf-color-text, #fff) !important;
-  border: 1px solid var(--sf-color-border, #666) !important;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border, #666) 48%, transparent) !important;
 }
 
 .sf-root .product-add-btn:hover,
@@ -184,19 +194,20 @@
 
 .sf-root .product-add-btn:active,
 .sf-root .add-button:active {
-  transform: none !important;
+  transform: scale(0.97) !important;
 }
 
+/* ── Variant selectors ── */
 .sf-root .product-action-btn {
-  border-radius: 2px !important;
+  border-radius: var(--sf-radius-sm, 8px) !important;
   background: transparent !important;
-  border: 1px solid var(--sf-color-border, #555) !important;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border, #555) 52%, transparent) !important;
   color: var(--sf-color-text) !important;
 }
 
 .sf-root .sizes button,
 .sf-root .colors button {
-  border-radius: 2px !important;
+  border-radius: var(--sf-radius-sm, 8px) !important;
   box-shadow: none !important;
 }
 
@@ -204,59 +215,64 @@
   box-shadow: none !important;
 }
 
+/* ── Slider dots — circular ── */
 .sf-root .dots span {
-  border-radius: 2px !important;
+  border-radius: 50% !important;
 }
 
+/* ── Hero CTA button ── */
 .sf-root .sf-hero__cta {
-  border-radius: 2px !important;
+  border-radius: var(--sf-button-radius, 16px) !important;
   box-shadow: none !important;
   font-weight: 600 !important;
   background: var(--sf-color-surface, #f0f0f0) !important;
   color: var(--sf-color-text) !important;
-  border: 1px solid var(--sf-color-border, #666) !important;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border, #666) 48%, transparent) !important;
 }
 
+/* ── Footer ── */
 .sf-root .sf-footer__inner {
-  border-top: 1px solid var(--sf-color-border, #444) !important;
+  border-top: 1px solid color-mix(in srgb, var(--sf-color-border, #444) 50%, transparent) !important;
   padding-top: 8px !important;
 }
 
+/* ── Sticky cart — frosted floating bar ── */
 .sf-sticky-cart {
-  border-radius: 2px !important;
-  box-shadow: none !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  border: 1px solid var(--sf-color-border, #444) !important;
-  background: var(--sf-color-card, #fff) !important;
+  border-radius: var(--sf-radius-xl, 20px) !important;
+  box-shadow: 0 -1px 12px rgba(0, 0, 0, 0.08), 0 4px 20px rgba(0, 0, 0, 0.12) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border, #444) 38%, transparent) !important;
+  background: color-mix(in srgb, var(--sf-color-card, #fff) 88%, transparent) !important;
 }
 
 .sf-sticky-cart__cta {
-  border-radius: 2px !important;
+  border-radius: var(--sf-button-radius, 16px) !important;
   box-shadow: none !important;
   background: var(--sf-color-surface, #f0f0f0) !important;
   color: var(--sf-color-text) !important;
-  border: 1px solid var(--sf-color-border, #666) !important;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border, #666) 48%, transparent) !important;
 }
 
+/* ── Floating cart button ── */
 .sf-app .floating-cart.cart-float {
-  border-radius: 2px !important;
-  box-shadow: none !important;
+  border-radius: var(--sf-radius-xl, 20px) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.14) !important;
   background: var(--sf-color-card, #fff) !important;
   color: var(--sf-color-text) !important;
-  border: 1px solid var(--sf-color-border, #666) !important;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border, #666) 38%, transparent) !important;
 }
 
 .sf-app .floating-cart.cart-float:hover {
-  transform: none !important;
-  box-shadow: none !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18) !important;
 }
 
-/* Шапка витрины */
+/* ── Storefront header ── */
 .sf-root .sf-header {
   background: var(--sf-color-surface, #f2f2f2) !important;
-  box-shadow: none !important;
-  border-bottom: 1px solid var(--sf-color-border, #444) !important;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.08) !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--sf-color-border, #444) 38%, transparent) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
@@ -277,18 +293,18 @@
 }
 
 .sf-root .sf-header__burger {
-  border-radius: 2px !important;
+  border-radius: var(--sf-radius-md, 12px) !important;
   box-shadow: none !important;
-  border: 1px solid var(--sf-color-border, #555) !important;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border, #555) 48%, transparent) !important;
   background: transparent !important;
 }
 
 .sf-root .sf-header__logo {
-  border-radius: 2px !important;
+  border-radius: var(--sf-radius-md, 12px) !important;
 }
 
 .sf-root .sf-header__avatar,
 .sf-root .sf-header__avatar--accent {
-  border-radius: 2px !important;
+  border-radius: var(--sf-radius-full, 50%) !important;
   box-shadow: none !important;
 }

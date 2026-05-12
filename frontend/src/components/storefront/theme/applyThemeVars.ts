@@ -64,14 +64,14 @@ function shadowFor(id: string, primaryHex: string): string {
     case "none":
       return "none";
     case "soft":
-      return "0 2px 10px rgba(0,0,0,0.16)";
+      return "0 2px 8px rgba(0,0,0,0.10)";
     case "glow":
-      return `0 10px 30px ${hexToRgba(primaryHex, 0.28)}`;
+      return `0 6px 24px ${hexToRgba(primaryHex, 0.22)}`;
     case "luxury":
-      return "0 18px 60px rgba(0,0,0,0.35)";
+      return "0 8px 32px rgba(0,0,0,0.20)";
     case "medium":
     default:
-      return "0 10px 26px rgba(0,0,0,0.22)";
+      return "0 4px 16px rgba(0,0,0,0.14)";
   }
 }
 

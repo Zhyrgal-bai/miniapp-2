@@ -27,12 +27,12 @@
 }
 
 .sf-section__title {
-  font-weight: var(--sf-typo-title-weight, 800);
+  font-weight: var(--sf-typo-title-weight, 600);
   margin-bottom: var(--sf-space-sm, 10px);
   font-size: var(--sf-typo-section-title-size, 16px);
   text-transform: var(--sf-typo-title-transform, none);
   letter-spacing: var(--sf-typo-title-letter-spacing, 0);
-  line-height: var(--sf-typo-title-line-height, 1.15);
+  line-height: var(--sf-typo-title-line-height, 1.2);
   font-family: var(--sf-font-heading);
 }
 
@@ -91,12 +91,12 @@
 
 .sf-hero__cta {
   min-height: var(--sf-button-height, 44px);
-  padding: 10px 14px;
-  border-radius: var(--sf-button-radius, 14px);
+  padding: 10px 16px;
+  border-radius: var(--sf-button-radius, 16px);
   border: 1px solid var(--sf-btn-border, color-mix(in srgb, var(--sf-color-primary) 55%, transparent));
   background: var(--sf-btn-bg, var(--sf-color-primary));
   color: var(--sf-btn-fg, var(--sf-on-primary, #fff));
-  font-weight: 800;
+  font-weight: 700;
   font-size: var(--sf-typo-button-size, 13px);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -549,7 +549,7 @@
 }
 [data-sf-kit="luxury"] .sf-header__logo {
   background: linear-gradient(135deg, var(--sf-color-primary), var(--sf-color-accent));
-  box-shadow: var(--sf-shadow-card);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--sf-color-primary) 24%, transparent);
 }
 [data-sf-kit="luxury"] .sf-header__title {
   font-size: 15px;
@@ -616,12 +616,15 @@
 [data-sf-kit="luxury"] .product-card {
   --sf-card-radius: var(--sf-radius-xl, 24px);
   --sf-card-shadow: var(--sf-shadow-card);
-  --sf-card-hover-transform: translateY(-3px);
+  --sf-card-hover-transform: none;
+}
+[data-sf-kit="luxury"] .sf-chip {
+  border-color: color-mix(in srgb, var(--sf-color-primary) 32%, transparent);
 }
 [data-sf-kit="luxury"] .product-add-btn {
   border-radius: var(--sf-radius-full, 999px);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-transform: none;
 }
 
 [data-sf-kit="fashion"] .product-card {
@@ -630,7 +633,7 @@
   --sf-card-hover-transform: translateY(-4px);
 }
 [data-sf-kit="fashion"] .product-title {
-  font-weight: 900;
+  font-weight: 700;
 }
 
 [data-sf-kit="neon"] .product-card {

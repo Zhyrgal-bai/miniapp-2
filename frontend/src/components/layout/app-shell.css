@@ -14,7 +14,7 @@
   --app-border: currentColor;
   --app-accent: Highlight;
   --app-accent-hover: Highlight;
-  --app-header-pad-y: 12px;
+  --app-header-pad-y: 10px;
   --app-header-pad-x: 16px;
   --app-header-approx: 56px;
 }
@@ -74,11 +74,11 @@
 .sf-app .app-header {
   background: linear-gradient(
     90deg,
-    color-mix(in srgb, var(--sf-color-surface) 92%, transparent) 0%,
-    color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface)) 96%, transparent) 100%
+    color-mix(in srgb, var(--sf-color-surface) 94%, transparent) 0%,
+    color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface)) 98%, transparent) 100%
   );
-  border-bottom: 1px solid color-mix(in srgb, var(--sf-color-border) 60%, transparent);
-  box-shadow: var(--sf-shadow-card, 0 8px 20px color-mix(in srgb, black 30%, transparent));
+  border-bottom: 1px solid color-mix(in srgb, var(--sf-color-border) 38%, transparent);
+  box-shadow: 0 1px 10px rgba(0, 0, 0, 0.08);
 }
 
 .sf-app .app-header__logo {
@@ -292,9 +292,9 @@
 .app-header__logo {
   margin: 0;
   font-size: 1.05rem;
-  font-weight: 800;
-  letter-spacing: 0.35em;
-  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: none;
   color: var(--app-text);
   user-select: none;
   text-align: center;
@@ -345,7 +345,7 @@
 
   .app-header__logo {
     font-size: 0.95rem;
-    letter-spacing: 0.28em;
+    letter-spacing: 0.03em;
   }
 
   .app-header__mark {
@@ -396,10 +396,10 @@
 /* Storefront-themed drawer */
 .sf-app .app-drawer {
   background: var(--sf-drawer-bg-resolved, var(--sf-color-surface));
-  border-right: 1px solid color-mix(in srgb, var(--sf-color-border) 60%, transparent);
+  border-right: 1px solid color-mix(in srgb, var(--sf-color-border) 40%, transparent);
   box-shadow:
-    16px 0 48px color-mix(in srgb, black 42%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--sf-color-border) 22%, transparent) inset;
+    12px 0 36px rgba(0, 0, 0, 0.18),
+    0 0 0 1px color-mix(in srgb, var(--sf-color-border) 16%, transparent) inset;
 }
 
 .sf-app {
@@ -475,13 +475,12 @@
 }
 
 .app-drawer__brand-title {
-  font-size: 1.35rem;
-  font-weight: 800;
-  letter-spacing: 0.32em;
-  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: none;
   color: var(--sf-color-text);
   font-family: var(--sf-font-heading);
-  font-size: var(--sf-typo-section-title-size, 1.35rem);
+  font-size: var(--sf-typo-section-title-size, 1.15rem);
   line-height: 1.2;
 }
 
@@ -491,11 +490,11 @@
 }
 
 .app-drawer__brand-tag {
-  margin-top: 6px;
+  margin-top: 4px;
   font-size: 0.8rem;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: lowercase;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
   color: color-mix(in srgb, var(--app-muted) 82%, transparent);
 }
 
@@ -582,7 +581,7 @@
   color: var(--sf-on-primary, #ffffff) !important;
   background: var(--sf-color-primary) !important;
   border-color: color-mix(in srgb, var(--sf-color-primary) 55%, transparent) !important;
-  box-shadow: var(--sf-shadow-button, 0 8px 24px color-mix(in srgb, black 25%, transparent));
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--sf-color-primary) 28%, transparent);
 }
 
 .sf-app .app-drawer__link--active .app-drawer__link-icon {
