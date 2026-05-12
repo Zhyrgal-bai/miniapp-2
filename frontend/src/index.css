@@ -19,9 +19,10 @@ body {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  background: var(--sf-color-background, Canvas);
-  font-family: var(--sf-font-body, -apple-system, BlinkMacSystemFont, sans-serif);
-  color: var(--sf-color-text, CanvasText);
+  /* --sf-* живут только внутри ThemeVarsProvider; на body используем legacy из ThemeContext */
+  background: var(--store-bg, Canvas);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--store-text, CanvasText);
 }
 
 #root {

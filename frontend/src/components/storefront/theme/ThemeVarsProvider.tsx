@@ -14,7 +14,7 @@ export function ThemeVarsProvider(props: {
         background: "var(--sf-color-background)",
         color: "var(--sf-color-text)",
         fontFamily: "var(--sf-font-body)",
-        minHeight: "100%",
+        minHeight: "100dvh",
       }}
     >
       {props.children}

@@ -30,6 +30,12 @@
   --app-accent-hover: var(--sf-color-danger);
 }
 
+/* Один непрерывный фон на весь экран Mini App (без «чёрной полосы» под коротким контентом) */
+.sf-root.sf-app {
+  min-height: 100dvh;
+  box-sizing: border-box;
+}
+
 .app {
   min-height: 100%;
   position: relative;
@@ -40,13 +46,6 @@
     var(--app-header-approx) + env(safe-area-inset-top, 0px) + var(--app-header-pad-y)
   );
   min-height: 100%;
-}
-
-/* Non-home storefront routes: same canvas as ThemeVarsProvider + Design Studio tokens */
-.sf-app .app__content {
-  background: var(--sf-color-background);
-  color: var(--sf-color-text);
-  font-family: var(--sf-font-body);
 }
 
 /* Storefront page uses its own header + safe-area; no platform header spacing. */
