@@ -1,0 +1,158 @@
+/**
+ * Витрина (каталог): только разметка и читаемость — без китов, теней, блюра, hover-драмы.
+ * Подключается после storefrontKits.css / ProductCard.
+ */
+.sf-root {
+  padding-bottom: 88px;
+}
+
+.sf-root .sf-section__title {
+  font-weight: 600;
+  font-size: 1rem;
+  letter-spacing: normal;
+  text-transform: none;
+  margin-bottom: 8px;
+}
+
+.sf-root .sf-chip {
+  border-radius: 4px;
+  opacity: 1;
+}
+
+.sf-root .sf-hero,
+.sf-root .sf-section-card,
+.sf-root .sf-section--hero > div,
+.sf-root .sf-section--featured > div,
+.sf-root .sf-section--promo > div {
+  border-radius: 4px !important;
+  box-shadow: none !important;
+  transition: none !important;
+  transform: none !important;
+}
+
+.sf-root .sf-hero {
+  border: 1px solid var(--sf-color-border, #444);
+  background: var(--sf-color-card, var(--sf-color-background));
+}
+
+.sf-root .sf-section-grid {
+  gap: 8px;
+}
+
+.sf-root .sf-section--padded {
+  padding: 8px 0;
+}
+
+.sf-root .product-card {
+  border-radius: 4px !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transition: none !important;
+  border: 1px solid var(--sf-color-border, #444);
+  background: var(--sf-color-card, #1a1a1a);
+}
+
+.sf-root .product-card:hover,
+.sf-root .product-card:active,
+.sf-root .product-card.out:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.sf-root .product-card:hover .image-slide img {
+  transform: none !important;
+}
+
+.sf-root .product-badge {
+  border-radius: 4px;
+  letter-spacing: normal;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.sf-root .product-title {
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.sf-root .product-add-btn,
+.sf-root .add-button {
+  border-radius: 4px !important;
+  box-shadow: none !important;
+  font-weight: 600;
+  min-height: 36px;
+}
+
+.sf-root .product-add-btn:hover,
+.sf-root .add-button:hover {
+  filter: none !important;
+  box-shadow: none !important;
+}
+
+.sf-root .product-add-btn:active,
+.sf-root .add-button:active {
+  transform: none !important;
+}
+
+.sf-root .sf-hero__cta {
+  border-radius: 4px !important;
+  box-shadow: none !important;
+  font-weight: 600;
+}
+
+.sf-root .sf-footer__inner {
+  border-top: 1px solid var(--sf-color-border, #444);
+  padding-top: 8px;
+}
+
+.sf-sticky-cart {
+  border-radius: 4px !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 1px solid var(--sf-color-border, #444);
+  background: var(--sf-color-card, #222);
+}
+
+.sf-sticky-cart__cta {
+  border-radius: 4px !important;
+  box-shadow: none !important;
+}
+
+.sf-app .floating-cart.cart-float {
+  border-radius: 4px !important;
+  box-shadow: none !important;
+}
+
+.sf-app .floating-cart.cart-float:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Шапка витрины — без стекла и тени (инлайн-стили гасим через !important) */
+.sf-root .sf-header {
+  background: var(--sf-color-background, #111) !important;
+  box-shadow: none !important;
+  border-bottom: 1px solid var(--sf-color-border, #444) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.sf-root .sf-header__title,
+.sf-root .sf-header__title--luxury,
+.sf-root .sf-header__title--fashion,
+.sf-root .sf-header__title--neon {
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  font-weight: 600 !important;
+}
+
+.sf-root .sf-header__eyebrow,
+.sf-root .sf-header__neon-line {
+  display: none !important;
+}
