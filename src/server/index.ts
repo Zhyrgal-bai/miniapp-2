@@ -1,6 +1,9 @@
 import "dotenv/config";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import express from "express";
-import type { Request, Response } from "express";
+import type { NextFunction, Request, Response } from "express";
 import multer from "multer";
 import { MembershipRole, Prisma } from "@prisma/client";
 import cors from "cors";
@@ -89,6 +92,11 @@ import {
   plainBotTokenFromStored,
 } from "./businessBotToken.js";
 import { connectDatabase, logPrismaError, prisma } from "./db.js";
+
+const __serverDir = path.dirname(fileURLToPath(import.meta.url));
+const FRONTEND_DIST = path.resolve(__serverDir, "../../frontend/dist");
+const SPA_INDEX = path.join(FRONTEND_DIST, "index.html");
+const SPA_AVAILABLE = fs.existsSync(SPA_INDEX);
 import {
   clearPaymentFieldByRowId,
   listPaymentDetailsFromDb,
@@ -2517,8 +2525,12 @@ app.post("/connect-bot", async (req: Request, res: Response) => {
 });
 
 // ================== ROOT ==================
-app.get("/", (req: Request, res: Response) => {
-  res.send("Server is working 🚀");
+app.get("/", (_req: Request, res: Response) => {
+  if (SPA_AVAILABLE) {
+    res.sendFile(SPA_INDEX);
+  } else {
+    res.type("text").send("Server is working 🚀");
+  }
 });
 
 app.get("/test-telegram", async (req: Request, res: Response) => {
@@ -4211,6 +4223,24 @@ app.delete("/products/:id", async (req: Request, res: Response) => {
     res.status(500).json({ error: "Ошибка удаления товара" });
   }
 });
+
+/** Раздача Vite SPA с того же хоста, что и API (Render): иначе Mini App на API_URL видит только текст «Server is working». */
+if (SPA_AVAILABLE) {
+  app.use(express.static(FRONTEND_DIST, { index: false, maxAge: "1h" }));
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.method !== "GET" && req.method !== "HEAD") return next();
+    if (
+      req.path.startsWith("/api") ||
+      req.path.startsWith("/telegram-webhook") ||
+      req.path.startsWith("/webhook")
+    ) {
+      return next();
+    }
+    res.sendFile(SPA_INDEX, (err) => {
+      if (err) next(err);
+    });
+  });
+}
 
 app.use(apiSafeErrorHandler);
 

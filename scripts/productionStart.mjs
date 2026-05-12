@@ -41,8 +41,8 @@ const rolledBack = spawnSync(
   },
 );
 const rbOut = (rolledBack.stdout ?? "") + (rolledBack.stderr ?? "");
-if (rbOut) process.stdout.write(rbOut);
-// Exit 1 when there is no failed migration — safe to ignore (clears P3018 when applicable).
+// P3012 = migration not failed; benign on healthy DB. P3018 recovery still logs other errors.
+if (rbOut && !rbOut.includes("P3012")) process.stdout.write(rbOut);
 
 const deployAttempt = spawnSync("npx prisma migrate deploy", {
   shell: true,
