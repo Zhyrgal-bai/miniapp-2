@@ -1,21 +1,48 @@
 .product-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: max(6px, calc(var(--sf-grid-gap, 10px) * 0.92));
-  padding: var(--sf-mobile-pad, 10px) var(--sf-mobile-pad, 10px) 16px;
   align-items: stretch;
+  box-sizing: border-box;
+  width: 100%;
+  /* Theme gap with a hard floor so cards never visually merge (bones also enforces on .sf-root). */
+  --pg-gap-x: max(12px, var(--sf-grid-gap, 14px));
+  --pg-gap-y: max(14px, calc(var(--sf-grid-gap, 14px) + 2px));
+  column-gap: var(--pg-gap-x);
+  row-gap: var(--pg-gap-y);
+  padding: var(--sf-mobile-pad, 12px) var(--sf-mobile-pad, 12px) 18px;
   /* Telegram Mini App: one main scroll container. Avoid nested scrolling. */
   overflow: visible;
 }
 
+/* Narrow phones: stable 2 columns; minmax(0,1fr) avoids overflow from long titles. */
+.product-grid:not(.product-grid--list):not(.product-grid--solo):not(.product-grid--empty) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: min(100%, 1240px);
+  margin-inline: auto;
+}
+
+/* Tablet / desktop: fluid columns with capped track width — no “two wall-sized cards”. */
+@media (min-width: 520px) {
+  .product-grid:not(.product-grid--list):not(.product-grid--solo):not(.product-grid--empty) {
+    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  }
+}
+
+@media (min-width: 900px) {
+  .product-grid:not(.product-grid--list):not(.product-grid--solo):not(.product-grid--empty) {
+    grid-template-columns: repeat(auto-fill, minmax(184px, 1fr));
+  }
+}
+
 .product-grid--density-compact {
-  gap: max(6px, calc(var(--sf-grid-gap, 10px) - 4px));
-  padding: max(6px, calc(var(--sf-mobile-pad, 10px) - 2px)) max(6px, calc(var(--sf-mobile-pad, 10px) - 2px)) 18px;
+  --pg-gap-x: max(10px, calc(var(--sf-grid-gap, 14px) - 2px));
+  --pg-gap-y: max(12px, var(--sf-grid-gap, 14px));
+  padding: max(8px, calc(var(--sf-mobile-pad, 12px) - 2px)) max(8px, calc(var(--sf-mobile-pad, 12px) - 2px)) 18px;
 }
 
 .product-grid--density-airy {
-  gap: calc(var(--sf-grid-gap, 10px) + 6px);
-  padding: calc(var(--sf-mobile-pad, 10px) + 4px) calc(var(--sf-mobile-pad, 10px) + 4px) 24px;
+  --pg-gap-x: max(16px, calc(var(--sf-grid-gap, 14px) + 6px));
+  --pg-gap-y: max(18px, calc(var(--sf-grid-gap, 14px) + 8px));
+  padding: calc(var(--sf-mobile-pad, 12px) + 4px) calc(var(--sf-mobile-pad, 12px) + 4px) 26px;
 }
 
 .product-grid .product-card {
@@ -54,16 +81,20 @@
 }
 
 @media (max-width: 400px) {
-  .product-grid {
-    gap: var(--sf-grid-gap, 8px);
-    padding: var(--sf-mobile-pad, 8px) var(--sf-mobile-pad, 8px) 18px;
+  .product-grid:not(.product-grid--density-compact):not(.product-grid--density-airy) {
+    --pg-gap-x: max(11px, var(--sf-grid-gap, 12px));
+    --pg-gap-y: max(12px, calc(var(--sf-grid-gap, 12px) + 2px));
+    padding: var(--sf-mobile-pad, 10px) var(--sf-mobile-pad, 10px) 18px;
   }
 }
 
 .product-grid--list {
   grid-template-columns: 1fr;
-  gap: max(6px, calc(var(--sf-grid-gap, 10px) * 0.88));
-  padding: max(6px, calc(var(--sf-mobile-pad, 10px) * 0.85)) max(8px, var(--sf-mobile-pad, 10px)) 14px;
+  max-width: 100%;
+  margin-inline: 0;
+  row-gap: max(10px, calc(var(--sf-grid-gap, 14px) * 0.92));
+  column-gap: 0;
+  padding: max(8px, calc(var(--sf-mobile-pad, 12px) * 0.88)) max(10px, var(--sf-mobile-pad, 12px)) 16px;
 }
 
 .product-grid--list .product-card {
@@ -105,8 +136,9 @@
 }
 
 .sf-root--catalog-bold .product-grid:not(.product-grid--list) {
-  gap: max(8px, calc(var(--sf-grid-gap, 10px) + 4px));
-  padding-bottom: 20px;
+  --pg-gap-x: max(14px, calc(var(--sf-grid-gap, 14px) + 2px));
+  --pg-gap-y: max(16px, calc(var(--sf-grid-gap, 14px) + 4px));
+  padding-bottom: 22px;
 }
 
 .sf-root--catalog-bold .product-grid:not(.product-grid--list) .product-card {

@@ -7,9 +7,12 @@
  * radius; 16px button radius; subtle layered shadows; no harsh borders.
  */
 
-/* Vertical padding for sticky cart bar */
-.sf-root {
-  padding-bottom: 88px;
+/*
+ * Запас под корзину только у вложенного .sf-root витрины (не у оболочки .sf-root.sf-app),
+ * иначе снизу складывается огромный «хвост» + safe-area.
+ */
+.sf-root:not(.sf-app) {
+  padding-bottom: max(40px, env(safe-area-inset-bottom, 0px));
 }
 
 /* ── Section titles ── */
@@ -69,17 +72,24 @@
 
 /* ── Section grid ── */
 .sf-root .sf-section-grid {
-  gap: 8px !important;
+  gap: 12px !important;
 }
 
 .sf-root .sf-section--padded {
   padding: 10px var(--sf-mobile-pad, 12px) !important;
 }
 
-/* ── Product grid ── */
-.sf-root .product-grid {
-  gap: 10px !important;
-  padding: 8px 12px 12px !important;
+/* ── Product grid (bones loads last: enforce rhythm + merchant --sf-grid-gap floor) ── */
+.sf-root .product-grid:not(.product-grid--empty):not(.product-grid--list) {
+  row-gap: max(14px, calc(var(--sf-grid-gap, 14px) + 2px)) !important;
+  column-gap: max(12px, var(--sf-grid-gap, 14px)) !important;
+  padding: 10px 14px 16px !important;
+}
+
+.sf-root .product-grid.product-grid--list:not(.product-grid--empty) {
+  row-gap: max(10px, calc(var(--sf-grid-gap, 14px) * 0.92)) !important;
+  column-gap: 0 !important;
+  padding: 10px 14px 16px !important;
 }
 
 .sf-root .product-grid--empty {
@@ -259,7 +269,7 @@
 /* ── Footer ── */
 .sf-root .sf-footer__inner {
   border-top: 1px solid color-mix(in srgb, var(--sf-color-border, #444) 50%, transparent) !important;
-  padding-top: 8px !important;
+  padding-top: 6px !important;
 }
 
 /* ── Sticky cart — frosted floating bar ── */

@@ -61,7 +61,7 @@ export function buildDiscoveryRails(ctx: DiscoveryContext & { textConfig?: Recor
     if (recent.length) {
       rails.push({
         id: "recent",
-        title: readText("titleHits", ru.discovery.titleRecentlyViewed),
+        title: readText("titleRecentlyViewed", ru.discovery.titleRecentlyViewed),
         layout: "horizontalRail",
         products: recent.slice(0, 12),
       });
@@ -79,7 +79,7 @@ export function buildDiscoveryRails(ctx: DiscoveryContext & { textConfig?: Recor
     if (because.length) {
       rails.push({
         id: "because_viewed",
-        title: readText("titleHits", ru.discovery.titleBecauseViewed),
+        title: readText("titleBecauseViewed", ru.discovery.titleBecauseViewed),
         layout: ctx.kit === "fashion" ? "editorialStrip" : "horizontalRail",
         products: because,
       });
@@ -101,7 +101,7 @@ export function buildDiscoveryRails(ctx: DiscoveryContext & { textConfig?: Recor
       if (related.length) {
         rails.push({
           id: "related",
-          title: readText("titleHits", ru.discovery.titleRelated),
+          title: readText("titleRelated", ru.discovery.titleRelated),
           layout: "horizontalRail",
           products: related,
         });

@@ -121,6 +121,9 @@ export type StorefrontTextConfig = {
   titleCategories: string;
   titleHits: string;
   titleTrending: string;
+  titleRecentlyViewed: string;
+  titleBecauseViewed: string;
+  titleRelated: string;
   titleFaq: string;
   titleReviews: string;
 
@@ -398,7 +401,10 @@ const StorefrontTextConfigSchema = z
 
     titleCategories: z.string().trim().max(LIMITS.maxTitleLen).optional().default("Категории"),
     titleHits: z.string().trim().max(LIMITS.maxTitleLen).optional().default("Хиты"),
-    titleTrending: z.string().trim().max(LIMITS.maxTitleLen).optional().default("Trending"),
+    titleTrending: z.string().trim().max(LIMITS.maxTitleLen).optional().default("В тренде"),
+    titleRecentlyViewed: z.string().trim().max(LIMITS.maxTitleLen).optional().default("Вы смотрели"),
+    titleBecauseViewed: z.string().trim().max(LIMITS.maxTitleLen).optional().default("Потому что вы смотрели"),
+    titleRelated: z.string().trim().max(LIMITS.maxTitleLen).optional().default("Похожие товары"),
     titleFaq: z.string().trim().max(LIMITS.maxTitleLen).optional().default("FAQ"),
     titleReviews: z.string().trim().max(LIMITS.maxTitleLen).optional().default("Отзывы"),
 
@@ -425,7 +431,10 @@ const StorefrontTextConfigSchema = z
 
     titleCategories: "Категории",
     titleHits: "Хиты",
-    titleTrending: "Trending",
+    titleTrending: "В тренде",
+    titleRecentlyViewed: "Вы смотрели",
+    titleBecauseViewed: "Потому что вы смотрели",
+    titleRelated: "Похожие товары",
     titleFaq: "FAQ",
     titleReviews: "Отзывы",
 

@@ -48,7 +48,7 @@
 /* Storefront column — bottom reserve so sticky bar / float do not cover last cards */
 .sf-app .app__content .sf-root {
   --sf-viewport-pad-bottom: calc(
-    env(safe-area-inset-bottom, 0px) + var(--sf-chrome-sticky-height) + 12px
+    env(safe-area-inset-bottom, 0px) + var(--sf-chrome-sticky-height) + 6px
   );
   padding-bottom: var(--sf-viewport-pad-bottom);
 }
@@ -241,6 +241,10 @@
   padding: var(--sf-space-sm, 10px);
 }
 
+.sf-section--featured .sf-section-card--inset {
+  padding: 12px;
+}
+
 .sf-section-media {
   width: 100%;
   max-height: 160px;
@@ -273,16 +277,18 @@
 }
 
 .sf-footer {
-  padding: var(--sf-space-md, 16px);
-  opacity: 0.9;
+  /* Не дублировать safe-area: он уже в padding-bottom колонки .sf-root */
+  padding: 6px var(--sf-mobile-pad, 12px) 6px;
+  opacity: 0.92;
 }
 
 .sf-footer__inner {
   border-top: 1px solid var(--sf-color-border);
-  padding-top: var(--sf-space-sm, 12px);
-  font-size: var(--sf-font-size-small, 14px);
+  padding-top: 4px;
+  font-size: max(11px, var(--sf-font-size-small, 12px));
+  line-height: 1.35;
   display: grid;
-  gap: var(--sf-space-xs, 6px);
+  gap: 2px;
 }
 
 .sf-footer a {
@@ -496,9 +502,10 @@
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(132px, min(42vw, 210px));
-  gap: var(--sf-space-sm, 10px);
+  gap: max(12px, var(--sf-space-sm, 10px));
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding-bottom: 6px;
+  padding-inline: 2px;
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
   width: 100%;
@@ -539,6 +546,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
 }
 
 .sf-rail__item > * {
