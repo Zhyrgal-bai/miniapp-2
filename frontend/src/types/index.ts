@@ -51,6 +51,9 @@ export interface Product {
   /** Скидка в процентах 0–100 от поля `price`. */
   discountPercent?: number;
 
+  /** Поля шаблона магазина (объём, сиропы и т.д.), JSON с бэкенда. */
+  attributes?: Record<string, unknown>;
+
   /** Легаси с API: варианты по цвету с размерами. */
   variants?: Variant[];
 }

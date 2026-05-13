@@ -228,6 +228,7 @@ export const adminService = {
         | "isSale"
         | "discountPercent"
         | "variants"
+        | "attributes"
       >
     >
   ): Promise<Product> {

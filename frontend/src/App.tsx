@@ -14,6 +14,10 @@ import { useCartStore } from "./store/useCartStore";
 import { useAdminPanelVisible, useAdminAccessBootstrap } from "@/utils/admin";
 import { fetchMyOrders } from "./services/myOrdersApi";
 import { getWebAppUserId } from "./utils/telegramUserId";
+import {
+  readPendingFinikOrder,
+  clearPendingFinikOrder,
+} from "./utils/pendingFinikOrder";
 import { mergeTenantShopIntoSearch } from "./utils/storeParams";
 import type { MyOrderRow } from "./types/myOrder";
 import "./App.css";
@@ -284,6 +288,78 @@ export default function App() {
     };
   }, [page, businessId]);
 
+  /** После оплаты Finik: опрос заказа до CONFIRMED+, затем переход на главную. */
+  useEffect(() => {
+    const uid = getWebAppUserId();
+    if (!Number.isFinite(uid) || uid <= 0 || businessId == null) {
+      return;
+    }
+    const initial = readPendingFinikOrder();
+    if (initial == null) return;
+    if (initial.businessId !== businessId) {
+      clearPendingFinikOrder();
+      return;
+    }
+    const MAX_MS = 30 * 60 * 1000;
+    const POLL_MS = 3000;
+    const paid = new Set(["CONFIRMED", "SHIPPED", "DELIVERED"]);
+    let cancelled = false;
+    const shop = String(businessId);
+    let intervalId = 0;
+
+    const stop = () => {
+      if (intervalId !== 0) {
+        window.clearInterval(intervalId);
+        intervalId = 0;
+      }
+    };
+
+    const tick = async () => {
+      if (cancelled) return;
+      const pend = readPendingFinikOrder();
+      if (pend == null) {
+        stop();
+        return;
+      }
+      if (pend.businessId !== businessId) {
+        clearPendingFinikOrder();
+        stop();
+        return;
+      }
+      if (Date.now() - pend.startedAt > MAX_MS) {
+        clearPendingFinikOrder();
+        stop();
+        return;
+      }
+      try {
+        const rows = await fetchMyOrders(uid, shop);
+        if (cancelled) return;
+        const row = rows.find((o) => o.id === pend.orderId);
+        if (row == null) return;
+        const st = String(row.status ?? "").toUpperCase();
+        if (paid.has(st)) {
+          clearPendingFinikOrder();
+          stop();
+          commitPage("home");
+          return;
+        }
+        if (st === "CANCELLED") {
+          clearPendingFinikOrder();
+          stop();
+        }
+      } catch {
+        /* сеть — следующий тик */
+      }
+    };
+
+    void tick();
+    intervalId = window.setInterval(() => void tick(), POLL_MS);
+    return () => {
+      cancelled = true;
+      stop();
+    };
+  }, [businessId, commitPage]);
+
   useEffect(() => {
     const onPop = () => {
       queueMicrotask(() => {
@@ -459,10 +535,7 @@ export default function App() {
           <CartPage onGoToCheckout={() => commitPage("checkout")} />
         )}
         {page === "checkout" && (
-          <CheckoutPage
-            onBack={() => commitPage("cart")}
-            onOrderSuccess={() => commitPage("home")}
-          />
+          <CheckoutPage onBack={() => commitPage("cart")} />
         )}
         {page === "admin" &&
           (adminAllowed ? (

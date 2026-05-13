@@ -9,13 +9,10 @@ import { cleanInput, validateKgPhone } from "../utils/orderInputSanitize";
 import MapPicker from "../components/checkout/MapPicker";
 import "../components/ui/CheckoutPage.css";
 import { buildCatalogRequestParams } from "../utils/storeParams";
-
-type CheckoutPaymentMethod = "finik" | "receipt";
+import { setPendingFinikOrder } from "../utils/pendingFinikOrder";
 
 type Props = {
   onBack?: () => void;
-  /** После успешного заказа (корзина уже очищена). */
-  onOrderSuccess?: () => void;
 };
 
 function promoApplyUrl(): string {
@@ -48,7 +45,7 @@ function orderErrorMessage(err: unknown): string {
   return "Не удалось оформить заказ. Попробуйте позже.";
 }
 
-export default function CheckoutPage({ onBack, onOrderSuccess }: Props) {
+export default function CheckoutPage({ onBack }: Props) {
   const { businessId } = useShop();
   const items = useCartStore((state) => state.items);
   const clearCart = useCartStore((state) => state.clearCart);
@@ -69,8 +66,6 @@ export default function CheckoutPage({ onBack, onOrderSuccess }: Props) {
   const addressSearchSeqRef = useRef(0);
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [deliveryType, setDeliveryType] = useState("delivery");
-  const [paymentMethod, setPaymentMethod] =
-    useState<CheckoutPaymentMethod>("receipt");
   const [promo, setPromo] = useState("");
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -377,6 +372,7 @@ export default function CheckoutPage({ onBack, onOrderSuccess }: Props) {
           : {};
       const { data } = await api.post<{
         id: number;
+        businessId?: number;
         paymentUrl?: string | null;
       }>("/orders", {
         ...tenantParams,
@@ -401,7 +397,7 @@ export default function CheckoutPage({ onBack, onOrderSuccess }: Props) {
         ...(lat != null && lng != null ? { lat, lng } : {}),
         promo: promoCode,
         comment: commentClean,
-        paymentMethod,
+        paymentMethod: "finik",
       });
 
       const payUrl =
@@ -410,6 +406,15 @@ export default function CheckoutPage({ onBack, onOrderSuccess }: Props) {
           : null;
 
       if (payUrl) {
+        const resolvedBusinessId =
+          businessId != null && businessId > 0
+            ? businessId
+            : typeof data.businessId === "number" && data.businessId > 0
+              ? data.businessId
+              : null;
+        if (resolvedBusinessId != null) {
+          setPendingFinikOrder({ orderId: data.id, businessId: resolvedBusinessId });
+        }
         setFinikRedirectMessage("Переход к оплате...");
         clearCart();
         setName("");
@@ -420,7 +425,6 @@ export default function CheckoutPage({ onBack, onOrderSuccess }: Props) {
         setLng(null);
         setPromo("");
         setComment("");
-        setPaymentMethod("receipt");
         setPromoPreview(null);
         window.setTimeout(() => {
           window.location.href = payUrl;
@@ -428,19 +432,9 @@ export default function CheckoutPage({ onBack, onOrderSuccess }: Props) {
         return;
       }
 
-      alert("Заказ отправлен");
-
-      clearCart();
-      setName("");
-      setPhone("");
-      setPhoneFromSavedOrder(false);
-      setAddress("");
-      setLat(null);
-      setLng(null);
-      setPromo("");
-      setComment("");
-      setPaymentMethod("receipt");
-      onOrderSuccess?.();
+      alert(
+        "Не удалось получить ссылку на оплату Finik. Заказ создан — откройте «Мои заказы» или попробуйте снова."
+      );
     } catch (err) {
       console.error(err);
       alert(orderErrorMessage(err));
@@ -628,32 +622,11 @@ export default function CheckoutPage({ onBack, onOrderSuccess }: Props) {
         />
 
         <div className="checkout-payment">
-          <p className="checkout-payment__label">Способ оплаты</p>
-          <div className="checkout-payment__row" role="group" aria-label="Способ оплаты">
-            <button
-              type="button"
-              className={`checkout-payment__opt${paymentMethod === "finik" ? " checkout-payment__opt--active" : ""}`}
-              onClick={() => setPaymentMethod("finik")}
-            >
-              <span className="checkout-payment__opt-title">💳 Finik</span>
-              <span className="checkout-payment__opt-sub">Онлайн</span>
-            </button>
-            <button
-              type="button"
-              className={`checkout-payment__opt${paymentMethod === "receipt" ? " checkout-payment__opt--active" : ""}`}
-              onClick={() => setPaymentMethod("receipt")}
-            >
-              <span className="checkout-payment__opt-title">📎 Чек / перевод</span>
-              <span className="checkout-payment__opt-sub">QR и чек в заказах</span>
-            </button>
-          </div>
+          <p className="checkout-payment__label">Оплата</p>
           <p className="checkout-payment__summary" aria-live="polite">
-            Выбрано:{" "}
-            <strong>
-              {paymentMethod === "finik"
-                ? "Finik (скоро)"
-                : "Чек или перевод по реквизитам"}
-            </strong>
+            Оплата только через <strong>Finik</strong>. После нажатия «Оформить заказ»
+            откроется страница оплаты; после успешной оплаты вы вернётесь в приложение
+            на главный экран.
           </p>
         </div>
       </div>

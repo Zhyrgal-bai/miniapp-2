@@ -92,10 +92,13 @@ const ProductForm = () => {
   const [discountPercent, setDiscountPercent] = useState<number | "">("");
   const [productSchema, setProductSchema] = useState<DynamicSchemaObject>({});
   const [attributes, setAttributes] = useState<Record<string, unknown>>({});
+  const [merchantBusinessType, setMerchantBusinessType] = useState("");
   const [variantDrafts, setVariantDrafts] = useState<VariantDraft[]>([
     createVariantDraft(),
   ]);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const showClothingVariants = merchantBusinessType === "clothing";
 
   const rootCategories = useMemo(() => categoryRoots(categories), [categories]);
 
@@ -103,6 +106,7 @@ const ProductForm = () => {
     void (async () => {
       try {
         const schema = await adminService.getMerchantSchemas();
+        setMerchantBusinessType(schema.businessType);
         setProductSchema(schema.productSchema as unknown as DynamicSchemaObject);
         const tree = await adminService.getCategories();
         setCategories(tree);
@@ -224,29 +228,33 @@ const ProductForm = () => {
       return;
     }
 
-    for (let i = 0; i < variantDrafts.length; i++) {
-      const d = variantDrafts[i];
-      if (!d) continue;
-      if (!d.colorName.trim()) {
-        setFormError(`Вариант ${i + 1}: укажите название цвета (текст).`);
-        return;
-      }
-      const enabled = SIZE_OPTIONS.filter((sz) => d.sizes[sz].enabled);
-      if (enabled.length === 0) {
-        setFormError(`Вариант ${i + 1}: выберите хотя бы один размер.`);
-        return;
-      }
-      for (const sz of enabled) {
-        const st = d.sizes[sz].stock;
-        const n = typeof st === "number" ? st : Number(st);
-        if (!Number.isFinite(n) || n <= 0) {
-          setFormError(`Вариант ${i + 1}: для размера ${sz} укажите количество больше нуля.`);
+    if (showClothingVariants) {
+      for (let i = 0; i < variantDrafts.length; i++) {
+        const d = variantDrafts[i];
+        if (!d) continue;
+        if (!d.colorName.trim()) {
+          setFormError(`Вариант ${i + 1}: укажите название цвета (текст).`);
           return;
+        }
+        const enabled = SIZE_OPTIONS.filter((sz) => d.sizes[sz].enabled);
+        if (enabled.length === 0) {
+          setFormError(`Вариант ${i + 1}: выберите хотя бы один размер.`);
+          return;
+        }
+        for (const sz of enabled) {
+          const st = d.sizes[sz].stock;
+          const n = typeof st === "number" ? st : Number(st);
+          if (!Number.isFinite(n) || n <= 0) {
+            setFormError(`Вариант ${i + 1}: для размера ${sz} укажите количество больше нуля.`);
+            return;
+          }
         }
       }
     }
 
-    const variants = buildVariantsForApi(variantDrafts);
+    const variants = showClothingVariants
+      ? buildVariantsForApi(variantDrafts)
+      : ([] as Variant[]);
 
     if (!subCategoryId) {
       setFormError("Выберите подкатегорию.");
@@ -481,133 +489,137 @@ const ProductForm = () => {
         onChange={setAttributes}
       />
 
-      <div className="admin-form-divider" />
+      {showClothingVariants && (
+        <>
+          <div className="admin-form-divider" />
 
-      <p className="admin-form-hint">Цвета и остатки по размерам (можно несколько вариантов)</p>
+          <p className="admin-form-hint">Цвета и остатки по размерам (можно несколько вариантов)</p>
 
-      {variantDrafts.map((draft, index) => (
-          <div key={draft.id} className="admin-variant">
-            <div className="admin-variant-head">
-              <span className="admin-variant-title">Вариант {index + 1}</span>
-              {variantDrafts.length > 1 && (
-                <button
-                  type="button"
-                  className="admin-variant-remove"
-                  onClick={() => removeVariant(draft.id)}
-                  aria-label="Удалить вариант"
-                >
-                  Удалить
-                </button>
-              )}
-            </div>
-
-            <div className="admin-form-section">
-              <span className="admin-field-label">Цвет</span>
-              <div className="admin-color-picker-row">
-                <input
-                  type="color"
-                  className="admin-color-native"
-                  aria-label={`Цвет варианта ${index + 1}`}
-                  value={
-                    isValidHexColor(draft.colorHex)
-                      ? expandShortHex(draft.colorHex)
-                      : "#cccccc"
-                  }
-                  onChange={(e) =>
-                    updateDraft(draft.id, { colorHex: e.target.value })
-                  }
-                />
-                <input
-                  id={`pf-color-${draft.id}`}
-                  className="admin-input admin-color-name-input"
-                  placeholder="например: светло-серый"
-                  value={draft.colorName}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    const mapped = lookupVariantHexByName(next);
-                    updateDraft(draft.id, {
-                      colorName: next,
-                      ...(mapped ? { colorHex: mapped } : {}),
-                    });
-                  }}
-                  autoComplete="off"
-                />
-              </div>
-              <div className="admin-color-presets" role="group" aria-label="Быстрый выбор цвета">
-                {COLOR_PRESETS.map((p) => (
+          {variantDrafts.map((draft, index) => (
+            <div key={draft.id} className="admin-variant">
+              <div className="admin-variant-head">
+                <span className="admin-variant-title">Вариант {index + 1}</span>
+                {variantDrafts.length > 1 && (
                   <button
-                    key={p.name}
                     type="button"
-                    className="admin-color-preset-btn"
-                    onClick={() =>
-                      updateDraft(draft.id, {
-                        colorName: p.name,
-                        colorHex: p.hex,
-                      })
-                    }
+                    className="admin-variant-remove"
+                    onClick={() => removeVariant(draft.id)}
+                    aria-label="Удалить вариант"
                   >
-                    {p.name}
+                    Удалить
                   </button>
-                ))}
+                )}
+              </div>
+
+              <div className="admin-form-section">
+                <span className="admin-field-label">Цвет</span>
+                <div className="admin-color-picker-row">
+                  <input
+                    type="color"
+                    className="admin-color-native"
+                    aria-label={`Цвет варианта ${index + 1}`}
+                    value={
+                      isValidHexColor(draft.colorHex)
+                        ? expandShortHex(draft.colorHex)
+                        : "#cccccc"
+                    }
+                    onChange={(e) =>
+                      updateDraft(draft.id, { colorHex: e.target.value })
+                    }
+                  />
+                  <input
+                    id={`pf-color-${draft.id}`}
+                    className="admin-input admin-color-name-input"
+                    placeholder="например: светло-серый"
+                    value={draft.colorName}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      const mapped = lookupVariantHexByName(next);
+                      updateDraft(draft.id, {
+                        colorName: next,
+                        ...(mapped ? { colorHex: mapped } : {}),
+                      });
+                    }}
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="admin-color-presets" role="group" aria-label="Быстрый выбор цвета">
+                  {COLOR_PRESETS.map((p) => (
+                    <button
+                      key={p.name}
+                      type="button"
+                      className="admin-color-preset-btn"
+                      onClick={() =>
+                        updateDraft(draft.id, {
+                          colorName: p.name,
+                          colorHex: p.hex,
+                        })
+                      }
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="admin-form-section">
+                <span className="admin-field-label">Размеры</span>
+                <div className="admin-sizes">
+                  {SIZE_OPTIONS.map((size) => (
+                    <label key={size} className="admin-size-chip">
+                      <input
+                        type="checkbox"
+                        checked={draft.sizes[size].enabled}
+                        onChange={(e) =>
+                          setSizeEnabled(draft.id, size, e.target.checked)
+                        }
+                      />
+                      <span className="admin-size-chip-text">{size}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="admin-stock-block">
+                <span className="admin-field-label">Остаток по размеру</span>
+                {SIZE_OPTIONS.filter((sz) => draft.sizes[sz].enabled).length === 0 ? (
+                  <p className="admin-stock-placeholder">Отметьте размеры выше</p>
+                ) : (
+                  SIZE_OPTIONS.filter((sz) => draft.sizes[sz].enabled).map((size) => (
+                    <div key={size} className="admin-stock-row">
+                      <span className="admin-stock-size">{size}</span>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        placeholder="Количество"
+                        value={
+                          draft.sizes[size].stock === ""
+                            ? ""
+                            : draft.sizes[size].stock
+                        }
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setSizeStock(
+                            draft.id,
+                            size,
+                            v === "" ? "" : Number(v)
+                          );
+                        }}
+                        className="admin-input"
+                      />
+                    </div>
+                  ))
+                )}
               </div>
             </div>
+          ))}
 
-            <div className="admin-form-section">
-              <span className="admin-field-label">Размеры</span>
-              <div className="admin-sizes">
-                {SIZE_OPTIONS.map((size) => (
-                  <label key={size} className="admin-size-chip">
-                    <input
-                      type="checkbox"
-                      checked={draft.sizes[size].enabled}
-                      onChange={(e) =>
-                        setSizeEnabled(draft.id, size, e.target.checked)
-                      }
-                    />
-                    <span className="admin-size-chip-text">{size}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="admin-stock-block">
-              <span className="admin-field-label">Остаток по размеру</span>
-              {SIZE_OPTIONS.filter((sz) => draft.sizes[sz].enabled).length === 0 ? (
-                <p className="admin-stock-placeholder">Отметьте размеры выше</p>
-              ) : (
-                SIZE_OPTIONS.filter((sz) => draft.sizes[sz].enabled).map((size) => (
-                  <div key={size} className="admin-stock-row">
-                    <span className="admin-stock-size">{size}</span>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      placeholder="Количество"
-                      value={
-                        draft.sizes[size].stock === ""
-                          ? ""
-                          : draft.sizes[size].stock
-                      }
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setSizeStock(
-                          draft.id,
-                          size,
-                          v === "" ? "" : Number(v)
-                        );
-                      }}
-                      className="admin-input"
-                    />
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        ))}
-
-      <button type="button" onClick={addVariant} className="admin-secondary-btn">
-        + Добавить цвет
-      </button>
+          <button type="button" onClick={addVariant} className="admin-secondary-btn">
+            + Добавить цвет
+          </button>
+        </>
+      )}
 
       <button type="submit" className="admin-submit-btn">
         Добавить товар

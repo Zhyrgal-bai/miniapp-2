@@ -3845,12 +3845,7 @@ app.post("/orders", async (req: Request, res: Response) => {
   }
   const customerPhoneValue = phoneRaw;
 
-  const rawPaymentMethod = (body as { paymentMethod?: unknown }).paymentMethod;
-  const paymentMethod =
-    typeof rawPaymentMethod === "string" &&
-    (rawPaymentMethod === "finik" || rawPaymentMethod === "receipt")
-      ? rawPaymentMethod
-      : "receipt";
+  const paymentMethod = "finik";
   const rawPaymentId = (body as { paymentId?: unknown }).paymentId;
   const paymentId =
     typeof rawPaymentId === "string" && rawPaymentId.trim() !== ""
