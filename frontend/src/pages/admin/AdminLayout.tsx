@@ -1,6 +1,11 @@
 import type { ReactNode } from "react";
 import { useMemo } from "react";
 import { adminNavKeyFromPath, type AdminNavKey } from "./adminHashRoute";
+import {
+  MERCHANT_PERM,
+  hasMerchantPermission,
+  type MerchantPermissionId,
+} from "../../permissions/merchantPermissions";
 
 type NavItem = {
   href: string;
@@ -8,11 +13,24 @@ type NavItem = {
   label: string;
   icon: string;
   ownerOnly?: boolean;
+  permission?: MerchantPermissionId;
 };
 
 const navAll: NavItem[] = [
-  { href: "#/admin/orders", match: "orders", label: "Заказы", icon: "📦" },
-  { href: "#/admin/design", match: "design", label: "Оформление", icon: "🎨" },
+  {
+    href: "#/admin/orders",
+    match: "orders",
+    label: "Заказы",
+    icon: "📦",
+    permission: MERCHANT_PERM.ordersManage,
+  },
+  {
+    href: "#/admin/design",
+    match: "design",
+    label: "Оформление",
+    icon: "🎨",
+    permission: MERCHANT_PERM.designEdit,
+  },
   {
     href: "#/admin/users",
     match: "users",
@@ -20,21 +38,41 @@ const navAll: NavItem[] = [
     icon: "👥",
     ownerOnly: true,
   },
-  { href: "#/admin/products", match: "products", label: "Товары", icon: "➕" },
+  {
+    href: "#/admin/products",
+    match: "products",
+    label: "Товары",
+    icon: "➕",
+    permission: MERCHANT_PERM.catalogEdit,
+  },
   {
     href: "#/admin/products/manage",
     match: "manage",
     label: "Каталог",
     icon: "🛍️",
+    permission: MERCHANT_PERM.catalogEdit,
   },
   {
     href: "#/admin/categories",
     match: "categories",
     label: "Категории",
     icon: "🗂️",
+    permission: MERCHANT_PERM.catalogEdit,
   },
-  { href: "#/admin/analytics", match: "analytics", label: "Аналитика", icon: "📊" },
-  { href: "#/admin/support", match: "support", label: "Поддержка", icon: "💬" },
+  {
+    href: "#/admin/analytics",
+    match: "analytics",
+    label: "Аналитика",
+    icon: "📊",
+    permission: MERCHANT_PERM.analyticsView,
+  },
+  {
+    href: "#/admin/support",
+    match: "support",
+    label: "Поддержка",
+    icon: "💬",
+    permission: MERCHANT_PERM.supportManage,
+  },
 ];
 
 type AdminLayoutProps = {
@@ -43,6 +81,8 @@ type AdminLayoutProps = {
   children: ReactNode;
   /** Только владелец видит пункт «Пользователи». */
   showOwnerNav?: boolean;
+  /** Права с GET /api/me (для фильтра пунктов меню). */
+  merchantPermissions: string[] | null;
 };
 
 export default function AdminLayout({
@@ -50,12 +90,17 @@ export default function AdminLayout({
   path,
   children,
   showOwnerNav = false,
+  merchantPermissions,
 }: AdminLayoutProps) {
   const active = adminNavKeyFromPath(path);
 
   const nav = useMemo(
-    () => navAll.filter((item) => !item.ownerOnly || showOwnerNav),
-    [showOwnerNav],
+    () =>
+      navAll.filter((item) => {
+        if (item.ownerOnly && !showOwnerNav) return false;
+        return hasMerchantPermission(merchantPermissions, item.permission);
+      }),
+    [showOwnerNav, merchantPermissions],
   );
 
   return (

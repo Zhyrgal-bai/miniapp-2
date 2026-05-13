@@ -38,9 +38,20 @@ export const useCartStore = create<CartStore>((set, get) => ({
   items: [],
 
   addItem: (item) =>
-    set((state) => ({
-      items: [...state.items, item],
-    })),
+    set((state) => {
+      const idx = state.items.findIndex(
+        (i) =>
+          i.productId === item.productId &&
+          i.size === item.size &&
+          i.color === item.color,
+      );
+      if (idx >= 0) {
+        const next = [...state.items];
+        next[idx] = { ...next[idx], ...item };
+        return { items: next };
+      }
+      return { items: [...state.items, item] };
+    }),
 
   removeItem: (item) =>
     set((state) => ({

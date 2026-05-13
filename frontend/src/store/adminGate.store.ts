@@ -10,6 +10,8 @@ type AdminGateState = {
   serverIsAdmin: boolean;
   /** Роль текущего пользователя из GET /api/me (OWNER | ADMIN | CLIENT). */
   merchantRole: string | null;
+  /** Эффективные права для ADMIN (OWNER — полный список с сервера). */
+  merchantPermissions: string[] | null;
   lastHttpOk: boolean;
   refresh: (businessId?: number | null) => Promise<void>;
 };
@@ -18,6 +20,7 @@ export const useAdminGateStore = create<AdminGateState>((set) => ({
   status: "idle",
   serverIsAdmin: false,
   merchantRole: null,
+  merchantPermissions: null,
   lastHttpOk: false,
 
   refresh: async (businessId?: number | null) => {
@@ -27,6 +30,7 @@ export const useAdminGateStore = create<AdminGateState>((set) => ({
         status: "idle",
         serverIsAdmin: false,
         merchantRole: null,
+        merchantPermissions: null,
         lastHttpOk: false,
       });
       return;
@@ -41,6 +45,7 @@ export const useAdminGateStore = create<AdminGateState>((set) => ({
         status: "ready",
         serverIsAdmin: false,
         merchantRole: null,
+        merchantPermissions: null,
         lastHttpOk: false,
       });
       return;
@@ -57,16 +62,22 @@ export const useAdminGateStore = create<AdminGateState>((set) => ({
       });
       const j = (await res.json().catch(() => ({}))) as {
         role?: string;
+        permissions?: string[];
       };
       const admin =
         res.ok &&
         (j.role === "OWNER" || j.role === "ADMIN");
       const r =
         res.ok && typeof j.role === "string" ? j.role : null;
+      const perms =
+        res.ok && Array.isArray(j.permissions)
+          ? j.permissions.filter((p): p is string => typeof p === "string")
+          : null;
       set({
         status: "ready",
         lastHttpOk: res.ok,
         merchantRole: r,
+        merchantPermissions: perms,
         serverIsAdmin: admin,
       });
     } catch {
@@ -75,6 +86,7 @@ export const useAdminGateStore = create<AdminGateState>((set) => ({
         lastHttpOk: false,
         serverIsAdmin: false,
         merchantRole: null,
+        merchantPermissions: null,
       });
     }
   },

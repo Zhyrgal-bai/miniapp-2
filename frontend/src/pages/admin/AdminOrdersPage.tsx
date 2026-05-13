@@ -263,14 +263,24 @@ export default function AdminOrdersPage() {
                 : null;
             return (
               <article key={order.id} className="admin-order-card">
-                <div className="admin-order-card__top">
-                  <h2 className="admin-order-card__id">#{order.id}</h2>
+                <div className="admin-order-card__identity">
+                  <h2 className="admin-order-card__client">{order.name}</h2>
+                  <p className="admin-order-card__subline">
+                    Заказ №{order.id}
+                    {order.buyerTelegramId ? (
+                      <>
+                        {" · "}
+                        <a
+                          href={`tg://user?id=${order.buyerTelegramId}`}
+                          className="admin-order-card__tg-link"
+                        >
+                          Написать в Telegram
+                        </a>
+                      </>
+                    ) : null}
+                  </p>
                 </div>
                 <dl className="admin-order-card__dl">
-                  <div>
-                    <dt>Имя</dt>
-                    <dd>{order.name}</dd>
-                  </div>
                   <div>
                     <dt>Телефон</dt>
                     <dd>{order.phone}</dd>

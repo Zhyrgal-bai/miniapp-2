@@ -99,6 +99,7 @@ export type AdminMembershipRow = {
   role: string;
   telegramId: string;
   name: string | null;
+  permissions?: string[];
 };
 
 export type AdminPromoRecord = {
@@ -122,6 +123,7 @@ export type AdminOrderListItem = {
   tracking?: string | null;
   receiptUrl?: string | null;
   receiptType?: string | null;
+  buyerTelegramId?: string | null;
 };
 
 export type AdminAnalytics = {
@@ -133,6 +135,16 @@ export type AdminAnalytics = {
   shipped?: number;
   delivered?: number;
   byStatus?: Record<string, number>;
+  rangeDays?: number;
+  rangeSince?: string;
+  ordersInRange?: number;
+  revenueInRange?: number;
+  dailySeries?: Array<{ day: string; revenue: number; orders: number }>;
+  topSku?: Array<{
+    productId: number | null;
+    name: string;
+    quantity: number;
+  }>;
 };
 
 export type CategoryCreateInput = {
@@ -398,8 +410,8 @@ export const adminService = {
     return typeof data.deleted === "number" ? data.deleted : 0;
   },
 
-  async getAnalytics(): Promise<AdminAnalytics> {
-    const d = await adminPost<AdminAnalytics>("/analytics", {});
+  async getAnalytics(rangeDays: 7 | 30 | 90 = 30): Promise<AdminAnalytics> {
+    const d = await adminPost<AdminAnalytics>("/analytics", { rangeDays });
     if (
       !d ||
       typeof d.totalOrders !== "number" ||
@@ -525,6 +537,38 @@ export const adminService = {
         userId: input.targetUserId,
         businessId: input.businessId,
         role: input.role,
+      }),
+    });
+    if (!res.ok) throw new Error(await readFetchError(res));
+  },
+
+  async updateMembershipPermissions(input: {
+    targetUserId: number;
+    businessId: number;
+    permissions: string[];
+  }): Promise<void> {
+    const telegramUserId = requireAdminUserId();
+    const url = new URL(
+      resolveAdminUrl("/api/memberships/update-permissions"),
+    );
+    url.searchParams.set("userId", String(telegramUserId));
+    url.searchParams.set("shop", String(input.businessId));
+    const res = await fetch(url.toString(), {
+      method: "POST",
+      headers: {
+        ...withTenantHeaders(
+          {
+            "Content-Type": "application/json",
+            "x-telegram-id": String(telegramUserId),
+          },
+          url.toString(),
+          { businessId: input.businessId },
+        ),
+      },
+      body: JSON.stringify({
+        userId: input.targetUserId,
+        businessId: input.businessId,
+        permissions: input.permissions,
       }),
     });
     if (!res.ok) throw new Error(await readFetchError(res));

@@ -1,4 +1,5 @@
 import type { Product } from "../../../types";
+import { ru } from "../../../i18n/ru";
 import { getRecentlyViewedIds } from "./recentlyViewed";
 import { categoryAffinities } from "../runtime/commerceSession";
 
@@ -43,7 +44,10 @@ export function buildDiscoveryRails(ctx: DiscoveryContext & { textConfig?: Recor
   if (trending.length) {
     rails.push({
       id: "trending",
-      title: ctx.businessType === "fastfood" ? "Горячее сейчас" : readText("titleTrending", "Trending"),
+      title:
+        ctx.businessType === "fastfood"
+          ? ru.discovery.titleHotNow
+          : readText("titleTrending", ru.discovery.titleTrending),
       layout: ctx.kit === "fashion" ? "editorialStrip" : "horizontalRail",
       products: trending,
     });
@@ -57,7 +61,7 @@ export function buildDiscoveryRails(ctx: DiscoveryContext & { textConfig?: Recor
     if (recent.length) {
       rails.push({
         id: "recent",
-        title: readText("titleHits", "Вы смотрели"),
+        title: readText("titleHits", ru.discovery.titleRecentlyViewed),
         layout: "horizontalRail",
         products: recent.slice(0, 12),
       });
@@ -75,7 +79,7 @@ export function buildDiscoveryRails(ctx: DiscoveryContext & { textConfig?: Recor
     if (because.length) {
       rails.push({
         id: "because_viewed",
-        title: readText("titleHits", "Потому что вы смотрели"),
+        title: readText("titleHits", ru.discovery.titleBecauseViewed),
         layout: ctx.kit === "fashion" ? "editorialStrip" : "horizontalRail",
         products: because,
       });
@@ -97,7 +101,7 @@ export function buildDiscoveryRails(ctx: DiscoveryContext & { textConfig?: Recor
       if (related.length) {
         rails.push({
           id: "related",
-          title: readText("titleHits", "Похожие товары"),
+          title: readText("titleHits", ru.discovery.titleRelated),
           layout: "horizontalRail",
           products: related,
         });

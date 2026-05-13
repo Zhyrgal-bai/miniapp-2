@@ -12,6 +12,7 @@ import {
   getPrimaryImage,
   isOutOfStock,
 } from "../../../utils/product";
+import { getMaxOrderQty } from "../../../commerce/quantityPolicy";
 import { getVariantCssBackground } from "../../../utils/variantColor";
 import { recordRecentlyViewed } from "../discovery/recentlyViewed";
 import "./ProductDetailSheet.css";
@@ -163,9 +164,9 @@ export function ProductDetailSheet({
 
   const outOfStock = isOutOfStock(display);
   const selectedStock = useMemo(() => {
-    if (!selectedSize) return 0;
-    return sizes.find((s) => s.size === selectedSize)?.stock ?? 0;
-  }, [selectedSize, sizes]);
+    if (!selectedSize || lineColor === null) return 0;
+    return getMaxOrderQty(display, selectedSize, lineColor);
+  }, [selectedSize, lineColor, display]);
 
   const addItem = useCartStore((s) => s.addItem);
   const removeItem = useCartStore((s) => s.removeItem);

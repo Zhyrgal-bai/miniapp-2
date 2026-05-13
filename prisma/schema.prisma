@@ -248,6 +248,9 @@ model Membership {
   businessId Int
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
+  /// Гранулярные права для ADMIN (OWNER игнорирует список на сервере).
+  permissions String[] @default([])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

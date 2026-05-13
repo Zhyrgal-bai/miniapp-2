@@ -95,6 +95,13 @@ import {
 } from "./businessBotToken.js";
 import { connectDatabase, logPrismaError, prisma } from "./db.js";
 import {
+  MERCHANT_PERM,
+  effectiveMerchantPermissions,
+  merchantHasPermission,
+  sanitizeMerchantPermissionInput,
+  type MerchantPermissionId,
+} from "./merchantPermissions.js";
+import {
   clearPaymentFieldByRowId,
   listPaymentDetailsFromDb,
   upsertPaymentSettings,
@@ -707,7 +714,7 @@ app.post(
 
 app.get("/api/merchant/schemas", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.catalogEdit);
     if (!merchant) return;
     const b = await prisma.business.findUnique({
       where: { id: merchant.businessId },
@@ -896,7 +903,7 @@ app.get("/api/storefront/:businessId", async (req: Request, res: Response) => {
 
 app.get("/api/merchant/storefront-builder", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.designEdit);
     if (!merchant) return;
 
     const b = await prisma.business.findUnique({
@@ -977,7 +984,7 @@ app.get("/api/merchant/storefront-builder", async (req: Request, res: Response) 
 
 app.put("/api/merchant/storefront-builder/draft", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.designEdit);
     if (!merchant) return;
 
     const body = req.body as { draftConfig?: unknown; themePatch?: unknown } | undefined;
@@ -1060,7 +1067,7 @@ app.put("/api/merchant/storefront-builder/draft", async (req: Request, res: Resp
 
 app.post("/api/merchant/storefront-builder/publish", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.designEdit);
     if (!merchant) return;
 
     const b = await prisma.business.findUnique({
@@ -1118,7 +1125,7 @@ app.post("/api/merchant/storefront-builder/publish", async (req: Request, res: R
 
 app.post("/api/merchant/storefront-builder/reset", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.designEdit);
     if (!merchant) return;
     const def = defaultStorefrontConfig();
     const sf = await prisma.storefront.findFirst({
@@ -1150,7 +1157,7 @@ app.post("/api/merchant/storefront-builder/reset", async (req: Request, res: Res
 
 app.get("/api/merchant/reusable-blocks", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.designEdit);
     if (!merchant) return;
     const typeRaw = req.query.type;
     const type =
@@ -1174,7 +1181,7 @@ app.get("/api/merchant/reusable-blocks", async (req: Request, res: Response) => 
 
 app.post("/api/merchant/reusable-blocks", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.designEdit);
     if (!merchant) return;
     const body = req.body as { name?: unknown; type?: unknown; config?: unknown } | undefined;
     const name = typeof body?.name === "string" ? body.name.trim().slice(0, 80) : "";
@@ -1219,7 +1226,7 @@ app.delete(
   "/api/merchant/reusable-blocks/:id",
   async (req: Request, res: Response) => {
     try {
-      const merchant = await requireMerchantStaff(req, res);
+      const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.designEdit);
       if (!merchant) return;
       const id = Number(req.params.id);
       if (!Number.isInteger(id) || id <= 0) {
@@ -1251,7 +1258,7 @@ app.delete(
 
 app.get("/api/merchant/storefront-config", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.designEdit);
     if (!merchant) return;
     const b = await prisma.business.findUnique({
       where: { id: merchant.businessId },
@@ -1283,7 +1290,7 @@ app.get("/api/merchant/storefront-config", async (req: Request, res: Response) =
 
 app.put("/api/merchant/storefront-config", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.designEdit);
     if (!merchant) return;
     const parsed = StorefrontConfigSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -2078,8 +2085,17 @@ app.get("/api/me", (req: Request, res: Response) => {
     }
     const role =
       req.tenantMembership?.role ?? MembershipRole.CLIENT;
+    const permissions =
+      req.tenantMembership &&
+      (role === MembershipRole.OWNER || role === MembershipRole.ADMIN)
+        ? effectiveMerchantPermissions(
+            req.tenantMembership.role,
+            req.tenantMembership.permissions ?? [],
+          )
+        : [];
     res.json({
       role,
+      permissions,
       businessId: req.businessId,
       telegramId:
         typeof req.tenantUser?.telegramId === "string"
@@ -2121,6 +2137,7 @@ app.get("/api/memberships", async (req: Request, res: Response) => {
       rows.map((m) => ({
         userId: m.userId,
         role: m.role,
+        permissions: m.permissions ?? [],
         telegramId: m.user.telegramId,
         name: m.user.name ?? null,
       })),
@@ -2222,6 +2239,98 @@ app.post("/api/memberships/update-role", async (req: Request, res: Response) => 
   }
 });
 
+app.post("/api/memberships/update-permissions", async (req: Request, res: Response) => {
+  try {
+    const body = req.body as {
+      userId?: unknown;
+      businessId?: unknown;
+      permissions?: unknown;
+    };
+
+    const targetUserIdRaw = Number(body.userId);
+    const businessBodyRaw = Number(body.businessId);
+
+    if (
+      !Number.isSafeInteger(targetUserIdRaw) ||
+      targetUserIdRaw <= 0 ||
+      !Number.isSafeInteger(businessBodyRaw) ||
+      businessBodyRaw <= 0
+    ) {
+      res.status(400).json({ error: "Нужны userId и businessId" });
+      return;
+    }
+
+    if (typeof req.businessId !== "number") {
+      res.status(400).json({
+        error: "Missing tenant: pass shop or businessId in query",
+      });
+      return;
+    }
+
+    if (req.businessId !== businessBodyRaw) {
+      res.status(403).json({ error: "Несовпадение магазина" });
+      return;
+    }
+
+    const ownerCtx = await requireStoreOwnerForApi(
+      req,
+      res,
+      req.businessId,
+    );
+    if (!ownerCtx) return;
+
+    if (targetUserIdRaw === ownerCtx.requesterDbUserId) {
+      res
+        .status(403)
+        .json({ error: "Нельзя изменить собственные права таким образом" });
+      return;
+    }
+
+    const existing = await prisma.membership.findUnique({
+      where: {
+        userId_businessId: {
+          userId: targetUserIdRaw,
+          businessId: req.businessId,
+        },
+      },
+    });
+
+    if (!existing) {
+      res.status(404).json({ error: "Участник не найден" });
+      return;
+    }
+
+    if (existing.role === MembershipRole.OWNER) {
+      res.status(403).json({ error: "У владельца права полные" });
+      return;
+    }
+
+    if (existing.role !== MembershipRole.ADMIN) {
+      res
+        .status(400)
+        .json({ error: "Права задаются только для администраторов" });
+      return;
+    }
+
+    const permissions = sanitizeMerchantPermissionInput(body.permissions);
+
+    await prisma.membership.update({
+      where: {
+        userId_businessId: {
+          userId: targetUserIdRaw,
+          businessId: req.businessId,
+        },
+      },
+      data: { permissions },
+    });
+
+    res.json({ ok: true, permissions });
+  } catch (e) {
+    console.error("POST /api/memberships/update-permissions:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 /** Telegram пользователя запроса: заголовок (для тел JSON с полем userId как id в БД) → body.userId → query.userId */
 function telegramIdFromRequest(req: Request): string | null {
   const rawXi = req.headers["x-telegram-id"];
@@ -2306,6 +2415,8 @@ function businessIdFromNonApiHint(req: Request): number | null {
 
 type MerchantStaffContext = {
   businessId: number;
+  role: MembershipRole;
+  effectivePermissions: MerchantPermissionId[];
 };
 
 /** Только OWNER магазина (Mini App уже привязан к tenant через middleware). */
@@ -2350,7 +2461,8 @@ async function requireStoreOwnerForApi(
 
 async function requireMerchantStaff(
   req: Request,
-  res: Response
+  res: Response,
+  requiredPermission?: MerchantPermissionId | MerchantPermissionId[],
 ): Promise<MerchantStaffContext | null> {
   const telegramId = telegramIdFromRequest(req);
   const businessId = businessIdFromNonApiHint(req);
@@ -2386,7 +2498,25 @@ async function requireMerchantStaff(
     res.status(403).json({ error: "Нет доступа к этому магазину" });
     return null;
   }
-  return { businessId };
+
+  const effectivePermissions = effectiveMerchantPermissions(
+    membershipRecord.role,
+    membershipRecord.permissions ?? [],
+  );
+
+  if (
+    requiredPermission != null &&
+    !merchantHasPermission(effectivePermissions, requiredPermission)
+  ) {
+    res.status(403).json({ error: "Недостаточно прав" });
+    return null;
+  }
+
+  return {
+    businessId,
+    role: membershipRecord.role,
+    effectivePermissions,
+  };
 }
 
 /** Каталог / settings / заказы клиента по магазину: валидный id + строка Business в БД. */
@@ -2741,7 +2871,10 @@ app.post(
   "/upload",
   upload.single("file"),
   async (req: Request, res: Response) => {
-    const m = await requireMerchantStaff(req, res);
+    const m = await requireMerchantStaff(req, res, [
+      MERCHANT_PERM.designEdit,
+      MERCHANT_PERM.catalogEdit,
+    ]);
     if (!m) return;
     try {
       if (!isCloudinaryConfigured()) {
@@ -2774,7 +2907,7 @@ app.post(
   "/products/upload-images",
   upload.array("files", 15),
   async (req: Request, res: Response) => {
-    const m = await requireMerchantStaff(req, res);
+    const m = await requireMerchantStaff(req, res, MERCHANT_PERM.catalogEdit);
     if (!m) return;
     try {
       if (!isCloudinaryConfigured()) {
@@ -2837,7 +2970,7 @@ app.get("/settings", async (req: Request, res: Response) => {
 
 app.post("/settings", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.settingsManage);
     if (!merchant) return;
     const body = req.body as Record<string, unknown>;
     const data = {
@@ -2864,7 +2997,7 @@ app.post("/settings", async (req: Request, res: Response) => {
 
 app.post("/payment/list", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.settingsManage);
     if (!merchant) return;
     res.json(await listPaymentDetailsFromDb(prisma, merchant.businessId));
   } catch (e) {
@@ -2875,7 +3008,7 @@ app.post("/payment/list", async (req: Request, res: Response) => {
 
 app.post("/payment", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.settingsManage);
     if (!merchant) return;
     const saved = await upsertPaymentSettings(
       prisma,
@@ -2891,7 +3024,7 @@ app.post("/payment", async (req: Request, res: Response) => {
 
 app.delete("/payment/:id", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.settingsManage);
     if (!merchant) return;
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) {
@@ -2963,7 +3096,7 @@ app.post("/promo/apply", async (req: Request, res: Response) => {
 
 app.post("/promo/list", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.settingsManage);
     if (!merchant) return;
     res.json(await listPromosFromDb(prisma, merchant.businessId));
   } catch (e) {
@@ -2974,7 +3107,7 @@ app.post("/promo/list", async (req: Request, res: Response) => {
 
 app.post("/promo", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.settingsManage);
     if (!merchant) return;
     const body = req.body as {
       code?: unknown;
@@ -3012,7 +3145,7 @@ app.post("/promo", async (req: Request, res: Response) => {
 
 app.delete("/promo/:code", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.settingsManage);
     if (!merchant) return;
     const codeParam = req.params.code;
     const encoded =
@@ -3098,7 +3231,7 @@ app.get("/categories", async (_req: Request, res: Response) => {
 
 app.post("/categories", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.catalogEdit);
     if (!merchant) return;
     const body = req.body as { name?: unknown; parentId?: unknown };
     const name = String(body.name ?? "").trim();
@@ -3139,7 +3272,7 @@ app.post("/categories", async (req: Request, res: Response) => {
 
 app.delete("/categories/:id", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.catalogEdit);
     if (!merchant) return;
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) {
@@ -3170,7 +3303,7 @@ app.delete("/categories/:id", async (req: Request, res: Response) => {
 
 app.put("/categories/:id/config", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.catalogEdit);
     if (!merchant) return;
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) {
@@ -3207,7 +3340,7 @@ app.put("/categories/:id/config", async (req: Request, res: Response) => {
 // ================== CREATE PRODUCT ==================
 app.post("/products", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.catalogEdit);
     if (!merchant) return;
     const body = req.body as {
       name?: unknown;
@@ -3369,7 +3502,7 @@ async function performOrderStatusUpdate(
 
 app.post("/order/status", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.ordersManage);
     if (!merchant) return;
 
     const { id, status } = req.body as {
@@ -3399,7 +3532,7 @@ app.post("/order/status", async (req: Request, res: Response) => {
 
 app.put("/orders/:id/status", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.ordersManage);
     if (!merchant) return;
     const orderId = Number(req.params.id);
     if (!Number.isFinite(orderId)) {
@@ -3423,7 +3556,7 @@ app.put("/orders/:id/status", async (req: Request, res: Response) => {
 
 async function handleAdminOrderPatch(req: Request, res: Response) {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.ordersManage);
     if (!merchant) return;
     const orderId = Number(req.params.id);
     if (!Number.isFinite(orderId)) {
@@ -3508,7 +3641,7 @@ app.patch("/orders/:id", handleAdminOrderPatch);
 
 app.delete("/orders/clear", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.ordersManage);
     if (!merchant) return;
 
     const rawType = Array.isArray(req.query.type)
@@ -3544,20 +3677,23 @@ app.delete("/orders/clear", async (req: Request, res: Response) => {
 
 app.post("/analytics", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.analyticsView);
     if (!merchant) return;
+
+    const body = req.body as { rangeDays?: unknown } | null | undefined;
+    const rd = Number(body?.rangeDays);
+    const rangeDays = rd === 7 || rd === 30 || rd === 90 ? rd : 30;
+    const since = new Date(Date.now() - rangeDays * 86400000);
+
     const orders = await prisma.order.findMany({
       where: { businessId: merchant.businessId },
     });
 
+    const paidStatuses = new Set<string>(["CONFIRMED", "SHIPPED", "DELIVERED"]);
+
     const totalOrders = orders.length;
     const totalRevenue = orders
-      .filter(
-        (o) =>
-          o.status === "CONFIRMED" ||
-          o.status === "SHIPPED" ||
-          o.status === "DELIVERED"
-      )
+      .filter((o) => paidStatuses.has(o.status))
       .reduce((sum, o) => sum + o.total, 0);
     const accepted = orders.filter((o) => o.status === "ACCEPTED").length;
     const pending = orders.filter((o) => o.status === "PAID_PENDING").length;
@@ -3570,6 +3706,66 @@ app.post("/analytics", async (req: Request, res: Response) => {
       byStatus[o.status] = (byStatus[o.status] ?? 0) + 1;
     }
 
+    const ordersInRange = await prisma.order.findMany({
+      where: {
+        businessId: merchant.businessId,
+        createdAt: { gte: since },
+      },
+      select: { id: true, total: true, status: true, createdAt: true },
+    });
+
+    const revenueInRange = ordersInRange
+      .filter((o) => paidStatuses.has(o.status))
+      .reduce((sum, o) => sum + o.total, 0);
+
+    const dayMap = new Map<string, { revenue: number; orders: number }>();
+    for (const o of ordersInRange) {
+      const key = o.createdAt.toISOString().slice(0, 10);
+      const row = dayMap.get(key) ?? { revenue: 0, orders: 0 };
+      row.orders += 1;
+      if (paidStatuses.has(o.status)) row.revenue += o.total;
+      dayMap.set(key, row);
+    }
+    const dailySeries = [...dayMap.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([day, v]) => ({ day, revenue: v.revenue, orders: v.orders }));
+
+    const topSkuRows = await prisma.orderItem.groupBy({
+      by: ["productId"],
+      where: {
+        businessId: merchant.businessId,
+        productId: { not: null },
+        order: { createdAt: { gte: since } },
+      },
+      _sum: { quantity: true },
+      orderBy: { _sum: { quantity: "desc" } },
+      take: 10,
+    });
+
+    const pids = topSkuRows
+      .map((r) => r.productId)
+      .filter((id): id is number => typeof id === "number");
+    const products =
+      pids.length > 0
+        ? await prisma.product.findMany({
+            where: { businessId: merchant.businessId, id: { in: pids } },
+            select: { id: true, name: true },
+          })
+        : [];
+    const nameById = new Map(products.map((p) => [p.id, p.name]));
+
+    const topSku = topSkuRows.map((r) => {
+      const pid = r.productId;
+      return {
+        productId: pid,
+        name:
+          typeof pid === "number"
+            ? nameById.get(pid) ?? `Товар #${pid}`
+            : "—",
+        quantity: Number(r._sum.quantity ?? 0) || 0,
+      };
+    });
+
     res.json({
       totalOrders,
       totalRevenue,
@@ -3579,6 +3775,12 @@ app.post("/analytics", async (req: Request, res: Response) => {
       delivered,
       done,
       byStatus,
+      rangeDays,
+      rangeSince: since.toISOString(),
+      ordersInRange: ordersInRange.length,
+      revenueInRange,
+      dailySeries,
+      topSku,
     });
   } catch (e) {
     console.error("ANALYTICS ERROR:", e);
@@ -3690,6 +3892,10 @@ async function fetchAdminOrdersPayload(businessId: number) {
       address,
       lat,
       lng,
+      buyerTelegramId:
+        o.buyerUser?.telegramId != null && String(o.buyerUser.telegramId).trim() !== ""
+          ? String(o.buyerUser.telegramId)
+          : null,
     };
   });
 }
@@ -3730,7 +3936,7 @@ attachSupportRoutes(app, {
 // ================== LIST ORDERS (admin, Prisma) ==================
 app.get("/orders", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.ordersManage);
     if (!merchant) return;
     res.json(await fetchAdminOrdersPayload(merchant.businessId));
   } catch (e) {
@@ -3741,7 +3947,7 @@ app.get("/orders", async (req: Request, res: Response) => {
 
 app.post("/orders/list", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.ordersManage);
     if (!merchant) return;
     res.json(await fetchAdminOrdersPayload(merchant.businessId));
   } catch (e) {
@@ -4115,7 +4321,7 @@ app.post(
   upload.single("file"),
   async (req: Request, res: Response) => {
     try {
-      const merchant = await requireMerchantStaff(req, res);
+      const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.ordersManage);
       if (!merchant) return;
       if (!isCloudinaryConfigured()) {
         return res.status(503).json({
@@ -4188,7 +4394,7 @@ app.post(
 // ================== UPDATE PRODUCT ==================
 app.put("/products/:id", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.catalogEdit);
     if (!merchant) return;
     const body = req.body as {
       name?: unknown;
@@ -4309,7 +4515,7 @@ app.put("/products/:id", async (req: Request, res: Response) => {
 // ================== DELETE PRODUCT ==================
 app.delete("/products/:id", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.catalogEdit);
     if (!merchant) return;
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) {

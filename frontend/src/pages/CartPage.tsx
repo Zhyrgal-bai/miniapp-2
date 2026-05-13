@@ -1,7 +1,12 @@
+import { useEffect, useState } from "react";
 import { useCartStore } from "../store/useCartStore";
 import { mergeTenantShopIntoSearch, readShopIdString } from "../utils/storeParams";
 import "../components/ui/Cart.css";
 import { useStorefrontPayload } from "../components/storefront/runtime/StorefrontPayloadContext";
+import { useShop } from "../context/ShopContext";
+import { api } from "../services/api";
+import type { Product } from "../types";
+import { getMaxOrderQty } from "../commerce/quantityPolicy";
 
 type Props = {
   onGoToCheckout: () => void;
@@ -11,7 +16,34 @@ export default function CartPage({ onGoToCheckout }: Props) {
   const items = useCartStore((state) => state.items);
   const addItem = useCartStore((state) => state.addItem);
   const removeItem = useCartStore((state) => state.removeItem);
+  const { businessId } = useShop();
+  const [catalogById, setCatalogById] = useState<Map<number, Product>>(() => new Map());
   const { payload } = useStorefrontPayload();
+
+  useEffect(() => {
+    if (businessId == null || !Number.isInteger(businessId) || businessId <= 0) {
+      setCatalogById(new Map());
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await api.get<Product[]>("/products");
+        if (cancelled) return;
+        const m = new Map<number, Product>();
+        for (const p of res.data ?? []) {
+          if (typeof p.id === "number") m.set(p.id, p);
+        }
+        setCatalogById(m);
+      } catch {
+        if (!cancelled) setCatalogById(new Map());
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId]);
+
   const txt = payload?.storefrontTextConfig ?? {};
   const readTxt = (k: string, fb: string) => {
     const v = (txt as Record<string, unknown>)[k];
@@ -32,18 +64,28 @@ export default function CartPage({ onGoToCheckout }: Props) {
     window.location.href = `${window.location.pathname}${qs}`;
   };
 
+  const maxQtyForLine = (item: (typeof items)[number]) => {
+    const p = catalogById.get(item.productId);
+    if (!p) return item.quantity ?? 1;
+    return getMaxOrderQty(p, item.size, item.color);
+  };
+
   const handleIncrement = (item: (typeof items)[number]) => {
-    removeItem(item);
+    const max = maxQtyForLine(item);
+    const next = (item.quantity ?? 1) + 1;
+    if (next > max) return;
     addItem({
       ...item,
-      quantity: (item.quantity ?? 1) + 1,
+      quantity: next,
     });
   };
 
   const handleDecrement = (item: (typeof items)[number]) => {
     const nextQuantity = (item.quantity ?? 1) - 1;
-    removeItem(item);
-    if (nextQuantity <= 0) return;
+    if (nextQuantity <= 0) {
+      removeItem(item);
+      return;
+    }
     addItem({
       ...item,
       quantity: nextQuantity,

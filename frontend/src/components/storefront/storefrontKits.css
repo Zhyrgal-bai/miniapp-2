@@ -770,5 +770,41 @@
   .sf-section {
     animation: none;
   }
+  .sf-feed__chunk--section,
+  .sf-feed__chunk--discovery {
+    animation: none;
+  }
 }
 
+/* Вертикальный feed: единый ритм секций + лёгкий вход (уважение prefers-reduced-motion). */
+.sf-feed {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--sf-section-gap, 10px) + 4px);
+}
+
+.sf-feed__chunk--section {
+  border-radius: var(--sf-section-radius, 18px);
+}
+
+.sf-feed__chunk--discovery {
+  border-radius: var(--sf-section-radius, 18px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sf-feed__chunk--section,
+  .sf-feed__chunk--discovery {
+    animation: sfFeedChunkIn 0.42s ease both;
+  }
+
+  @keyframes sfFeedChunkIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}

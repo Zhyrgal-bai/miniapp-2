@@ -48,6 +48,12 @@
   min-height: 100%;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  .app__content {
+    transition: opacity 0.18s ease;
+  }
+}
+
 /* ——— Header ——— */
 .app-header {
   position: fixed;

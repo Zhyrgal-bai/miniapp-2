@@ -130,7 +130,7 @@ function MessageList({
           >
             {!isMine ? (
               <span className="sf-support-msg__who">
-                {isSystem ? "Поддержка" : st === "MERCHANT" ? "Магазин" : st}
+                {isSystem ? "Поддержка" : st === "MERCHANT" ? "Магазин" : "Поддержка"}
               </span>
             ) : null}
             <p className="sf-support-msg__text">{m.text}</p>

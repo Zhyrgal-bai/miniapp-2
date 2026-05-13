@@ -15,6 +15,10 @@ import {
   orderSupportPhase,
   type SupportPhase,
 } from "../shared/supportPhase.js";
+import {
+  MERCHANT_PERM,
+  type MerchantPermissionId,
+} from "./merchantPermissions.js";
 
 type Deps = {
   upload: multer.Multer;
@@ -25,7 +29,8 @@ type Deps = {
   ) => Promise<number | null>;
   requireMerchantStaff: (
     req: Request,
-    res: Response
+    res: Response,
+    requiredPermission?: MerchantPermissionId | MerchantPermissionId[],
   ) => Promise<{ businessId: number } | null>;
 };
 
@@ -778,7 +783,7 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
 
   app.get("/merchant/support/tickets", async (req: Request, res: Response) => {
     try {
-      const merchant = await requireMerchantStaff(req, res);
+      const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.supportManage);
       if (!merchant) return;
 
       const statusQ = queryParamString(req.query.status);
@@ -819,7 +824,7 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
     "/merchant/support/tickets/:ticketId",
     async (req: Request, res: Response) => {
       try {
-        const merchant = await requireMerchantStaff(req, res);
+        const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.supportManage);
         if (!merchant) return;
 
         const ticketId = parseTicketIdParam(req.params.ticketId);
@@ -850,7 +855,7 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
     "/merchant/support/tickets/:ticketId",
     async (req: Request, res: Response) => {
       try {
-        const merchant = await requireMerchantStaff(req, res);
+        const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.supportManage);
         if (!merchant) return;
 
         const ticketId = parseTicketIdParam(req.params.ticketId);
@@ -941,7 +946,7 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
     "/merchant/support/tickets/:ticketId/messages",
     async (req: Request, res: Response) => {
       try {
-        const merchant = await requireMerchantStaff(req, res);
+        const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.supportManage);
         if (!merchant) return;
 
         const telegramId = telegramIdFromRequest(req);
@@ -1014,7 +1019,7 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
 
   app.get("/merchant/support/returns", async (req: Request, res: Response) => {
     try {
-      const merchant = await requireMerchantStaff(req, res);
+      const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.supportManage);
       if (!merchant) return;
 
       const statusQ = queryParamString(req.query.status);
@@ -1046,7 +1051,7 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
     "/merchant/support/returns/:returnId",
     async (req: Request, res: Response) => {
       try {
-        const merchant = await requireMerchantStaff(req, res);
+        const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.supportManage);
         if (!merchant) return;
 
         const returnId = parseTicketIdParam(req.params.returnId);

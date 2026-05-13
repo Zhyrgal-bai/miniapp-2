@@ -8,6 +8,7 @@ import {
   getPrimaryImage,
   isOutOfStock,
 } from "../../utils/product";
+import { getMaxOrderQty } from "../../commerce/quantityPolicy";
 import { getVariantCssBackground } from "../../utils/variantColor";
 import "../ui/ProductCard.css";
 import { useTheme } from "../../context/ThemeContext";
@@ -211,9 +212,9 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   }, [images.length]);
 
   const selectedStock = useMemo(() => {
-    if (!selectedSize) return 0;
-    return sizes.find((s) => s.size === selectedSize)?.stock ?? 0;
-  }, [selectedSize, sizes]);
+    if (!selectedSize || lineColor === null) return 0;
+    return getMaxOrderQty(product, selectedSize, lineColor);
+  }, [selectedSize, lineColor, product]);
 
   const totalStock = useMemo(() => {
     if (product.variants?.length) {

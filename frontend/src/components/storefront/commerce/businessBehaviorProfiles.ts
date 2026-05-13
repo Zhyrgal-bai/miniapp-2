@@ -47,7 +47,7 @@ export const BUSINESS_BEHAVIOR_PROFILES: Record<string, BusinessBehaviorProfile>
         ...BASE.cta.labels,
         add: "Добавить",
         buyNow: "Купить сейчас",
-        popularToday: "Trending today",
+        popularToday: "В тренде сегодня",
       },
       lowStockThreshold: 4,
       preferBuyNow: true,

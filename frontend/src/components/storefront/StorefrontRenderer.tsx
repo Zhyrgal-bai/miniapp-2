@@ -149,80 +149,92 @@ export function StorefrontRenderer(props: {
   return (
     <ThemeVarsProvider theme={theme}>
       <div data-sf-kit={kit} className="sf-root" style={cssVars as unknown as React.CSSProperties}>
-        {sections.map((s) => {
-          switch (s.type) {
-            case "hero":
-              return (
-                <HeroSection
-                  key={s.id}
-                  config={s.config}
-                  textConfig={props.payload.storefrontTextConfig ?? undefined}
-                  kit={kit}
-                  heroStyle={(props.payload.storefrontStyleConfig as Record<string, unknown> | undefined)?.hero as
-                    | Record<string, unknown>
-                    | undefined}
-                />
-              );
-            case "promo":
-              return <PromoSection key={s.id} config={s.config} />;
-            case "categories":
-              return (
-                <CategoriesSection
-                  key={s.id}
-                  config={s.config}
-                  categories={props.payload.categories ?? []}
-                  textConfig={props.payload.storefrontTextConfig ?? undefined}
-                  activeCategoryId={activeCategoryId}
-                  onSelectCategory={setActiveCategoryId}
-                />
-              );
-            case "featuredProducts":
-              return (
-                <FeaturedProductsSection
-                  key={s.id}
-                  config={s.config}
-                  products={featuredFiltered}
-                  catalogProductCount={featuredAll.length}
-                  cardConfig={mergedCardConfig}
-                  textConfig={props.payload.storefrontTextConfig ?? undefined}
-                  kit={kit}
-                  businessId={props.payload.businessId}
-                  onOpenProduct={openProduct}
-                />
-              );
-            case "footer":
-              return <FooterSection key={s.id} config={s.config} />;
-            case "reviews":
-              return (
-                <ReviewsSection
-                  key={s.id}
-                  config={s.config}
-                  textConfig={props.payload.storefrontTextConfig ?? undefined}
-                />
-              );
-            case "faq":
-              return (
-                <FaqSection
-                  key={s.id}
-                  config={s.config}
-                  textConfig={props.payload.storefrontTextConfig ?? undefined}
-                />
-              );
-            default:
-              return null;
-          }
-        })}
+        <div className="sf-feed" data-sf-feed>
+          {sections.map((s) => {
+            const chunk = (() => {
+              switch (s.type) {
+                case "hero":
+                  return (
+                    <HeroSection
+                      key={s.id}
+                      config={s.config}
+                      textConfig={props.payload.storefrontTextConfig ?? undefined}
+                      kit={kit}
+                      heroStyle={(props.payload.storefrontStyleConfig as Record<string, unknown> | undefined)?.hero as
+                        | Record<string, unknown>
+                        | undefined}
+                    />
+                  );
+                case "promo":
+                  return <PromoSection key={s.id} config={s.config} />;
+                case "categories":
+                  return (
+                    <CategoriesSection
+                      key={s.id}
+                      config={s.config}
+                      categories={props.payload.categories ?? []}
+                      textConfig={props.payload.storefrontTextConfig ?? undefined}
+                      activeCategoryId={activeCategoryId}
+                      onSelectCategory={setActiveCategoryId}
+                    />
+                  );
+                case "featuredProducts":
+                  return (
+                    <FeaturedProductsSection
+                      key={s.id}
+                      config={s.config}
+                      products={featuredFiltered}
+                      catalogProductCount={featuredAll.length}
+                      cardConfig={mergedCardConfig}
+                      textConfig={props.payload.storefrontTextConfig ?? undefined}
+                      kit={kit}
+                      businessId={props.payload.businessId}
+                      onOpenProduct={openProduct}
+                    />
+                  );
+                case "footer":
+                  return <FooterSection key={s.id} config={s.config} />;
+                case "reviews":
+                  return (
+                    <ReviewsSection
+                      key={s.id}
+                      config={s.config}
+                      textConfig={props.payload.storefrontTextConfig ?? undefined}
+                    />
+                  );
+                case "faq":
+                  return (
+                    <FaqSection
+                      key={s.id}
+                      config={s.config}
+                      textConfig={props.payload.storefrontTextConfig ?? undefined}
+                    />
+                  );
+                default:
+                  return null;
+              }
+            })();
+            if (chunk == null) return null;
+            return (
+              <div key={s.id} className="sf-feed__chunk sf-feed__chunk--section">
+                {chunk}
+              </div>
+            );
+          })}
 
-        <DiscoveryRails
-          kit={kit}
-          businessType={props.payload.businessType}
-          businessId={props.payload.businessId}
-          featuredProducts={featuredFiltered}
-          cardConfig={mergedCardConfig}
-          textConfig={props.payload.storefrontTextConfig ?? undefined}
-          catalogProducts={catalog === null ? undefined : catalogFiltered}
-          onOpenProduct={openProduct}
-        />
+          <div className="sf-feed__chunk sf-feed__chunk--discovery">
+            <DiscoveryRails
+              kit={kit}
+              businessType={props.payload.businessType}
+              businessId={props.payload.businessId}
+              featuredProducts={featuredFiltered}
+              cardConfig={mergedCardConfig}
+              textConfig={props.payload.storefrontTextConfig ?? undefined}
+              catalogProducts={catalog === null ? undefined : catalogFiltered}
+              onOpenProduct={openProduct}
+            />
+          </div>
+        </div>
       </div>
 
       {sheetProduct ? (
