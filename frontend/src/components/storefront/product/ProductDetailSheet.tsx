@@ -48,6 +48,7 @@ export function ProductDetailSheet({
   const [resolved, setResolved] = useState<Product | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
 
   const display =
     resolved != null && resolved.id === product.id ? resolved : product;
@@ -259,6 +260,17 @@ export function ProductDetailSheet({
     touchStartX.current = null;
   };
 
+  const handleDragZoneTouchStart = (e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0]?.clientY ?? null;
+  };
+
+  const handleDragZoneTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartY.current == null) return;
+    const dy = e.changedTouches[0].clientY - touchStartY.current;
+    touchStartY.current = null;
+    if (dy > 56) onClose();
+  };
+
   const openSupport = () => {
     onClose();
     window.dispatchEvent(new CustomEvent("sf:openSupport"));
@@ -294,7 +306,13 @@ export function ProductDetailSheet({
         transition={{ type: "spring", damping: 34, stiffness: 380 }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sf-pds-handle" aria-hidden />
+        <div
+          className="sf-pds-drag-zone"
+          onTouchStart={handleDragZoneTouchStart}
+          onTouchEnd={handleDragZoneTouchEnd}
+        >
+          <div className="sf-pds-handle" aria-hidden />
+        </div>
         <div className="sf-pds-scroll">
           <div
             className="sf-pds-gallery"
@@ -400,6 +418,29 @@ export function ProductDetailSheet({
             </>
           )}
 
+          {related.length > 0 ? (
+            <div className="sf-pds-related">
+              <p className="sf-pds-section-label">Смотрите также</p>
+              <div className="sf-pds-related-scroll">
+                {related.map((p) => (
+                  <button
+                    key={String(p.id)}
+                    type="button"
+                    className="sf-pds-related-card"
+                    onClick={() => onSelectProduct(p)}
+                  >
+                    <img src={getPrimaryImage(p)} alt="" />
+                    <div className="sf-pds-related-meta">
+                      <span>{p.name}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="sf-pds-sticky-cta">
           <div className="sf-pds-cta-row">
             {quantity <= 0 ? (
               <button
@@ -437,27 +478,6 @@ export function ProductDetailSheet({
               </div>
             )}
           </div>
-
-          {related.length > 0 ? (
-            <div className="sf-pds-related">
-              <p className="sf-pds-section-label">Смотрите также</p>
-              <div className="sf-pds-related-scroll">
-                {related.map((p) => (
-                  <button
-                    key={String(p.id)}
-                    type="button"
-                    className="sf-pds-related-card"
-                    onClick={() => onSelectProduct(p)}
-                  >
-                    <img src={getPrimaryImage(p)} alt="" />
-                    <div className="sf-pds-related-meta">
-                      <span>{p.name}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
         </div>
 
         <div className="sf-pds-footer">

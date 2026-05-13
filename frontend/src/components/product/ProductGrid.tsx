@@ -33,6 +33,10 @@ export default function ProductGrid({
   const density =
     densityRaw === "compact" || densityRaw === "airy" ? (densityRaw as "compact" | "airy") : "normal";
 
+  const catalogLayoutRaw = (cardConfig as Record<string, unknown> | undefined)?.catalogLayout;
+  const catalogLayout =
+    catalogLayoutRaw === "list" ? "list" : "grid";
+
   if (catalogProductCount === 0) {
     return (
       <div className="product-grid product-grid--empty" role="status">
@@ -52,7 +56,15 @@ export default function ProductGrid({
   }
 
   return (
-    <div className={`product-grid product-grid--density-${density}`}>
+    <div
+      className={[
+        "product-grid",
+        `product-grid--density-${density}`,
+        catalogLayout === "list" ? "product-grid--list" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       {products.map((p) => (
         <ProductCard
           key={p.id}

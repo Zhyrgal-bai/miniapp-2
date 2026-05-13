@@ -17,6 +17,7 @@ import {
   buildStorefrontLayoutCssVars,
   kitFromTemplateId,
 } from "../../storefront/buildStorefrontLayoutCssVars";
+import { mergeStorefrontCardConfigWithPreset } from "../../storefront/catalogCardPresets";
 
 type StorefrontKitId = "minimal" | "luxury" | "fashion" | "neon" | "default";
 
@@ -61,6 +62,34 @@ export function StorefrontRenderer(props: {
   const kit = kitFromTemplateId(props.payload.templateId) as StorefrontKitId;
   const [catalog, setCatalog] = useState<Product[] | null>(null);
   const [sheetProduct, setSheetProduct] = useState<Product | null>(null);
+  const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
+
+  const mergedCardConfig = useMemo(
+    () => mergeStorefrontCardConfigWithPreset(props.payload.storefrontCardConfig ?? undefined),
+    [props.payload.storefrontCardConfig],
+  );
+
+  const filterByCategory = useCallback(
+    (list: Product[]) => {
+      if (activeCategoryId == null) return list;
+      return list.filter((p) => p.categoryId === activeCategoryId);
+    },
+    [activeCategoryId],
+  );
+
+  const featuredAll = useMemo(
+    () => props.payload.featuredProducts ?? [],
+    [props.payload.featuredProducts],
+  );
+  const featuredFiltered = useMemo(
+    () => filterByCategory(featuredAll),
+    [featuredAll, filterByCategory],
+  );
+
+  const catalogFiltered = useMemo(
+    () => filterByCategory(catalog ?? []),
+    [catalog, filterByCategory],
+  );
 
   useEffect(() => {
     const bid = props.payload.businessId;
@@ -89,11 +118,20 @@ export function StorefrontRenderer(props: {
 
   useEffect(() => {
     setSheetProduct(null);
+    setActiveCategoryId(null);
   }, [props.payload.businessId]);
 
   const openProduct = useCallback((p: Product) => {
     setSheetProduct(p);
   }, []);
+
+  useEffect(() => {
+    if (sheetProduct) {
+      window.dispatchEvent(new CustomEvent("sf:productSheetOpen"));
+    } else {
+      window.dispatchEvent(new CustomEvent("sf:productSheetClose"));
+    }
+  }, [sheetProduct]);
 
   const cssVars = useMemo(
     () =>
@@ -134,6 +172,8 @@ export function StorefrontRenderer(props: {
                   config={s.config}
                   categories={props.payload.categories ?? []}
                   textConfig={props.payload.storefrontTextConfig ?? undefined}
+                  activeCategoryId={activeCategoryId}
+                  onSelectCategory={setActiveCategoryId}
                 />
               );
             case "featuredProducts":
@@ -141,8 +181,9 @@ export function StorefrontRenderer(props: {
                 <FeaturedProductsSection
                   key={s.id}
                   config={s.config}
-                  products={props.payload.featuredProducts ?? []}
-                  cardConfig={props.payload.storefrontCardConfig ?? undefined}
+                  products={featuredFiltered}
+                  catalogProductCount={featuredAll.length}
+                  cardConfig={mergedCardConfig}
                   textConfig={props.payload.storefrontTextConfig ?? undefined}
                   kit={kit}
                   businessId={props.payload.businessId}
@@ -176,10 +217,10 @@ export function StorefrontRenderer(props: {
           kit={kit}
           businessType={props.payload.businessType}
           businessId={props.payload.businessId}
-          featuredProducts={props.payload.featuredProducts ?? []}
-          cardConfig={props.payload.storefrontCardConfig ?? undefined}
+          featuredProducts={featuredFiltered}
+          cardConfig={mergedCardConfig}
           textConfig={props.payload.storefrontTextConfig ?? undefined}
-          catalogProducts={catalog === null ? undefined : catalog}
+          catalogProducts={catalog === null ? undefined : catalogFiltered}
           onOpenProduct={openProduct}
         />
       </div>
@@ -188,7 +229,7 @@ export function StorefrontRenderer(props: {
         <ProductDetailSheet
           product={sheetProduct}
           businessId={props.payload.businessId}
-          featuredProducts={props.payload.featuredProducts ?? []}
+          featuredProducts={featuredAll}
           catalogProducts={catalog ?? []}
           onClose={() => setSheetProduct(null)}
           onSelectProduct={setSheetProduct}

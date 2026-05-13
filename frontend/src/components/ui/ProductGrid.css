@@ -59,3 +59,37 @@
     padding: var(--sf-mobile-pad, 8px) var(--sf-mobile-pad, 8px) 18px;
   }
 }
+
+.product-grid--list {
+  grid-template-columns: 1fr;
+  gap: max(6px, calc(var(--sf-grid-gap, 10px) * 0.88));
+  padding: max(6px, calc(var(--sf-mobile-pad, 10px) * 0.85)) max(8px, var(--sf-mobile-pad, 10px)) 14px;
+}
+
+.product-grid--list .product-card {
+  flex-direction: row;
+  align-items: stretch;
+  min-height: 96px;
+}
+
+.product-grid--list .product-image-wrapper {
+  width: 104px;
+  min-width: 104px;
+  max-width: 104px;
+  aspect-ratio: 1;
+  flex-shrink: 0;
+  border-radius: calc(var(--sf-card-radius, 18px) - 4px);
+}
+
+.product-grid--list .product-info {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  justify-content: center;
+}
+
+.product-grid--list .product-bottom {
+  margin-top: 0;
+  align-self: center;
+  width: 100%;
+}

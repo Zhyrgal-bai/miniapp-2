@@ -25,54 +25,60 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(value, max));
 }
 
-function clampPos(x: number, y: number, minY: number): Pos {
+function clampPos(x: number, y: number, minY: number, bottomInset: number): Pos {
   if (typeof window === "undefined") return { x, y };
   const maxX = Math.max(PAD, window.innerWidth - BTN - PAD);
-  const maxY = Math.max(minY, window.innerHeight - BTN - PAD);
+  const maxY = Math.max(minY, window.innerHeight - BTN - PAD - bottomInset);
   return {
     x: clamp(x, PAD, maxX),
     y: clamp(y, minY, maxY),
   };
 }
 
-function defaultPos(minY: number): Pos {
+function defaultPos(minY: number, bottomInset: number): Pos {
   if (typeof window === "undefined") return { x: 100, y: 100 };
   return clampPos(
     window.innerWidth - BTN - 22,
     window.innerHeight - BTN - 24,
-    minY
+    minY,
+    bottomInset
   );
 }
 
-function loadPos(minY: number): Pos {
-  if (typeof window === "undefined") return defaultPos(minY);
+function loadPos(minY: number, bottomInset: number): Pos {
+  if (typeof window === "undefined") return defaultPos(minY, bottomInset);
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const j = JSON.parse(raw) as { x?: unknown; y?: unknown };
       if (Number.isFinite(j.x) && Number.isFinite(j.y)) {
-        return clampPos(Number(j.x), Number(j.y), minY);
+        return clampPos(Number(j.x), Number(j.y), minY, bottomInset);
       }
     }
   } catch {
     /* ignore */
   }
-  return defaultPos(minY);
+  return defaultPos(minY, bottomInset);
 }
 
 type Props = {
   visible: boolean;
   totalQuantity: number;
   onOpen: () => void;
+  /** Extra space reserved above bottom (sticky cart + gap), px. */
+  bottomInsetPx?: number;
 };
 
 export default function FloatingCart({
   visible,
   totalQuantity,
   onOpen,
+  bottomInsetPx = 0,
 }: Props) {
   const minYRef = useRef(HEADER_FALLBACK_BOTTOM);
-  const [pos, setPos] = useState<Pos>(() => loadPos(HEADER_FALLBACK_BOTTOM));
+  const bottomInsetRef = useRef(bottomInsetPx);
+  bottomInsetRef.current = bottomInsetPx;
+  const [pos, setPos] = useState<Pos>(() => loadPos(HEADER_FALLBACK_BOTTOM, bottomInsetPx));
   const posRef = useRef<Pos>(pos);
 
   useEffect(() => {
@@ -91,12 +97,17 @@ export default function FloatingCart({
   useLayoutEffect(() => {
     const syncMinY = () => {
       minYRef.current = getHeaderBottomY();
-      setPos((p) => clampPos(p.x, p.y, minYRef.current));
+      const bi = bottomInsetRef.current;
+      setPos((p) => clampPos(p.x, p.y, minYRef.current, bi));
     };
     syncMinY();
     window.addEventListener("resize", syncMinY);
     return () => window.removeEventListener("resize", syncMinY);
   }, []);
+
+  useLayoutEffect(() => {
+    setPos((p) => clampPos(p.x, p.y, minYRef.current, bottomInsetPx));
+  }, [bottomInsetPx]);
 
   useEffect(() => {
     return () => {
@@ -130,7 +141,7 @@ export default function FloatingCart({
       movedRef.current = true;
     }
     minYRef.current = getHeaderBottomY();
-    setPos(clampPos(d.startX + dx, d.startY + dy, minYRef.current));
+    setPos(clampPos(d.startX + dx, d.startY + dy, minYRef.current, bottomInsetRef.current));
   }, []);
 
   const startDrag = useCallback(

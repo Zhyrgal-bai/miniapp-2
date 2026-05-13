@@ -6,7 +6,7 @@ import FAQ from "./pages/FAQ";
 import AboutShopPage from "./pages/AboutShopPage";
 import MyOrders from "./pages/MyOrders";
 import SupportHubPage from "./pages/SupportHubPage";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShop } from "./context/ShopContext";
 import { useAdminGateStore } from "./store/adminGate.store";
@@ -105,6 +105,48 @@ export default function App() {
 
   const items = useCartStore((state) => state.items);
   const totalQuantity = items.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
+
+  const sfAppRef = useRef<HTMLDivElement | null>(null);
+  const [stickyCartHeight, setStickyCartHeight] = useState(0);
+  const [productSheetOpen, setProductSheetOpen] = useState(false);
+
+  useLayoutEffect(() => {
+    const stickyVisible = page === "home" && totalQuantity > 0;
+    if (!stickyVisible) {
+      setStickyCartHeight(0);
+      sfAppRef.current?.style.setProperty("--sf-chrome-sticky-height", "0px");
+      return;
+    }
+    const measure = () => {
+      const el = document.querySelector(".sf-sticky-cart");
+      const h = el instanceof HTMLElement ? Math.ceil(el.getBoundingClientRect().height) : 0;
+      const next = h > 0 ? h + 10 : 82;
+      setStickyCartHeight(next);
+      sfAppRef.current?.style.setProperty("--sf-chrome-sticky-height", `${next}px`);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    const el = document.querySelector(".sf-sticky-cart");
+    if (el) ro.observe(el);
+    window.addEventListener("resize", measure);
+    const t = window.setTimeout(measure, 120);
+    return () => {
+      window.clearTimeout(t);
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [page, totalQuantity]);
+
+  useEffect(() => {
+    const onOpen = () => setProductSheetOpen(true);
+    const onClose = () => setProductSheetOpen(false);
+    window.addEventListener("sf:productSheetOpen", onOpen as EventListener);
+    window.addEventListener("sf:productSheetClose", onClose as EventListener);
+    return () => {
+      window.removeEventListener("sf:productSheetOpen", onOpen as EventListener);
+      window.removeEventListener("sf:productSheetClose", onClose as EventListener);
+    };
+  }, []);
 
   const sfKit = kitFromTemplateId(templateId ?? payload?.templateId ?? null);
 
@@ -439,12 +481,14 @@ export default function App() {
 
       <FloatingCart
         visible={
+          !productSheetOpen &&
           page !== "support" &&
           page !== "checkout" &&
           !(page === "home" && totalQuantity > 0)
         }
         totalQuantity={totalQuantity}
         onOpen={handleFloatingCartClick}
+        bottomInsetPx={stickyCartHeight}
       />
 
       <StickyCartBar
@@ -457,8 +501,10 @@ export default function App() {
   return (
     <ThemeVarsProvider theme={theme}>
       <div
+        ref={sfAppRef}
         data-sf-kit={sfKit}
         className="sf-root sf-app"
+        data-sf-product-sheet={productSheetOpen ? "open" : undefined}
         style={sfVars as unknown as React.CSSProperties}
       >
         <div id="sf-theme-portal-root" data-sf-portal-host />

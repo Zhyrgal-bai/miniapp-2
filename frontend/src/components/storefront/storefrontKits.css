@@ -12,6 +12,25 @@
   font-family: var(--sf-font-body);
 }
 
+.sf-featured-empty {
+  padding: var(--sf-space-lg, 20px) var(--sf-mobile-pad, 14px);
+  text-align: center;
+}
+
+.sf-featured-empty__title {
+  margin: 0 0 8px;
+  font-size: var(--sf-font-size-small, 0.95rem);
+  font-weight: 650;
+  color: var(--sf-color-text);
+}
+
+.sf-featured-empty__hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--sf-color-muted);
+  line-height: 1.45;
+}
+
 /* content width */
 .sf-root {
   max-width: var(--sf-content-max, 100%);
@@ -21,9 +40,21 @@
   overscroll-behavior-x: contain;
 }
 
-/* Prevent sticky cart bar from covering content */
-.sf-root {
-  padding-bottom: 96px;
+/* Shell: runtime --sf-chrome-sticky-height from App (sticky cart measured height). */
+.sf-root.sf-app {
+  --sf-chrome-sticky-height: 0px;
+}
+
+/* Storefront column — bottom reserve so sticky bar / float do not cover last cards */
+.sf-app .app__content .sf-root {
+  --sf-viewport-pad-bottom: calc(
+    env(safe-area-inset-bottom, 0px) + var(--sf-chrome-sticky-height) + 12px
+  );
+  padding-bottom: var(--sf-viewport-pad-bottom);
+}
+
+.sf-app .app__content .sf-container-state {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--sf-chrome-sticky-height) + 24px);
 }
 
 .sf-section__title {
@@ -40,6 +71,44 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--sf-chip-gap, var(--sf-space-sm, 10px));
+}
+
+.sf-chips--rail {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  overscroll-behavior-x: contain;
+  padding-bottom: 4px;
+  margin: 0 calc(-1 * var(--sf-mobile-pad, 14px));
+  padding-left: var(--sf-mobile-pad, 14px);
+  padding-right: var(--sf-mobile-pad, 14px);
+  scrollbar-width: none;
+}
+
+.sf-chips--rail::-webkit-scrollbar {
+  display: none;
+}
+
+.sf-chip--filter {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 65%, transparent);
+  background: var(--sf-chip-bg, transparent);
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.15s ease;
+}
+
+.sf-chip--filter:active {
+  transform: scale(0.98);
+}
+
+.sf-chip--filter.sf-chip--active {
+  background: color-mix(in srgb, var(--sf-color-primary) 18%, transparent);
+  border-color: color-mix(in srgb, var(--sf-color-primary) 45%, transparent);
+  font-weight: 650;
 }
 
 .sf-chip {
@@ -266,6 +335,35 @@
   display: grid;
   justify-items: center;
 }
+
+.sf-hero__dots {
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.sf-hero__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  padding: 0;
+  border: none;
+  background: color-mix(in srgb, var(--sf-color-text) 38%, transparent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sf-hero__dot--active {
+  background: var(--sf-color-primary);
+  transform: scale(1.15);
+}
+
+.sf-hero--fashion .sf-hero__copy .sf-hero__dots {
+  margin-top: 10px;
+  justify-content: flex-start;
+}
 .sf-hero.sf-hero--banner .sf-hero__overlay {
   align-items: center;
 }
@@ -358,7 +456,7 @@
 .sf-rail {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: 260px;
+  grid-auto-columns: min(200px, 46vw);
   gap: var(--sf-space-sm, 10px);
   overflow-x: auto;
   padding-bottom: 4px;
@@ -367,6 +465,19 @@
 }
 .sf-rail__item {
   scroll-snap-align: start;
+  min-width: 0;
+}
+
+.sf-rail .product-bottom {
+  gap: 6px;
+  min-height: 36px;
+}
+
+.sf-rail .product-add-btn,
+.sf-rail .add-button {
+  min-height: 34px;
+  padding: 5px 10px;
+  font-size: max(11px, var(--sf-typo-button-size, 12px));
 }
 
 /* Lightweight entrance animation (no heavy JS). */

@@ -1,6 +1,7 @@
 .product-card {
   background: var(--sf-color-card);
   color: var(--sf-color-text);
+  contain: layout style;
   border: none;
   border-radius: var(--sf-card-radius, var(--sf-radius-lg, 20px));
   overflow: hidden;
