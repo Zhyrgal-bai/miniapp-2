@@ -17,6 +17,10 @@ export type PlatformMyBusinessDTO = {
   isBlocked: boolean;
   /** Есть действующее окно оплаты/trial и магазин не в ручном бане. */
   subscriptionActive: boolean;
+  /** ISO 8601, если задано на сервере. */
+  subscriptionEndsAt: string | null;
+  /** ISO 8601 для trial. */
+  trialEndsAt: string | null;
   /** OK при валидном вебхуке по ответу getWebhookInfo; ERROR иначе. */
   webhookStatus: "OK" | "ERROR";
   /** URL из getWebhookInfo (без токена); null если не настроен или ошибка API. */
@@ -91,6 +95,8 @@ export async function mapRowsWithWebhook(
       isActive: r.isActive,
       isBlocked: r.isBlocked,
       subscriptionActive,
+      subscriptionEndsAt: r.subscriptionEndsAt?.toISOString() ?? null,
+      trialEndsAt: r.trialEndsAt?.toISOString() ?? null,
       webhookStatus,
       webhookUrl: info.webhookUrl,
     };

@@ -2,9 +2,8 @@ import { plainBotTokenFromStored } from "./businessBotToken.js";
 import { prisma } from "./db.js";
 import {
   hasValidPaidOrTrialWindow,
-  merchantStoreEntitled,
 } from "./subscriptionAccess.js";
-import { platformMerchantOwnsBusiness } from "./platformMerchantAccess.js";
+import { isPlatformAdminTelegramId } from "./platformAdminService.js";
 import {
   classifyWebhookOkError,
   fetchTelegramWebhookInfo,
@@ -17,12 +16,12 @@ export async function platformCheckWebhookForMerchant(input: {
   | { ok: true; status: "OK" | "ERROR"; lastErrorMessage: string | null }
   | { ok: false; status: number; error: string }
 > {
-  const allowed = await platformMerchantOwnsBusiness(
-    input.telegramId,
-    input.businessId,
-  );
-  if (!allowed) {
-    return { ok: false, status: 403, error: "Нет доступа к этому магазину" };
+  if (!isPlatformAdminTelegramId(input.telegramId)) {
+    return {
+      ok: false,
+      status: 403,
+      error: "Проверку webhook может запускать только оператор платформы",
+    };
   }
 
   const b = await prisma.business.findUnique({
@@ -39,9 +38,6 @@ export async function platformCheckWebhookForMerchant(input: {
   });
   if (b == null) {
     return { ok: false, status: 404, error: "Магазин не найден" };
-  }
-  if (!merchantStoreEntitled(b)) {
-    return { ok: false, status: 403, error: "Подписка не активна" };
   }
 
   const info = await fetchTelegramWebhookInfo(
@@ -63,12 +59,12 @@ export async function platformToggleBotForMerchant(input: {
   | { ok: true; isActive: boolean }
   | { ok: false; status: number; error: string }
 > {
-  const allowed = await platformMerchantOwnsBusiness(
-    input.telegramId,
-    input.businessId,
-  );
-  if (!allowed) {
-    return { ok: false, status: 403, error: "Нет доступа к этому магазину" };
+  if (!isPlatformAdminTelegramId(input.telegramId)) {
+    return {
+      ok: false,
+      status: 403,
+      error: "Включение и отключение бота доступно только оператору платформы",
+    };
   }
 
   const b = await prisma.business.findUnique({

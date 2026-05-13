@@ -404,6 +404,8 @@ export type PlatformAdminBusinessRow = {
   isBlocked: boolean;
   /** Сводный статус (как в кабинете клиента). */
   status: string;
+  /** Есть действующее окно оплаты/trial (как в my-businesses). */
+  subscriptionActive: boolean;
   subscriptionStatus: string;
   subscriptionEndsAt: string | null;
   trialEndsAt: string | null;
@@ -454,6 +456,7 @@ export async function listBusinessesForPlatformAdmin(
       isActive: p.isActive,
       isBlocked: p.isBlocked,
       status: p.status,
+      subscriptionActive: p.subscriptionActive,
       subscriptionStatus: String(r?.subscriptionStatus ?? ""),
       subscriptionEndsAt: r?.subscriptionEndsAt?.toISOString() ?? null,
       trialEndsAt: r?.trialEndsAt?.toISOString() ?? null,
@@ -509,14 +512,21 @@ export type PurgeBusinessOutcome =
   | { ok: true }
   | { ok: false; statusCode: number; message: string };
 
+type PurgedBusinessMeta = {
+  id: number;
+  name: string;
+  slug: string | null;
+};
+
 /**
- * Полное удаление магазина и связанных данных из БД (порядок с учётом FK Product→Category).
- * Пользователи `User` не удаляются (глобальные аккаунты).
+ * Удаляет магазин и связанные строки из БД (без проверки ролей и без лога).
  */
-export async function purgeBusinessCompletelyForPlatformAdmin(
+async function purgeBusinessFromDatabase(
   businessId: number,
-  adminTelegramId: string,
-): Promise<PurgeBusinessOutcome> {
+): Promise<
+  | { ok: true; biz: PurgedBusinessMeta }
+  | { ok: false; statusCode: number; message: string }
+> {
   if (!Number.isInteger(businessId) || businessId <= 0) {
     return { ok: false, statusCode: 400, message: "Неверный businessId" };
   }
@@ -558,13 +568,90 @@ export async function purgeBusinessCompletelyForPlatformAdmin(
       await tx.business.delete({ where: { id: businessId } });
     });
   } catch (e) {
-    console.error("[purgeBusinessCompletelyForPlatformAdmin]", businessId, e);
+    console.error("[purgeBusinessFromDatabase]", businessId, e);
     return {
       ok: false,
       statusCode: 500,
       message: "Не удалось удалить данные из БД",
     };
   }
+
+  return {
+    ok: true,
+    biz: { id: biz.id, name: biz.name, slug: biz.slug },
+  };
+}
+
+/**
+ * Полное удаление магазина владельцем (только роль OWNER в этом магазине).
+ */
+export async function purgeBusinessCompletelyForOwner(
+  businessId: number,
+  ownerTelegramId: string,
+): Promise<PurgeBusinessOutcome> {
+  const tid = ownerTelegramId.trim();
+  if (!/^\d+$/.test(tid)) {
+    return { ok: false, statusCode: 400, message: "Некорректный Telegram ID" };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId: tid },
+    select: { id: true },
+  });
+  if (!user) {
+    return { ok: false, statusCode: 403, message: "Пользователь не найден" };
+  }
+
+  const owns = await prisma.membership.findFirst({
+    where: {
+      businessId,
+      userId: user.id,
+      role: MembershipRole.OWNER,
+    },
+    select: { id: true },
+  });
+  if (!owns) {
+    return {
+      ok: false,
+      statusCode: 403,
+      message: "Удалить магазин может только владелец",
+    };
+  }
+
+  const purged = await purgeBusinessFromDatabase(businessId);
+  if (!purged.ok) return purged;
+
+  try {
+    await prisma.adminActionLog.create({
+      data: {
+        adminTelegramId: tid,
+        action: AdminActionType.DELETE_SHOP,
+        targetBusinessId: businessId,
+        details: {
+          purgeComplete: true,
+          selfServiceOwner: true,
+          previousName: purged.biz.name,
+          previousSlug: purged.biz.slug,
+        } as object,
+      },
+    });
+  } catch (logErr) {
+    console.error("[purgeBusinessCompletelyForOwner] AdminActionLog:", logErr);
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Полное удаление магазина и связанных данных из БД (порядок с учётом FK Product→Category).
+ * Пользователи `User` не удаляются (глобальные аккаунты).
+ */
+export async function purgeBusinessCompletelyForPlatformAdmin(
+  businessId: number,
+  adminTelegramId: string,
+): Promise<PurgeBusinessOutcome> {
+  const purged = await purgeBusinessFromDatabase(businessId);
+  if (!purged.ok) return purged;
 
   try {
     await prisma.adminActionLog.create({
@@ -574,8 +661,8 @@ export async function purgeBusinessCompletelyForPlatformAdmin(
         targetBusinessId: businessId,
         details: {
           purgeComplete: true,
-          previousName: biz.name,
-          previousSlug: biz.slug,
+          previousName: purged.biz.name,
+          previousSlug: purged.biz.slug,
         } as object,
       },
     });

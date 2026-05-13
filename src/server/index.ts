@@ -33,7 +33,9 @@ import {
 import {
   formatZodApiError,
   platformCheckWebhookBodySchema,
+  platformDeleteMyBusinessBodySchema,
   platformRegisterRequestShape,
+  platformSubscriptionPaymentBodySchema,
   platformToggleBotBodySchema,
 } from "./platformRouteBodySchemas.js";
 import { validateAndPersistPlatformRegistration } from "./platformRegisterRequest.js";
@@ -111,7 +113,10 @@ import {
   mountFinikSettingsRoutes,
   publicApiOrigin,
 } from "./finikMerchant.js";
-import { mountSubscriptionFinikPaymentRoutes } from "./subscriptionFinikPayments.js";
+import {
+  mountSubscriptionFinikPaymentRoutes,
+  createSubscriptionFinikPaymentSession,
+} from "./subscriptionFinikPayments.js";
 import { relayDynamicStoreWebhook as relayDynamicTenantStoreWebhook } from "./storeTelegramWebhookRelay.js";
 import {
   isHexWebhookSlug,
@@ -267,7 +272,7 @@ mountSubscriptionFinikPaymentRoutes(app);
 
 /**
  * Диагностика platform admin доступа (без токенов/PII).
- * Показывает telegramId из валидного initData и результат isPlatformAdminTelegramId().
+ * `isPlatformAdmin` = Telegram user id входит в ADMIN_IDS / PLATFORM_ADMIN_TELEGRAM_ID на сервере.
  */
 app.get("/api/platform/admin/whoami", async (req: Request, res: Response) => {
   try {
@@ -450,6 +455,96 @@ app.post(
     res.status(500).json({ error: "Ошибка сервера" });
   }
 });
+
+app.post(
+  "/api/platform/delete-my-business",
+  strictLimiter,
+  requireNonEmptyJsonBody,
+  async (req: Request, res: Response) => {
+    try {
+      const telegramId = platformTelegramIdFromWebApp(req);
+      if (!telegramId) {
+        res.status(500).json({
+          error: "Внутренняя ошибка авторизации Mini App",
+        });
+        return;
+      }
+      if (!isPlatformAdminTelegramId(telegramId)) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+      const parsed = platformDeleteMyBusinessBodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: formatZodApiError(parsed.error) });
+        return;
+      }
+      const { businessId } = parsed.data;
+      const out = await purgeBusinessCompletelyForPlatformAdmin(
+        businessId,
+        telegramId,
+      );
+      if (!out.ok) {
+        res.status(out.statusCode).json({ error: out.message });
+        return;
+      }
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("POST /api/platform/delete-my-business:", e);
+      res.status(500).json({ error: "Ошибка сервера" });
+    }
+  },
+);
+
+app.post(
+  "/api/platform/subscription-payment/create",
+  strictLimiter,
+  requireNonEmptyJsonBody,
+  async (req: Request, res: Response) => {
+    try {
+      const telegramId = platformTelegramIdFromWebApp(req);
+      if (!telegramId) {
+        res.status(500).json({
+          error: "Внутренняя ошибка авторизации Mini App",
+        });
+        return;
+      }
+      const parsed = platformSubscriptionPaymentBodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: formatZodApiError(parsed.error) });
+        return;
+      }
+      const { businessId, plan } = parsed.data;
+      const out = await createSubscriptionFinikPaymentSession({
+        telegramId,
+        businessId,
+        plan,
+      });
+      if (!out.ok) {
+        res.status(out.statusCode).json({ error: out.error });
+        return;
+      }
+      if ("finikConfigured" in out && out.finikConfigured === false) {
+        res.status(200).json({
+          finikConfigured: false,
+          useManualPaymentRequest: true,
+          message: out.message,
+        });
+        return;
+      }
+      if ("paymentUrl" in out) {
+        res.json({
+          paymentUrl: out.paymentUrl,
+          subscriptionPaymentId: out.subscriptionPaymentId,
+          planDays: out.planDays,
+          amountSom: out.amountSom,
+        });
+      }
+    } catch (e) {
+      console.error("POST /api/platform/subscription-payment/create:", e);
+      res.status(500).json({ error: "Ошибка сервера" });
+    }
+  },
+);
 
 app.get("/api/platform/store-settings", async (req: Request, res: Response) => {
   try {

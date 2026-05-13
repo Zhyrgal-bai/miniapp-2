@@ -455,6 +455,56 @@
   -webkit-overflow-scrolling: touch;
 }
 
+.mp-webhook-block--miniapp {
+  margin-top: 0.65rem;
+}
+
+.mp-copy-row {
+  margin-top: 0.45rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.mp-copy-row .mp-btn {
+  flex: 0 1 auto;
+}
+
+.mp-access-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: #94a3b8;
+}
+
+.mp-subscription-hint {
+  margin-top: 0.65rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: #cbd5e1;
+}
+
+.mp-subscription-hint p {
+  margin: 0.1rem 0;
+}
+
+.mp-btn--danger-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(239, 68, 68, 0.55);
+  background: rgba(15, 23, 42, 0.35);
+  color: #fecaca;
+  font-size: 0.75rem;
+}
+
+.mp-btn--danger-outline:hover:not(:disabled) {
+  background: rgba(127, 29, 29, 0.28);
+}
+
 .mp-store-actions-primary {
   margin-top: 1.1rem;
   display: flex;

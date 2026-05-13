@@ -9,6 +9,8 @@ export type PlatformMyBusinessDTO = {
   isActive: boolean;
   isBlocked: boolean;
   subscriptionActive: boolean;
+  subscriptionEndsAt: string | null;
+  trialEndsAt: string | null;
   webhookStatus: "OK" | "ERROR";
   /** URL вебхука из Telegram (без токена бота). */
   webhookUrl: string | null;
@@ -46,6 +48,14 @@ export async function fetchPlatformMyBusinesses(params: {
         : null;
     const isActive = Boolean(x.isActive);
     const isBlocked = Boolean(x.isBlocked);
+    const subEnd =
+      typeof x.subscriptionEndsAt === "string" && x.subscriptionEndsAt.trim() !== ""
+        ? x.subscriptionEndsAt.trim()
+        : null;
+    const trialEnd =
+      typeof x.trialEndsAt === "string" && x.trialEndsAt.trim() !== ""
+        ? x.trialEndsAt.trim()
+        : null;
     return {
       id:
         typeof idNum === "number" &&
@@ -61,11 +71,115 @@ export async function fetchPlatformMyBusinesses(params: {
         typeof x.subscriptionActive === "boolean"
           ? x.subscriptionActive
           : isActive && !isBlocked,
+      subscriptionEndsAt: subEnd,
+      trialEndsAt: trialEnd,
       webhookStatus: ws,
       webhookUrl: wu,
     };
   });
   return mapped.filter((r) => r.id > 0);
+}
+
+export async function fetchPlatformWhoAmI(): Promise<{
+  telegramId: string;
+  isPlatformAdmin: boolean;
+}> {
+  const res = await fetch(apiAbsoluteUrl("/api/platform/admin/whoami"), {
+    method: "GET",
+    credentials: "omit",
+    headers: { ...telegramWebAppInitDataHeader() },
+  });
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    telegramId?: string;
+    isPlatformAdmin?: boolean;
+  };
+  if (!res.ok) {
+    throw new Error(j.error ?? `HTTP ${res.status}`);
+  }
+  const tid = typeof j.telegramId === "string" ? j.telegramId.trim() : "";
+  if (tid === "") {
+    throw new Error("Некорректный ответ сервера");
+  }
+  return {
+    telegramId: tid,
+    isPlatformAdmin: Boolean(j.isPlatformAdmin),
+  };
+}
+
+export type PlatformSubscriptionPaymentResult =
+  | {
+      finikConfigured: false;
+      useManualPaymentRequest: true;
+      message: string;
+    }
+  | {
+      paymentUrl: string;
+      subscriptionPaymentId: number;
+      planDays: 30 | 90;
+      amountSom: number;
+    };
+
+export async function postPlatformSubscriptionPaymentCreate(params: {
+  telegramId: number;
+  businessId: number;
+  plan: 30 | 90;
+}): Promise<PlatformSubscriptionPaymentResult> {
+  void params.telegramId;
+  const res = await fetch(
+    apiAbsoluteUrl("/api/platform/subscription-payment/create"),
+    {
+      method: "POST",
+      credentials: "omit",
+      headers: {
+        "Content-Type": "application/json",
+        ...telegramWebAppInitDataHeader(),
+      },
+      body: JSON.stringify({
+        businessId: params.businessId,
+        plan: params.plan,
+      }),
+    },
+  );
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    finikConfigured?: boolean;
+    useManualPaymentRequest?: boolean;
+    message?: string;
+    paymentUrl?: string;
+    subscriptionPaymentId?: number;
+    planDays?: number;
+    amountSom?: number;
+  };
+  if (!res.ok) {
+    throw new Error(j.error ?? `HTTP ${res.status}`);
+  }
+  if (
+    j.finikConfigured === false &&
+    j.useManualPaymentRequest === true &&
+    typeof j.message === "string"
+  ) {
+    return {
+      finikConfigured: false,
+      useManualPaymentRequest: true,
+      message: j.message,
+    };
+  }
+  if (
+    typeof j.paymentUrl === "string" &&
+    j.paymentUrl.trim() !== "" &&
+    typeof j.subscriptionPaymentId === "number" &&
+    (j.planDays === 30 || j.planDays === 90) &&
+    typeof j.amountSom === "number"
+  ) {
+    return {
+      paymentUrl: j.paymentUrl.trim(),
+      subscriptionPaymentId: j.subscriptionPaymentId,
+      planDays: j.planDays,
+      amountSom: j.amountSom,
+    };
+  }
+  throw new Error(j.error ?? "Некорректный ответ сервера");
 }
 
 export type PlatformStoreSettingsDTO = {
@@ -76,6 +190,9 @@ export type PlatformStoreSettingsDTO = {
   businessType: string;
   merchantConfig: Record<string, unknown>;
   merchantSettingsSchema: Record<string, unknown>;
+  subscriptionStatus: string;
+  subscriptionEndsAt: string | null;
+  trialEndsAt: string | null;
 };
 
 export async function fetchPlatformStoreSettings(params: {
@@ -103,6 +220,9 @@ export async function fetchPlatformStoreSettings(params: {
     businessType?: unknown;
     merchantConfig?: unknown;
     merchantSettingsSchema?: unknown;
+    subscriptionStatus?: unknown;
+    subscriptionEndsAt?: unknown;
+    trialEndsAt?: unknown;
   };
   if (!res.ok) {
     throw new Error(j.error ?? `HTTP ${res.status}`);
@@ -132,6 +252,16 @@ export async function fetchPlatformStoreSettings(params: {
       !Array.isArray(j.merchantSettingsSchema)
         ? (j.merchantSettingsSchema as Record<string, unknown>)
         : {},
+    subscriptionStatus:
+      typeof j.subscriptionStatus === "string" ? j.subscriptionStatus : "",
+    subscriptionEndsAt:
+      typeof j.subscriptionEndsAt === "string" && j.subscriptionEndsAt.trim() !== ""
+        ? j.subscriptionEndsAt.trim()
+        : null,
+    trialEndsAt:
+      typeof j.trialEndsAt === "string" && j.trialEndsAt.trim() !== ""
+        ? j.trialEndsAt.trim()
+        : null,
   };
 }
 

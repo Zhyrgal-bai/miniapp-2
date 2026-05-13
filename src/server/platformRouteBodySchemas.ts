@@ -76,3 +76,12 @@ export const platformToggleBotBodySchema = z.object({
   businessId: z.coerce.number().int().positive(),
   action: z.enum(["enable", "disable"]),
 });
+
+export const platformDeleteMyBusinessBodySchema = z.object({
+  businessId: z.coerce.number().int().positive(),
+});
+
+export const platformSubscriptionPaymentBodySchema = z.object({
+  businessId: z.coerce.number().int().positive(),
+  plan: z.union([z.literal(30), z.literal(90)]),
+});

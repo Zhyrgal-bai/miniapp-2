@@ -22,7 +22,7 @@ function telegramIdFromTrustedHeader(req: Request): string | null {
   return /^\d+$/.test(xi) ? xi : null;
 }
 
-function parsePlanDays(raw: unknown): 30 | 90 | null {
+export function parseSubscriptionPlanDays(raw: unknown): 30 | 90 | null {
   const n =
     typeof raw === "number" && Number.isFinite(raw)
       ? Math.trunc(raw)
@@ -113,6 +113,105 @@ function businessFinikReady(finikApiKey: string | null, finikSecret: string | nu
   return k.length > 0 && s.length > 0;
 }
 
+export type CreateSubscriptionFinikSessionResult =
+  | {
+      ok: true;
+      paymentUrl: string;
+      subscriptionPaymentId: number;
+      planDays: 30 | 90;
+      amountSom: number;
+    }
+  | {
+      ok: true;
+      finikConfigured: false;
+      useManualPaymentRequest: true;
+      message: string;
+    }
+  | { ok: false; statusCode: number; error: string };
+
+/**
+ * Создание сессии оплаты подписки через Finik магазина (владелец/админ магазина).
+ * Вызывается из legacy POST /api/payments/create и из POST /api/platform/subscription-payment/create.
+ */
+export async function createSubscriptionFinikPaymentSession(input: {
+  telegramId: string;
+  businessId: number;
+  plan: 30 | 90;
+}): Promise<CreateSubscriptionFinikSessionResult> {
+  const { telegramId, businessId, plan } = input;
+  if (!Number.isInteger(businessId) || businessId <= 0) {
+    return { ok: false, statusCode: 400, error: "Нужен корректный businessId" };
+  }
+
+  const allowed = await platformMerchantOwnsBusiness(telegramId, businessId);
+  if (!allowed) {
+    return { ok: false, statusCode: 403, error: "Нет доступа к этому магазину" };
+  }
+
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { id: true, finikApiKey: true, finikSecret: true, botToken: true },
+  });
+  if (business == null) {
+    return { ok: false, statusCode: 404, error: "Магазин не найден" };
+  }
+
+  if (!businessFinikReady(business.finikApiKey, business.finikSecret)) {
+    return {
+      ok: true,
+      finikConfigured: false,
+      useManualPaymentRequest: true,
+      message:
+        "Онлайн-оплата Finik не настроена для магазина. Отправьте чек на проверку через бота (ручная заявка PaymentRequest).",
+    };
+  }
+
+  const spec = saasFinikSubscriptionPlanSpec(plan);
+
+  const row = await prisma.subscriptionFinikPayment.create({
+    data: {
+      businessId,
+      planDays: spec.days,
+      amountSom: spec.amountSom,
+      payerTelegramId: telegramId,
+      status: "pending",
+    },
+  });
+
+  const finik = await createFinikSaasSubscriptionSession(
+    {
+      id: business.id,
+      finikApiKey: business.finikApiKey,
+      finikSecret: business.finikSecret,
+    },
+    {
+      subscriptionPaymentRowId: row.id,
+      amountSom: spec.amountSom,
+    },
+  );
+
+  if (!finik.ok) {
+    await prisma.subscriptionFinikPayment.update({
+      where: { id: row.id },
+      data: { status: "failed" },
+    });
+    return { ok: false, statusCode: 502, error: finik.error };
+  }
+
+  await prisma.subscriptionFinikPayment.update({
+    where: { id: row.id },
+    data: { finikPaymentId: finik.paymentId },
+  });
+
+  return {
+    ok: true,
+    paymentUrl: finik.paymentUrl,
+    subscriptionPaymentId: row.id,
+    planDays: spec.days as 30 | 90,
+    amountSom: spec.amountSom,
+  };
+}
+
 export function mountSubscriptionFinikPaymentRoutes(app: Express): void {
   app.post("/api/payments/create", async (req: Request, res: Response) => {
     try {
@@ -138,84 +237,37 @@ export function mountSubscriptionFinikPaymentRoutes(app: Express): void {
         return;
       }
 
-      const plan = parsePlanDays(body.plan);
+      const plan = parseSubscriptionPlanDays(body.plan);
       if (plan == null) {
         res.status(400).json({ error: "Параметр plan: 30 или 90 (дней)" });
         return;
       }
 
-      const allowed = await platformMerchantOwnsBusiness(
+      const out = await createSubscriptionFinikPaymentSession({
         telegramId,
         businessId,
-      );
-      if (!allowed) {
-        res.status(403).json({ error: "Нет доступа к этому магазину" });
-        return;
-      }
-
-      const business = await prisma.business.findUnique({
-        where: { id: businessId },
-        select: { id: true, finikApiKey: true, finikSecret: true, botToken: true },
+        plan,
       });
-      if (business == null) {
-        res.status(404).json({ error: "Магазин не найден" });
+      if (!out.ok) {
+        res.status(out.statusCode).json({ error: out.error });
         return;
       }
-
-      if (!businessFinikReady(business.finikApiKey, business.finikSecret)) {
+      if ("finikConfigured" in out && out.finikConfigured === false) {
         res.status(200).json({
           finikConfigured: false,
           useManualPaymentRequest: true,
-          message:
-            "Онлайн-оплата Finik не настроена для магазина. Отправьте чек на проверку через бота (ручная заявка PaymentRequest).",
+          message: out.message,
         });
         return;
       }
-
-      const spec = saasFinikSubscriptionPlanSpec(plan);
-
-      const row = await prisma.subscriptionFinikPayment.create({
-        data: {
-          businessId,
-          planDays: spec.days,
-          amountSom: spec.amountSom,
-          payerTelegramId: telegramId,
-          status: "pending",
-        },
-      });
-
-      const finik = await createFinikSaasSubscriptionSession(
-        {
-          id: business.id,
-          finikApiKey: business.finikApiKey,
-          finikSecret: business.finikSecret,
-        },
-        {
-          subscriptionPaymentRowId: row.id,
-          amountSom: spec.amountSom,
-        },
-      );
-
-      if (!finik.ok) {
-        await prisma.subscriptionFinikPayment.update({
-          where: { id: row.id },
-          data: { status: "failed" },
+      if ("paymentUrl" in out) {
+        res.json({
+          paymentUrl: out.paymentUrl,
+          subscriptionPaymentId: out.subscriptionPaymentId,
+          planDays: out.planDays,
+          amountSom: out.amountSom,
         });
-        res.status(502).json({ error: finik.error });
-        return;
       }
-
-      await prisma.subscriptionFinikPayment.update({
-        where: { id: row.id },
-        data: { finikPaymentId: finik.paymentId },
-      });
-
-      res.json({
-        paymentUrl: finik.paymentUrl,
-        subscriptionPaymentId: row.id,
-        planDays: spec.days,
-        amountSom: spec.amountSom,
-      });
     } catch (e) {
       console.error("POST /api/payments/create:", e);
       res.status(500).json({ error: "Ошибка сервера" });

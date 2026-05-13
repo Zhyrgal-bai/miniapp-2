@@ -15,6 +15,7 @@ export type PlatformAdminBusinessDTO = {
   isActive: boolean;
   isBlocked: boolean;
   status: string;
+  subscriptionActive: boolean;
   subscriptionStatus: string;
   subscriptionEndsAt: string | null;
   trialEndsAt: string | null;
@@ -111,7 +112,27 @@ export async function fetchPlatformAdminBusinesses(params: {
   );
   await throwIfNotOk(res);
   const data = (await res.json()) as unknown;
-  return Array.isArray(data) ? (data as PlatformAdminBusinessDTO[]) : [];
+  if (!Array.isArray(data)) return [];
+  return (data as Record<string, unknown>[]).map((row) => ({
+    id: typeof row.id === "number" ? row.id : Number(row.id) || 0,
+    name: String(row.name ?? ""),
+    isActive: Boolean(row.isActive),
+    isBlocked: Boolean(row.isBlocked),
+    status: String(row.status ?? ""),
+    subscriptionActive:
+      typeof row.subscriptionActive === "boolean"
+        ? row.subscriptionActive
+        : Boolean(row.isActive) && !row.isBlocked,
+    subscriptionStatus: String(row.subscriptionStatus ?? ""),
+    subscriptionEndsAt:
+      typeof row.subscriptionEndsAt === "string" ? row.subscriptionEndsAt : null,
+    trialEndsAt: typeof row.trialEndsAt === "string" ? row.trialEndsAt : null,
+    webhookStatus: row.webhookStatus === "OK" ? "OK" : "ERROR",
+    webhookUrl:
+      typeof row.webhookUrl === "string" && row.webhookUrl.trim() !== ""
+        ? row.webhookUrl.trim()
+        : null,
+  })) as PlatformAdminBusinessDTO[];
 }
 
 export async function postPlatformAdminDisable(params: {

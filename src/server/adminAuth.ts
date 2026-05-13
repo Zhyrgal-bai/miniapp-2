@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 
+/** Telegram numeric ids суперадмина: `ADMIN_IDS` и/или `PLATFORM_ADMIN_TELEGRAM_ID` (см. `isPlatformAdminTelegramId` на сервере). */
 function adminIdsFromEnv(): string[] {
   const out: string[] = [];
   const seen = new Set<string>();

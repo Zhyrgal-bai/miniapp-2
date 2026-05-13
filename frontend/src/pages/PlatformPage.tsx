@@ -6,12 +6,21 @@ import { getTelegramWebApp } from "../utils/telegram";
 import { resolveMerchantTelegramUserId } from "../utils/telegramUserId";
 import { ArchaHeader } from "../components/archa/ArchaHeader";
 import { archa } from "../components/archa/archaUi";
-import { fetchPlatformAdminRequests } from "../services/platformAdminApi";
+import {
+  fetchPlatformAdminBusinesses,
+  postPlatformAdminDisable,
+  postPlatformAdminEnable,
+  postPlatformAdminExtend,
+  postPlatformAdminPurgeBusiness,
+  postPlatformAdminUnblock,
+  type PlatformAdminBusinessDTO,
+} from "../services/platformAdminApi";
 import {
   fetchPlatformMyBusinesses,
   fetchPlatformStoreSettings,
+  fetchPlatformWhoAmI,
   postPlatformCheckWebhook,
-  postPlatformToggleBot,
+  postPlatformSubscriptionPaymentCreate,
   postPlatformUpdateFinik,
   savePlatformStoreSettings,
   type PlatformMyBusinessDTO,
@@ -42,6 +51,48 @@ function webhookUrlLine(b: PlatformMyBusinessDTO): string {
   const u = b.webhookUrl;
   if (u != null && u.trim() !== "") return u.trim();
   return "URL вебхука не задан или недоступен";
+}
+
+function miniAppOpenUrl(businessId: number): string {
+  if (typeof window === "undefined") return "";
+  const origin = window.location.origin.replace(/\/$/, "");
+  return `${origin}/?shop=${encodeURIComponent(String(businessId))}`;
+}
+
+function formatRuDateShort(iso: string | null): string | null {
+  if (iso == null || iso.trim() === "") return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(d);
+}
+
+function formatDaysRemaining(iso: string | null): string | null {
+  if (iso == null || iso.trim() === "") return null;
+  const end = new Date(iso).getTime();
+  if (Number.isNaN(end)) return null;
+  const days = Math.ceil((end - Date.now()) / 86400000);
+  if (days < 0) return `истекло ${Math.abs(days)} дн. назад`;
+  if (days === 0) return "истекает сегодня";
+  return `осталось дней: ${days}`;
+}
+
+function adminBusinessToCard(row: PlatformAdminBusinessDTO): PlatformMyBusinessDTO {
+  return {
+    id: row.id,
+    name: row.name,
+    status: row.status,
+    isActive: row.isActive,
+    isBlocked: row.isBlocked,
+    subscriptionActive: row.subscriptionActive,
+    subscriptionEndsAt: row.subscriptionEndsAt,
+    trialEndsAt: row.trialEndsAt,
+    webhookStatus: row.webhookStatus,
+    webhookUrl: row.webhookUrl,
+  };
 }
 
 function botRunBadge(b: PlatformMyBusinessDTO): { label: string; className: string } {
@@ -141,7 +192,9 @@ export default function PlatformPage() {
   const [successFlash, setSuccessFlash] = useState(false);
   /** Ряд активных действий по businessId для UX загрузки. */
   const [pendingByBusiness, setPendingByBusiness] = useState<
-    Partial<Record<number, "toggle" | "webhook">>
+    Partial<
+      Record<number, "toggle" | "webhook" | "delete" | "extend" | "unblock">
+    >
   >({});
 
   const [settingsBusinessId, setSettingsBusinessId] = useState<number | null>(
@@ -163,10 +216,6 @@ export default function PlatformPage() {
   const [merchantConfigDraft, setMerchantConfigDraft] = useState<
     Record<string, unknown>
   >({});
-  /** Сервер: только ADMIN_IDS видит админку (пробуем лёгкий GET заявок). */
-  const [platformAdminAccess, setPlatformAdminAccess] = useState<
-    "unknown" | "yes" | "no"
-  >("unknown");
 
   const [onboardingDone, setOnboardingDone] = useState(readOnboardingCompleted);
   type OnboardingStep = 1 | 2 | 3 | "success";
@@ -175,6 +224,9 @@ export default function PlatformPage() {
   const prevZeroStores = useRef(false);
 
   const [merchantTelegramId, setMerchantTelegramId] = useState<number>(NaN);
+  /** Суперадмин платформы: `ADMIN_IDS` на сервере (см. GET /api/platform/admin/whoami). */
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  const [payPlanBusy, setPayPlanBusy] = useState<30 | 90 | null>(null);
 
   const loadBusinesses = useCallback(async () => {
     setLoading(true);
@@ -210,6 +262,7 @@ export default function PlatformPage() {
 
       if (signed === "") {
         setMerchantTelegramId(NaN);
+        setIsPlatformAdmin(false);
         setError(
           "Нет данных Mini App из Telegram (initData пустой). Откройте приложение кнопкой Web App из бота, не по прямой ссылке браузера.",
         );
@@ -219,16 +272,29 @@ export default function PlatformPage() {
 
       if (!Number.isFinite(telegramId) || telegramId <= 0) {
         setMerchantTelegramId(NaN);
+        setIsPlatformAdmin(false);
         setError("Откройте приложение из Telegram Mini App.");
         setBusinesses([]);
         return;
       }
 
       setMerchantTelegramId(telegramId);
-      const rows = await fetchPlatformMyBusinesses({ telegramId });
-      setBusinesses(rows);
+      const who = await fetchPlatformWhoAmI();
+      setIsPlatformAdmin(who.isPlatformAdmin);
+      if (who.isPlatformAdmin) {
+        const adminRows = await fetchPlatformAdminBusinesses({ telegramId });
+        setBusinesses(
+          adminRows
+            .filter((r) => r.id > 0)
+            .map(adminBusinessToCard),
+        );
+      } else {
+        const rows = await fetchPlatformMyBusinesses({ telegramId });
+        setBusinesses(rows);
+      }
     } catch (e) {
       setMerchantTelegramId(NaN);
+      setIsPlatformAdmin(false);
       setError(e instanceof Error ? e.message : "Не удалось загрузить");
       setBusinesses([]);
     } finally {
@@ -287,26 +353,6 @@ export default function PlatformPage() {
   }, [onboardingBaseOk, businesses.length]);
 
   useEffect(() => {
-    if (!Number.isFinite(merchantTelegramId) || merchantTelegramId <= 0) {
-      setPlatformAdminAccess("unknown");
-      return;
-    }
-    let cancelled = false;
-    setPlatformAdminAccess("unknown");
-    void (async () => {
-      try {
-        await fetchPlatformAdminRequests(merchantTelegramId);
-        if (!cancelled) setPlatformAdminAccess("yes");
-      } catch {
-        if (!cancelled) setPlatformAdminAccess("no");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [merchantTelegramId]);
-
-  useEffect(() => {
     if (settingsBusinessId == null) {
       setSettingsSnap(null);
       setSettingsErr(null);
@@ -359,7 +405,7 @@ export default function PlatformPage() {
 
   const setPending = (
     businessId: number,
-    kind: "toggle" | "webhook",
+    kind: "toggle" | "webhook" | "delete" | "extend" | "unblock",
     busy: boolean,
   ) => {
     setPendingByBusiness((prev) => {
@@ -375,21 +421,27 @@ export default function PlatformPage() {
       setError("Нет данных пользователя Telegram.");
       return;
     }
-    const action = b.isActive ? "disable" : "enable";
+    if (!isPlatformAdmin) {
+      setError("Включение и отключение бота доступно только оператору платформы.");
+      return;
+    }
     setError(null);
     setInfoBanner(null);
     setPending(b.id, "toggle", true);
     try {
-      const r = await postPlatformToggleBot({
-        telegramId: merchantTelegramId,
-        businessId: b.id,
-        action,
-      });
-      setBusinesses((prev) =>
-        prev.map((row) =>
-          row.id === b.id ? { ...row, isActive: r.isActive } : row,
-        ),
-      );
+      if (b.isActive) {
+        await postPlatformAdminDisable({
+          telegramId: merchantTelegramId,
+          businessId: b.id,
+        });
+      } else {
+        await postPlatformAdminEnable({
+          telegramId: merchantTelegramId,
+          businessId: b.id,
+        });
+      }
+      await loadBusinesses();
+      setInfoBanner(`${b.name}: статус бота обновлён`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось изменить бота");
     } finally {
@@ -400,6 +452,10 @@ export default function PlatformPage() {
   const handleCheckWebhook = async (b: PlatformMyBusinessDTO) => {
     if (!Number.isFinite(merchantTelegramId)) {
       setError("Нет данных пользователя Telegram.");
+      return;
+    }
+    if (!isPlatformAdmin) {
+      setError("Проверку webhook может запускать только оператор платформы.");
       return;
     }
     setError(null);
@@ -425,6 +481,134 @@ export default function PlatformPage() {
       setError(e instanceof Error ? e.message : "Не удалось проверить webhook");
     } finally {
       setPending(b.id, "webhook", false);
+    }
+  };
+
+  const handleCopyMiniAppUrl = async (b: PlatformMyBusinessDTO) => {
+    const url = miniAppOpenUrl(b.id);
+    if (url === "") return;
+    setError(null);
+    try {
+      await navigator.clipboard.writeText(url);
+      setInfoBanner(`${b.name}: ссылка Mini App скопирована`);
+    } catch {
+      setInfoBanner(null);
+      setError("Не удалось скопировать — выделите ссылку вручную");
+    }
+  };
+
+  const handleDeleteShop = async (b: PlatformMyBusinessDTO) => {
+    if (!Number.isFinite(merchantTelegramId)) {
+      setError("Нет данных пользователя Telegram.");
+      return;
+    }
+    if (!isPlatformAdmin) {
+      setError("Удаление магазина доступно только оператору платформы.");
+      return;
+    }
+    const confirmed = window.confirm(
+      `Удалить магазин «${b.name}» (id ${b.id}) безвозвратно? Все товары, заказы и настройки будут удалены.`,
+    );
+    if (!confirmed) return;
+    setError(null);
+    setInfoBanner(null);
+    setPending(b.id, "delete", true);
+    try {
+      await postPlatformAdminPurgeBusiness({
+        telegramId: merchantTelegramId,
+        businessId: b.id,
+      });
+      if (settingsBusinessId === b.id) {
+        setSettingsBusinessId(null);
+      }
+      setInfoBanner(`Магазин «${b.name}» удалён`);
+      await loadBusinesses();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось удалить магазин");
+    } finally {
+      setPending(b.id, "delete", false);
+    }
+  };
+
+  const handleExtendSubscription = async (
+    b: PlatformMyBusinessDTO,
+    days: 30 | 90,
+  ) => {
+    if (!Number.isFinite(merchantTelegramId)) {
+      setError("Нет данных пользователя Telegram.");
+      return;
+    }
+    if (!isPlatformAdmin) return;
+    setError(null);
+    setInfoBanner(null);
+    setPending(b.id, "extend", true);
+    try {
+      const out = await postPlatformAdminExtend({
+        telegramId: merchantTelegramId,
+        businessId: b.id,
+        days,
+      });
+      setInfoBanner(
+        `${b.name}: подписка продлена до ${formatRuDateShort(out.subscriptionEndsAt) ?? "—"}`,
+      );
+      await loadBusinesses();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось продлить подписку");
+    } finally {
+      setPending(b.id, "extend", false);
+    }
+  };
+
+  const handleUnblockShop = async (b: PlatformMyBusinessDTO) => {
+    if (!Number.isFinite(merchantTelegramId)) return;
+    if (!isPlatformAdmin) return;
+    setError(null);
+    setInfoBanner(null);
+    setPending(b.id, "unblock", true);
+    try {
+      await postPlatformAdminUnblock({
+        telegramId: merchantTelegramId,
+        businessId: b.id,
+      });
+      setInfoBanner(`${b.name}: блокировка снята`);
+      await loadBusinesses();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось снять блокировку");
+    } finally {
+      setPending(b.id, "unblock", false);
+    }
+  };
+
+  const handleClientSubscriptionPay = async (plan: 30 | 90) => {
+    if (!Number.isFinite(merchantTelegramId) || settingsBusinessId == null) {
+      setFinikErr("Нет данных для оплаты.");
+      return;
+    }
+    if (isPlatformAdmin) return;
+    setPayPlanBusy(plan);
+    setFinikErr(null);
+    setError(null);
+    try {
+      const out = await postPlatformSubscriptionPaymentCreate({
+        telegramId: merchantTelegramId,
+        businessId: settingsBusinessId,
+        plan,
+      });
+      if ("finikConfigured" in out && out.finikConfigured === false) {
+        setFinikErr(out.message);
+        return;
+      }
+      if ("paymentUrl" in out) {
+        const tg = getTelegramWebApp() as
+          | { openLink?: (url: string) => void }
+          | undefined;
+        tg?.openLink?.(out.paymentUrl);
+        setFinikMsg("Откроется страница оплаты Finik");
+      }
+    } catch (e) {
+      setFinikErr(e instanceof Error ? e.message : "Не удалось создать оплату");
+    } finally {
+      setPayPlanBusy(null);
     }
   };
 
@@ -579,7 +763,12 @@ export default function PlatformPage() {
     };
     if (nameChanged) payload.storeName = trimmedName;
     if (newTok !== "") payload.newBotToken = newTok;
-    payload.merchantConfig = merchantConfigDraft;
+    if (
+      isPlatformAdmin &&
+      Object.keys(settingsSnap.merchantSettingsSchema ?? {}).length > 0
+    ) {
+      payload.merchantConfig = merchantConfigDraft;
+    }
 
     if (
       payload.storeName === undefined &&
@@ -601,8 +790,15 @@ export default function PlatformPage() {
         finikConfigured: out.finikConfigured,
         pendingBotTokenChange: out.pendingBotTokenChange,
         businessType: settingsSnap.businessType,
-        merchantConfig: merchantConfigDraft,
+        merchantConfig:
+          isPlatformAdmin &&
+          Object.keys(settingsSnap.merchantSettingsSchema ?? {}).length > 0
+            ? merchantConfigDraft
+            : settingsSnap.merchantConfig,
         merchantSettingsSchema: settingsSnap.merchantSettingsSchema,
+        subscriptionStatus: settingsSnap.subscriptionStatus,
+        subscriptionEndsAt: settingsSnap.subscriptionEndsAt,
+        trialEndsAt: settingsSnap.trialEndsAt,
       });
       setSettingsName(out.name);
       setSettingsNewToken("");
@@ -640,6 +836,21 @@ export default function PlatformPage() {
             className="mp-top-header"
             subtitle="Управляйте своими магазинами"
           />
+          <p className="mp-access-hint">
+            {isPlatformAdmin ? (
+              <>
+                Режим оператора платформы: видны все магазины, включение/отключение
+                бота, вебхуки, удаление и ручное продление подписки. Доступ по{" "}
+                <span className="font-mono">ADMIN_IDS</span> на сервере.
+              </>
+            ) : (
+              <>
+                Этот кабинет открыт только вам: список магазинов приходит с сервера по
+                подписанным данным Telegram Mini App. Управление ботом и удаление
+                магазина выполняет только оператор платформы.
+              </>
+            )}
+          </p>
 
         {successFlash ? (
           <p className="mp-flash mp-flash--ok" role="status">
@@ -701,10 +912,17 @@ export default function PlatformPage() {
                 {businesses.map((b, index) => {
                   const toggleBusy = pendingByBusiness[b.id] === "toggle";
                   const webhookBusy = pendingByBusiness[b.id] === "webhook";
+                  const deleteBusy = pendingByBusiness[b.id] === "delete";
+                  const extendBusy = pendingByBusiness[b.id] === "extend";
+                  const unblockBusy = pendingByBusiness[b.id] === "unblock";
                   const runBadge = botRunBadge(b);
                   const subBadge = subscriptionBadge(b.status);
                   const whBadge = webhookBadge(b.webhookStatus);
                   const subLocked = !b.subscriptionActive;
+                  const trialEndLabel = formatRuDateShort(b.trialEndsAt);
+                  const subEndLabel = formatRuDateShort(b.subscriptionEndsAt);
+                  const trialRem = formatDaysRemaining(b.trialEndsAt);
+                  const subRem = formatDaysRemaining(b.subscriptionEndsAt);
                   return (
                     <motion.li
                       key={b.id}
@@ -738,16 +956,78 @@ export default function PlatformPage() {
                             <span className={subBadge.className}>
                               {subBadge.label}
                             </span>
-                            <span className={whBadge.className}>
-                              {whBadge.label}
-                            </span>
+                            {isPlatformAdmin ? (
+                              <span className={whBadge.className}>
+                                {whBadge.label}
+                              </span>
+                            ) : null}
                           </div>
-                          <div className="mp-webhook-block">
-                            <div className="mp-webhook-label">
-                              Вебхук Telegram
+                          {!isPlatformAdmin ? (
+                            <div className="mp-subscription-hint">
+                              {trialEndLabel != null ? (
+                                <p>
+                                  Пробный период до {trialEndLabel}
+                                  {trialRem != null ? ` — ${trialRem}` : ""}
+                                </p>
+                              ) : null}
+                              {subEndLabel != null ? (
+                                <p>
+                                  Подписка до {subEndLabel}
+                                  {subRem != null ? ` — ${subRem}` : ""}
+                                </p>
+                              ) : null}
+                              {trialEndLabel == null && subEndLabel == null ? (
+                                <p className="text-slate-500">
+                                  Сроки подписки и оплата — в настройках.
+                                </p>
+                              ) : null}
+                              <button
+                                type="button"
+                                className="mp-btn mp-btn--ghost mp-btn--sm mt-1 min-w-0"
+                                onClick={(ev) => {
+                                  ev.preventDefault();
+                                  ev.stopPropagation();
+                                  setSettingsErr(null);
+                                  setSettingsOkMsg(null);
+                                  setSettingsBusinessId(b.id);
+                                }}
+                              >
+                                Настройки
+                              </button>
                             </div>
-                            <div className="mp-webhook-url">
-                              {webhookUrlLine(b)}
+                          ) : (
+                            <div className="mp-subscription-hint">
+                              {trialEndLabel != null ? (
+                                <p>Пробный до {trialEndLabel}</p>
+                              ) : null}
+                              {subEndLabel != null ? (
+                                <p>Оплата до {subEndLabel}</p>
+                              ) : null}
+                            </div>
+                          )}
+                          {isPlatformAdmin ? (
+                            <div className="mp-webhook-block">
+                              <div className="mp-webhook-label">
+                                Вебхук Telegram
+                              </div>
+                              <div className="mp-webhook-url">
+                                {webhookUrlLine(b)}
+                              </div>
+                            </div>
+                          ) : null}
+                          <div className="mp-webhook-block mp-webhook-block--miniapp">
+                            <div className="mp-webhook-label">
+                              Ссылка для Mini App (BotFather → Menu / Web App)
+                            </div>
+                            <div className="mp-webhook-url">{miniAppOpenUrl(b.id)}</div>
+                            <div className="mp-copy-row">
+                              <button
+                                type="button"
+                                className="mp-btn mp-btn--secondary mp-btn--sm"
+                                onClick={() => void handleCopyMiniAppUrl(b)}
+                              >
+                                Скопировать ссылку
+                              </button>
                             </div>
                           </div>
                           {!b.isBlocked && subLocked ? (
@@ -797,56 +1077,88 @@ export default function PlatformPage() {
                             </button>
                           </div>
                           <div className="mp-store-actions-secondary">
-                            {platformAdminAccess === "yes" &&
-                            b.isActive &&
-                            !b.isBlocked ? (
-                              <button
-                                type="button"
-                                disabled={toggleBusy || subLocked}
-                                onClick={() => void handleToggleBot(b)}
-                                className="mp-btn mp-btn--danger mp-btn-wide-mobile"
-                                title={
-                                  subLocked
-                                    ? "Оплатите подписку"
-                                    : undefined
-                                }
-                              >
-                                {toggleBusy ? "…" : "Отключить бота"}
-                              </button>
-                            ) : null}
-                            {!b.isActive && b.isBlocked ? (
+                            {isPlatformAdmin ? (
+                              <>
+                                {b.isBlocked ? (
+                                  <button
+                                    type="button"
+                                    disabled={unblockBusy}
+                                    onClick={() => void handleUnblockShop(b)}
+                                    className="mp-btn mp-btn-enable mp-btn-wide-mobile"
+                                  >
+                                    {unblockBusy ? "…" : "Снять блокировку"}
+                                  </button>
+                                ) : null}
+                                {b.isActive && !b.isBlocked ? (
+                                  <button
+                                    type="button"
+                                    disabled={toggleBusy}
+                                    onClick={() => void handleToggleBot(b)}
+                                    className="mp-btn mp-btn--danger mp-btn-wide-mobile"
+                                  >
+                                    {toggleBusy ? "…" : "Отключить бота"}
+                                  </button>
+                                ) : null}
+                                {!b.isActive && !b.isBlocked ? (
+                                  <button
+                                    type="button"
+                                    disabled={toggleBusy}
+                                    title="Включить магазин"
+                                    onClick={() => void handleToggleBot(b)}
+                                    className="mp-btn mp-btn-enable mp-btn-wide-mobile"
+                                  >
+                                    {toggleBusy ? "…" : "🟢 Включить"}
+                                  </button>
+                                ) : null}
+                                {!b.isActive && b.isBlocked ? (
+                                  <span className="inline-flex min-h-[2.5rem] items-center text-sm font-semibold text-yellow-300">
+                                    ⛔ Заблокирован
+                                  </span>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  disabled={webhookBusy}
+                                  onClick={() => void handleCheckWebhook(b)}
+                                  className="mp-btn mp-btn--ghost mp-btn-wide-mobile"
+                                >
+                                  {webhookBusy ? "Проверка…" : "Проверить webhook"}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={deleteBusy}
+                                  onClick={() => void handleDeleteShop(b)}
+                                  className="mp-btn mp-btn--danger-outline mp-btn-wide-mobile"
+                                  title="Безвозвратно удалить магазин из платформы"
+                                >
+                                  {deleteBusy ? "…" : "Удалить магазин"}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={extendBusy}
+                                  onClick={() =>
+                                    void handleExtendSubscription(b, 30)
+                                  }
+                                  className="mp-btn mp-btn--secondary mp-btn-wide-mobile"
+                                >
+                                  {extendBusy ? "…" : "+30 дн. подписки"}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={extendBusy}
+                                  onClick={() =>
+                                    void handleExtendSubscription(b, 90)
+                                  }
+                                  className="mp-btn mp-btn--secondary mp-btn-wide-mobile"
+                                >
+                                  {extendBusy ? "…" : "+90 дн. подписки"}
+                                </button>
+                              </>
+                            ) : b.isBlocked ? (
                               <span className="inline-flex min-h-[2.5rem] items-center text-sm font-semibold text-yellow-300">
-                                ⛔ Заблокирован
+                                ⛔ Магазин заблокирован оператором. Обратитесь в
+                                поддержку.
                               </span>
                             ) : null}
-                            {!b.isActive && !b.isBlocked ? (
-                              <button
-                                type="button"
-                                disabled={toggleBusy || subLocked}
-                                title={
-                                  subLocked
-                                    ? "Оплатите подписку"
-                                    : "Включить магазин"
-                                }
-                                onClick={() => void handleToggleBot(b)}
-                                className="mp-btn mp-btn-enable mp-btn-wide-mobile"
-                              >
-                                {toggleBusy ? "…" : "🟢 Включить"}
-                              </button>
-                            ) : null}
-                            <button
-                              type="button"
-                              disabled={webhookBusy || subLocked}
-                              title={
-                                subLocked
-                                  ? "Оплатите подписку"
-                                  : undefined
-                              }
-                              onClick={() => void handleCheckWebhook(b)}
-                              className="mp-btn mp-btn--ghost mp-btn-wide-mobile"
-                            >
-                              {webhookBusy ? "Проверка…" : "Проверить webhook"}
-                            </button>
                           </div>
                         </div>
                       </div>
@@ -1123,6 +1435,41 @@ export default function PlatformPage() {
                   </p>
                 ) : null}
 
+                {settingsSnap != null ? (
+                  <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] px-3 py-3">
+                    <div className="text-sm font-semibold text-white">
+                      Подписка
+                    </div>
+                    <ul className="mp-muted mt-2 list-none space-y-1.5 text-sm leading-relaxed">
+                      <li>
+                        Статус:{" "}
+                        <span className="text-slate-200">
+                          {settingsSnap.subscriptionStatus || "—"}
+                        </span>
+                      </li>
+                      {formatRuDateShort(settingsSnap.trialEndsAt) != null ? (
+                        <li>
+                          Пробный до {formatRuDateShort(settingsSnap.trialEndsAt)}
+                          {formatDaysRemaining(settingsSnap.trialEndsAt) != null
+                            ? ` (${formatDaysRemaining(settingsSnap.trialEndsAt)})`
+                            : ""}
+                        </li>
+                      ) : null}
+                      {formatRuDateShort(settingsSnap.subscriptionEndsAt) !=
+                      null ? (
+                        <li>
+                          Оплаченный период до{" "}
+                          {formatRuDateShort(settingsSnap.subscriptionEndsAt)}
+                          {formatDaysRemaining(settingsSnap.subscriptionEndsAt) !=
+                          null
+                            ? ` (${formatDaysRemaining(settingsSnap.subscriptionEndsAt)})`
+                            : ""}
+                        </li>
+                      ) : null}
+                    </ul>
+                  </div>
+                ) : null}
+
                 <div>
                   <label
                     htmlFor="platform-settings-name"
@@ -1145,6 +1492,7 @@ export default function PlatformPage() {
                 </div>
 
                 {settingsSnap != null &&
+                isPlatformAdmin &&
                 Object.keys(settingsSnap.merchantSettingsSchema ?? {}).length >
                   0 ? (
                   <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3">
@@ -1251,6 +1599,36 @@ export default function PlatformPage() {
                     {finikSaving ? "Сохранение…" : "Сохранить"}
                   </button>
                 </div>
+
+                {!isPlatformAdmin && settingsSnap != null ? (
+                  <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/20 px-3 py-3">
+                    <div className="text-sm font-semibold text-white">
+                      Оплата подписки (Finik)
+                    </div>
+                    <p className="mp-muted mt-2 text-xs leading-relaxed">
+                      Продление только онлайн через платёжную страницу Finik
+                      магазина (нужны API key и secret на стороне Finik).
+                    </p>
+                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                      <button
+                        type="button"
+                        disabled={payPlanBusy !== null}
+                        onClick={() => void handleClientSubscriptionPay(30)}
+                        className="mp-btn mp-btn--secondary mp-btn--sm flex-1"
+                      >
+                        {payPlanBusy === 30 ? "…" : "Оплатить 30 дней"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={payPlanBusy !== null}
+                        onClick={() => void handleClientSubscriptionPay(90)}
+                        className="mp-btn mp-btn--secondary mp-btn--sm flex-1"
+                      >
+                        {payPlanBusy === 90 ? "…" : "Оплатить 90 дней"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
 
                 {settingsErr ? (
                   <p className="text-sm text-red-300" role="alert">

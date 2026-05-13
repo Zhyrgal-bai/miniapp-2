@@ -2,7 +2,8 @@ import { prisma } from "./db.js";
 import { merchantStoreEntitled } from "./subscriptionAccess.js";
 import { isValidFinikApiKey } from "../bot/saasRegistrationValidation.js";
 import { validateMerchantConfig } from "./templateValidation.js";
-import { platformMerchantOwnsBusiness } from "./platformMerchantAccess.js";
+import { platformMerchantCanAccessStoreSettings } from "./platformMerchantAccess.js";
+import { isPlatformAdminTelegramId } from "./platformAdminService.js";
 import { templateForBusinessType } from "../templates/index.js";
 import {
   createMerchantBotTokenChangeRequest,
@@ -20,6 +21,9 @@ export type PlatformStoreSettingsDTO = {
   businessType: string;
   merchantConfig: Record<string, unknown>;
   merchantSettingsSchema: Record<string, unknown>;
+  subscriptionStatus: string;
+  subscriptionEndsAt: string | null;
+  trialEndsAt: string | null;
 };
 
 export async function getPlatformStoreSettingsForMerchant(input: {
@@ -29,7 +33,7 @@ export async function getPlatformStoreSettingsForMerchant(input: {
   | { ok: true; settings: PlatformStoreSettingsDTO }
   | { ok: false; statusCode: number; error: string }
 > {
-  const allowed = await platformMerchantOwnsBusiness(
+  const allowed = await platformMerchantCanAccessStoreSettings(
     input.telegramId,
     input.businessId,
   );
@@ -45,6 +49,9 @@ export async function getPlatformStoreSettingsForMerchant(input: {
       finikApiKey: true,
       businessType: true,
       merchantConfig: true,
+      subscriptionStatus: true,
+      subscriptionEndsAt: true,
+      trialEndsAt: true,
     },
   });
   if (b == null) {
@@ -89,6 +96,9 @@ export async function getPlatformStoreSettingsForMerchant(input: {
         }
         return {};
       })(),
+      subscriptionStatus: String(b.subscriptionStatus ?? ""),
+      subscriptionEndsAt: b.subscriptionEndsAt?.toISOString() ?? null,
+      trialEndsAt: b.trialEndsAt?.toISOString() ?? null,
     },
   };
 }
@@ -114,7 +124,7 @@ export async function updatePlatformStoreSettingsForMerchant(input: {
     }
   | { ok: false; statusCode: number; error: string }
 > {
-  const allowed = await platformMerchantOwnsBusiness(
+  const allowed = await platformMerchantCanAccessStoreSettings(
     input.telegramId,
     input.businessId,
   );
@@ -122,18 +132,21 @@ export async function updatePlatformStoreSettingsForMerchant(input: {
     return { ok: false, statusCode: 403, error: "Нет доступа к этому магазину" };
   }
 
-  const entitledRow = await prisma.business.findUnique({
-    where: { id: input.businessId },
-    select: {
-      isBlocked: true,
-      isActive: true,
-      subscriptionStatus: true,
-      trialEndsAt: true,
-      subscriptionEndsAt: true,
-    },
-  });
-  if (!entitledRow || !merchantStoreEntitled(entitledRow)) {
-    return { ok: false, statusCode: 403, error: "Подписка не активна" };
+  const isAdmin = isPlatformAdminTelegramId(input.telegramId);
+  if (!isAdmin) {
+    const entitledRow = await prisma.business.findUnique({
+      where: { id: input.businessId },
+      select: {
+        isBlocked: true,
+        isActive: true,
+        subscriptionStatus: true,
+        trialEndsAt: true,
+        subscriptionEndsAt: true,
+      },
+    });
+    if (!entitledRow || !merchantStoreEntitled(entitledRow)) {
+      return { ok: false, statusCode: 403, error: "Подписка не активна" };
+    }
   }
 
   const rawName = input.body.storeName;
@@ -272,7 +285,7 @@ export async function updatePlatformFinikForMerchant(input: {
   | { ok: true; finikConfigured: boolean }
   | { ok: false; statusCode: number; error: string }
 > {
-  const allowed = await platformMerchantOwnsBusiness(
+  const allowed = await platformMerchantCanAccessStoreSettings(
     input.telegramId,
     input.businessId,
   );
@@ -280,18 +293,21 @@ export async function updatePlatformFinikForMerchant(input: {
     return { ok: false, statusCode: 403, error: "Нет доступа к этому магазину" };
   }
 
-  const entitledRow = await prisma.business.findUnique({
-    where: { id: input.businessId },
-    select: {
-      isBlocked: true,
-      isActive: true,
-      subscriptionStatus: true,
-      trialEndsAt: true,
-      subscriptionEndsAt: true,
-    },
-  });
-  if (!entitledRow || !merchantStoreEntitled(entitledRow)) {
-    return { ok: false, statusCode: 403, error: "Подписка не активна" };
+  const isAdmin = isPlatformAdminTelegramId(input.telegramId);
+  if (!isAdmin) {
+    const entitledRow = await prisma.business.findUnique({
+      where: { id: input.businessId },
+      select: {
+        isBlocked: true,
+        isActive: true,
+        subscriptionStatus: true,
+        trialEndsAt: true,
+        subscriptionEndsAt: true,
+      },
+    });
+    if (!entitledRow || !merchantStoreEntitled(entitledRow)) {
+      return { ok: false, statusCode: 403, error: "Подписка не активна" };
+    }
   }
 
   const raw = input.finikApiKey;
