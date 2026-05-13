@@ -474,9 +474,9 @@
 
 /* ── Каталог: хиты + ленты discovery в одной секции ── */
 .sf-section--with-discovery .sf-discovery-embedded {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid color-mix(in srgb, var(--sf-color-border) 42%, transparent);
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--sf-color-border) 38%, transparent);
 }
 
 .sf-discovery-embedded__title {
@@ -546,12 +546,32 @@
 }
 
 .sf-rail .product-bottom {
-  gap: 6px;
-  min-height: 36px;
+  flex-direction: column;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  gap: 8px;
+  min-height: 0;
+}
+
+.sf-rail .product-bottom .product-price-block {
+  align-self: flex-start;
+}
+
+.sf-rail .product-bottom--fashion .product-actions--icon {
+  align-self: flex-end;
+}
+
+.sf-rail .product-actions {
+  width: 100%;
+  min-width: 0;
+  justify-content: flex-end;
 }
 
 .sf-rail .product-add-btn,
 .sf-rail .add-button {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   min-height: 34px;
   padding: 5px 10px;
   font-size: max(11px, var(--sf-typo-button-size, 12px));

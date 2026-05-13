@@ -2,6 +2,8 @@
   background: var(--sf-color-card);
   color: var(--sf-color-text);
   contain: layout style;
+  container-type: inline-size;
+  container-name: pcard;
   border: none;
   border-radius: var(--sf-card-radius, var(--sf-radius-lg, 20px));
   overflow: hidden;
@@ -487,6 +489,47 @@
   margin-top: auto;
   flex-wrap: nowrap;
   min-height: 40px;
+}
+
+/* Узкая карточка (сетка 2 колонки / малый экран): цена и CTA в колонку — без налезания длинной подписи */
+@container pcard (max-width: 198px) {
+  .product-bottom:not(.product-bottom--fashion) {
+    flex-direction: column;
+    align-items: stretch;
+    flex-wrap: nowrap;
+    gap: 8px;
+    min-height: 0;
+  }
+
+  .product-bottom:not(.product-bottom--fashion) .product-price-block {
+    align-self: flex-start;
+  }
+
+  .product-bottom:not(.product-bottom--fashion) .product-actions {
+    width: 100%;
+    min-width: 0;
+    justify-content: flex-end;
+  }
+
+  .product-bottom:not(.product-bottom--fashion) .product-add-btn,
+  .product-bottom:not(.product-bottom--fashion) .add-button {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+}
+
+@container pcard (max-width: 198px) {
+  .product-bottom--fashion {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    min-height: 0;
+  }
+
+  .product-bottom--fashion .product-actions--icon {
+    align-self: flex-end;
+  }
 }
 
 .product-price-block {

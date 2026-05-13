@@ -60,8 +60,8 @@ export function FeaturedProductsSection(props: {
             businessId={props.businessId}
           />
         )}
+        {props.afterGrid != null ? props.afterGrid : null}
       </div>
-      {props.afterGrid != null ? props.afterGrid : null}
     </section>
   );
 }

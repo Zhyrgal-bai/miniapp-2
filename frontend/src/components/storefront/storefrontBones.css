@@ -220,6 +220,23 @@
   box-shadow: none !important;
 }
 
+.sf-root .product-card .product-info .sizes button {
+  color: color-mix(in srgb, var(--sf-color-text, #f8fafc) 12%, #141210) !important;
+  border-color: color-mix(in srgb, var(--sf-color-border, #555) 52%, #3a3830) !important;
+  background: color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface)) 72%, #ebe6de) !important;
+}
+
+.sf-root .product-card .product-info .sizes button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--sf-color-primary) 38%, #555) !important;
+  background: color-mix(in srgb, var(--sf-color-primary) 12%, var(--sf-color-surfaceAlt, #f0ebe4)) !important;
+}
+
+.sf-root .product-card .product-info .sizes button.active {
+  color: color-mix(in srgb, var(--sf-color-primary) 88%, #141210) !important;
+  border-color: color-mix(in srgb, var(--sf-color-primary) 55%, #444) !important;
+  background: color-mix(in srgb, var(--sf-color-primary) 18%, #f5f0e8) !important;
+}
+
 .sf-root .sizes button.active {
   box-shadow: none !important;
 }
