@@ -14,6 +14,8 @@ type Props = {
   /** Если задан (включая пустой массив) — внутренний GET /products не выполняется. */
   catalogProducts?: Product[] | null;
   onOpenProduct?: (product: Product) => void;
+  /** Внутри блока «Хиты» — без отдельной секции, визуально единый каталог. */
+  variant?: "full" | "embedded";
 };
 
 export function DiscoveryRails(props: Props): React.ReactElement | null {
@@ -62,30 +64,39 @@ export function DiscoveryRails(props: Props): React.ReactElement | null {
 
   if (!rails.length) return null;
 
+  const embedded = props.variant === "embedded";
+  const inner = (
+    <div className={`sf-section-grid sf-section-grid--md${embedded ? " sf-discovery-embedded__grid" : ""}`}>
+      {rails.map((r) => (
+        <div key={r.id} className={embedded ? "sf-discovery-embedded__rail" : undefined}>
+          <div className={`sf-section__title${embedded ? " sf-discovery-embedded__title" : ""}`}>{r.title}</div>
+          <div className={`sf-rail${embedded ? " sf-rail--embedded" : ""}`} role="list">
+            {r.products.map((p) => (
+              <div key={String(p.id)} className="sf-rail__item" role="listitem">
+                <ProductCard
+                  product={p}
+                  showToast={() => undefined}
+                  onOpenDetail={props.onOpenProduct}
+                  cardConfig={props.cardConfig}
+                  textConfig={props.textConfig}
+                  kit={props.kit}
+                  businessId={props.businessId}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  if (embedded) {
+    return <div className="sf-discovery-embedded">{inner}</div>;
+  }
+
   return (
     <section className="sf-section sf-section--discovery sf-section--padded">
-      <div className="sf-section-grid sf-section-grid--md">
-        {rails.map((r) => (
-          <div key={r.id}>
-            <div className="sf-section__title">{r.title}</div>
-            <div className="sf-rail" role="list">
-              {r.products.map((p) => (
-                <div key={String(p.id)} className="sf-rail__item" role="listitem">
-                  <ProductCard
-                    product={p}
-                    showToast={() => undefined}
-                    onOpenDetail={props.onOpenProduct}
-                    cardConfig={props.cardConfig}
-                    textConfig={props.textConfig}
-                    kit={props.kit}
-                    businessId={props.businessId}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
+      {inner}
     </section>
   );
 }

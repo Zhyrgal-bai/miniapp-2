@@ -1,4 +1,5 @@
 import type { Product } from "../../../types";
+import type { ReactNode } from "react";
 import ProductGrid from "../../product/ProductGrid";
 
 function readTitle(config: Record<string, unknown>, fallback: string): string {
@@ -17,6 +18,8 @@ export function FeaturedProductsSection(props: {
   kit?: "minimal" | "luxury" | "fashion" | "neon" | "default";
   businessId?: number;
   onOpenProduct?: (product: Product) => void;
+  /** Сразу под сеткой (например ленты discovery) — внутри той же секции и паддингов. */
+  afterGrid?: ReactNode;
 }): React.ReactElement | null {
   const cfgTitle = readTitle(props.config, "");
   const txtTitle =
@@ -36,7 +39,7 @@ export function FeaturedProductsSection(props: {
 
   return (
     <section
-      className={`sf-section sf-section--featured sf-section--padded${catalogBold ? " sf-section--catalog-bold" : ""}`}
+      className={`sf-section sf-section--featured sf-section--padded${catalogBold ? " sf-section--catalog-bold" : ""}${props.afterGrid != null ? " sf-section--with-discovery" : ""}`}
     >
       <div className="sf-section__title">{title}</div>
       <div className="sf-section-card sf-section-card--transparent sf-section-card--inset">
@@ -58,6 +61,7 @@ export function FeaturedProductsSection(props: {
           />
         )}
       </div>
+      {props.afterGrid != null ? props.afterGrid : null}
     </section>
   );
 }

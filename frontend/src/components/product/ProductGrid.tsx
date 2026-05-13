@@ -61,6 +61,7 @@ export default function ProductGrid({
         "product-grid",
         `product-grid--density-${density}`,
         catalogLayout === "list" ? "product-grid--list" : "",
+        products.length === 1 ? "product-grid--solo" : "",
       ]
         .filter(Boolean)
         .join(" ")}

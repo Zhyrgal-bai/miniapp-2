@@ -94,6 +94,14 @@
   width: 100%;
 }
 
+/* Один товар в сетке — не «висячая» половина экрана */
+.product-grid--solo:not(.product-grid--list) {
+  grid-template-columns: 1fr;
+  max-width: min(360px, 100%);
+  margin-inline: auto;
+  justify-items: stretch;
+}
+
 .sf-root--catalog-bold .product-grid:not(.product-grid--list) {
   gap: max(8px, calc(var(--sf-grid-gap, 10px) + 4px));
   padding-bottom: 20px;

@@ -147,6 +147,12 @@ export function StorefrontRenderer(props: {
     return [...s].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }, [props.payload.sections]);
 
+  const firstFeaturedSectionId = useMemo(
+    () => sections.find((sec) => sec.type === "featuredProducts")?.id ?? null,
+    [sections],
+  );
+  const hasFeaturedSection = firstFeaturedSectionId != null;
+
   const styleCfg = props.payload.storefrontStyleConfig as Record<string, unknown> | undefined;
   const catalogBold =
     styleCfg != null &&
@@ -217,10 +223,10 @@ export function StorefrontRenderer(props: {
                       onSelectCategory={setActiveCategoryId}
                     />
                   );
-                case "featuredProducts":
+                case "featuredProducts": {
+                  const pairDiscovery = s.id === firstFeaturedSectionId;
                   return (
                     <FeaturedProductsSection
-                      key={s.id}
                       config={s.config}
                       products={featuredFiltered}
                       catalogProductCount={featuredAll.length}
@@ -230,8 +236,24 @@ export function StorefrontRenderer(props: {
                       kit={kit}
                       businessId={props.payload.businessId}
                       onOpenProduct={openProduct}
+                      afterGrid={
+                        pairDiscovery ? (
+                          <DiscoveryRails
+                            variant="embedded"
+                            kit={kit}
+                            businessType={props.payload.businessType}
+                            businessId={props.payload.businessId}
+                            featuredProducts={featuredFiltered}
+                            cardConfig={mergedCardConfig}
+                            textConfig={props.payload.storefrontTextConfig ?? undefined}
+                            catalogProducts={catalog === null ? undefined : catalogFiltered}
+                            onOpenProduct={openProduct}
+                          />
+                        ) : null
+                      }
                     />
                   );
+                }
                 case "footer":
                   return <FooterSection key={s.id} config={s.config} />;
                 case "reviews":
@@ -262,18 +284,21 @@ export function StorefrontRenderer(props: {
             );
           })}
 
-          <div className="sf-feed__chunk sf-feed__chunk--discovery">
-            <DiscoveryRails
-              kit={kit}
-              businessType={props.payload.businessType}
-              businessId={props.payload.businessId}
-              featuredProducts={featuredFiltered}
-              cardConfig={mergedCardConfig}
-              textConfig={props.payload.storefrontTextConfig ?? undefined}
-              catalogProducts={catalog === null ? undefined : catalogFiltered}
-              onOpenProduct={openProduct}
-            />
-          </div>
+          {!hasFeaturedSection ? (
+            <div className="sf-feed__chunk sf-feed__chunk--discovery">
+              <DiscoveryRails
+                variant="full"
+                kit={kit}
+                businessType={props.payload.businessType}
+                businessId={props.payload.businessId}
+                featuredProducts={featuredFiltered}
+                cardConfig={mergedCardConfig}
+                textConfig={props.payload.storefrontTextConfig ?? undefined}
+                catalogProducts={catalog === null ? undefined : catalogFiltered}
+                onOpenProduct={openProduct}
+              />
+            </div>
+          ) : null}
 
           {showCatalogFooter ? (
             <div className="sf-feed__chunk sf-feed__chunk--catalog-footer">
