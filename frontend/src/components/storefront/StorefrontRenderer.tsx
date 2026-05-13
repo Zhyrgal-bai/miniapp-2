@@ -154,16 +154,30 @@ export function StorefrontRenderer(props: {
     styleCfg.catalog !== null &&
     (styleCfg.catalog as { gridBoost?: string }).gridBoost !== "normal";
 
+  const sliderProductById = useMemo(() => {
+    const m = new Map<number, Product>();
+    for (const p of featuredAll) {
+      if (typeof p.id === "number") m.set(p.id, p);
+    }
+    const cat = catalog ?? [];
+    for (const p of cat) {
+      if (typeof p.id === "number" && !m.has(p.id)) m.set(p.id, p);
+    }
+    return m;
+  }, [featuredAll, catalog]);
+
   const showCatalogFooter = useMemo(() => {
     const st = styleCfg?.catalogFooter;
     if (!st || typeof st !== "object") return false;
     if (!(st as { enabled?: boolean }).enabled) return false;
     const slides = (st as { slides?: unknown }).slides;
-    if (!Array.isArray(slides)) return false;
+    if (!Array.isArray(slides) || slides.length === 0) return false;
     return slides.some((row) => {
       if (!row || typeof row !== "object") return false;
       const im = (row as { image?: unknown }).image;
-      return typeof im === "string" && im.trim() !== "";
+      if (typeof im === "string" && im.trim() !== "") return true;
+      const pid = (row as { productId?: unknown }).productId;
+      return typeof pid === "number" && pid > 0;
     });
   }, [styleCfg]);
 
@@ -263,7 +277,11 @@ export function StorefrontRenderer(props: {
 
           {showCatalogFooter ? (
             <div className="sf-feed__chunk sf-feed__chunk--catalog-footer">
-              <CatalogFooterSlider storefrontStyleConfig={styleCfg} />
+              <CatalogFooterSlider
+                storefrontStyleConfig={styleCfg}
+                productById={sliderProductById}
+                onOpenProduct={openProduct}
+              />
             </div>
           ) : null}
         </div>

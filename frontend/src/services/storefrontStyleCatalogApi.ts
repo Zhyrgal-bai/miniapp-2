@@ -2,7 +2,8 @@ import { apiAbsoluteUrl, withTenantHeaders } from "./api";
 import { getWebAppUserId } from "../utils/telegramUserId";
 
 export type CatalogFooterSlideInput = {
-  image: string;
+  image?: string;
+  productId?: number;
   href?: string;
   caption?: string;
 };

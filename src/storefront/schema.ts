@@ -202,7 +202,7 @@ export type StorefrontStyleConfig = {
   catalogFooter: {
     enabled: boolean;
     title: string;
-    slides: Array<{ image: string; href: string; caption: string }>;
+    slides: CatalogFooterSlide[];
   };
 };
 
@@ -282,6 +282,31 @@ const PromoConfigSchema = z
     blocks: z.array(PromoBlockSchema).max(LIMITS.maxPromoBlocks).default([]),
   })
   .default({ blocks: [] });
+
+/** Нижний слайдер витрины: картинка (URL / Cloudinary) и/или товар для карточки и открытия листа. */
+const CatalogFooterSlideSchema = z
+  .object({
+    image: HttpsImageUrl.optional(),
+    productId: z.number().int().positive().optional(),
+    href: z.string().trim().max(2048).optional().default(""),
+    caption: z.string().trim().max(120).optional().default(""),
+  })
+  .superRefine((data, ctx) => {
+    const hasImg = data.image != null && String(data.image).trim() !== "";
+    const hasPid =
+      typeof data.productId === "number" &&
+      Number.isFinite(data.productId) &&
+      data.productId > 0;
+    if (!hasImg && !hasPid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Нужен URL изображения или выбранный товар",
+        path: ["image"],
+      });
+    }
+  });
+
+export type CatalogFooterSlide = z.infer<typeof CatalogFooterSlideSchema>;
 
 const StorefrontHeaderConfigSchema = z
   .object({
@@ -557,16 +582,7 @@ const StorefrontStyleConfigSchema = z
       .object({
         enabled: z.boolean().default(false),
         title: z.string().trim().max(80).optional().default("Акции"),
-        slides: z
-          .array(
-            z.object({
-              image: HttpsImageUrl,
-              href: z.string().trim().max(2048).optional().default(""),
-              caption: z.string().trim().max(120).optional().default(""),
-            }),
-          )
-          .max(10)
-          .default([]),
+        slides: z.array(CatalogFooterSlideSchema).max(10).default([]),
       })
       .default({ enabled: false, title: "Акции", slides: [] }),
   })
@@ -644,16 +660,7 @@ export const StorefrontStyleCatalogPatchSchema = z
       .object({
         enabled: z.boolean().optional(),
         title: z.string().trim().max(80).optional(),
-        slides: z
-          .array(
-            z.object({
-              image: HttpsImageUrl,
-              href: z.string().trim().max(2048).optional().default(""),
-              caption: z.string().trim().max(120).optional().default(""),
-            }),
-          )
-          .max(10)
-          .optional(),
+        slides: z.array(CatalogFooterSlideSchema).max(10).optional(),
       })
       .optional(),
   })

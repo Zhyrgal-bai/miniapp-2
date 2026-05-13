@@ -73,7 +73,7 @@
 }
 
 .sf-root .sf-section--padded {
-  padding: 8px 0 !important;
+  padding: 10px var(--sf-mobile-pad, 12px) !important;
 }
 
 /* ── Product grid ── */

@@ -1,16 +1,26 @@
 import type { ReactElement } from "react";
+import type { Product } from "../../../types";
+import { buildCloudinaryResponsiveUrl } from "../../../utils/cloudinaryTransforms";
 import "./CatalogFooterSlider.css";
 
-type CatalogFooterSlide = {
-  image: string;
+type SlideRow = {
+  image?: string;
+  productId?: number;
   href?: string;
   caption?: string;
 };
 
+function productPrimaryImage(p: Product): string {
+  const a = typeof p.image === "string" ? p.image.trim() : "";
+  if (a !== "") return a;
+  const first = p.images?.[0];
+  return typeof first === "string" ? first.trim() : "";
+}
+
 function readCatalogFooter(styleConfig: Record<string, unknown> | null | undefined): {
   enabled: boolean;
   title: string;
-  slides: CatalogFooterSlide[];
+  slides: SlideRow[];
 } | null {
   if (!styleConfig || typeof styleConfig !== "object") return null;
   const raw = styleConfig.catalogFooter;
@@ -19,17 +29,41 @@ function readCatalogFooter(styleConfig: Record<string, unknown> | null | undefin
   return {
     enabled: Boolean(o.enabled),
     title: typeof o.title === "string" ? o.title : "Акции",
-    slides: Array.isArray(o.slides) ? (o.slides as CatalogFooterSlide[]) : [],
+    slides: Array.isArray(o.slides) ? (o.slides as SlideRow[]) : [],
   };
+}
+
+function resolveSlide(
+  slide: SlideRow,
+  productById: Map<number, Product>,
+): { imageUrl: string; caption: string; product?: Product; externalHref: string } | null {
+  const pid =
+    typeof slide.productId === "number" && Number.isFinite(slide.productId) && slide.productId > 0
+      ? slide.productId
+      : undefined;
+  const p = pid != null ? productById.get(pid) : undefined;
+  const rawImg = typeof slide.image === "string" ? slide.image.trim() : "";
+  const fromProduct = p ? productPrimaryImage(p) : "";
+  const imageUrl = rawImg !== "" ? rawImg : fromProduct;
+  if (imageUrl === "") return null;
+  const cap = typeof slide.caption === "string" ? slide.caption.trim() : "";
+  const caption = cap !== "" ? cap : (p?.name ?? "");
+  const externalHref = typeof slide.href === "string" ? slide.href.trim() : "";
+  return { imageUrl, caption, product: p, externalHref };
 }
 
 export function CatalogFooterSlider(props: {
   storefrontStyleConfig?: Record<string, unknown> | null;
+  productById: Map<number, Product>;
+  onOpenProduct?: (product: Product) => void;
 }): ReactElement | null {
   const cfg = readCatalogFooter(props.storefrontStyleConfig ?? undefined);
   if (!cfg?.enabled) return null;
-  const slides = cfg.slides.filter((s) => typeof s.image === "string" && s.image.trim() !== "");
-  if (slides.length === 0) return null;
+
+  const resolved = cfg.slides
+    .map((s) => resolveSlide(s, props.productById))
+    .filter((x): x is NonNullable<typeof x> => x != null && x.imageUrl !== "");
+  if (resolved.length === 0) return null;
 
   const title = cfg.title.trim() !== "" ? cfg.title : "Акции";
 
@@ -39,23 +73,39 @@ export function CatalogFooterSlider(props: {
         <span className="sf-catalog-footer__title">{title}</span>
       </div>
       <div className="sf-catalog-footer__track" role="region">
-        {slides.map((s, i) => {
-          const href = typeof s.href === "string" ? s.href.trim() : "";
-          const cap = typeof s.caption === "string" ? s.caption.trim() : "";
+        {resolved.map((r, i) => {
+          const imgSrc = buildCloudinaryResponsiveUrl(r.imageUrl, "thumbnail");
+          const cap = r.caption.trim() !== "" ? r.caption : null;
           const inner = (
             <>
               <div className="sf-catalog-footer__media">
-                <img src={s.image} alt="" loading="lazy" decoding="async" />
+                <img src={imgSrc} alt="" loading="lazy" decoding="async" />
               </div>
-              {cap !== "" ? <div className="sf-catalog-footer__caption">{cap}</div> : null}
+              {cap != null ? <div className="sf-catalog-footer__caption">{cap}</div> : null}
             </>
           );
           const cardClass = "sf-catalog-footer__card";
+          const key = `${i}-${r.imageUrl.slice(0, 40)}`;
+
+          if (r.product != null && props.onOpenProduct) {
+            return (
+              <button
+                key={key}
+                type="button"
+                className={`${cardClass} sf-catalog-footer__card--action`}
+                onClick={() => props.onOpenProduct?.(r.product!)}
+              >
+                {inner}
+              </button>
+            );
+          }
+
+          const href = r.externalHref;
           if (href !== "" && /^https?:\/\//i.test(href)) {
             return (
               <a
-                key={`${i}-${s.image.slice(0, 48)}`}
-                className={cardClass}
+                key={key}
+                className={`${cardClass} sf-catalog-footer__card--action`}
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -64,8 +114,9 @@ export function CatalogFooterSlider(props: {
               </a>
             );
           }
+
           return (
-            <div key={`${i}-${s.image.slice(0, 48)}`} className={cardClass}>
+            <div key={key} className={cardClass}>
               {inner}
             </div>
           );
