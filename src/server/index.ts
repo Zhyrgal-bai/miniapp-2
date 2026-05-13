@@ -52,6 +52,8 @@ import {
 import { templateForBusinessType } from "../templates/index.js";
 import {
   StorefrontConfigSchema,
+  StorefrontStyleCatalogPatchSchema,
+  applyStorefrontStyleCatalogPatch,
   defaultStorefrontConfig,
   resolveStorefrontConfig,
   type ResolvedStorefrontPayload,
@@ -1307,6 +1309,110 @@ app.put("/api/merchant/storefront-config", async (req: Request, res: Response) =
     res.json({ ok: true, storefrontConfigVersion: parsed.data.version });
   } catch (e) {
     console.error("PUT /api/merchant/storefront-config:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.put("/api/merchant/storefront-style-catalog-patch", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.designEdit);
+    if (!merchant) return;
+
+    const parsedPatch = StorefrontStyleCatalogPatchSchema.safeParse(req.body);
+    if (!parsedPatch.success) {
+      res.status(400).json({ error: formatZodApiError(parsedPatch.error) });
+      return;
+    }
+
+    const bid = merchant.businessId;
+    const b = await prisma.business.findUnique({
+      where: { id: bid },
+      select: {
+        storefrontConfig: true,
+        storefrontPublishedConfig: true,
+      } as any,
+    });
+    if (!b) {
+      res.status(404).json({ error: "Business not found" });
+      return;
+    }
+
+    const sf = await prisma.storefront.findFirst({
+      where: { businessId: bid },
+      orderBy: { id: "asc" },
+      select: { id: true, publishedConfig: true, draftConfig: true } as any,
+    });
+
+    const publishedRaw =
+      sf &&
+      (sf as any).publishedConfig != null &&
+      typeof (sf as any).publishedConfig === "object" &&
+      JSON.stringify((sf as any).publishedConfig) !== "{}"
+        ? (sf as any).publishedConfig
+        : (b as any).storefrontPublishedConfig != null &&
+            typeof (b as any).storefrontPublishedConfig === "object" &&
+            JSON.stringify((b as any).storefrontPublishedConfig) !== "{}"
+          ? (b as any).storefrontPublishedConfig
+          : {};
+    const legacyRaw =
+      (b as any).storefrontConfig != null && typeof (b as any).storefrontConfig === "object"
+        ? (b as any).storefrontConfig
+        : {};
+    const rawConfig =
+      publishedRaw && JSON.stringify(publishedRaw) !== "{}" ? publishedRaw : legacyRaw;
+
+    const cfgParsed = StorefrontConfigSchema.safeParse(rawConfig ?? {});
+    const cfg = cfgParsed.success ? cfgParsed.data : defaultStorefrontConfig();
+
+    const nextStyle = applyStorefrontStyleCatalogPatch(
+      cfg.storefrontStyleConfig ?? {},
+      parsedPatch.data,
+    );
+    const nextCfg = StorefrontConfigSchema.parse({
+      ...cfg,
+      storefrontStyleConfig: nextStyle,
+    });
+
+    const mergeDraftStyleWithPublished = (draftRaw: unknown) => {
+      const d = StorefrontConfigSchema.safeParse(draftRaw ?? {});
+      const draftBase = d.success ? d.data : defaultStorefrontConfig();
+      return StorefrontConfigSchema.parse({
+        ...draftBase,
+        storefrontStyleConfig: nextCfg.storefrontStyleConfig,
+      });
+    };
+
+    if (sf) {
+      const draftMerged = mergeDraftStyleWithPublished((sf as any).draftConfig);
+      await prisma.storefront.update({
+        where: { id: (sf as any).id },
+        data: {
+          publishedConfig: nextCfg as any,
+          draftConfig: draftMerged as any,
+        } as any,
+      });
+    } else {
+      const pubNonempty =
+        (b as any).storefrontPublishedConfig != null &&
+        typeof (b as any).storefrontPublishedConfig === "object" &&
+        JSON.stringify((b as any).storefrontPublishedConfig) !== "{}";
+      if (pubNonempty) {
+        await prisma.business.update({
+          where: { id: bid },
+          data: { storefrontPublishedConfig: nextCfg as any } as any,
+        });
+      } else {
+        await prisma.business.update({
+          where: { id: bid },
+          data: { storefrontConfig: nextCfg as any } as any,
+        });
+      }
+    }
+
+    invalidateStorefrontCache(bid);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("PUT /api/merchant/storefront-style-catalog-patch:", e);
     res.status(500).json({ error: "Server error" });
   }
 });

@@ -13,6 +13,7 @@ export function FeaturedProductsSection(props: {
   catalogProductCount?: number;
   cardConfig?: Record<string, unknown>;
   textConfig?: Record<string, unknown>;
+  storefrontStyleConfig?: Record<string, unknown>;
   kit?: "minimal" | "luxury" | "fashion" | "neon" | "default";
   businessId?: number;
   onOpenProduct?: (product: Product) => void;
@@ -27,8 +28,16 @@ export function FeaturedProductsSection(props: {
     typeof props.catalogProductCount === "number" ? props.catalogProductCount : props.products.length;
   if (fullCount === 0) return null;
 
+  const catalogBold =
+    props.storefrontStyleConfig != null &&
+    typeof props.storefrontStyleConfig.catalog === "object" &&
+    props.storefrontStyleConfig.catalog !== null &&
+    (props.storefrontStyleConfig.catalog as { gridBoost?: string }).gridBoost !== "normal";
+
   return (
-    <section className="sf-section sf-section--featured sf-section--padded">
+    <section
+      className={`sf-section sf-section--featured sf-section--padded${catalogBold ? " sf-section--catalog-bold" : ""}`}
+    >
       <div className="sf-section__title">{title}</div>
       <div className="sf-section-card sf-section-card--transparent sf-section-card--inset">
         {props.products.length === 0 ? (

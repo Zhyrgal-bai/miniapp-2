@@ -6,3 +6,5 @@ frontend/dist
 .env
 
 /generated/prisma
+
+.vercel

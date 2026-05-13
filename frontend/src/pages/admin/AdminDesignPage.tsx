@@ -9,6 +9,10 @@ import { useShop } from "../../context/ShopContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useStorefrontPayload } from "../../components/storefront/runtime/StorefrontPayloadContext";
 import { saveBusinessThemePut } from "../../services/businessThemeApi";
+import {
+  putStorefrontStyleCatalogPatch,
+  type CatalogFooterSlideInput,
+} from "../../services/storefrontStyleCatalogApi";
 
 const TEMPLATE_LABELS: Record<StoreTemplateId, string> = {
   red: "Красный",
@@ -32,7 +36,7 @@ export default function AdminDesignPage(): ReactElement {
   const { businessId } = useShop();
   const { theme, templateId: serverTemplateId, refresh, loading: themeLoading } =
     useTheme();
-  const { refresh: refreshStorefrontPayload } = useStorefrontPayload();
+  const { refresh: refreshStorefrontPayload, payload: storefrontPayload } = useStorefrontPayload();
 
   const [templateId, setTemplateId] = useState<StoreTemplateId | null>(null);
   const [primaryColor, setPrimaryColor] = useState("#6366f1");
@@ -44,6 +48,14 @@ export default function AdminDesignPage(): ReactElement {
   const [bannerTitle, setBannerTitle] = useState("");
   const [bannerSubtitle, setBannerSubtitle] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
+
+  const [footerSliderEnabled, setFooterSliderEnabled] = useState(false);
+  const [footerSliderTitle, setFooterSliderTitle] = useState("Акции");
+  const [footerSlides, setFooterSlides] = useState<CatalogFooterSlideInput[]>([
+    { image: "", href: "", caption: "" },
+    { image: "", href: "", caption: "" },
+  ]);
+  const [catalogGridBoost, setCatalogGridBoost] = useState<"normal" | "bold">("bold");
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +85,40 @@ export default function AdminDesignPage(): ReactElement {
     theme.logoUrl,
   ]);
 
+  const syncCatalogStyleFromPayload = useCallback(() => {
+    const st = storefrontPayload?.storefrontStyleConfig;
+    if (!st || typeof st !== "object") return;
+    const o = st as Record<string, unknown>;
+    const cf = o.catalogFooter;
+    if (cf && typeof cf === "object") {
+      const c = cf as Record<string, unknown>;
+      setFooterSliderEnabled(Boolean(c.enabled));
+      setFooterSliderTitle(typeof c.title === "string" && c.title.trim() !== "" ? c.title : "Акции");
+      const slidesRaw = Array.isArray(c.slides) ? c.slides : [];
+      const slides: CatalogFooterSlideInput[] = slidesRaw.map((row) => {
+        if (!row || typeof row !== "object") return { image: "", href: "", caption: "" };
+        const r = row as Record<string, unknown>;
+        return {
+          image: typeof r.image === "string" ? r.image : "",
+          href: typeof r.href === "string" ? r.href : "",
+          caption: typeof r.caption === "string" ? r.caption : "",
+        };
+      });
+      const next = slides.length > 0 ? [...slides] : [];
+      while (next.length < 2) next.push({ image: "", href: "", caption: "" });
+      setFooterSlides(next.slice(0, 10));
+    }
+    const cat = o.catalog;
+    if (cat && typeof cat === "object" && "gridBoost" in cat) {
+      const gb = (cat as { gridBoost?: string }).gridBoost;
+      setCatalogGridBoost(gb === "normal" ? "normal" : "bold");
+    }
+  }, [storefrontPayload?.storefrontStyleConfig]);
+
+  useEffect(() => {
+    syncCatalogStyleFromPayload();
+  }, [syncCatalogStyleFromPayload]);
+
   useEffect(() => {
     if (themeLoading) return;
     syncFromServer();
@@ -99,6 +145,17 @@ export default function AdminDesignPage(): ReactElement {
     setError(null);
     setOk(null);
     try {
+      const slidesOut = footerSlides
+        .map((s) => ({
+          image: s.image.trim(),
+          href: (s.href ?? "").trim(),
+          caption: (s.caption ?? "").trim(),
+        }))
+        .filter((s) => s.image !== "");
+      if (footerSliderEnabled && slidesOut.length === 0) {
+        setError("Слайдер включён: добавьте хотя бы одну картинку (https, разрешённый хост).");
+        return;
+      }
       const patch = {
         primaryColor,
         bgColor,
@@ -114,8 +171,16 @@ export default function AdminDesignPage(): ReactElement {
         ...(templateId != null ? { templateId } : {}),
       };
       await saveBusinessThemePut(businessId, patch);
+      await putStorefrontStyleCatalogPatch(businessId, {
+        catalog: { gridBoost: catalogGridBoost },
+        catalogFooter: {
+          enabled: footerSliderEnabled,
+          title: footerSliderTitle.trim() === "" ? "Акции" : footerSliderTitle.trim(),
+          slides: slidesOut,
+        },
+      });
       await Promise.all([refresh(), refreshStorefrontPayload()]);
-      setOk("Сохранено. Откройте «Магазин» — цвета обновятся сразу.");
+      setOk("Сохранено. Откройте «Магазин» — цвета и нижний блок обновятся.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось сохранить");
     } finally {
@@ -280,6 +345,118 @@ export default function AdminDesignPage(): ReactElement {
             />
           </label>
         </div>
+
+        <p className="admin-theme-subtitle">Каталог и низ витрины</p>
+        <p className="admin-dash-page__subtitle" style={{ marginBottom: 10 }}>
+          Слайдер внизу — после каталога. Картинки: https и тот же набор хостов, что для витрины (например Cloudinary).
+        </p>
+        <p className="admin-theme-subtitle admin-theme-hint--tight" style={{ marginBottom: 6 }}>
+          Вид сетки товаров
+        </p>
+        <div className="admin-theme-layout-switch" style={{ marginBottom: 14 }}>
+          {(["normal", "bold"] as const).map((b) => (
+            <button
+              key={b}
+              type="button"
+              className={`admin-theme-layout-switch__btn${catalogGridBoost === b ? " admin-theme-layout-switch__btn--on" : ""}`}
+              onClick={() => setCatalogGridBoost(b)}
+            >
+              {b === "normal" ? "Спокойная" : "Мощная"}
+            </button>
+          ))}
+        </div>
+
+        <div className="admin-theme-banner" style={{ marginBottom: 8 }}>
+          <label className="admin-theme-toggle">
+            <input
+              type="checkbox"
+              checked={footerSliderEnabled}
+              onChange={(e) => setFooterSliderEnabled(e.target.checked)}
+            />
+            Показывать нижний слайдер на витрине
+          </label>
+          <label className="admin-theme-field admin-theme-field--full">
+            Заголовок над слайдером
+            <input
+              type="text"
+              value={footerSliderTitle}
+              onChange={(e) => setFooterSliderTitle(e.target.value)}
+              maxLength={80}
+              disabled={!footerSliderEnabled}
+            />
+          </label>
+        </div>
+
+        <div className="admin-dash-page__subtitle" style={{ marginBottom: 8 }}>
+          Слайды (до 10)
+        </div>
+        <div style={{ display: "grid", gap: 12 }}>
+          {footerSlides.map((row, idx) => (
+            <div
+              key={idx}
+              style={{
+                border: "1px solid rgba(255,255,255,0.12)",
+                borderRadius: 10,
+                padding: 10,
+                opacity: footerSliderEnabled ? 1 : 0.55,
+              }}
+            >
+              <p style={{ margin: "0 0 8px", fontSize: 12, opacity: 0.85 }}>Слайд {idx + 1}</p>
+              <label className="admin-theme-field admin-theme-field--full">
+                Картинка (URL)
+                <input
+                  type="url"
+                  value={row.image}
+                  disabled={!footerSliderEnabled}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setFooterSlides((prev) => prev.map((p, i) => (i === idx ? { ...p, image: v } : p)));
+                  }}
+                  placeholder="https://…"
+                />
+              </label>
+              <label className="admin-theme-field admin-theme-field--full">
+                Ссылка (необязательно)
+                <input
+                  type="url"
+                  value={row.href ?? ""}
+                  disabled={!footerSliderEnabled}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setFooterSlides((prev) => prev.map((p, i) => (i === idx ? { ...p, href: v } : p)));
+                  }}
+                  placeholder="https://…"
+                />
+              </label>
+              <label className="admin-theme-field admin-theme-field--full">
+                Подпись
+                <input
+                  type="text"
+                  value={row.caption ?? ""}
+                  disabled={!footerSliderEnabled}
+                  maxLength={120}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setFooterSlides((prev) => prev.map((p, i) => (i === idx ? { ...p, caption: v } : p)));
+                  }}
+                />
+              </label>
+            </div>
+          ))}
+        </div>
+        {footerSlides.length < 10 ? (
+          <button
+            type="button"
+            className="admin-theme-reset"
+            style={{ marginTop: 10 }}
+            disabled={!footerSliderEnabled}
+            onClick={() =>
+              setFooterSlides((prev) => [...prev, { image: "", href: "", caption: "" }])
+            }
+          >
+            Добавить слайд
+          </button>
+        ) : null}
 
         <div
           className="admin-theme-preview"

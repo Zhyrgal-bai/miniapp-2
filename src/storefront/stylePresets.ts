@@ -40,6 +40,8 @@ export const STOREFRONT_STYLE_PRESETS: Record<Exclude<StorefrontKitId, "default"
       alignment: "center",
       ctaPosition: "below",
     },
+    catalog: { gridBoost: "bold" },
+    catalogFooter: { enabled: false, title: "Акции", slides: [] },
   },
   luxury: {
     layout: { density: "comfortable", sectionSpacing: 20, productGap: 12, mobilePadding: 14, contentWidth: "narrow" },
@@ -69,6 +71,8 @@ export const STOREFRONT_STYLE_PRESETS: Record<Exclude<StorefrontKitId, "default"
       alignment: "center",
       ctaPosition: "overlay",
     },
+    catalog: { gridBoost: "bold" },
+    catalogFooter: { enabled: false, title: "Акции", slides: [] },
   },
   fashion: {
     layout: { density: "normal", sectionSpacing: 18, productGap: 10, mobilePadding: 12, contentWidth: "full" },
@@ -98,6 +102,8 @@ export const STOREFRONT_STYLE_PRESETS: Record<Exclude<StorefrontKitId, "default"
       alignment: "left",
       ctaPosition: "below",
     },
+    catalog: { gridBoost: "bold" },
+    catalogFooter: { enabled: false, title: "Акции", slides: [] },
   },
   neon: {
     layout: { density: "compact", sectionSpacing: 14, productGap: 8, mobilePadding: 10, contentWidth: "full" },
@@ -127,6 +133,8 @@ export const STOREFRONT_STYLE_PRESETS: Record<Exclude<StorefrontKitId, "default"
       alignment: "left",
       ctaPosition: "overlay",
     },
+    catalog: { gridBoost: "bold" },
+    catalogFooter: { enabled: false, title: "Акции", slides: [] },
   },
 };
 

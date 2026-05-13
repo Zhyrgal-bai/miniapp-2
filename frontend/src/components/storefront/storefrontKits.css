@@ -286,6 +286,16 @@
   transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
 }
 
+.sf-section--catalog-bold.sf-section--featured .sf-section__title {
+  letter-spacing: 0.06em;
+  text-shadow: 0 1px 0 color-mix(in srgb, var(--sf-color-background, #000) 25%, transparent);
+}
+
+.sf-section--catalog-bold.sf-section--featured .sf-section-card {
+  border-color: color-mix(in srgb, var(--sf-color-border) 70%, transparent);
+  box-shadow: 0 16px 40px color-mix(in srgb, var(--sf-color-shadow, #000) 12%, transparent);
+}
+
 /* Structural Hero archetypes */
 .sf-hero {
   --_sf-hero-radius: var(--sf-hero-radius, var(--sf-section-radius));

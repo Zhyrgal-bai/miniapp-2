@@ -11,6 +11,7 @@ import { FooterSection } from "./sections/FooterSection";
 import { ReviewsSection } from "./sections/ReviewsSection";
 import { FaqSection } from "./sections/FaqSection";
 import { DiscoveryRails } from "./discovery/DiscoveryRails";
+import { CatalogFooterSlider } from "./sections/CatalogFooterSlider";
 import { ProductDetailSheet } from "./product/ProductDetailSheet";
 import "./storefrontKits.css";
 import {
@@ -146,9 +147,33 @@ export function StorefrontRenderer(props: {
     return [...s].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }, [props.payload.sections]);
 
+  const styleCfg = props.payload.storefrontStyleConfig as Record<string, unknown> | undefined;
+  const catalogBold =
+    styleCfg != null &&
+    typeof styleCfg.catalog === "object" &&
+    styleCfg.catalog !== null &&
+    (styleCfg.catalog as { gridBoost?: string }).gridBoost !== "normal";
+
+  const showCatalogFooter = useMemo(() => {
+    const st = styleCfg?.catalogFooter;
+    if (!st || typeof st !== "object") return false;
+    if (!(st as { enabled?: boolean }).enabled) return false;
+    const slides = (st as { slides?: unknown }).slides;
+    if (!Array.isArray(slides)) return false;
+    return slides.some((row) => {
+      if (!row || typeof row !== "object") return false;
+      const im = (row as { image?: unknown }).image;
+      return typeof im === "string" && im.trim() !== "";
+    });
+  }, [styleCfg]);
+
   return (
     <ThemeVarsProvider theme={theme}>
-      <div data-sf-kit={kit} className="sf-root" style={cssVars as unknown as React.CSSProperties}>
+      <div
+        data-sf-kit={kit}
+        className={`sf-root${catalogBold ? " sf-root--catalog-bold" : ""}`}
+        style={cssVars as unknown as React.CSSProperties}
+      >
         <div className="sf-feed" data-sf-feed>
           {sections.map((s) => {
             const chunk = (() => {
@@ -187,6 +212,7 @@ export function StorefrontRenderer(props: {
                       catalogProductCount={featuredAll.length}
                       cardConfig={mergedCardConfig}
                       textConfig={props.payload.storefrontTextConfig ?? undefined}
+                      storefrontStyleConfig={styleCfg}
                       kit={kit}
                       businessId={props.payload.businessId}
                       onOpenProduct={openProduct}
@@ -234,6 +260,12 @@ export function StorefrontRenderer(props: {
               onOpenProduct={openProduct}
             />
           </div>
+
+          {showCatalogFooter ? (
+            <div className="sf-feed__chunk sf-feed__chunk--catalog-footer">
+              <CatalogFooterSlider storefrontStyleConfig={styleCfg} />
+            </div>
+          ) : null}
         </div>
       </div>
 

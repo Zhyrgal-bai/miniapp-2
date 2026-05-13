@@ -93,3 +93,15 @@
   align-self: center;
   width: 100%;
 }
+
+.sf-root--catalog-bold .product-grid:not(.product-grid--list) {
+  gap: max(8px, calc(var(--sf-grid-gap, 10px) + 4px));
+  padding-bottom: 20px;
+}
+
+.sf-root--catalog-bold .product-grid:not(.product-grid--list) .product-card {
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 55%, transparent);
+  box-shadow:
+    0 10px 28px color-mix(in srgb, var(--sf-color-shadow, #000) 14%, transparent),
+    0 1px 0 color-mix(in srgb, var(--sf-color-surface) 40%, transparent);
+}

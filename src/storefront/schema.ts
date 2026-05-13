@@ -196,6 +196,14 @@ export type StorefrontStyleConfig = {
     alignment: "left" | "center";
     ctaPosition: "below" | "overlay" | "hidden";
   };
+  catalog: {
+    gridBoost: "normal" | "bold";
+  };
+  catalogFooter: {
+    enabled: boolean;
+    title: string;
+    slides: Array<{ image: string; href: string; caption: string }>;
+  };
 };
 
 function configBytesLimitCheck(v: unknown): boolean {
@@ -540,6 +548,27 @@ const StorefrontStyleConfigSchema = z
         alignment: "center",
         ctaPosition: "below",
       }),
+    catalog: z
+      .object({
+        gridBoost: z.enum(["normal", "bold"]).default("bold"),
+      })
+      .default({ gridBoost: "bold" }),
+    catalogFooter: z
+      .object({
+        enabled: z.boolean().default(false),
+        title: z.string().trim().max(80).optional().default("Акции"),
+        slides: z
+          .array(
+            z.object({
+              image: HttpsImageUrl,
+              href: z.string().trim().max(2048).optional().default(""),
+              caption: z.string().trim().max(120).optional().default(""),
+            }),
+          )
+          .max(10)
+          .default([]),
+      })
+      .default({ enabled: false, title: "Акции", slides: [] }),
   })
   .default({
     layout: {
@@ -600,7 +629,73 @@ const StorefrontStyleConfigSchema = z
       alignment: "center",
       ctaPosition: "below",
     },
+    catalog: { gridBoost: "bold" },
+    catalogFooter: { enabled: false, title: "Акции", slides: [] },
   });
+
+export const StorefrontStyleCatalogPatchSchema = z
+  .object({
+    catalog: z
+      .object({
+        gridBoost: z.enum(["normal", "bold"]).optional(),
+      })
+      .optional(),
+    catalogFooter: z
+      .object({
+        enabled: z.boolean().optional(),
+        title: z.string().trim().max(80).optional(),
+        slides: z
+          .array(
+            z.object({
+              image: HttpsImageUrl,
+              href: z.string().trim().max(2048).optional().default(""),
+              caption: z.string().trim().max(120).optional().default(""),
+            }),
+          )
+          .max(10)
+          .optional(),
+      })
+      .optional(),
+  })
+  .strict()
+  .refine((v) => v.catalog !== undefined || v.catalogFooter !== undefined, {
+    message: "Нужен catalog или catalogFooter",
+  });
+
+export type StorefrontStyleCatalogPatch = z.infer<typeof StorefrontStyleCatalogPatchSchema>;
+
+export function applyStorefrontStyleCatalogPatch(
+  currentStyle: unknown,
+  patch: StorefrontStyleCatalogPatch,
+): StorefrontStyleConfig {
+  const base = StorefrontStyleConfigSchema.parse(currentStyle ?? {});
+  let next: StorefrontStyleConfig = { ...base };
+  if (patch.catalog) {
+    next = {
+      ...next,
+      catalog: {
+        ...base.catalog,
+        ...patch.catalog,
+        gridBoost: patch.catalog.gridBoost ?? base.catalog.gridBoost,
+      },
+    };
+  }
+  if (patch.catalogFooter) {
+    const cf = base.catalogFooter;
+    next = {
+      ...next,
+      catalogFooter: {
+        ...cf,
+        ...patch.catalogFooter,
+        title: patch.catalogFooter.title !== undefined ? patch.catalogFooter.title : cf.title,
+        enabled: patch.catalogFooter.enabled !== undefined ? patch.catalogFooter.enabled : cf.enabled,
+        slides:
+          patch.catalogFooter.slides !== undefined ? patch.catalogFooter.slides : cf.slides,
+      },
+    };
+  }
+  return StorefrontStyleConfigSchema.parse(next);
+}
 
 const ReviewsItemSchema = z.object({
   author: z.string().trim().max(80).default(""),
