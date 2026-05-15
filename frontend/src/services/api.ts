@@ -71,9 +71,16 @@ function isPlatformAdminPath(pathname: string): boolean {
   return pathname.startsWith("/api/platform/admin/");
 }
 
+function isPublicStorefrontPath(pathname: string): boolean {
+  if (/^\/api\/storefront\/by-slug\/[^/]+$/i.test(pathname)) return true;
+  if (/^\/api\/storefront\/\d+$/i.test(pathname)) return true;
+  return false;
+}
+
 export function isTenantScopedPath(pathname: string): boolean {
   if (!pathname.startsWith("/")) return false;
   if (isPlatformAdminPath(pathname)) return false;
+  if (isPublicStorefrontPath(pathname)) return false;
   return (
     pathname.startsWith("/api/storefront/") ||
     pathname.startsWith("/api/business/") ||
