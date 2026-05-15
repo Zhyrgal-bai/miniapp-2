@@ -285,6 +285,15 @@ function merchantMiniAppBaseUrl(): string {
     .replace(/\/$/, "");
 }
 
+function storefrontMiniAppRelativePath(b: {
+  id: number;
+  slug: string | null;
+}): string {
+  const s = typeof b.slug === "string" ? b.slug.trim() : "";
+  if (s !== "") return `/store/${encodeURIComponent(s)}`;
+  return `/?shop=${encodeURIComponent(String(b.id))}`;
+}
+
 function miniAppMerchantCabinetUrl(): string | null {
   const base = merchantMiniAppBaseUrl();
   if (base === "") return null;
@@ -335,7 +344,13 @@ async function replyMerchantStoreDashboard(
       "Ссылки на ваши магазины в Mini App включатся после настройки адресов витрины на сервере.",
     );
     rows.forEach((r, i) => {
-      lines.push(`${i + 1}. «${r.business.name}» — shop=${r.business.id}`);
+      const slug =
+        typeof r.business.slug === "string" ? r.business.slug.trim() : "";
+      const ref =
+        slug !== ""
+          ? `store/${slug}`
+          : `shop=${r.business.id}`;
+      lines.push(`${i + 1}. «${r.business.name}» — ${ref}`);
     });
   }
 
@@ -347,9 +362,10 @@ async function replyMerchantStoreDashboard(
   if (base) {
     for (const row of rows) {
       const b = row.business;
-      const q = encodeURIComponent(String(b.id));
-      const storeUrl = `${base}/?shop=${q}`;
-      const ordersUrl = `${base}/?shop=${q}&view=my-orders`;
+      const path = storefrontMiniAppRelativePath(b);
+      const q = path.includes("?") ? "&" : "?";
+      const storeUrl = `${base}${path}`;
+      const ordersUrl = `${base}${path}${q}view=my-orders`;
       const short =
         b.name.length > 18 ? `${b.name.slice(0, 17)}…` : b.name;
       keyboard.push([
@@ -1225,7 +1241,7 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
 
     const bizFromDb = await prisma.business.findUnique({
       where: { id: businessId },
-      select: { id: true, botToken: true },
+      select: { id: true, botToken: true, slug: true },
     });
     const storedToken = bizFromDb?.botToken ?? "";
     console.log("TOKEN BEFORE DECRYPT:", `${String(storedToken).slice(0, 24)}…(len=${String(storedToken).length})`);
@@ -1276,10 +1292,11 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
     );
 
     const front = merchantMiniAppBaseUrl();
-    const tgUrl =
-      front !== ""
-        ? `${front}/?shop=${encodeURIComponent(String(businessId))}`
-        : undefined;
+    const rel =
+      bizFromDb != null
+        ? storefrontMiniAppRelativePath(bizFromDb)
+        : `/?shop=${encodeURIComponent(String(businessId))}`;
+    const tgUrl = front !== "" ? `${front}${rel}` : undefined;
 
     if (tgUrl) {
       await ctx.telegram
@@ -1303,9 +1320,11 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
       await ctx.telegram
         .sendMessage(
           row.telegramId,
-          [
+            [
             "Магазин подключён ✅",
-            `Витрина: shop=${businessId}`,
+            bizFromDb != null
+              ? `Витрина: ${storefrontMiniAppRelativePath(bizFromDb)}`
+              : `Витрина: shop=${businessId}`,
             "",
             "Откройте своего бота и отправьте /start.",
           ].join("\n")

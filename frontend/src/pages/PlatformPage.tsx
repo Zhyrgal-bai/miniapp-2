@@ -53,10 +53,20 @@ function webhookUrlLine(b: PlatformMyBusinessDTO): string {
   return "URL вебхука не задан или недоступен";
 }
 
-function miniAppOpenUrl(businessId: number): string {
+function miniAppOpenUrl(b: Pick<PlatformMyBusinessDTO, "id" | "slug">): string {
   if (typeof window === "undefined") return "";
   const origin = window.location.origin.replace(/\/$/, "");
-  return `${origin}/?shop=${encodeURIComponent(String(businessId))}`;
+  const s = typeof b.slug === "string" ? b.slug.trim() : "";
+  if (s !== "") {
+    return `${origin}/store/${encodeURIComponent(s)}`;
+  }
+  return `${origin}/?shop=${encodeURIComponent(String(b.id))}`;
+}
+
+function miniAppNavigatePath(b: Pick<PlatformMyBusinessDTO, "id" | "slug">): string {
+  const s = typeof b.slug === "string" ? b.slug.trim() : "";
+  if (s !== "") return `/store/${encodeURIComponent(s)}`;
+  return `/?shop=${encodeURIComponent(String(b.id))}`;
 }
 
 function formatRuDateShort(iso: string | null): string | null {
@@ -84,6 +94,7 @@ function adminBusinessToCard(row: PlatformAdminBusinessDTO): PlatformMyBusinessD
   return {
     id: row.id,
     name: row.name,
+    slug: null,
     status: row.status,
     isActive: row.isActive,
     isBlocked: row.isBlocked,
@@ -181,7 +192,7 @@ function webhookBadge(ws: PlatformMyBusinessDTO["webhookStatus"]): {
   };
 }
 
-/** Панель клиента Mini App: маршрут `/merchant` (витрины по-прежнему `/?shop=ID`). */
+/** Панель клиента Mini App: маршрут `/merchant` (витрины: `/store/:slug` или legacy `/?shop=ID`). */
 export default function PlatformPage() {
   const navigate = useNavigate();
   const [businesses, setBusinesses] = useState<PlatformMyBusinessDTO[]>([]);
@@ -485,7 +496,7 @@ export default function PlatformPage() {
   };
 
   const handleCopyMiniAppUrl = async (b: PlatformMyBusinessDTO) => {
-    const url = miniAppOpenUrl(b.id);
+    const url = miniAppOpenUrl(b);
     if (url === "") return;
     setError(null);
     try {
@@ -1019,7 +1030,7 @@ export default function PlatformPage() {
                             <div className="mp-webhook-label">
                               Ссылка для Mini App (BotFather → Menu / Web App)
                             </div>
-                            <div className="mp-webhook-url">{miniAppOpenUrl(b.id)}</div>
+                            <div className="mp-webhook-url">{miniAppOpenUrl(b)}</div>
                             <div className="mp-copy-row">
                               <button
                                 type="button"
@@ -1041,9 +1052,7 @@ export default function PlatformPage() {
                               type="button"
                               disabled={subLocked}
                               onClick={() =>
-                                navigate(
-                                  `/?shop=${encodeURIComponent(String(b.id))}`,
-                                )
+                                navigate(miniAppNavigatePath(b))
                               }
                               className="mp-btn mp-btn--primary mp-btn--sm min-w-0"
                               title={
@@ -1336,9 +1345,7 @@ export default function PlatformPage() {
                           type="button"
                           onClick={() => {
                             markOnboardingComplete();
-                            navigate(
-                              `/?shop=${encodeURIComponent(String(businesses[0].id))}`,
-                            );
+                            navigate(miniAppNavigatePath(businesses[0]))
                           }}
                           className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg"
                         >

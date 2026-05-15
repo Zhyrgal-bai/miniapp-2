@@ -1,9 +1,11 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { api } from "../../../services/api";
 import { useShop } from "../../../context/ShopContext";
 import type { ResolvedStorefrontPayload } from "../StorefrontRenderer";
 import { safeParseStorefrontPublicApiResponse } from "@repo-storefront/storefrontPublicApiResponseSchema";
+import { parseStoreSlugFromPath, rememberResolvedStoreSlug } from "../../../utils/storeParams";
 
 type StorefrontPayloadCtx = {
   payload: ResolvedStorefrontPayload | null;
@@ -16,25 +18,35 @@ const Ctx = createContext<StorefrontPayloadCtx | null>(null);
 
 export function StorefrontPayloadProvider(props: { children: React.ReactNode }): React.ReactElement {
   const { businessId } = useShop();
+  const { pathname } = useLocation();
+  const slug = useMemo(() => parseStoreSlugFromPath(pathname), [pathname]);
   const [payload, setPayload] = useState<ResolvedStorefrontPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const aborted = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
-    if (businessId == null) {
-      setPayload(null);
-      setError("Магазин не найден");
-      setLoading(false);
-      return;
-    }
     aborted.current?.abort();
     const ac = new AbortController();
     aborted.current = ac;
     setLoading(true);
     setError(null);
+
+    const url = slug
+      ? `/api/storefront/by-slug/${encodeURIComponent(slug)}`
+      : businessId != null
+        ? `/api/storefront/${businessId}`
+        : null;
+
+    if (url == null) {
+      setPayload(null);
+      setError("Магазин не найден");
+      setLoading(false);
+      return;
+    }
+
     try {
-      const res = await api.get(`/api/storefront/${businessId}`, { signal: ac.signal });
+      const res = await api.get(url, { signal: ac.signal });
       if (ac.signal.aborted) return;
       const parsed = safeParseStorefrontPublicApiResponse(res.data);
       if (!parsed.ok) {
@@ -43,7 +55,12 @@ export function StorefrontPayloadProvider(props: { children: React.ReactNode }):
         setError("Некорректный ответ витрины");
         return;
       }
-      setPayload(parsed.data as ResolvedStorefrontPayload);
+      const data = parsed.data as ResolvedStorefrontPayload;
+      setPayload(data);
+      if (slug && typeof data.businessId === "number" && data.businessId > 0) {
+        rememberResolvedStoreSlug(slug, data.businessId);
+        window.dispatchEvent(new CustomEvent("sf:tenantResolved"));
+      }
     } catch (e) {
       if (ac.signal.aborted) return;
       console.error(e);
@@ -52,7 +69,7 @@ export function StorefrontPayloadProvider(props: { children: React.ReactNode }):
     } finally {
       if (!ac.signal.aborted) setLoading(false);
     }
-  }, [businessId]);
+  }, [slug, businessId]);
 
   useEffect(() => {
     void refresh();
@@ -72,4 +89,3 @@ export function useStorefrontPayload(): StorefrontPayloadCtx {
   if (!v) throw new Error("useStorefrontPayload must be used within StorefrontPayloadProvider");
   return v;
 }
-

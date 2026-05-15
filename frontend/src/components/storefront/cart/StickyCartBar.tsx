@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useCartStore } from "../../../store/useCartStore";
 import { useStorefrontPayload } from "../runtime/StorefrontPayloadContext";
+import { storefrontShellModeFromStyleConfig } from "../../../storefront/buildStorefrontLayoutCssVars";
 
 function formatSom(v: number): string {
   const n = Number(v) || 0;
@@ -18,6 +19,9 @@ export function StickyCartBar(props: {
   const prevQty = useRef<number>(qty);
   const [bump, setBump] = useState(false);
   const { payload } = useStorefrontPayload();
+  const shellMode = storefrontShellModeFromStyleConfig(
+    (payload?.storefrontStyleConfig ?? null) as Record<string, unknown> | null,
+  );
   const txt = payload?.storefrontTextConfig ?? {};
   const readTxt = (k: string, fb: string) => {
     const v = (txt as Record<string, unknown>)[k];
@@ -36,17 +40,23 @@ export function StickyCartBar(props: {
   if (!props.visible || qty <= 0) return null;
 
   return (
-    <div className={`sf-sticky-cart${bump ? " sf-sticky-cart--bump" : ""}`} role="region" aria-label="Корзина">
-      <button type="button" className="sf-sticky-cart__main" onClick={props.onOpenCart}>
-        <div className="sf-sticky-cart__title">{readTxt("menuCartLabel", "Корзина")}</div>
-        <div className="sf-sticky-cart__meta">
-          <span className="sf-sticky-cart__qty">{qty} шт.</span>
-          <span className="sf-sticky-cart__sum">{formatSom(total)} сом</span>
-        </div>
-      </button>
-      <button type="button" className="sf-sticky-cart__cta" onClick={props.onCheckout}>
-        {readTxt("checkoutLabel", "Оформить")}
-      </button>
+    <div
+      className="sf-chrome-align-commerce sf-sticky-cart-slot"
+      data-sf-shell={shellMode}
+      role="presentation"
+    >
+      <div className={`sf-sticky-cart${bump ? " sf-sticky-cart--bump" : ""}`} role="region" aria-label="Корзина">
+        <button type="button" className="sf-sticky-cart__main" onClick={props.onOpenCart}>
+          <div className="sf-sticky-cart__title">{readTxt("menuCartLabel", "Корзина")}</div>
+          <div className="sf-sticky-cart__meta">
+            <span className="sf-sticky-cart__qty">{qty} шт.</span>
+            <span className="sf-sticky-cart__sum">{formatSom(total)} сом</span>
+          </div>
+        </button>
+        <button type="button" className="sf-sticky-cart__cta" onClick={props.onCheckout}>
+          {readTxt("checkoutLabel", "Оформить")}
+        </button>
+      </div>
     </div>
   );
 }

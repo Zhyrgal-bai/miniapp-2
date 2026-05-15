@@ -14,22 +14,26 @@
 }
 
 /* Narrow phones: stable 2 columns; minmax(0,1fr) avoids overflow from long titles. */
-.product-grid:not(.product-grid--list):not(.product-grid--solo):not(.product-grid--empty) {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  max-width: min(100%, 1240px);
-  margin-inline: auto;
+.product-grid:not(.product-grid--list):not(.product-grid--solo):not(.product-grid--empty):not(.product-grid--rail) {
+  grid-template-columns: repeat(var(--sf-catalog-cols, 2), minmax(0, 1fr));
+  max-width: 100%;
+  margin-inline: 0;
 }
 
-/* Tablet / desktop: fluid columns with capped track width — no “two wall-sized cards”. */
-@media (min-width: 520px) {
-  .product-grid:not(.product-grid--list):not(.product-grid--solo):not(.product-grid--empty) {
-    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+/* Outside commerce shell (no --sf-catalog-cols): viewport-based fallback */
+@supports not (container-type: inline-size) {
+  .product-grid:not(.product-grid--list):not(.product-grid--solo):not(.product-grid--empty):not(.product-grid--rail) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-}
-
-@media (min-width: 900px) {
-  .product-grid:not(.product-grid--list):not(.product-grid--solo):not(.product-grid--empty) {
-    grid-template-columns: repeat(auto-fill, minmax(184px, 1fr));
+  @media (min-width: 520px) {
+    .product-grid:not(.product-grid--list):not(.product-grid--solo):not(.product-grid--empty):not(.product-grid--rail) {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 900px) {
+    .product-grid:not(.product-grid--list):not(.product-grid--solo):not(.product-grid--empty):not(.product-grid--rail) {
+      grid-template-columns: repeat(auto-fill, minmax(184px, 1fr));
+    }
   }
 }
 
@@ -95,6 +99,28 @@
   row-gap: max(10px, calc(var(--sf-grid-gap, 14px) * 0.92));
   column-gap: 0;
   padding: max(8px, calc(var(--sf-mobile-pad, 12px) * 0.88)) max(10px, var(--sf-mobile-pad, 12px)) 16px;
+}
+
+/* Horizontal “rail” row (optional catalogLayout from admin) — scroll inside shell */
+.product-grid--rail {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(148px, min(42%, 220px));
+  grid-template-columns: unset;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  row-gap: 0;
+  column-gap: var(--pg-gap-x);
+  max-width: 100%;
+  margin-inline: 0;
+  padding-bottom: 10px;
+}
+
+.product-grid--rail .product-card {
+  scroll-snap-align: start;
+  height: 100%;
 }
 
 .product-grid--list .product-card {

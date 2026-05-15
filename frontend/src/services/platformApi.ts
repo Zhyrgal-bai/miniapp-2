@@ -4,6 +4,7 @@ import { telegramWebAppInitDataHeader } from "../utils/telegramInitDataHeader";
 export type PlatformMyBusinessDTO = {
   id: number;
   name: string;
+  slug: string | null;
   /** Серверное значение статуса (blocked, active, …) */
   status: string;
   isActive: boolean;
@@ -56,6 +57,8 @@ export async function fetchPlatformMyBusinesses(params: {
       typeof x.trialEndsAt === "string" && x.trialEndsAt.trim() !== ""
         ? x.trialEndsAt.trim()
         : null;
+    const slugRaw =
+      typeof x.slug === "string" && x.slug.trim() !== "" ? x.slug.trim() : null;
     return {
       id:
         typeof idNum === "number" &&
@@ -64,6 +67,7 @@ export async function fetchPlatformMyBusinesses(params: {
           ? idNum
           : 0,
       name: String(x.name ?? ""),
+      slug: slugRaw,
       status: String(x.status ?? ""),
       isActive,
       isBlocked,

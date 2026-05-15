@@ -1,9 +1,9 @@
 .sf-sticky-cart {
-  position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-  z-index: 40;
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  z-index: 1;
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 10px;
@@ -79,9 +79,6 @@
 
 @media (max-width: 480px) {
   .sf-sticky-cart {
-    left: max(10px, env(safe-area-inset-left, 0px));
-    right: max(10px, env(safe-area-inset-right, 0px));
-    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
     gap: 8px;
     padding: var(--sf-space-xs, 8px);
   }

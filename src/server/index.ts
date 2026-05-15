@@ -61,12 +61,11 @@ import {
 import { validateUx } from "../ux/validators.js";
 import { validateImageFile, uploadTenantImage } from "../media/upload.js";
 import { extractCloudinaryPublicIds, safeDeleteCloudinaryAsset } from "../media/delete.js";
+import { invalidateStorefrontCache } from "./storefrontCache.js";
 import {
-  getCachedStorefrontPayload,
-  invalidateStorefrontCache,
-  setCachedStorefrontPayload,
-} from "./storefrontCache.js";
-import { safeParseStorefrontPublicApiResponse } from "../storefront/storefrontPublicApiResponseSchema.js";
+  normalizePublicStoreSlug,
+  sendStorefrontPublicPayload,
+} from "./storefrontPublicPayload.js";
 import {
   adminBlockBusiness,
   adminDeactivateBusiness,
@@ -739,164 +738,36 @@ app.get("/api/merchant/schemas", async (req: Request, res: Response) => {
   }
 });
 
+app.get("/api/storefront/by-slug/:slug", async (req: Request, res: Response) => {
+  try {
+    const slug = normalizePublicStoreSlug(String(req.params.slug ?? ""));
+    if (!slug) {
+      res.status(400).json({ error: "Invalid slug" });
+      return;
+    }
+    const b = await prisma.business.findFirst({
+      where: { slug } as any,
+      select: { id: true, isActive: true, isBlocked: true } as any,
+    });
+    if (!b) {
+      res.status(404).json({ error: "Store not found" });
+      return;
+    }
+    if (!(b as any).isActive || (b as any).isBlocked) {
+      res.status(403).json({ error: "Store unavailable" });
+      return;
+    }
+    await sendStorefrontPublicPayload(res, (b as any).id);
+  } catch (e) {
+    console.error("GET /api/storefront/by-slug/:slug:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 app.get("/api/storefront/:businessId", async (req: Request, res: Response) => {
   try {
     const businessId = Number(req.params.businessId);
-    if (!Number.isInteger(businessId) || businessId <= 0) {
-      return res.status(400).json({ error: "Invalid businessId" });
-    }
-
-    const cached = getCachedStorefrontPayload(businessId);
-    if (cached) {
-      const cachedOk = safeParseStorefrontPublicApiResponse(cached);
-      if (cachedOk.ok) {
-        return res.json(cachedOk.data);
-      }
-      console.warn(
-        `GET /api/storefront/${businessId}: cached payload failed validation, rebuilding:`,
-        cachedOk.error,
-      );
-    }
-
-    const b = await prisma.business.findUnique({
-      where: { id: businessId },
-      select: {
-        id: true,
-        name: true,
-        isActive: true,
-        isBlocked: true,
-        businessType: true,
-        templateId: true,
-        themeConfig: true,
-        storefrontConfig: true,
-        storefrontPublishedConfig: true,
-        storefrontConfigVersion: true,
-        featureFlags: true,
-      } as any,
-    });
-    if (!b) return res.status(404).json({ error: "Business not found" });
-    if (!(b as any).isActive || (b as any).isBlocked) {
-      return res.status(403).json({ error: "Store unavailable" });
-    }
-
-    // Prefer default Storefront table (Stage 6), fallback to legacy Business fields.
-    const sf = await prisma.storefront.findFirst({
-      where: { businessId },
-      orderBy: { id: "asc" },
-      select: { publishedConfig: true } as any,
-    });
-    const publishedRaw =
-      sf && (sf as any).publishedConfig != null && typeof (sf as any).publishedConfig === "object"
-        ? (sf as any).publishedConfig
-        : (b as any).storefrontPublishedConfig != null &&
-            typeof (b as any).storefrontPublishedConfig === "object"
-          ? (b as any).storefrontPublishedConfig
-          : {};
-    const legacyRaw =
-      (b as any).storefrontConfig != null && typeof (b as any).storefrontConfig === "object"
-        ? (b as any).storefrontConfig
-        : {};
-    const rawConfig = publishedRaw && JSON.stringify(publishedRaw) !== "{}" ? publishedRaw : legacyRaw;
-
-    const payload = resolveStorefrontConfig({
-      businessId,
-      businessType: String((b as any).businessType ?? ""),
-      templateId: (b as any).templateId ?? null,
-      storefrontConfigVersion: Number((b as any).storefrontConfigVersion ?? 1),
-      rawStorefrontConfig: rawConfig ?? {},
-      rawThemeConfig: (b as any).themeConfig ?? {},
-      rawFeatureFlags: (b as any).featureFlags ?? {},
-    });
-    (payload as any).storeName = String((b as any).name ?? "").slice(0, 80);
-
-    const enabledTypes = new Set(payload.sections.map((s) => s.type));
-    if (enabledTypes.has("categories")) {
-      const categories = await prisma.category.findMany({
-        where: { businessId },
-        orderBy: { id: "asc" },
-      });
-      const nodeById = new Map<number, any>();
-      for (const c of categories) {
-        nodeById.set(c.id, {
-          id: c.id,
-          name: c.name,
-          parentId: (c as any).parentId ?? null,
-          children: [],
-        });
-      }
-      const roots: any[] = [];
-      for (const c of categories) {
-        const node = nodeById.get(c.id)!;
-        const pid = (c as any).parentId ?? null;
-        if (pid == null) roots.push(node);
-        else {
-          const parent = nodeById.get(pid);
-          if (parent) parent.children.push(node);
-          else roots.push(node);
-        }
-      }
-      (payload as any).categories = roots;
-    }
-
-    if (enabledTypes.has("featuredProducts")) {
-      const sec = payload.sections.find((s) => s.type === "featuredProducts");
-      const lim = Number((sec?.config as any)?.limit ?? 8);
-      const take = Number.isFinite(lim) && lim > 0 ? Math.min(lim, 24) : 8;
-      const products = await prisma.product.findMany({
-        where: { businessId },
-        orderBy: { id: "desc" },
-        take,
-        select: {
-          id: true,
-          name: true,
-          price: true,
-          image: true,
-          images: true,
-          description: true,
-          categoryId: true,
-          createdAt: true,
-        },
-      });
-      const ids = products.map((p) => p.id);
-      const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      const soldRows =
-        ids.length > 0
-          ? await prisma.orderItem.groupBy({
-              by: ["productId"],
-              where: {
-                businessId,
-                productId: { in: ids },
-                order: { createdAt: { gte: since30d } },
-              },
-              _sum: { quantity: true },
-            })
-          : [];
-      const soldById = new Map<number, number>();
-      for (const r of soldRows) {
-        const pid = r.productId;
-        if (typeof pid === "number") soldById.set(pid, Number(r._sum.quantity ?? 0) || 0);
-      }
-      (payload as any).featuredProducts = products.map((p) => ({
-        ...p,
-        sold30d: soldById.get(p.id) ?? 0,
-        sold: soldById.get(p.id) ?? 0,
-      }));
-    }
-
-    const payloadOk = safeParseStorefrontPublicApiResponse(payload);
-    if (!payloadOk.ok) {
-      console.error(
-        `GET /api/storefront/${businessId}: payload failed validation:`,
-        payloadOk.error,
-      );
-      return res.status(500).json({ error: "Storefront payload invalid" });
-    }
-
-    setCachedStorefrontPayload({
-      businessId,
-      payload: payloadOk.data as ResolvedStorefrontPayload,
-    });
-    return res.json(payloadOk.data);
+    await sendStorefrontPublicPayload(res, businessId);
   } catch (e) {
     console.error("GET /api/storefront/:businessId:", e);
     res.status(500).json({ error: "Server error" });

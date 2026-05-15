@@ -11,6 +11,8 @@ import {
 export type PlatformMyBusinessDTO = {
   id: number;
   name: string;
+  /** Публичный permalink витрины (если задан). */
+  slug: string | null;
   /** Короткий код статуса для UI */
   status: string;
   isActive: boolean;
@@ -31,6 +33,7 @@ export type PlatformMyBusinessDTO = {
 const businessSelectForPlatformList = {
   id: true,
   name: true,
+  slug: true,
   isActive: true,
   isBlocked: true,
   subscriptionStatus: true,
@@ -69,6 +72,7 @@ export async function mapRowsWithWebhook(
   rows: Array<{
     id: number;
     name: string;
+    slug: string | null;
     isActive: boolean;
     isBlocked: boolean;
     subscriptionStatus: SubscriptionStatus;
@@ -91,6 +95,7 @@ export async function mapRowsWithWebhook(
     return {
       id: r.id,
       name: r.name,
+      slug: typeof r.slug === "string" && r.slug.trim() !== "" ? r.slug.trim() : null,
       status: computePlatformBusinessStatus(r),
       isActive: r.isActive,
       isBlocked: r.isBlocked,

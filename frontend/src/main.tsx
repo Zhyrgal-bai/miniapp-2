@@ -12,6 +12,7 @@ import "leaflet/dist/leaflet.css";
 import "./index.css";
 /** Последним в бандле: перебивает ProductCard.css / ProductGrid.css / kits (порядок каскада). */
 import "./components/storefront/storefrontBones.css";
+import "./components/storefront/commerceShell.css";
 
 const tg = window.Telegram?.WebApp;
 tg?.ready();
@@ -32,6 +33,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 path="/platform"
                 element={<Navigate to="/merchant" replace />}
               />
+              <Route path="/store/:slug" element={<App />} />
               <Route path="/" element={<RootAppOrPlatform />} />
               <Route path="*" element={<App />} />
             </Routes>

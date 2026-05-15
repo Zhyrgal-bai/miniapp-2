@@ -35,7 +35,7 @@ export default function ProductGrid({
 
   const catalogLayoutRaw = (cardConfig as Record<string, unknown> | undefined)?.catalogLayout;
   const catalogLayout =
-    catalogLayoutRaw === "list" ? "list" : "grid";
+    catalogLayoutRaw === "list" ? "list" : catalogLayoutRaw === "rail" ? "rail" : "grid";
 
   if (catalogProductCount === 0) {
     return (
@@ -61,6 +61,7 @@ export default function ProductGrid({
         "product-grid",
         `product-grid--density-${density}`,
         catalogLayout === "list" ? "product-grid--list" : "",
+        catalogLayout === "rail" ? "product-grid--rail" : "",
         products.length === 1 ? "product-grid--solo" : "",
       ]
         .filter(Boolean)

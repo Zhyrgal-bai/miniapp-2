@@ -27,12 +27,32 @@ function clamp(value: number, min: number, max: number): number {
 
 function clampPos(x: number, y: number, minY: number, bottomInset: number): Pos {
   if (typeof window === "undefined") return { x, y };
-  const maxX = Math.max(PAD, window.innerWidth - BTN - PAD);
+  const shell = getStorefrontShellDragXBounds();
+  const viewportMaxX = Math.max(PAD, window.innerWidth - BTN - PAD);
+  const minX = shell != null ? Math.max(PAD, shell.minX) : PAD;
+  const maxX =
+    shell != null
+      ? Math.max(minX, Math.min(viewportMaxX, shell.maxX))
+      : viewportMaxX;
   const maxY = Math.max(minY, window.innerHeight - BTN - PAD - bottomInset);
   return {
-    x: clamp(x, PAD, maxX),
+    x: clamp(x, minX, maxX),
     y: clamp(y, minY, maxY),
   };
+}
+
+function getStorefrontShellDragXBounds(): { minX: number; maxX: number } | null {
+  if (typeof document === "undefined") return null;
+  const el = document.querySelector(".sf-commerce-shell");
+  if (!(el instanceof HTMLElement)) return null;
+  const r = el.getBoundingClientRect();
+  if (!Number.isFinite(r.left) || !Number.isFinite(r.right) || r.width < 80) {
+    return null;
+  }
+  const minX = Math.max(PAD, Math.floor(r.left) + PAD);
+  const maxX = Math.ceil(r.right) - BTN - PAD;
+  if (maxX < minX + 24) return null;
+  return { minX, maxX };
 }
 
 function defaultPos(minY: number, bottomInset: number): Pos {

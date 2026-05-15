@@ -81,15 +81,15 @@
 
 /* ── Product grid (bones loads last: enforce rhythm + merchant --sf-grid-gap floor) ── */
 .sf-root .product-grid:not(.product-grid--empty):not(.product-grid--list) {
-  row-gap: max(14px, calc(var(--sf-grid-gap, 14px) + 2px)) !important;
-  column-gap: max(12px, var(--sf-grid-gap, 14px)) !important;
-  padding: 10px 14px 16px !important;
+  row-gap: max(14px, calc(var(--sf-grid-gap, 14px) + 2px));
+  column-gap: max(12px, var(--sf-grid-gap, 14px));
+  padding: 10px 14px 16px;
 }
 
 .sf-root .product-grid.product-grid--list:not(.product-grid--empty) {
-  row-gap: max(10px, calc(var(--sf-grid-gap, 14px) * 0.92)) !important;
-  column-gap: 0 !important;
-  padding: 10px 14px 16px !important;
+  row-gap: max(10px, calc(var(--sf-grid-gap, 14px) * 0.92));
+  column-gap: 0;
+  padding: 10px 14px 16px;
 }
 
 .sf-root .product-grid--empty {

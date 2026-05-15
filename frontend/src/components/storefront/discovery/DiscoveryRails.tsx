@@ -68,11 +68,14 @@ export function DiscoveryRails(props: Props): React.ReactElement | null {
   const inner = (
     <div className={`sf-section-grid sf-section-grid--md${embedded ? " sf-discovery-embedded__grid" : ""}`}>
       {rails.map((r) => (
-        <div key={r.id} className={embedded ? "sf-discovery-embedded__rail" : undefined}>
+        <div key={r.id} className={embedded ? "sf-discovery-embedded__block" : undefined}>
           <div className={`sf-section__title${embedded ? " sf-discovery-embedded__title" : ""}`}>{r.title}</div>
-          <div className={`sf-rail${embedded ? " sf-rail--embedded" : ""}`} role="list">
+          <div
+            className={`sf-discovery-adaptive__body${embedded ? " sf-discovery-adaptive__body--embedded" : ""}`}
+            role="list"
+          >
             {r.products.map((p) => (
-              <div key={String(p.id)} className="sf-rail__item" role="listitem">
+              <div key={String(p.id)} className="sf-discovery-adaptive__item" role="listitem">
                 <ProductCard
                   product={p}
                   showToast={() => undefined}

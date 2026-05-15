@@ -568,7 +568,25 @@ export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
       .trim()
       .replace(/\/$/, "");
     if (shop && base) {
-      const url = `${base}/?shop=${encodeURIComponent(shop)}`;
+      let url = `${base}/?shop=${encodeURIComponent(shop)}`;
+      try {
+        const bid = Number(shop);
+        if (Number.isInteger(bid) && bid > 0) {
+          const row = await prisma.business.findUnique({
+            where: { id: bid },
+            select: { slug: true } as any,
+          });
+          const slug =
+            row && typeof (row as any).slug === "string" && String((row as any).slug).trim() !== ""
+              ? String((row as any).slug).trim().toLowerCase()
+              : null;
+          if (slug) {
+            url = `${base}/store/${encodeURIComponent(slug)}`;
+          }
+        }
+      } catch {
+        /* legacy ?shop= */
+      }
       const lead = merchantHere
         ? "Ваш магазин 🏪"
         : "Добро пожаловать в магазин 🛍️";

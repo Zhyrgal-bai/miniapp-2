@@ -1,64 +1,74 @@
 /* Context module exports both provider and hook (Fast Refresh convention). */
 /* eslint-disable react-refresh/only-export-components */
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { readShopIdString } from "../utils/storeParams";
+import { parseStoreSlugFromPath, readShopIdString } from "../utils/storeParams";
 import { useCartStore } from "../store/useCartStore";
 
 export type ShopContextValue = {
-  /** `Business.id` тенанта из `?shop=` / `?businessId=` / Telegram Mini App start_param */
+  /** `Business.id` тенанта из `/store/:slug`, `?shop=` / `?businessId=` или Telegram Mini App */
   businessId: number | null;
   shopIdString: string | undefined;
+  /** Публичный slug витрины (после резолва slug-маршрута). */
+  storefrontSlug: string | null;
+  /** Slug в URL ещё не сматчился с sessionStorage (идёт первый запрос). */
+  tenantResolving: boolean;
 };
 
 const ShopContext = createContext<ShopContextValue | null>(null);
 
 export function ShopProvider({ children }: { children: React.ReactNode }) {
-  const { search } = useLocation();
+  const { search, pathname } = useLocation();
   const [searchTick, setSearchTick] = useState(0);
   const [telegramTick, setTelegramTick] = useState(0);
+  const [slugResolveTick, setSlugResolveTick] = useState(0);
 
   useEffect(() => {
     setSearchTick((n) => n + 1);
-  }, [search]);
+  }, [search, pathname]);
 
   useEffect(() => {
     const id = window.setTimeout(() => setTelegramTick((n) => n + 1), 200);
     return () => window.clearTimeout(id);
-  }, [search]);
+  }, [search, pathname]);
+
+  useEffect(() => {
+    const bump = () => setSlugResolveTick((n) => n + 1);
+    window.addEventListener("sf:tenantResolved", bump as EventListener);
+    return () => window.removeEventListener("sf:tenantResolved", bump as EventListener);
+  }, []);
 
   const value = useMemo<ShopContextValue>(() => {
     void searchTick;
     void telegramTick;
-    const shopIdString = readShopIdString();
+    void slugResolveTick;
+    const shopIdString = readShopIdString(pathname);
     const n = shopIdString ? Number(shopIdString) : NaN;
-    const businessId =
-      Number.isInteger(n) && n > 0 ? n : null;
+    const businessId = Number.isInteger(n) && n > 0 ? n : null;
+    const pathSlug = parseStoreSlugFromPath(pathname);
+    const tenantResolving = Boolean(pathSlug) && !shopIdString;
+    const storefrontSlug =
+      pathSlug ??
+      (typeof window !== "undefined" ? sessionStorage.getItem("miniapp-store-slug") : null);
     return {
       businessId,
       shopIdString,
+      storefrontSlug: storefrontSlug && storefrontSlug.trim() !== "" ? storefrontSlug : null,
+      tenantResolving,
     };
-  }, [searchTick, telegramTick]);
+  }, [searchTick, telegramTick, slugResolveTick, pathname]);
 
   useEffect(() => {
     useCartStore.getState().syncTenantShopId(value.shopIdString ?? null);
   }, [value.shopIdString]);
 
-  return (
-    <ShopContext.Provider value={value}>{children}</ShopContext.Provider>
-  );
+  return <ShopContext.Provider value={value}>{children}</ShopContext.Provider>;
 }
 
 export function useShop(): ShopContextValue {
   const ctx = useContext(ShopContext);
   if (!ctx) {
-    throw new Error("useShop must be used within ShopProvider");
+    throw new Error("useShop must be used within a ShopProvider");
   }
   return ctx;
 }

@@ -11,7 +11,8 @@ export type CatalogCardPresetId =
   | "fashion"
   | "overlay_cta"
   | "bottom_cta"
-  | "floating_cta";
+  | "floating_cta"
+  | "rail_row";
 
 const PRESETS: Record<CatalogCardPresetId, Record<string, unknown>> = {
   compact_grid: {
@@ -81,6 +82,15 @@ const PRESETS: Record<CatalogCardPresetId, Record<string, unknown>> = {
     ctaStyle: "pill",
     textAlign: "center",
   },
+  rail_row: {
+    variant: "marketplace",
+    density: "compact",
+    imageRatio: "square",
+    catalogLayout: "rail",
+    priceStyle: "bold",
+    ctaStyle: "full",
+    shadow: false,
+  },
 };
 
 export function isCatalogCardPresetId(v: unknown): v is CatalogCardPresetId {
@@ -97,4 +107,36 @@ export function mergeStorefrontCardConfigWithPreset(
   const preset = { ...PRESETS[pid] };
   delete base.catalogCardPreset;
   return { ...preset, ...base };
+}
+
+/** Viewport tier for `responsiveCardPreset` layers (admin builder). */
+export type StorefrontCardViewportTier = "default" | "md" | "lg";
+
+function applyCardConfigLayer(
+  merged: Record<string, unknown>,
+  layer: unknown,
+): Record<string, unknown> {
+  if (layer == null || typeof layer !== "object" || Array.isArray(layer)) return merged;
+  const next = mergeStorefrontCardConfigWithPreset(layer as Record<string, unknown>);
+  return { ...merged, ...next };
+}
+
+/**
+ * Applies `catalogCardPreset` then optional `responsiveCardPreset` layers:
+ * `{ default?: object, md?: object, lg?: object }` — md from 640px, lg from 1024px.
+ */
+export function mergeStorefrontCardConfigWithResponsive(
+  raw: Record<string, unknown> | undefined | null,
+  tier: StorefrontCardViewportTier,
+): Record<string, unknown> {
+  const base = raw && typeof raw === "object" && !Array.isArray(raw) ? { ...raw } : {};
+  const rcp = base.responsiveCardPreset;
+  delete base.responsiveCardPreset;
+  let merged = mergeStorefrontCardConfigWithPreset(base);
+  if (rcp == null || typeof rcp !== "object" || Array.isArray(rcp)) return merged;
+  const o = rcp as Record<string, unknown>;
+  merged = applyCardConfigLayer(merged, o.default ?? o.sm);
+  if (tier === "md" || tier === "lg") merged = applyCardConfigLayer(merged, o.md);
+  if (tier === "lg") merged = applyCardConfigLayer(merged, o.lg);
+  return merged;
 }

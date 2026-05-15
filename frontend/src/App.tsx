@@ -18,7 +18,10 @@ import {
   readPendingFinikOrder,
   clearPendingFinikOrder,
 } from "./utils/pendingFinikOrder";
-import { mergeTenantShopIntoSearch } from "./utils/storeParams";
+import {
+  mergeTenantIntoLocation,
+  parseStoreSlugFromPath,
+} from "./utils/storeParams";
 import type { MyOrderRow } from "./types/myOrder";
 import "./App.css";
 import "./components/ui/Admin.css";
@@ -38,6 +41,7 @@ import { useStorefrontPayload } from "./components/storefront/runtime/Storefront
 import {
   buildStorefrontLayoutCssVars,
   kitFromTemplateId,
+  storefrontShellModeFromStyleConfig,
 } from "./storefront/buildStorefrontLayoutCssVars";
 
 type AppNavPage =
@@ -69,7 +73,7 @@ export default function App() {
   const location = useLocation();
   const { businessId, shopIdString } = useShop();
   const { theme, templateId } = useTheme();
-  const { payload } = useStorefrontPayload();
+  const { payload, loading: storefrontLoading } = useStorefrontPayload();
   const [page, setPage] = useState<AppNavPage>(initialPageFromPath);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [myOrdersAttention, setMyOrdersAttention] = useState(false);
@@ -88,13 +92,20 @@ export default function App() {
     void refreshAdminGate(businessId ?? undefined);
   }, [businessId, refreshAdminGate]);
 
-  const tenantMergedSearch = useMemo(() => {
+  const tenantNav = useMemo(() => {
     if (!shopIdString) {
       const s = location.search.trim();
-      return s && s !== "?" ? s : "";
+      return { pathname: location.pathname, search: s && s !== "?" ? s : "" };
     }
-    return mergeTenantShopIntoSearch(location.search ?? "", shopIdString);
-  }, [shopIdString, location.search]);
+    return mergeTenantIntoLocation({
+      pathname: location.pathname,
+      rawSearch: location.search ?? "",
+      shopIdString,
+      storefrontSlug: payload?.storefrontSlug ?? null,
+    });
+  }, [shopIdString, location.pathname, location.search, payload?.storefrontSlug]);
+
+  const tenantMergedSearch = tenantNav.search;
 
   useEffect(() => {
     const onHash = () =>
@@ -105,7 +116,10 @@ export default function App() {
 
   const allowWithoutShop =
     page === "admin" || adminByHash || page === "faq";
-  const shopMissing = !allowWithoutShop && businessId == null;
+  const slugPath = parseStoreSlugFromPath(location.pathname);
+  const slugBoot =
+    Boolean(slugPath) && storefrontLoading && businessId == null && !allowWithoutShop;
+  const shopMissing = !allowWithoutShop && businessId == null && !storefrontLoading;
 
   const items = useCartStore((state) => state.items);
   const totalQuantity = items.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
@@ -162,45 +176,82 @@ export default function App() {
     [payload?.storefrontStyleConfig],
   );
 
+  const commerceShellMode = useMemo(
+    () =>
+      storefrontShellModeFromStyleConfig(
+        (payload?.storefrontStyleConfig ?? null) as Record<string, unknown> | null,
+      ),
+    [payload?.storefrontStyleConfig],
+  );
+
   const commitPage = useCallback(
     (next: AppNavPage) => {
       if (next === "faq") {
-        navigate({
-          pathname: "/faq",
-          search:
-            tenantMergedSearch && tenantMergedSearch !== "?"
-              ? tenantMergedSearch
-              : "",
-        });
+        if (shopIdString) {
+          navigate(
+            mergeTenantIntoLocation({
+              pathname: "/faq",
+              rawSearch: location.search ?? "",
+              shopIdString,
+              storefrontSlug: payload?.storefrontSlug ?? null,
+            }),
+          );
+        } else {
+          navigate({ pathname: "/faq", search: location.search });
+        }
         setPage("faq");
         return;
       }
       if (next === "about-shop") {
-        navigate({
-          pathname: "/about",
-          search:
-            tenantMergedSearch && tenantMergedSearch !== "?"
-              ? tenantMergedSearch
-              : "",
-        });
+        if (shopIdString) {
+          navigate(
+            mergeTenantIntoLocation({
+              pathname: "/about",
+              rawSearch: location.search ?? "",
+              shopIdString,
+              storefrontSlug: payload?.storefrontSlug ?? null,
+            }),
+          );
+        } else {
+          navigate({ pathname: "/about", search: location.search });
+        }
         setPage("about-shop");
         return;
       }
       setPage(next);
       if (location.pathname === "/faq" || location.pathname === "/about") {
-        navigate(
-          {
-            pathname: "/",
-            search:
-              tenantMergedSearch && tenantMergedSearch !== "?"
-                ? tenantMergedSearch
-                : "",
-          },
-          { replace: true }
-        );
+        if (shopIdString) {
+          navigate(
+            mergeTenantIntoLocation({
+              pathname: "/",
+              rawSearch: tenantMergedSearch || "",
+              shopIdString,
+              storefrontSlug: payload?.storefrontSlug ?? null,
+            }),
+            { replace: true },
+          );
+        } else {
+          navigate(
+            {
+              pathname: "/",
+              search:
+                tenantMergedSearch && tenantMergedSearch !== "?"
+                  ? tenantMergedSearch
+                  : "",
+            },
+            { replace: true },
+          );
+        }
       }
     },
-    [navigate, location.pathname, tenantMergedSearch]
+    [
+      navigate,
+      location.pathname,
+      location.search,
+      tenantMergedSearch,
+      shopIdString,
+      payload?.storefrontSlug,
+    ],
   );
 
   useEffect(() => {
@@ -227,16 +278,28 @@ export default function App() {
       setPage("admin");
       window.location.hash = "#/admin/design";
       if (location.pathname === "/faq" || location.pathname === "/about") {
-        navigate(
-          {
-            pathname: "/",
-            search:
-              tenantMergedSearch && tenantMergedSearch !== "?"
-                ? tenantMergedSearch
-                : "",
-          },
-          { replace: true }
-        );
+        if (shopIdString) {
+          navigate(
+            mergeTenantIntoLocation({
+              pathname: "/",
+              rawSearch: tenantMergedSearch || "",
+              shopIdString,
+              storefrontSlug: payload?.storefrontSlug ?? null,
+            }),
+            { replace: true },
+          );
+        } else {
+          navigate(
+            {
+              pathname: "/",
+              search:
+                tenantMergedSearch && tenantMergedSearch !== "?"
+                  ? tenantMergedSearch
+                  : "",
+            },
+            { replace: true },
+          );
+        }
       }
       return;
     }
@@ -246,13 +309,26 @@ export default function App() {
       const sp2 = new URLSearchParams(location.search);
       sp2.delete("view");
       const qs = sp2.toString();
-      navigate(
-        {
-          pathname: location.pathname === "/faq" ? "/" : location.pathname,
-          search: qs ? `?${qs}` : "",
-        },
-        { replace: true },
-      );
+      const rawSearch = qs ? `?${qs}` : "";
+      if (shopIdString && location.pathname === "/faq") {
+        navigate(
+          mergeTenantIntoLocation({
+            pathname: "/",
+            rawSearch,
+            shopIdString,
+            storefrontSlug: payload?.storefrontSlug ?? null,
+          }),
+          { replace: true },
+        );
+      } else {
+        navigate(
+          {
+            pathname: location.pathname === "/faq" ? "/" : location.pathname,
+            search: qs ? `?${qs}` : "",
+          },
+          { replace: true },
+        );
+      }
       setPage("home");
     }
   }, [
@@ -261,6 +337,8 @@ export default function App() {
     location.pathname,
     navigate,
     tenantMergedSearch,
+    shopIdString,
+    payload?.storefrontSlug,
   ]);
 
   useEffect(() => {
@@ -426,16 +504,28 @@ export default function App() {
   ) => {
     setPage("admin");
     if (location.pathname === "/faq" || location.pathname === "/about") {
-      navigate(
-        {
-          pathname: "/",
-          search:
-            tenantMergedSearch && tenantMergedSearch !== "?"
-              ? tenantMergedSearch
-              : "",
-        },
-        { replace: true }
-      );
+      if (shopIdString) {
+        navigate(
+          mergeTenantIntoLocation({
+            pathname: "/",
+            rawSearch: tenantMergedSearch || "",
+            shopIdString,
+            storefrontSlug: payload?.storefrontSlug ?? null,
+          }),
+          { replace: true },
+        );
+      } else {
+        navigate(
+          {
+            pathname: "/",
+            search:
+              tenantMergedSearch && tenantMergedSearch !== "?"
+                ? tenantMergedSearch
+                : "",
+          },
+          { replace: true },
+        );
+      }
     }
     const paths: Record<typeof section, string> = {
       orders: "#/admin/orders",
@@ -457,16 +547,39 @@ export default function App() {
   const showHeaderAttentionDot =
     myOrdersAttention && page !== "my-orders" && businessId != null;
 
+  useEffect(() => {
+    if (!shopIdString || !payload?.storefrontSlug) return;
+    if (slugPath) return;
+    const sp = new URLSearchParams(location.search);
+    if (!sp.has("shop")) return;
+    const slug = String(payload.storefrontSlug).trim();
+    if (!slug) return;
+    navigate({ pathname: `/store/${encodeURIComponent(slug)}`, search: "" }, { replace: true });
+  }, [shopIdString, payload?.storefrontSlug, location.search, location.pathname, navigate, slugPath]);
+
+  if (slugBoot) {
+    return (
+      <ThemeVarsProvider theme={theme}>
+        <div className="app app--tenant-loading" role="status">
+          <p className="shop-missing__hint" style={{ textAlign: "center", padding: "32px 20px" }}>
+            Загрузка витрины…
+          </p>
+        </div>
+      </ThemeVarsProvider>
+    );
+  }
+
   if (shopMissing) {
     return (
       <div className="app app--shop-missing">
         <div className="shop-missing" role="alert">
           <p className="shop-missing__title">Магазин не найден</p>
           <p className="shop-missing__hint">
-            Откройте витрину по ссылке с параметром{" "}
+            Откройте витрину по адресу{" "}
+            <code className="shop-missing__code">/store/ваш-магазин</code>, параметром{" "}
             <code className="shop-missing__code">?shop=ID</code> или{" "}
-            <code className="shop-missing__code">?businessId=ID</code>, либо
-            через кнопку «Открыть» в Telegram (Mini App).
+            <code className="shop-missing__code">?businessId=ID</code>, либо через кнопку «Открыть» в
+            Telegram (Mini App).
           </p>
         </div>
       </div>
@@ -519,37 +632,39 @@ export default function App() {
       />
 
       <div className="content app__content">
-        {page === "home" && <HomePage />}
-        {page === "faq" && <FAQ />}
-        {page === "about-shop" && <AboutShopPage />}
-        {page === "my-orders" && (
-          <MyOrders profilePlainNonce={myOrdersPlainNonce} />
-        )}
-        {page === "support" && (
-          <SupportHubPage
-            onBack={() => commitPage("home")}
-            onGoShopping={() => commitPage("home")}
-          />
-        )}
-        {page === "cart" && (
-          <CartPage onGoToCheckout={() => commitPage("checkout")} />
-        )}
-        {page === "checkout" && (
-          <CheckoutPage onBack={() => commitPage("cart")} />
-        )}
-        {page === "admin" &&
-          (adminAllowed ? (
-            <AdminApp
-              onExit={() => {
-                window.location.hash = "";
-                commitPage("home");
-              }}
+        <div className="sf-commerce-shell" data-sf-shell={commerceShellMode}>
+          {page === "home" && <HomePage />}
+          {page === "faq" && <FAQ />}
+          {page === "about-shop" && <AboutShopPage />}
+          {page === "my-orders" && (
+            <MyOrders profilePlainNonce={myOrdersPlainNonce} />
+          )}
+          {page === "support" && (
+            <SupportHubPage
+              onBack={() => commitPage("home")}
+              onGoShopping={() => commitPage("home")}
             />
-          ) : (
-            <div className="admin-page">
-              <div className="no-access">Нет прав</div>
-            </div>
-          ))}
+          )}
+          {page === "cart" && (
+            <CartPage onGoToCheckout={() => commitPage("checkout")} />
+          )}
+          {page === "checkout" && (
+            <CheckoutPage onBack={() => commitPage("cart")} />
+          )}
+          {page === "admin" &&
+            (adminAllowed ? (
+              <AdminApp
+                onExit={() => {
+                  window.location.hash = "";
+                  commitPage("home");
+                }}
+              />
+            ) : (
+              <div className="admin-page">
+                <div className="no-access">Нет прав</div>
+              </div>
+            ))}
+        </div>
       </div>
 
       <FloatingCart

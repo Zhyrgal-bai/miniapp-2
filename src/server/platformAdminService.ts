@@ -437,6 +437,7 @@ export async function listBusinessesForPlatformAdmin(
     select: {
       id: true,
       name: true,
+      slug: true,
       isActive: true,
       isBlocked: true,
       subscriptionStatus: true,

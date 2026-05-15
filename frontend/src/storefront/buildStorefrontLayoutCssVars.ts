@@ -4,6 +4,18 @@ function getObj(v: unknown): Record<string, unknown> {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 }
 
+/** Public shell width mode for `data-sf-shell` on `.sf-commerce-shell`. */
+export function storefrontShellModeFromStyleConfig(
+  storefrontStyleConfig: Record<string, unknown> | null | undefined,
+): "tiered" | "full" | "narrow" {
+  const layout = getObj(storefrontStyleConfig?.layout);
+  const shellModeRaw = typeof layout.shellMode === "string" ? layout.shellMode.trim().toLowerCase() : "";
+  if (shellModeRaw === "full" || shellModeRaw === "wide") return "full";
+  if (shellModeRaw === "narrow") return "narrow";
+  if (layout.contentWidth === "narrow") return "narrow";
+  return "tiered";
+}
+
 /** Aligns with `data-sf-kit` / storefront kits. */
 export function kitFromTemplateId(tid: string | null | undefined): string {
   const t = typeof tid === "string" ? tid.trim().toLowerCase() : "";
@@ -46,9 +58,27 @@ export function buildStorefrontLayoutCssVars(
 
   const contentMax = layout.contentWidth === "narrow" ? "430px" : "100%";
 
+  const shellMode = storefrontShellModeFromStyleConfig(storefrontStyleConfig);
+
+  const shellPad =
+    scaledPx(layout.shellPadding) ||
+    (typeof layout.shellPadding === "number" ? `${layout.shellPadding}px` : "");
+
+  const shellMaxSm =
+    typeof layout.shellMaxSm === "number" && Number.isFinite(layout.shellMaxSm) ? `${layout.shellMaxSm}px` : "";
+  const shellMaxMd =
+    typeof layout.shellMaxMd === "number" && Number.isFinite(layout.shellMaxMd) ? `${layout.shellMaxMd}px` : "";
+  const shellMaxLg =
+    typeof layout.shellMaxLg === "number" && Number.isFinite(layout.shellMaxLg) ? `${layout.shellMaxLg}px` : "";
+
   return {
     "--sf-density-scale": String(densityScale),
     "--sf-content-max": contentMax,
+    "--sf-shell-mode": shellMode,
+    "--sf-shell-pad-x": shellPad,
+    "--sf-shell-max-sm": shellMaxSm,
+    "--sf-shell-max-md": shellMaxMd,
+    "--sf-shell-max-lg": shellMaxLg,
     "--sf-section-pad":
       scaledPx(layout.sectionSpacing) ||
       (typeof layout.sectionSpacing === "number" ? `${layout.sectionSpacing}px` : ""),

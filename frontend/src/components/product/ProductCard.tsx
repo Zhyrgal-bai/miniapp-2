@@ -471,7 +471,13 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
         >
           {images.map((img, index) => (
             <div key={index} className="image-slide">
-              <img src={img} alt="" />
+              <img
+                src={img}
+                alt=""
+                sizes="(min-width: 1200px) 220px, (min-width: 900px) 20vw, (min-width: 600px) 28vw, 48vw"
+                loading={index === 0 ? "eager" : "lazy"}
+                decoding="async"
+              />
             </div>
           ))}
         </div>

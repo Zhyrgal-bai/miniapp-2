@@ -2,6 +2,8 @@
   background: var(--sf-color-card);
   color: var(--sf-color-text);
   contain: layout style;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 280px;
   container-type: inline-size;
   container-name: pcard;
   border: none;
@@ -270,7 +272,7 @@
   flex-direction: column;
   gap: 8px;
   flex: 1 1 auto;
-  min-height: 0;
+  min-height: 4.75rem;
 }
 
 .product-badge {
@@ -555,6 +557,22 @@
   white-space: nowrap;
 }
 
+.product-card--price-bold .product-price:not(.product-price--sale) {
+  font-size: clamp(14px, 4.2cqi, 17px);
+  font-weight: 800;
+  color: var(--sf-color-text);
+  letter-spacing: -0.02em;
+}
+
+.product-card--price-bold .product-price--sale {
+  font-size: clamp(15px, 4.5cqi, 18px);
+  font-weight: 850;
+}
+
+.product-card--price-bold .product-price-old {
+  font-size: 12px;
+  font-weight: 600;
+}
 .product-price--sale {
   color: var(--sf-color-danger, var(--sf-color-primary));
   font-weight: 700;

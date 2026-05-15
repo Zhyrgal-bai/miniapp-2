@@ -1,0 +1,192 @@
+import type { Response } from "express";
+import { prisma } from "./db.js";
+import { resolveStorefrontConfig } from "../storefront/schema.js";
+import {
+  getCachedStorefrontPayload,
+  setCachedStorefrontPayload,
+} from "./storefrontCache.js";
+import { safeParseStorefrontPublicApiResponse } from "../storefront/storefrontPublicApiResponseSchema.js";
+
+/** Public GET /api/storefront payload (shared by numeric id and slug routes). */
+export async function sendStorefrontPublicPayload(
+  res: Response,
+  businessId: number,
+): Promise<void> {
+  try {
+    if (!Number.isInteger(businessId) || businessId <= 0) {
+      res.status(400).json({ error: "Invalid businessId" });
+      return;
+    }
+
+    const cached = getCachedStorefrontPayload(businessId);
+    if (cached) {
+      const cachedOk = safeParseStorefrontPublicApiResponse(cached);
+      if (cachedOk.ok) {
+        res.json(cachedOk.data);
+        return;
+      }
+      console.warn(
+        `GET /api/storefront/${businessId}: cached payload failed validation, rebuilding:`,
+        cachedOk.error,
+      );
+    }
+
+    const b = await prisma.business.findUnique({
+      where: { id: businessId },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        isActive: true,
+        isBlocked: true,
+        businessType: true,
+        templateId: true,
+        themeConfig: true,
+        storefrontConfig: true,
+        storefrontPublishedConfig: true,
+        storefrontConfigVersion: true,
+        featureFlags: true,
+      } as any,
+    });
+    if (!b) {
+      res.status(404).json({ error: "Business not found" });
+      return;
+    }
+    if (!(b as any).isActive || (b as any).isBlocked) {
+      res.status(403).json({ error: "Store unavailable" });
+      return;
+    }
+
+    const sf = await prisma.storefront.findFirst({
+      where: { businessId },
+      orderBy: { id: "asc" },
+      select: { publishedConfig: true } as any,
+    });
+    const publishedRaw =
+      sf && (sf as any).publishedConfig != null && typeof (sf as any).publishedConfig === "object"
+        ? (sf as any).publishedConfig
+        : (b as any).storefrontPublishedConfig != null &&
+            typeof (b as any).storefrontPublishedConfig === "object"
+          ? (b as any).storefrontPublishedConfig
+          : {};
+    const legacyRaw =
+      (b as any).storefrontConfig != null && typeof (b as any).storefrontConfig === "object"
+        ? (b as any).storefrontConfig
+        : {};
+    const rawConfig = publishedRaw && JSON.stringify(publishedRaw) !== "{}" ? publishedRaw : legacyRaw;
+
+    const payload = resolveStorefrontConfig({
+      businessId,
+      businessType: String((b as any).businessType ?? ""),
+      templateId: (b as any).templateId ?? null,
+      storefrontConfigVersion: Number((b as any).storefrontConfigVersion ?? 1),
+      rawStorefrontConfig: rawConfig ?? {},
+      rawThemeConfig: (b as any).themeConfig ?? {},
+      rawFeatureFlags: (b as any).featureFlags ?? {},
+    });
+    (payload as any).storeName = String((b as any).name ?? "").slice(0, 80);
+    const slugVal = (b as any).slug;
+    (payload as any).storefrontSlug =
+      typeof slugVal === "string" && slugVal.trim() !== "" ? String(slugVal).trim() : null;
+
+    const enabledTypes = new Set(payload.sections.map((s) => s.type));
+    if (enabledTypes.has("categories")) {
+      const categories = await prisma.category.findMany({
+        where: { businessId },
+        orderBy: { id: "asc" },
+      });
+      const nodeById = new Map<number, any>();
+      for (const c of categories) {
+        nodeById.set(c.id, {
+          id: c.id,
+          name: c.name,
+          parentId: (c as any).parentId ?? null,
+          children: [],
+        });
+      }
+      const roots: any[] = [];
+      for (const c of categories) {
+        const node = nodeById.get(c.id)!;
+        const pid = (c as any).parentId ?? null;
+        if (pid == null) roots.push(node);
+        else {
+          const parent = nodeById.get(pid);
+          if (parent) parent.children.push(node);
+          else roots.push(node);
+        }
+      }
+      (payload as any).categories = roots;
+    }
+
+    if (enabledTypes.has("featuredProducts")) {
+      const sec = payload.sections.find((s) => s.type === "featuredProducts");
+      const lim = Number((sec?.config as any)?.limit ?? 8);
+      const take = Number.isFinite(lim) && lim > 0 ? Math.min(lim, 24) : 8;
+      const products = await prisma.product.findMany({
+        where: { businessId },
+        orderBy: { id: "desc" },
+        take,
+        select: {
+          id: true,
+          name: true,
+          price: true,
+          image: true,
+          images: true,
+          description: true,
+          categoryId: true,
+          createdAt: true,
+        },
+      });
+      const ids = products.map((p) => p.id);
+      const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const soldRows =
+        ids.length > 0
+          ? await prisma.orderItem.groupBy({
+              by: ["productId"],
+              where: {
+                businessId,
+                productId: { in: ids },
+                order: { createdAt: { gte: since30d } },
+              },
+              _sum: { quantity: true },
+            })
+          : [];
+      const soldById = new Map<number, number>();
+      for (const r of soldRows) {
+        const pid = r.productId;
+        if (typeof pid === "number") soldById.set(pid, Number(r._sum.quantity ?? 0) || 0);
+      }
+      (payload as any).featuredProducts = products.map((p) => ({
+        ...p,
+        sold30d: soldById.get(p.id) ?? 0,
+        sold: soldById.get(p.id) ?? 0,
+      }));
+    }
+
+    const payloadOk = safeParseStorefrontPublicApiResponse(payload);
+    if (!payloadOk.ok) {
+      console.error(
+        `GET /api/storefront/${businessId}: payload failed validation:`,
+        payloadOk.error,
+      );
+      res.status(500).json({ error: "Storefront payload invalid" });
+      return;
+    }
+
+    setCachedStorefrontPayload({
+      businessId,
+      payload: payloadOk.data as any,
+    });
+    res.json(payloadOk.data);
+  } catch (e) {
+    console.error("GET /api/storefront payload:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+export function normalizePublicStoreSlug(raw: string): string | null {
+  const s = decodeURIComponent(String(raw ?? "").trim()).toLowerCase();
+  const cleaned = s.replace(/[^a-z0-9-]/g, "").replace(/-+/g, "-");
+  if (cleaned.length < 2 || cleaned.length > 80) return null;
+  return cleaned;
+}

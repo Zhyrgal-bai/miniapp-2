@@ -18,7 +18,11 @@ import {
   buildStorefrontLayoutCssVars,
   kitFromTemplateId,
 } from "../../storefront/buildStorefrontLayoutCssVars";
-import { mergeStorefrontCardConfigWithPreset } from "../../storefront/catalogCardPresets";
+import {
+  mergeStorefrontCardConfigWithResponsive,
+  type StorefrontCardViewportTier,
+} from "../../storefront/catalogCardPresets";
+import { StorefrontFeed } from "./StorefrontFeed";
 
 type StorefrontKitId = "minimal" | "luxury" | "fashion" | "neon" | "default";
 
@@ -43,6 +47,7 @@ export type ResolvedStorefrontSection = {
 
 export type ResolvedStorefrontPayload = {
   businessId: number;
+  storefrontSlug?: string | null;
   storeName?: string;
   businessType: string;
   templateId: string | null;
@@ -65,9 +70,32 @@ export function StorefrontRenderer(props: {
   const [sheetProduct, setSheetProduct] = useState<Product | null>(null);
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
 
+  const [cardViewportTier, setCardViewportTier] = useState<StorefrontCardViewportTier>("default");
+
+  useEffect(() => {
+    const mqMd = window.matchMedia("(min-width: 640px)");
+    const mqLg = window.matchMedia("(min-width: 1024px)");
+    const sync = () => {
+      if (mqLg.matches) setCardViewportTier("lg");
+      else if (mqMd.matches) setCardViewportTier("md");
+      else setCardViewportTier("default");
+    };
+    sync();
+    mqMd.addEventListener("change", sync);
+    mqLg.addEventListener("change", sync);
+    return () => {
+      mqMd.removeEventListener("change", sync);
+      mqLg.removeEventListener("change", sync);
+    };
+  }, []);
+
   const mergedCardConfig = useMemo(
-    () => mergeStorefrontCardConfigWithPreset(props.payload.storefrontCardConfig ?? undefined),
-    [props.payload.storefrontCardConfig],
+    () =>
+      mergeStorefrontCardConfigWithResponsive(
+        props.payload.storefrontCardConfig ?? undefined,
+        cardViewportTier,
+      ),
+    [props.payload.storefrontCardConfig, cardViewportTier],
   );
 
   const filterByCategory = useCallback(
@@ -194,7 +222,7 @@ export function StorefrontRenderer(props: {
         className={`sf-root${catalogBold ? " sf-root--catalog-bold" : ""}`}
         style={cssVars as unknown as React.CSSProperties}
       >
-        <div className="sf-feed" data-sf-feed>
+        <StorefrontFeed>
           {sections.map((s) => {
             const chunk = (() => {
               switch (s.type) {
@@ -208,6 +236,26 @@ export function StorefrontRenderer(props: {
                       heroStyle={(props.payload.storefrontStyleConfig as Record<string, unknown> | undefined)?.hero as
                         | Record<string, unknown>
                         | undefined}
+                      onHeroCta={(ev) => {
+                        if (ev.kind === "scrollToSection") {
+                          document.getElementById(ev.target)?.scrollIntoView({
+                            behavior: "smooth",
+                            block: "start",
+                          });
+                          return;
+                        }
+                        if (ev.kind === "openCategory") {
+                          const id = Number(ev.target);
+                          if (Number.isInteger(id) && id > 0) setActiveCategoryId(id);
+                          return;
+                        }
+                        if (ev.kind === "openProduct") {
+                          const id = Number(ev.target);
+                          const pool = [...(catalog ?? []), ...featuredAll];
+                          const p = pool.find((x) => x.id === id);
+                          if (p) openProduct(p);
+                        }
+                      }}
                     />
                   );
                 case "promo":
@@ -278,14 +326,19 @@ export function StorefrontRenderer(props: {
             })();
             if (chunk == null) return null;
             return (
-              <div key={s.id} className="sf-feed__chunk sf-feed__chunk--section">
+              <div
+                key={s.id}
+                id={`sf-sec-${s.id}`}
+                className="sf-feed__chunk sf-feed__chunk--section sf-feed__chunk--stack"
+                data-sf-section-type={s.type}
+              >
                 {chunk}
               </div>
             );
           })}
 
           {!hasFeaturedSection ? (
-            <div className="sf-feed__chunk sf-feed__chunk--discovery">
+            <div className="sf-feed__chunk sf-feed__chunk--discovery sf-feed__chunk--stack">
               <DiscoveryRails
                 variant="full"
                 kit={kit}
@@ -301,7 +354,7 @@ export function StorefrontRenderer(props: {
           ) : null}
 
           {showCatalogFooter ? (
-            <div className="sf-feed__chunk sf-feed__chunk--catalog-footer">
+            <div className="sf-feed__chunk sf-feed__chunk--catalog-footer sf-feed__chunk--stack">
               <CatalogFooterSlider
                 storefrontStyleConfig={styleCfg}
                 productById={sliderProductById}
@@ -309,7 +362,7 @@ export function StorefrontRenderer(props: {
               />
             </div>
           ) : null}
-        </div>
+        </StorefrontFeed>
       </div>
 
       {sheetProduct ? (

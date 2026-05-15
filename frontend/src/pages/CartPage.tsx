@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useCartStore } from "../store/useCartStore";
-import { mergeTenantShopIntoSearch, readShopIdString } from "../utils/storeParams";
+import { useLocation } from "react-router-dom";
+import { mergeTenantIntoLocation, readShopIdString } from "../utils/storeParams";
 import "../components/ui/Cart.css";
 import { useStorefrontPayload } from "../components/storefront/runtime/StorefrontPayloadContext";
 import { useShop } from "../context/ShopContext";
@@ -17,6 +18,7 @@ export default function CartPage({ onGoToCheckout }: Props) {
   const addItem = useCartStore((state) => state.addItem);
   const removeItem = useCartStore((state) => state.removeItem);
   const { businessId } = useShop();
+  const { pathname, search } = useLocation();
   const [catalogById, setCatalogById] = useState<Map<number, Product>>(() => new Map());
   const { payload } = useStorefrontPayload();
 
@@ -55,13 +57,18 @@ export default function CartPage({ onGoToCheckout }: Props) {
   }, 0);
 
   const handleGoShop = () => {
-    const shop = readShopIdString();
+    const shop = readShopIdString(pathname);
     if (!shop) {
       window.location.href = "/";
       return;
     }
-    const qs = mergeTenantShopIntoSearch(window.location.search, shop);
-    window.location.href = `${window.location.pathname}${qs}`;
+    const nav = mergeTenantIntoLocation({
+      pathname: "/",
+      rawSearch: search,
+      shopIdString: shop,
+      storefrontSlug: payload?.storefrontSlug ?? null,
+    });
+    window.location.href = `${nav.pathname}${nav.search}`;
   };
 
   const maxQtyForLine = (item: (typeof items)[number]) => {
