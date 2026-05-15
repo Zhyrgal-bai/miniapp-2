@@ -746,7 +746,9 @@ app.get("/api/storefront/by-slug/:slug", async (req: Request, res: Response) => 
       return;
     }
     const b = await prisma.business.findFirst({
-      where: { slug } as any,
+      where: {
+        slug: { equals: slug, mode: "insensitive" },
+      } as any,
       select: { id: true, isActive: true, isBlocked: true } as any,
     });
     if (!b) {

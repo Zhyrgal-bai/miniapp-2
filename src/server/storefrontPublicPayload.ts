@@ -185,8 +185,15 @@ export async function sendStorefrontPublicPayload(
 }
 
 export function normalizePublicStoreSlug(raw: string): string | null {
-  const s = decodeURIComponent(String(raw ?? "").trim()).toLowerCase();
-  const cleaned = s.replace(/[^a-z0-9-]/g, "").replace(/-+/g, "-");
-  if (cleaned.length < 2 || cleaned.length > 80) return null;
-  return cleaned;
+  const input = String(raw ?? "").trim();
+  if (input === "") return null;
+  let decoded = input;
+  try {
+    decoded = decodeURIComponent(input);
+  } catch {
+    decoded = input;
+  }
+  const normalized = decoded.trim().toLowerCase();
+  if (normalized.length < 2 || normalized.length > 80) return null;
+  return normalized;
 }
