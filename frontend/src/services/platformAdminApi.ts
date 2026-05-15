@@ -23,24 +23,47 @@ export type PlatformAdminBusinessDTO = {
   webhookUrl: string | null;
 };
 
-function adminHeaders(_telegramId: number): HeadersInit {
+type AdminCallOptions = {
+  operatorSessionToken?: string;
+};
+
+function adminHeaders(
+  _telegramId: number,
+  options?: AdminCallOptions,
+): HeadersInit {
   void _telegramId;
-  return telegramWebAppInitDataHeader();
+  const base = telegramWebAppInitDataHeader();
+  const token = options?.operatorSessionToken?.trim();
+  if (token) {
+    return {
+      ...base,
+      "x-operator-session": token,
+    };
+  }
+  return base;
 }
 
 async function throwIfNotOk(res: Response): Promise<void> {
+  if (res.ok) return;
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    code?: string;
+  };
   if (res.status === 403) {
-    const err = new Error("Нет доступа");
-    (err as Error & { status: number }).status = 403;
+    const err = new Error(j.error ?? "Нет доступа") as Error & {
+      status: number;
+      code?: string;
+    };
+    err.code = j.code;
+    err.status = 403;
     throw err;
   }
-  if (res.ok) return;
-  const j = (await res.json().catch(() => ({}))) as { error?: string };
   throw new Error(j.error ?? `HTTP ${res.status}`);
 }
 
 export async function fetchPlatformAdminRequests(
   telegramId: number,
+  options?: AdminCallOptions,
 ): Promise<PlatformAdminRequestDTO[]> {
   const tid = encodeURIComponent(String(telegramId));
   const res = await fetch(
@@ -48,7 +71,7 @@ export async function fetchPlatformAdminRequests(
     {
       method: "GET",
       credentials: "omit",
-      headers: adminHeaders(telegramId),
+      headers: adminHeaders(telegramId, options),
     },
   );
   await throwIfNotOk(res);
@@ -59,12 +82,13 @@ export async function fetchPlatformAdminRequests(
 export async function postPlatformAdminApprove(params: {
   telegramId: number;
   requestId: number;
+  operatorSessionToken?: string;
 }): Promise<{ businessId: number }> {
   const res = await fetch(apiAbsoluteUrl("/api/platform/admin/approve"), {
     method: "POST",
     credentials: "omit",
     headers: {
-      ...adminHeaders(params.telegramId),
+      ...adminHeaders(params.telegramId, params),
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ requestId: params.requestId }),
@@ -80,12 +104,13 @@ export async function postPlatformAdminApprove(params: {
 export async function postPlatformAdminReject(params: {
   telegramId: number;
   requestId: number;
+  operatorSessionToken?: string;
 }): Promise<void> {
   const res = await fetch(apiAbsoluteUrl("/api/platform/admin/reject"), {
     method: "POST",
     credentials: "omit",
     headers: {
-      ...adminHeaders(params.telegramId),
+      ...adminHeaders(params.telegramId, params),
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ requestId: params.requestId }),
@@ -96,6 +121,7 @@ export async function postPlatformAdminReject(params: {
 export async function fetchPlatformAdminBusinesses(params: {
   telegramId: number;
   search?: string;
+  operatorSessionToken?: string;
 }): Promise<PlatformAdminBusinessDTO[]> {
   const tid = encodeURIComponent(String(params.telegramId));
   const q =
@@ -107,7 +133,7 @@ export async function fetchPlatformAdminBusinesses(params: {
     {
       method: "GET",
       credentials: "omit",
-      headers: adminHeaders(params.telegramId),
+      headers: adminHeaders(params.telegramId, params),
     },
   );
   await throwIfNotOk(res);
@@ -138,12 +164,13 @@ export async function fetchPlatformAdminBusinesses(params: {
 export async function postPlatformAdminDisable(params: {
   telegramId: number;
   businessId: number;
+  operatorSessionToken?: string;
 }): Promise<void> {
   const res = await fetch(apiAbsoluteUrl("/api/platform/admin/disable"), {
     method: "POST",
     credentials: "omit",
     headers: {
-      ...adminHeaders(params.telegramId),
+      ...adminHeaders(params.telegramId, params),
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ businessId: params.businessId }),
@@ -154,12 +181,13 @@ export async function postPlatformAdminDisable(params: {
 export async function postPlatformAdminEnable(params: {
   telegramId: number;
   businessId: number;
+  operatorSessionToken?: string;
 }): Promise<void> {
   const res = await fetch(apiAbsoluteUrl("/api/platform/admin/enable"), {
     method: "POST",
     credentials: "omit",
     headers: {
-      ...adminHeaders(params.telegramId),
+      ...adminHeaders(params.telegramId, params),
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ businessId: params.businessId }),
@@ -170,12 +198,13 @@ export async function postPlatformAdminEnable(params: {
 export async function postPlatformAdminUnblock(params: {
   telegramId: number;
   businessId: number;
+  operatorSessionToken?: string;
 }): Promise<void> {
   const res = await fetch(apiAbsoluteUrl("/api/platform/admin/unblock"), {
     method: "POST",
     credentials: "omit",
     headers: {
-      ...adminHeaders(params.telegramId),
+      ...adminHeaders(params.telegramId, params),
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ businessId: params.businessId }),
@@ -187,6 +216,7 @@ export async function postPlatformAdminUnblock(params: {
 export async function postPlatformAdminRestartDynamicBot(params: {
   telegramId: number;
   businessId: number;
+  operatorSessionToken?: string;
 }): Promise<void> {
   const res = await fetch(
     apiAbsoluteUrl("/api/platform/admin/restart-dynamic-bot"),
@@ -194,7 +224,7 @@ export async function postPlatformAdminRestartDynamicBot(params: {
       method: "POST",
       credentials: "omit",
       headers: {
-        ...adminHeaders(params.telegramId),
+        ...adminHeaders(params.telegramId, params),
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ businessId: params.businessId }),
@@ -206,12 +236,13 @@ export async function postPlatformAdminRestartDynamicBot(params: {
 export async function postPlatformAdminPurgeBusiness(params: {
   telegramId: number;
   businessId: number;
+  operatorSessionToken?: string;
 }): Promise<void> {
   const res = await fetch(apiAbsoluteUrl("/api/platform/admin/purge-business"), {
     method: "POST",
     credentials: "omit",
     headers: {
-      ...adminHeaders(params.telegramId),
+      ...adminHeaders(params.telegramId, params),
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ businessId: params.businessId }),
@@ -223,12 +254,13 @@ export async function postPlatformAdminExtend(params: {
   telegramId: number;
   businessId: number;
   days: 30 | 90;
+  operatorSessionToken?: string;
 }): Promise<{ subscriptionEndsAt: string }> {
   const res = await fetch(apiAbsoluteUrl("/api/platform/admin/extend"), {
     method: "POST",
     credentials: "omit",
     headers: {
-      ...adminHeaders(params.telegramId),
+      ...adminHeaders(params.telegramId, params),
       "Content-Type": "application/json",
     },
     body: JSON.stringify({

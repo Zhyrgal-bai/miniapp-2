@@ -17,8 +17,11 @@ import {
 } from "../services/platformAdminApi";
 import {
   fetchPlatformMyBusinesses,
+  fetchOperatorCapabilities,
   fetchPlatformStoreSettings,
-  fetchPlatformWhoAmI,
+  postOperatorLock,
+  postOperatorReauth,
+  postOperatorUnlock,
   postPlatformCheckWebhook,
   postPlatformSubscriptionPaymentCreate,
   postPlatformUpdateFinik,
@@ -235,8 +238,17 @@ export default function PlatformPage() {
   const prevZeroStores = useRef(false);
 
   const [merchantTelegramId, setMerchantTelegramId] = useState<number>(NaN);
-  /** Суперадмин платформы: `ADMIN_IDS` на сервере (см. GET /api/platform/admin/whoami). */
+  const [operatorIdentity, setOperatorIdentity] = useState(false);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  const [operatorSessionToken, setOperatorSessionToken] = useState<string | null>(
+    null,
+  );
+  const [operatorUnlockOpen, setOperatorUnlockOpen] = useState(false);
+  const [operatorPassword, setOperatorPassword] = useState("");
+  const [operatorUnlockBusy, setOperatorUnlockBusy] = useState(false);
+  const [operatorUnlockError, setOperatorUnlockError] = useState<string | null>(
+    null,
+  );
   const [payPlanBusy, setPayPlanBusy] = useState<30 | 90 | null>(null);
 
   const loadBusinesses = useCallback(async () => {
@@ -273,7 +285,9 @@ export default function PlatformPage() {
 
       if (signed === "") {
         setMerchantTelegramId(NaN);
+        setOperatorIdentity(false);
         setIsPlatformAdmin(false);
+        setOperatorSessionToken(null);
         setError(
           "Нет данных Mini App из Telegram (initData пустой). Откройте приложение кнопкой Web App из бота, не по прямой ссылке браузера.",
         );
@@ -283,35 +297,68 @@ export default function PlatformPage() {
 
       if (!Number.isFinite(telegramId) || telegramId <= 0) {
         setMerchantTelegramId(NaN);
+        setOperatorIdentity(false);
         setIsPlatformAdmin(false);
+        setOperatorSessionToken(null);
         setError("Откройте приложение из Telegram Mini App.");
         setBusinesses([]);
         return;
       }
 
       setMerchantTelegramId(telegramId);
-      const who = await fetchPlatformWhoAmI();
-      setIsPlatformAdmin(who.isPlatformAdmin);
-      if (who.isPlatformAdmin) {
-        const adminRows = await fetchPlatformAdminBusinesses({ telegramId });
-        setBusinesses(
-          adminRows
-            .filter((r) => r.id > 0)
-            .map(adminBusinessToCard),
-        );
-      } else {
-        const rows = await fetchPlatformMyBusinesses({ telegramId });
-        setBusinesses(rows);
-      }
+      const caps = await fetchOperatorCapabilities().catch(() => ({
+        isOperatorIdentity: false,
+        canShowOperatorEntry: false,
+      }));
+      setOperatorIdentity(Boolean(caps.canShowOperatorEntry));
+      setIsPlatformAdmin(false);
+      setOperatorSessionToken(null);
+      const rows = await fetchPlatformMyBusinesses({ telegramId });
+      setBusinesses(rows);
     } catch (e) {
       setMerchantTelegramId(NaN);
+      setOperatorIdentity(false);
       setIsPlatformAdmin(false);
+      setOperatorSessionToken(null);
       setError(e instanceof Error ? e.message : "Не удалось загрузить");
       setBusinesses([]);
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const loadOperatorBusinesses = useCallback(
+    async (telegramId: number, token: string) => {
+      const adminRows = await fetchPlatformAdminBusinesses({
+        telegramId,
+        operatorSessionToken: token,
+      });
+      setBusinesses(
+        adminRows
+          .filter((r) => r.id > 0)
+          .map(adminBusinessToCard),
+      );
+      setIsPlatformAdmin(true);
+    },
+    [],
+  );
+
+  const ensureOperatorReauth = useCallback(async (): Promise<boolean> => {
+    const token = operatorSessionToken?.trim();
+    if (!token) {
+      setError("Operator session не активна.");
+      return false;
+    }
+    const pass = window.prompt("Подтвердите пароль оператора");
+    if (pass == null || pass.trim() === "") return false;
+    try {
+      await postOperatorReauth(token, pass.trim());
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось подтвердить пароль");
+      return false;
+    }
+  }, [operatorSessionToken]);
 
   useEffect(() => {
     window.Telegram?.WebApp?.ready();
@@ -436,6 +483,12 @@ export default function PlatformPage() {
       setError("Включение и отключение бота доступно только оператору платформы.");
       return;
     }
+    if (!(await ensureOperatorReauth())) return;
+    const token = operatorSessionToken?.trim();
+    if (!token) {
+      setError("Operator session не активна.");
+      return;
+    }
     setError(null);
     setInfoBanner(null);
     setPending(b.id, "toggle", true);
@@ -444,14 +497,16 @@ export default function PlatformPage() {
         await postPlatformAdminDisable({
           telegramId: merchantTelegramId,
           businessId: b.id,
+          operatorSessionToken: token,
         });
       } else {
         await postPlatformAdminEnable({
           telegramId: merchantTelegramId,
           businessId: b.id,
+          operatorSessionToken: token,
         });
       }
-      await loadBusinesses();
+      await loadOperatorBusinesses(merchantTelegramId, token);
       setInfoBanner(`${b.name}: статус бота обновлён`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось изменить бота");
@@ -467,6 +522,11 @@ export default function PlatformPage() {
     }
     if (!isPlatformAdmin) {
       setError("Проверку webhook может запускать только оператор платформы.");
+      return;
+    }
+    const token = operatorSessionToken?.trim();
+    if (!token) {
+      setError("Operator session не активна.");
       return;
     }
     setError(null);
@@ -517,6 +577,12 @@ export default function PlatformPage() {
       setError("Удаление магазина доступно только оператору платформы.");
       return;
     }
+    if (!(await ensureOperatorReauth())) return;
+    const token = operatorSessionToken?.trim();
+    if (!token) {
+      setError("Operator session не активна.");
+      return;
+    }
     const confirmed = window.confirm(
       `Удалить магазин «${b.name}» (id ${b.id}) безвозвратно? Все товары, заказы и настройки будут удалены.`,
     );
@@ -528,12 +594,13 @@ export default function PlatformPage() {
       await postPlatformAdminPurgeBusiness({
         telegramId: merchantTelegramId,
         businessId: b.id,
+        operatorSessionToken: token,
       });
       if (settingsBusinessId === b.id) {
         setSettingsBusinessId(null);
       }
       setInfoBanner(`Магазин «${b.name}» удалён`);
-      await loadBusinesses();
+      await loadOperatorBusinesses(merchantTelegramId, token);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось удалить магазин");
     } finally {
@@ -550,6 +617,12 @@ export default function PlatformPage() {
       return;
     }
     if (!isPlatformAdmin) return;
+    if (!(await ensureOperatorReauth())) return;
+    const token = operatorSessionToken?.trim();
+    if (!token) {
+      setError("Operator session не активна.");
+      return;
+    }
     setError(null);
     setInfoBanner(null);
     setPending(b.id, "extend", true);
@@ -558,11 +631,12 @@ export default function PlatformPage() {
         telegramId: merchantTelegramId,
         businessId: b.id,
         days,
+        operatorSessionToken: token,
       });
       setInfoBanner(
         `${b.name}: подписка продлена до ${formatRuDateShort(out.subscriptionEndsAt) ?? "—"}`,
       );
-      await loadBusinesses();
+      await loadOperatorBusinesses(merchantTelegramId, token);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось продлить подписку");
     } finally {
@@ -573,6 +647,12 @@ export default function PlatformPage() {
   const handleUnblockShop = async (b: PlatformMyBusinessDTO) => {
     if (!Number.isFinite(merchantTelegramId)) return;
     if (!isPlatformAdmin) return;
+    if (!(await ensureOperatorReauth())) return;
+    const token = operatorSessionToken?.trim();
+    if (!token) {
+      setError("Operator session не активна.");
+      return;
+    }
     setError(null);
     setInfoBanner(null);
     setPending(b.id, "unblock", true);
@@ -580,9 +660,10 @@ export default function PlatformPage() {
       await postPlatformAdminUnblock({
         telegramId: merchantTelegramId,
         businessId: b.id,
+        operatorSessionToken: token,
       });
       setInfoBanner(`${b.name}: блокировка снята`);
-      await loadBusinesses();
+      await loadOperatorBusinesses(merchantTelegramId, token);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось снять блокировку");
     } finally {
@@ -620,6 +701,52 @@ export default function PlatformPage() {
       setFinikErr(e instanceof Error ? e.message : "Не удалось создать оплату");
     } finally {
       setPayPlanBusy(null);
+    }
+  };
+
+  const handleOperatorUnlock = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+    if (!Number.isFinite(merchantTelegramId) || merchantTelegramId <= 0) {
+      setOperatorUnlockError("Нет данных Telegram пользователя.");
+      return;
+    }
+    const password = operatorPassword.trim();
+    if (password === "") {
+      setOperatorUnlockError("Введите пароль оператора.");
+      return;
+    }
+    setOperatorUnlockBusy(true);
+    setOperatorUnlockError(null);
+    try {
+      const out = await postOperatorUnlock(password);
+      setOperatorSessionToken(out.token);
+      await loadOperatorBusinesses(merchantTelegramId, out.token);
+      setOperatorPassword("");
+      setOperatorUnlockOpen(false);
+      setInfoBanner("Operator mode активирован.");
+    } catch (e) {
+      setOperatorUnlockError(e instanceof Error ? e.message : "Не удалось войти");
+    } finally {
+      setOperatorUnlockBusy(false);
+    }
+  };
+
+  const handleOperatorLock = async () => {
+    const token = operatorSessionToken?.trim();
+    try {
+      if (token) {
+        await postOperatorLock(token);
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setIsPlatformAdmin(false);
+      setOperatorSessionToken(null);
+      setOperatorUnlockOpen(false);
+      setOperatorPassword("");
+      setOperatorUnlockError(null);
+      await loadBusinesses();
+      setInfoBanner("Operator mode закрыт.");
     }
   };
 
@@ -847,12 +974,36 @@ export default function PlatformPage() {
             className="mp-top-header"
             subtitle="Управляйте своими магазинами"
           />
+          <div className="mb-2 flex items-center justify-end gap-2">
+            {operatorIdentity && !isPlatformAdmin ? (
+              <button
+                type="button"
+                className="mp-btn mp-btn--ghost mp-btn--sm"
+                style={{ opacity: 0.55 }}
+                onClick={() => {
+                  setOperatorUnlockError(null);
+                  setOperatorPassword("");
+                  setOperatorUnlockOpen(true);
+                }}
+              >
+                Operator Mode
+              </button>
+            ) : null}
+            {isPlatformAdmin ? (
+              <button
+                type="button"
+                className="mp-btn mp-btn--ghost mp-btn--sm"
+                onClick={() => void handleOperatorLock()}
+              >
+                Закрыть Operator Mode
+              </button>
+            ) : null}
+          </div>
           <p className="mp-access-hint">
             {isPlatformAdmin ? (
               <>
                 Режим оператора платформы: видны все магазины, включение/отключение
-                бота, вебхуки, удаление и ручное продление подписки. Доступ по{" "}
-                <span className="font-mono">ADMIN_IDS</span> на сервере.
+                бота, вебхуки, удаление и ручное продление подписки.
               </>
             ) : (
               <>
@@ -1195,6 +1346,66 @@ export default function PlatformPage() {
             >
               ➕ Создать магазин
             </button>
+          </div>
+        </div>
+      ) : null}
+
+      {operatorUnlockOpen ? (
+        <div className="mp-settings-backdrop">
+          <div
+            className="mp-settings-dialog-shell"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="operator-unlock-title"
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <h2
+                id="operator-unlock-title"
+                className="text-lg font-semibold text-white"
+              >
+                Operator Unlock
+              </h2>
+              <button
+                type="button"
+                className="rounded-xl border border-white/[0.08] px-2.5 py-1.5 text-sm text-[#9CA3AF] transition hover:border-white/15 hover:bg-white/[0.06] hover:text-[#E5E7EB]"
+                onClick={() => {
+                  setOperatorUnlockOpen(false);
+                  setOperatorPassword("");
+                  setOperatorUnlockError(null);
+                }}
+                aria-label="Закрыть"
+              >
+                ✕
+              </button>
+            </div>
+            <form className="flex flex-col gap-4" onSubmit={(e) => void handleOperatorUnlock(e)}>
+              <div>
+                <label className="mp-muted mb-1 block text-sm" htmlFor="operator-password">
+                  Пароль оператора
+                </label>
+                <input
+                  id="operator-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={operatorPassword}
+                  onChange={(e) => setOperatorPassword(e.target.value)}
+                  className={archa.input}
+                  disabled={operatorUnlockBusy}
+                />
+              </div>
+              {operatorUnlockError ? (
+                <p className="text-sm text-red-300" role="alert">
+                  {operatorUnlockError}
+                </p>
+              ) : null}
+              <button
+                type="submit"
+                className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg"
+                disabled={operatorUnlockBusy}
+              >
+                {operatorUnlockBusy ? "Проверка..." : "Войти в Operator Mode"}
+              </button>
+            </form>
           </div>
         </div>
       ) : null}

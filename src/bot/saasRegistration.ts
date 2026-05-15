@@ -15,6 +15,7 @@ import {
 } from "../server/businessBotToken.js";
 import { applyBusinessTemplate } from "../server/applyBusinessTemplate.js";
 import { isEncryptedTokenFormat } from "../server/botTokenCrypto.js";
+import { platformOperatorIdsFromEnv } from "../server/adminAuth.js";
 import { logPrismaError, prisma } from "../server/db.js";
 import {
   isValidFinikApiKey,
@@ -104,20 +105,7 @@ function normalizeStoreName(raw: string): string {
 }
 
 function adminTelegramNumericIds(): string[] {
-  const raw = process.env.ADMIN_IDS;
-  if (!raw) return [];
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const s of raw
-    .split(/[,;]+/)
-    .map((x) => x.trim())
-    .filter((x) => x !== "")) {
-    if (!seen.has(s)) {
-      seen.add(s);
-      out.push(s);
-    }
-  }
-  return out;
+  return platformOperatorIdsFromEnv();
 }
 
 /** Reply Keyboard «🛠 Админ панель» только для ADMIN_IDS (второй аргумент `ctx.reply`). */

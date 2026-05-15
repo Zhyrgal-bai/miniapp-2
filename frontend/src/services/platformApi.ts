@@ -111,6 +111,109 @@ export async function fetchPlatformWhoAmI(): Promise<{
   };
 }
 
+export async function fetchOperatorCapabilities(): Promise<{
+  isOperatorIdentity: boolean;
+  canShowOperatorEntry: boolean;
+}> {
+  const res = await fetch(apiAbsoluteUrl("/api/platform/operator/capabilities"), {
+    method: "GET",
+    credentials: "omit",
+    headers: { ...telegramWebAppInitDataHeader() },
+  });
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    isOperatorIdentity?: boolean;
+    canShowOperatorEntry?: boolean;
+  };
+  if (!res.ok) {
+    throw new Error(j.error ?? `HTTP ${res.status}`);
+  }
+  return {
+    isOperatorIdentity: Boolean(j.isOperatorIdentity),
+    canShowOperatorEntry: Boolean(j.canShowOperatorEntry),
+  };
+}
+
+export async function postOperatorUnlock(password: string): Promise<{
+  token: string;
+  expiresAt: string;
+}> {
+  const res = await fetch(apiAbsoluteUrl("/api/platform/operator/unlock"), {
+    method: "POST",
+    credentials: "omit",
+    headers: {
+      "Content-Type": "application/json",
+      ...telegramWebAppInitDataHeader(),
+    },
+    body: JSON.stringify({ password }),
+  });
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    code?: string;
+    token?: string;
+    expiresAt?: string;
+  };
+  if (!res.ok) {
+    const err = new Error(j.error ?? `HTTP ${res.status}`) as Error & {
+      code?: string;
+      status?: number;
+    };
+    err.code = j.code;
+    err.status = res.status;
+    throw err;
+  }
+  if (typeof j.token !== "string" || typeof j.expiresAt !== "string") {
+    throw new Error("Некорректный ответ сервера");
+  }
+  return {
+    token: j.token,
+    expiresAt: j.expiresAt,
+  };
+}
+
+export async function postOperatorLock(token: string): Promise<void> {
+  const res = await fetch(apiAbsoluteUrl("/api/platform/operator/lock"), {
+    method: "POST",
+    credentials: "omit",
+    headers: {
+      "Content-Type": "application/json",
+      "x-operator-session": token,
+      ...telegramWebAppInitDataHeader(),
+    },
+    body: JSON.stringify({}),
+  });
+  const j = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) {
+    throw new Error(j.error ?? `HTTP ${res.status}`);
+  }
+}
+
+export async function postOperatorReauth(
+  token: string,
+  password: string,
+): Promise<void> {
+  const res = await fetch(apiAbsoluteUrl("/api/platform/operator/reauth"), {
+    method: "POST",
+    credentials: "omit",
+    headers: {
+      "Content-Type": "application/json",
+      "x-operator-session": token,
+      ...telegramWebAppInitDataHeader(),
+    },
+    body: JSON.stringify({ password }),
+  });
+  const j = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
+  if (!res.ok) {
+    const err = new Error(j.error ?? `HTTP ${res.status}`) as Error & {
+      code?: string;
+      status?: number;
+    };
+    err.code = j.code;
+    err.status = res.status;
+    throw err;
+  }
+}
+
 export type PlatformSubscriptionPaymentResult =
   | {
       finikConfigured: false;

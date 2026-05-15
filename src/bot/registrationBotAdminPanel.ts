@@ -1,11 +1,13 @@
 import crypto from "node:crypto";
 import type { Context } from "telegraf";
+import bcrypt from "bcryptjs";
 import {
   AdminActionType,
   MembershipRole,
   SubscriptionStatus,
 } from "@prisma/client";
 import { prisma } from "../server/db.js";
+import { platformOperatorIdsFromEnv } from "../server/adminAuth.js";
 import {
   approveMerchantBotTokenChangeById,
   listPendingMerchantChangeRequests,
@@ -91,18 +93,30 @@ type AdminPanel = NonNullable<
   RegistrationSessionState["adminPanel"]
 >;
 
-function adminIdsFromEnv(): string[] {
-  const raw = process.env.ADMIN_IDS;
-  if (!raw) return [];
-  return raw
-    .split(/[,;]+/)
-    .map((s) => s.trim())
-    .filter((s) => s !== "");
+type OperatorPasswordConfig =
+  | { kind: "hash"; value: string }
+  | { kind: "plain"; value: string };
+
+function operatorPasswordConfigFromEnv(): OperatorPasswordConfig | null {
+  const hash = String(process.env.OPERATOR_PASSWORD_HASH ?? "").trim();
+  if (hash !== "") return { kind: "hash", value: hash };
+  const plain = String(process.env.ADMIN_PANEL_PASSWORD ?? "").trim();
+  if (plain !== "") return { kind: "plain", value: plain };
+  return null;
 }
 
-function adminPanelPasswordFromEnv(): string | null {
-  const p = String(process.env.ADMIN_PANEL_PASSWORD ?? "").trim();
-  return p === "" ? null : p;
+async function verifyOperatorPassword(
+  cfg: OperatorPasswordConfig,
+  received: string,
+): Promise<boolean> {
+  if (cfg.kind === "hash") {
+    try {
+      return await bcrypt.compare(received, cfg.value);
+    } catch {
+      return false;
+    }
+  }
+  return timingSafePasswordMatch(cfg.value, received);
 }
 
 function timingSafePasswordMatch(expected: string, received: string): boolean {
@@ -113,7 +127,7 @@ function timingSafePasswordMatch(expected: string, received: string): boolean {
 }
 
 function isPlatformAdminUser(tid: string): boolean {
-  return adminIdsFromEnv().includes(tid);
+  return platformOperatorIdsFromEnv().includes(tid);
 }
 
 function ensureAdminPanel(sess: RegistrationSessionState): NonNullable<
@@ -319,9 +333,9 @@ export async function tryHandleRegistrationSuperAdminCommand(
   if (!sess) return false;
   const ap = ensureAdminPanel(sess);
 
-  const pwConfig = adminPanelPasswordFromEnv();
+  const pwConfig = operatorPasswordConfigFromEnv();
   if (pwConfig == null) {
-    await ctx.reply("⚠️ Панель не настроена (ADMIN_PANEL_PASSWORD).");
+    await ctx.reply("⚠️ Панель не настроена (OPERATOR_PASSWORD_HASH).");
     return true;
   }
 
@@ -366,7 +380,7 @@ export async function consumeRegistrationSuperAdminPrivateMessage(
   const sess = getPanelSession(ctx);
   if (!sess) return false;
   const ap = ensureAdminPanel(sess);
-  const pwConfig = adminPanelPasswordFromEnv();
+  const pwConfig = operatorPasswordConfigFromEnv();
 
   if (
     pwConfig != null &&
@@ -384,7 +398,7 @@ export async function consumeRegistrationSuperAdminPrivateMessage(
   }
 
   if (ap.awaitingPassword && pwConfig != null && !ap.isAdmin) {
-    if (timingSafePasswordMatch(pwConfig, text)) {
+    if (await verifyOperatorPassword(pwConfig, text)) {
       ap.isAdmin = true;
       ap.awaitingPassword = false;
       ap.passwordAttempts = 0;
@@ -592,7 +606,7 @@ export async function handleRegistrationSuperAdminCallback(
     return true;
   }
   const ap = ensureAdminPanel(sess);
-  const pwOk = adminPanelPasswordFromEnv() != null;
+  const pwOk = operatorPasswordConfigFromEnv() != null;
 
   if (!pwOk) {
     await ctx.answerCbQuery("Панель не настроена").catch(() => undefined);

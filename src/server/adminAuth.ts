@@ -1,24 +1,29 @@
 import type { Request, Response } from "express";
 
-/** Telegram numeric ids суперадмина: `ADMIN_IDS` и/или `PLATFORM_ADMIN_TELEGRAM_ID` (см. `isPlatformAdminTelegramId` на сервере). */
-function adminIdsFromEnv(): string[] {
+function splitIds(raw: string | undefined): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
-  const push = (v: string | undefined | null) => {
-    const s = String(v ?? "").trim();
-    if (s === "" || seen.has(s)) return;
-    seen.add(s);
-    out.push(s);
-  };
-
-  // Backward/alt compatibility: allow single-id variable.
-  push(process.env.PLATFORM_ADMIN_TELEGRAM_ID);
-
-  const raw = process.env.ADMIN_IDS ?? "";
-  for (const part of raw.split(/[,;\s]+/)) {
-    push(part);
+  for (const part of String(raw ?? "").split(/[,;\s]+/)) {
+    const id = part.trim();
+    if (id === "" || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
   }
   return out;
+}
+
+/**
+ * Platform operator IDs.
+ * Priority: PLATFORM_OPERATOR_IDS, fallback: ADMIN_IDS + PLATFORM_ADMIN_TELEGRAM_ID.
+ */
+export function platformOperatorIdsFromEnv(): string[] {
+  const preferred = splitIds(process.env.PLATFORM_OPERATOR_IDS);
+  if (preferred.length > 0) return preferred;
+
+  const fallback = splitIds(process.env.ADMIN_IDS);
+  const single = String(process.env.PLATFORM_ADMIN_TELEGRAM_ID ?? "").trim();
+  if (single !== "" && !fallback.includes(single)) fallback.push(single);
+  return fallback;
 }
 
 function queryUserId(req: Request): string | undefined {
@@ -44,11 +49,16 @@ export function isAdmin(userId: unknown): boolean {
   if (!str) return false;
   const num = Number(str);
   if (Number.isFinite(num) && num <= 0) return false;
-  const adminIds = adminIdsFromEnv();
-  if (adminIds.length === 0) return false;
-  if (adminIds.includes(str)) return true;
-  if (Number.isFinite(num) && adminIds.includes(String(num))) return true;
+  const operatorIds = platformOperatorIdsFromEnv();
+  if (operatorIds.length === 0) return false;
+  if (operatorIds.includes(str)) return true;
+  if (Number.isFinite(num) && operatorIds.includes(String(num))) return true;
   return false;
+}
+
+/** Explicit alias for operator checks in platform security layer. */
+export function isPlatformOperator(userId: unknown): boolean {
+  return isAdmin(userId);
 }
 
 /** Все admin endpoint: `userId` в теле или в query. */

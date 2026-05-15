@@ -44,11 +44,21 @@ import {
   approveRegistrationRequestById,
   extendBusinessSubscriptionAdmin,
   isPlatformAdminTelegramId,
+  isPlatformOperatorTelegramId,
   listBusinessesForPlatformAdmin,
   listPendingRegistrationRequestsForAdmin,
   purgeBusinessCompletelyForPlatformAdmin,
   rejectRegistrationRequestById,
 } from "./platformAdminService.js";
+import {
+  OPERATOR_SESSION_HEADER,
+  hasRecentOperatorReauth,
+  markOperatorSessionReauth,
+  revokeOperatorSession,
+  unlockOperatorSession,
+  validateOperatorSession,
+  verifyOperatorPassword,
+} from "./platformOperatorAuth.js";
 import { templateForBusinessType } from "../templates/index.js";
 import {
   StorefrontConfigSchema,
@@ -358,6 +368,214 @@ function platformTelegramIdFromWebApp(req: Request): string | null {
   return typeof id === "string" && /^\d+$/.test(id) ? id : null;
 }
 
+function operatorForbidden(res: Response, code = "operator_forbidden"): void {
+  res.status(403).json({ error: "Forbidden", code });
+}
+
+function operatorSessionTokenFromReq(req: Request): string | null {
+  const raw = req.headers[OPERATOR_SESSION_HEADER];
+  const token =
+    typeof raw === "string"
+      ? raw.trim()
+      : Array.isArray(raw) && typeof raw[0] === "string"
+        ? raw[0].trim()
+        : "";
+  return token !== "" ? token : null;
+}
+
+async function requireOperatorIdentity(
+  req: Request,
+  res: Response,
+): Promise<string | null> {
+  const telegramId = platformTelegramIdFromWebApp(req);
+  if (!telegramId) {
+    res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
+    return null;
+  }
+  if (!isPlatformOperatorTelegramId(telegramId)) {
+    operatorForbidden(res);
+    return null;
+  }
+  return telegramId;
+}
+
+async function requireOperatorUnlock(
+  req: Request,
+  res: Response,
+): Promise<{ telegramId: string; token: string } | null> {
+  const telegramId = await requireOperatorIdentity(req, res);
+  if (!telegramId) return null;
+  const token = operatorSessionTokenFromReq(req);
+  if (!token) {
+    operatorForbidden(res, "operator_unlock_required");
+    return null;
+  }
+  const valid = await validateOperatorSession({
+    operatorTelegramId: telegramId,
+    token,
+  });
+  if (!valid.ok) {
+    operatorForbidden(res, "operator_unlock_required");
+    return null;
+  }
+  return { telegramId, token };
+}
+
+async function requireOperatorRecentReauth(
+  req: Request,
+  res: Response,
+): Promise<{ telegramId: string; token: string } | null> {
+  const unlocked = await requireOperatorUnlock(req, res);
+  if (!unlocked) return null;
+  const ok = await hasRecentOperatorReauth({
+    operatorTelegramId: unlocked.telegramId,
+    token: unlocked.token,
+  });
+  if (!ok) {
+    operatorForbidden(res, "reauth_required");
+    return null;
+  }
+  return unlocked;
+}
+
+app.get("/api/platform/operator/capabilities", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromWebApp(req);
+    if (!telegramId) {
+      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
+      return;
+    }
+    const isOperatorIdentity = isPlatformOperatorTelegramId(telegramId);
+    res.json({
+      isOperatorIdentity,
+      canShowOperatorEntry: isOperatorIdentity,
+    });
+  } catch (e) {
+    console.error("GET /api/platform/operator/capabilities:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post(
+  "/api/platform/operator/unlock",
+  strictLimiter,
+  requireNonEmptyJsonBody,
+  async (req: Request, res: Response) => {
+    try {
+      const telegramId = await requireOperatorIdentity(req, res);
+      if (!telegramId) return;
+      const password =
+        typeof (req.body as { password?: unknown }).password === "string"
+          ? (req.body as { password: string }).password.trim()
+          : "";
+      if (password === "") {
+        res.status(400).json({ error: "Нужен пароль", code: "password_required" });
+        return;
+      }
+      const out = await unlockOperatorSession({
+        operatorTelegramId: telegramId,
+        password,
+        userAgent:
+          typeof req.headers["user-agent"] === "string"
+            ? req.headers["user-agent"]
+            : null,
+        ip: typeof req.ip === "string" ? req.ip : null,
+      });
+      if (!out.ok) {
+        res.status(out.status).json({ error: out.message, code: out.code });
+        return;
+      }
+      res.json({ token: out.token, expiresAt: out.expiresAt });
+    } catch (e) {
+      console.error("POST /api/platform/operator/unlock:", e);
+      res.status(500).json({ error: "Ошибка сервера" });
+    }
+  },
+);
+
+app.post(
+  "/api/platform/operator/lock",
+  strictLimiter,
+  async (req: Request, res: Response) => {
+    try {
+      const telegramId = await requireOperatorIdentity(req, res);
+      if (!telegramId) return;
+      const token = operatorSessionTokenFromReq(req);
+      if (!token) {
+        res.json({ ok: true });
+        return;
+      }
+      await revokeOperatorSession({
+        operatorTelegramId: telegramId,
+        token,
+      });
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("POST /api/platform/operator/lock:", e);
+      res.status(500).json({ error: "Ошибка сервера" });
+    }
+  },
+);
+
+app.get("/api/platform/operator/session", async (req: Request, res: Response) => {
+  try {
+    const telegramId = await requireOperatorIdentity(req, res);
+    if (!telegramId) return;
+    const token = operatorSessionTokenFromReq(req);
+    if (!token) {
+      operatorForbidden(res, "operator_unlock_required");
+      return;
+    }
+    const valid = await validateOperatorSession({
+      operatorTelegramId: telegramId,
+      token,
+    });
+    if (!valid.ok) {
+      operatorForbidden(res, "operator_unlock_required");
+      return;
+    }
+    res.json({ unlocked: true, expiresAt: valid.expiresAt });
+  } catch (e) {
+    console.error("GET /api/platform/operator/session:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post(
+  "/api/platform/operator/reauth",
+  strictLimiter,
+  requireNonEmptyJsonBody,
+  async (req: Request, res: Response) => {
+    try {
+      const unlocked = await requireOperatorUnlock(req, res);
+      if (!unlocked) return;
+      const password =
+        typeof (req.body as { password?: unknown }).password === "string"
+          ? (req.body as { password: string }).password.trim()
+          : "";
+      if (password === "") {
+        res.status(400).json({ error: "Нужен пароль", code: "password_required" });
+        return;
+      }
+      const ok = await verifyOperatorPassword(password);
+      if (!ok) {
+        res
+          .status(401)
+          .json({ error: "Неверный пароль", code: "operator_unlock_failed" });
+        return;
+      }
+      await markOperatorSessionReauth({
+        operatorTelegramId: unlocked.telegramId,
+        token: unlocked.token,
+      });
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("POST /api/platform/operator/reauth:", e);
+      res.status(500).json({ error: "Ошибка сервера" });
+    }
+  },
+);
+
 app.get("/api/platform/my-businesses", async (req: Request, res: Response) => {
   try {
     const telegramId = platformTelegramIdFromWebApp(req);
@@ -470,17 +688,8 @@ app.post(
   requireNonEmptyJsonBody,
   async (req: Request, res: Response) => {
     try {
-      const telegramId = platformTelegramIdFromWebApp(req);
-      if (!telegramId) {
-        res.status(500).json({
-          error: "Внутренняя ошибка авторизации Mini App",
-        });
-        return;
-      }
-      if (!isPlatformAdminTelegramId(telegramId)) {
-        res.status(403).json({ error: "Forbidden" });
-        return;
-      }
+      const unlocked = await requireOperatorRecentReauth(req, res);
+      if (!unlocked) return;
       const parsed = platformDeleteMyBusinessBodySchema.safeParse(req.body);
       if (!parsed.success) {
         res.status(400).json({ error: formatZodApiError(parsed.error) });
@@ -489,7 +698,7 @@ app.post(
       const { businessId } = parsed.data;
       const out = await purgeBusinessCompletelyForPlatformAdmin(
         businessId,
-        telegramId,
+        unlocked.telegramId,
       );
       if (!out.ok) {
         res.status(out.statusCode).json({ error: out.message });
@@ -1292,11 +1501,8 @@ app.put("/api/merchant/storefront-style-catalog-patch", async (req: Request, res
 
 app.get("/api/platform/admin/requests", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromWebApp(req);
-    if (!telegramId) {
-      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
-      return;
-    }
+    const unlocked = await requireOperatorUnlock(req, res);
+    if (!unlocked) return;
     const rawQ = req.query.telegramId ?? req.query.userId;
     const queryTid =
       typeof rawQ === "string"
@@ -1304,14 +1510,10 @@ app.get("/api/platform/admin/requests", async (req: Request, res: Response) => {
         : Array.isArray(rawQ) && typeof rawQ[0] === "string"
           ? rawQ[0].trim()
           : "";
-    if (/^\d+$/.test(queryTid) && queryTid !== telegramId) {
+    if (/^\d+$/.test(queryTid) && queryTid !== unlocked.telegramId) {
       res.status(403).json({
         error: "Несовпадение telegramId в query с данными авторизации Telegram",
       });
-      return;
-    }
-    if (!isPlatformAdminTelegramId(telegramId)) {
-      res.status(403).json({ error: "Forbidden" });
       return;
     }
     const rows = await listPendingRegistrationRequestsForAdmin();
@@ -1324,15 +1526,7 @@ app.get("/api/platform/admin/requests", async (req: Request, res: Response) => {
 
 app.post("/api/platform/admin/approve", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromWebApp(req);
-    if (!telegramId) {
-      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
-      return;
-    }
-    if (!isPlatformAdminTelegramId(telegramId)) {
-      res.status(403).json({ error: "Forbidden" });
-      return;
-    }
+    if (!(await requireOperatorRecentReauth(req, res))) return;
     const requestId = Number((req.body as { requestId?: unknown }).requestId);
     if (!Number.isInteger(requestId) || requestId <= 0) {
       res.status(400).json({ error: "Нужен корректный requestId" });
@@ -1356,15 +1550,7 @@ app.post("/api/platform/admin/approve", async (req: Request, res: Response) => {
 
 app.post("/api/platform/admin/reject", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromWebApp(req);
-    if (!telegramId) {
-      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
-      return;
-    }
-    if (!isPlatformAdminTelegramId(telegramId)) {
-      res.status(403).json({ error: "Forbidden" });
-      return;
-    }
+    if (!(await requireOperatorRecentReauth(req, res))) return;
     const requestId = Number((req.body as { requestId?: unknown }).requestId);
     if (!Number.isInteger(requestId) || requestId <= 0) {
       res.status(400).json({ error: "Нужен корректный requestId" });
@@ -1384,15 +1570,7 @@ app.post("/api/platform/admin/reject", async (req: Request, res: Response) => {
 
 app.post("/api/platform/admin/block", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromWebApp(req);
-    if (!telegramId) {
-      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
-      return;
-    }
-    if (!isPlatformAdminTelegramId(telegramId)) {
-      res.status(403).json({ error: "Forbidden" });
-      return;
-    }
+    if (!(await requireOperatorRecentReauth(req, res))) return;
     const businessId = Number(
       (req.body as { businessId?: unknown }).businessId,
     );
@@ -1418,15 +1596,7 @@ app.post("/api/platform/admin/block", async (req: Request, res: Response) => {
 
 app.post("/api/platform/admin/unblock", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromWebApp(req);
-    if (!telegramId) {
-      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
-      return;
-    }
-    if (!isPlatformAdminTelegramId(telegramId)) {
-      res.status(403).json({ error: "Forbidden" });
-      return;
-    }
+    if (!(await requireOperatorRecentReauth(req, res))) return;
     const businessId = Number(
       (req.body as { businessId?: unknown }).businessId,
     );
@@ -1452,11 +1622,8 @@ app.post("/api/platform/admin/unblock", async (req: Request, res: Response) => {
 
 app.get("/api/platform/admin/businesses", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromWebApp(req);
-    if (!telegramId) {
-      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
-      return;
-    }
+    const unlocked = await requireOperatorUnlock(req, res);
+    if (!unlocked) return;
     const rawQl = req.query.telegramId ?? req.query.userId;
     const queryTidAdmin =
       typeof rawQl === "string"
@@ -1464,14 +1631,10 @@ app.get("/api/platform/admin/businesses", async (req: Request, res: Response) =>
         : Array.isArray(rawQl) && typeof rawQl[0] === "string"
           ? rawQl[0].trim()
           : "";
-    if (/^\d+$/.test(queryTidAdmin) && queryTidAdmin !== telegramId) {
+    if (/^\d+$/.test(queryTidAdmin) && queryTidAdmin !== unlocked.telegramId) {
       res.status(403).json({
         error: "Несовпадение telegramId в query с данными авторизации Telegram",
       });
-      return;
-    }
-    if (!isPlatformAdminTelegramId(telegramId)) {
-      res.status(403).json({ error: "Forbidden" });
       return;
     }
     const rawQ = req.query.search ?? req.query.q;
@@ -1491,15 +1654,7 @@ app.get("/api/platform/admin/businesses", async (req: Request, res: Response) =>
 
 app.post("/api/platform/admin/disable", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromWebApp(req);
-    if (!telegramId) {
-      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
-      return;
-    }
-    if (!isPlatformAdminTelegramId(telegramId)) {
-      res.status(403).json({ error: "Forbidden" });
-      return;
-    }
+    if (!(await requireOperatorRecentReauth(req, res))) return;
     const businessId = Number(
       (req.body as { businessId?: unknown }).businessId,
     );
@@ -1525,15 +1680,7 @@ app.post("/api/platform/admin/disable", async (req: Request, res: Response) => {
 
 app.post("/api/platform/admin/enable", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromWebApp(req);
-    if (!telegramId) {
-      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
-      return;
-    }
-    if (!isPlatformAdminTelegramId(telegramId)) {
-      res.status(403).json({ error: "Forbidden" });
-      return;
-    }
+    if (!(await requireOperatorRecentReauth(req, res))) return;
     const businessId = Number(
       (req.body as { businessId?: unknown }).businessId,
     );
@@ -1561,15 +1708,7 @@ app.post(
   "/api/platform/admin/restart-dynamic-bot",
   async (req: Request, res: Response) => {
     try {
-      const telegramId = platformTelegramIdFromWebApp(req);
-      if (!telegramId) {
-        res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
-        return;
-      }
-      if (!isPlatformAdminTelegramId(telegramId)) {
-        res.status(403).json({ error: "Forbidden" });
-        return;
-      }
+      if (!(await requireOperatorRecentReauth(req, res))) return;
       const businessId = Number(
         (req.body as { businessId?: unknown }).businessId,
       );
@@ -1615,15 +1754,7 @@ app.post(
 
 app.post("/api/platform/admin/extend", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromWebApp(req);
-    if (!telegramId) {
-      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
-      return;
-    }
-    if (!isPlatformAdminTelegramId(telegramId)) {
-      res.status(403).json({ error: "Forbidden" });
-      return;
-    }
+    if (!(await requireOperatorRecentReauth(req, res))) return;
     const body = req.body as { businessId?: unknown; days?: unknown };
     const businessId = Number(body.businessId);
     const daysRaw = Number(body.days);
@@ -1648,15 +1779,8 @@ app.post("/api/platform/admin/extend", async (req: Request, res: Response) => {
 
 app.post("/api/platform/admin/purge-business", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromWebApp(req);
-    if (!telegramId) {
-      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
-      return;
-    }
-    if (!isPlatformAdminTelegramId(telegramId)) {
-      res.status(403).json({ error: "Forbidden" });
-      return;
-    }
+    const unlocked = await requireOperatorRecentReauth(req, res);
+    if (!unlocked) return;
     const businessId = Number(
       (req.body as { businessId?: unknown }).businessId,
     );
@@ -1666,7 +1790,7 @@ app.post("/api/platform/admin/purge-business", async (req: Request, res: Respons
     }
     const out = await purgeBusinessCompletelyForPlatformAdmin(
       businessId,
-      telegramId,
+      unlocked.telegramId,
     );
     if (!out.ok) {
       res.status(out.statusCode).json({ error: out.message });
@@ -1681,15 +1805,7 @@ app.post("/api/platform/admin/purge-business", async (req: Request, res: Respons
 
 app.get("/api/platform/admin/template-info", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromWebApp(req);
-    if (!telegramId) {
-      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
-      return;
-    }
-    if (!isPlatformAdminTelegramId(telegramId)) {
-      res.status(403).json({ error: "Forbidden" });
-      return;
-    }
+    if (!(await requireOperatorUnlock(req, res))) return;
     const bid = Number((req.query as { businessId?: string }).businessId);
     if (!Number.isInteger(bid) || bid <= 0) {
       res.status(400).json({ error: "Нужен query businessId" });
@@ -1725,15 +1841,7 @@ app.get("/api/platform/admin/template-info", async (req: Request, res: Response)
 
 app.post("/api/platform/admin/reapply-template", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromWebApp(req);
-    if (!telegramId) {
-      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
-      return;
-    }
-    if (!isPlatformAdminTelegramId(telegramId)) {
-      res.status(403).json({ error: "Forbidden" });
-      return;
-    }
+    if (!(await requireOperatorRecentReauth(req, res))) return;
     const bid = Number((req.body as { businessId?: unknown }).businessId);
     if (!Number.isInteger(bid) || bid <= 0) {
       res.status(400).json({ error: "Нужен корректный businessId" });
@@ -1756,15 +1864,7 @@ app.post("/api/platform/admin/reapply-template", async (req: Request, res: Respo
 
 app.post("/api/platform/admin/regenerate-demo", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromWebApp(req);
-    if (!telegramId) {
-      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
-      return;
-    }
-    if (!isPlatformAdminTelegramId(telegramId)) {
-      res.status(403).json({ error: "Forbidden" });
-      return;
-    }
+    if (!(await requireOperatorRecentReauth(req, res))) return;
     const bid = Number((req.body as { businessId?: unknown }).businessId);
     if (!Number.isInteger(bid) || bid <= 0) {
       res.status(400).json({ error: "Нужен корректный businessId" });
@@ -1792,15 +1892,7 @@ app.post("/api/platform/admin/regenerate-demo", async (req: Request, res: Respon
 
 app.post("/api/platform/admin/migrate-template", async (req: Request, res: Response) => {
   try {
-    const telegramId = platformTelegramIdFromWebApp(req);
-    if (!telegramId) {
-      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
-      return;
-    }
-    if (!isPlatformAdminTelegramId(telegramId)) {
-      res.status(403).json({ error: "Forbidden" });
-      return;
-    }
+    if (!(await requireOperatorRecentReauth(req, res))) return;
     const bid = Number((req.body as { businessId?: unknown }).businessId);
     if (!Number.isInteger(bid) || bid <= 0) {
       res.status(400).json({ error: "Нужен корректный businessId" });
@@ -1827,15 +1919,7 @@ app.get(
   "/api/platform/admin/bot-token-changes",
   async (req: Request, res: Response) => {
     try {
-      const telegramId = platformTelegramIdFromWebApp(req);
-      if (!telegramId) {
-        res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
-        return;
-      }
-      if (!isPlatformAdminTelegramId(telegramId)) {
-        res.status(403).json({ error: "Forbidden" });
-        return;
-      }
+      if (!(await requireOperatorUnlock(req, res))) return;
       const rows = await listPendingMerchantChangeRequests();
       res.json(rows);
     } catch (e) {
@@ -1849,15 +1933,7 @@ app.post(
   "/api/platform/admin/bot-token-changes/approve",
   async (req: Request, res: Response) => {
     try {
-      const telegramId = platformTelegramIdFromWebApp(req);
-      if (!telegramId) {
-        res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
-        return;
-      }
-      if (!isPlatformAdminTelegramId(telegramId)) {
-        res.status(403).json({ error: "Forbidden" });
-        return;
-      }
+      if (!(await requireOperatorRecentReauth(req, res))) return;
       const id = Number((req.body as { id?: unknown }).id);
       if (!Number.isInteger(id) || id <= 0) {
         res.status(400).json({ error: "Нужен корректный id заявки" });
@@ -1880,15 +1956,7 @@ app.post(
   "/api/platform/admin/bot-token-changes/reject",
   async (req: Request, res: Response) => {
     try {
-      const telegramId = platformTelegramIdFromWebApp(req);
-      if (!telegramId) {
-        res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
-        return;
-      }
-      if (!isPlatformAdminTelegramId(telegramId)) {
-        res.status(403).json({ error: "Forbidden" });
-        return;
-      }
+      if (!(await requireOperatorRecentReauth(req, res))) return;
       const id = Number((req.body as { id?: unknown }).id);
       if (!Number.isInteger(id) || id <= 0) {
         res.status(400).json({ error: "Нужен корректный id заявки" });

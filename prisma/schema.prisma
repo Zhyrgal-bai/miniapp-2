@@ -538,6 +538,23 @@ model AdminActionLog {
   @@index([createdAt])
 }
 
+model PlatformOperatorSession {
+  id                Int      @id @default(autoincrement())
+  operatorTelegramId String
+  tokenHash         String   @unique
+  userAgent         String?
+  ipHash            String?
+  createdAt         DateTime @default(now())
+  lastActivityAt    DateTime @default(now())
+  expiresAt         DateTime
+  lastReauthAt      DateTime?
+  revokedAt         DateTime?
+
+  @@index([operatorTelegramId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+}
+
 /// Заявки на изменение магазина (сейчас только смена botToken — после approve).
 model MerchantChangeRequest {
   id Int @id @default(autoincrement())

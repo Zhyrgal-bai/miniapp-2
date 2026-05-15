@@ -20,7 +20,7 @@ import {
   hashBotTokenSha256Hex,
 } from "./businessBotToken.js";
 import { isEncryptedTokenFormat } from "./botTokenCrypto.js";
-import { isAdmin } from "./adminAuth.js";
+import { isPlatformOperator } from "./adminAuth.js";
 import { mapRowsWithWebhook } from "./platformMyBusinesses.js";
 
 function buildApproveUserNotifyMessage(merchantBotUsername: string | null): string {
@@ -153,13 +153,16 @@ async function provisionMerchantStoreInTx(
 
 /**
  * Доступ к REST `/api/platform/admin/*`: после `requireTelegramAuth` (WebApp initData)
- * telegram id проверяется по `ADMIN_IDS` на сервере.
+ * telegram id проверяется по `PLATFORM_OPERATOR_IDS` (fallback: `ADMIN_IDS`).
  */
-export function isPlatformAdminTelegramId(telegramId: string): boolean {
+export function isPlatformOperatorTelegramId(telegramId: string): boolean {
   const tid = telegramId.trim();
   if (!/^\d+$/.test(tid)) return false;
-  return isAdmin(tid);
+  return isPlatformOperator(tid);
 }
+
+/** Backward compatibility alias for existing imports/calls. */
+export const isPlatformAdminTelegramId = isPlatformOperatorTelegramId;
 
 export type PlatformAdminRequestRow = {
   id: number;
