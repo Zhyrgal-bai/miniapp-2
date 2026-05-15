@@ -16,6 +16,30 @@ export function storefrontShellModeFromStyleConfig(
   return "tiered";
 }
 
+export function storefrontMotionLevelFromStyleConfig(
+  storefrontStyleConfig: Record<string, unknown> | null | undefined,
+): "none" | "low" | "normal" | "high" {
+  const styleCfg = storefrontStyleConfig ?? {};
+  const motion = getObj(styleCfg.motion);
+  const levelRaw = typeof motion.level === "string" ? motion.level.trim().toLowerCase() : "";
+  if (levelRaw === "none" || levelRaw === "off" || levelRaw === "reduced") return "none";
+  if (levelRaw === "low" || levelRaw === "soft") return "low";
+  if (levelRaw === "high" || levelRaw === "expressive") return "high";
+  return "normal";
+}
+
+export function storefrontLayoutPresetFromStyleConfig(
+  storefrontStyleConfig: Record<string, unknown> | null | undefined,
+): "classic" | "editorial" | "marketplace" | "immersive" {
+  const styleCfg = storefrontStyleConfig ?? {};
+  const layout = getObj(styleCfg.layout);
+  const presetRaw = typeof layout.preset === "string" ? layout.preset.trim().toLowerCase() : "";
+  if (presetRaw === "editorial") return "editorial";
+  if (presetRaw === "marketplace") return "marketplace";
+  if (presetRaw === "immersive") return "immersive";
+  return "classic";
+}
+
 /** Aligns with `data-sf-kit` / storefront kits. */
 export function kitFromTemplateId(tid: string | null | undefined): string {
   const t = typeof tid === "string" ? tid.trim().toLowerCase() : "";
@@ -41,6 +65,7 @@ export function buildStorefrontLayoutCssVars(
   const hero = getObj(styleCfg.hero);
   const cart = getObj(styleCfg.cart);
   const drawer = getObj(styleCfg.drawer);
+  const brand = getObj(styleCfg.brand);
 
   const fontStack = (id: unknown): string => {
     const v = isFontId(id) ? id : "system";
@@ -59,6 +84,7 @@ export function buildStorefrontLayoutCssVars(
   const contentMax = layout.contentWidth === "narrow" ? "430px" : "100%";
 
   const shellMode = storefrontShellModeFromStyleConfig(storefrontStyleConfig);
+  const motionLevel = storefrontMotionLevelFromStyleConfig(storefrontStyleConfig);
 
   const shellPad =
     scaledPx(layout.shellPadding) ||
@@ -71,6 +97,17 @@ export function buildStorefrontLayoutCssVars(
   const shellMaxLg =
     typeof layout.shellMaxLg === "number" && Number.isFinite(layout.shellMaxLg) ? `${layout.shellMaxLg}px` : "";
 
+  const catalogMinCard =
+    typeof layout.catalogMinCardWidth === "number" && Number.isFinite(layout.catalogMinCardWidth)
+      ? `${Math.max(120, Math.min(320, Math.round(layout.catalogMinCardWidth)))}px`
+      : "";
+
+  const motionFast =
+    motionLevel === "none" ? "0ms" : motionLevel === "low" ? "120ms" : motionLevel === "high" ? "220ms" : "160ms";
+  const motionNormal =
+    motionLevel === "none" ? "0ms" : motionLevel === "low" ? "180ms" : motionLevel === "high" ? "360ms" : "260ms";
+  const interactionLift = motionLevel === "none" ? "0px" : motionLevel === "high" ? "-4px" : "-2px";
+
   return {
     "--sf-density-scale": String(densityScale),
     "--sf-content-max": contentMax,
@@ -79,6 +116,7 @@ export function buildStorefrontLayoutCssVars(
     "--sf-shell-max-sm": shellMaxSm,
     "--sf-shell-max-md": shellMaxMd,
     "--sf-shell-max-lg": shellMaxLg,
+    "--sf-catalog-min-card": catalogMinCard,
     "--sf-section-pad":
       scaledPx(layout.sectionSpacing) ||
       (typeof layout.sectionSpacing === "number" ? `${layout.sectionSpacing}px` : ""),
@@ -114,8 +152,13 @@ export function buildStorefrontLayoutCssVars(
       typeof buttons.shadow === "boolean" ? (buttons.shadow ? "1" : "0") : "",
     "--sf-button-glow-enabled": typeof buttons.glow === "boolean" ? (buttons.glow ? "1" : "0") : "",
     "--sf-button-compact": typeof buttons.compact === "boolean" ? (buttons.compact ? "1" : "0") : "",
-    "--sf-motion-level":
-      typeof buttons.animationLevel === "string" ? String(buttons.animationLevel) : "",
+    "--sf-motion-level": motionLevel,
+    "--sf-motion-duration-fast": motionFast,
+    "--sf-motion-duration-normal": motionNormal,
+    "--sf-interaction-lift": interactionLift,
+    "--sf-brand-tone": typeof brand.tone === "string" ? String(brand.tone) : "",
+    "--sf-brand-personality": typeof brand.personality === "string" ? String(brand.personality) : "",
+    "--sf-banner-style": typeof brand.bannerStyle === "string" ? String(brand.bannerStyle) : "",
     "--sf-cart-item-style": typeof cart.itemStyle === "string" ? String(cart.itemStyle) : "",
     "--sf-cart-empty-style": typeof cart.emptyStyle === "string" ? String(cart.emptyStyle) : "",
     "--sf-cart-footer-style": typeof cart.footerStyle === "string" ? String(cart.footerStyle) : "",

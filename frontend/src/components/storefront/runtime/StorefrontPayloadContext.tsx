@@ -5,7 +5,7 @@ import { api } from "../../../services/api";
 import { useShop } from "../../../context/ShopContext";
 import type { ResolvedStorefrontPayload } from "../StorefrontRenderer";
 import { safeParseStorefrontPublicApiResponse } from "@repo-storefront/storefrontPublicApiResponseSchema";
-import { parseStoreSlugFromPath, rememberResolvedStoreSlug } from "../../../utils/storeParams";
+import { readStoreSlugString, rememberResolvedStoreSlug } from "../../../utils/storeParams";
 
 type StorefrontPayloadCtx = {
   payload: ResolvedStorefrontPayload | null;
@@ -18,12 +18,17 @@ const Ctx = createContext<StorefrontPayloadCtx | null>(null);
 
 export function StorefrontPayloadProvider(props: { children: React.ReactNode }): React.ReactElement {
   const { businessId } = useShop();
-  const { pathname } = useLocation();
-  const slug = useMemo(() => parseStoreSlugFromPath(pathname), [pathname]);
+  const { pathname, search } = useLocation();
+  const slug = useMemo(() => readStoreSlugString(pathname, search), [pathname, search]);
   const [payload, setPayload] = useState<ResolvedStorefrontPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const aborted = useRef<AbortController | null>(null);
+  const transientRetries = useRef(0);
+
+  useEffect(() => {
+    transientRetries.current = 0;
+  }, [slug, businessId]);
 
   const refresh = useCallback(async () => {
     aborted.current?.abort();
@@ -57,6 +62,7 @@ export function StorefrontPayloadProvider(props: { children: React.ReactNode }):
       }
       const data = parsed.data as ResolvedStorefrontPayload;
       setPayload(data);
+      transientRetries.current = 0;
       if (slug && typeof data.businessId === "number" && data.businessId > 0) {
         rememberResolvedStoreSlug(slug, data.businessId);
         window.dispatchEvent(new CustomEvent("sf:tenantResolved"));
@@ -64,8 +70,23 @@ export function StorefrontPayloadProvider(props: { children: React.ReactNode }):
     } catch (e) {
       if (ac.signal.aborted) return;
       console.error(e);
+      const status = (e as { response?: { status?: number } })?.response?.status;
+      const canRetry = (status == null || status >= 500) && transientRetries.current < 2;
+      if (canRetry) {
+        transientRetries.current += 1;
+        const delayMs = 500 * transientRetries.current;
+        setError("Подключаем витрину…");
+        window.setTimeout(() => {
+          if (!ac.signal.aborted) void refresh();
+        }, delayMs);
+        return;
+      }
       setPayload(null);
-      setError("Не удалось загрузить витрину");
+      if (status === 404) {
+        setError("Витрина пока недоступна");
+      } else {
+        setError("Не удалось загрузить витрину");
+      }
     } finally {
       if (!ac.signal.aborted) setLoading(false);
     }

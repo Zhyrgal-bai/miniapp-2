@@ -4,6 +4,7 @@ import { prisma } from "../server/db.js";
 import {
   envCandidateBotTokensForWebAppInit,
   parseBusinessIdFromWebAppStartParam,
+  parseStoreSlugFromWebAppStartParam,
   telegramUserIdStringFromInitData,
   validateTelegramInitData,
 } from "../server/telegramWebAppInitData.js";
@@ -114,6 +115,7 @@ export async function requireTelegramAuth(
 
     const envToks = envCandidateBotTokensForWebAppInit();
     const businessIdHint = parseBusinessIdFromWebAppStartParam(initData);
+    const slugHint = parseStoreSlugFromWebAppStartParam(initData);
     const scanOn = shouldScanStoreBotsForInitData();
 
     const canTrySomething =
@@ -129,6 +131,26 @@ export async function requireTelegramAuth(
     if (businessIdHint != null) {
       const row = await prisma.business.findUnique({
         where: { id: businessIdHint },
+        select: { botToken: true },
+      });
+      const plain =
+        row != null ? safePlainBotTokenFromStored(row.botToken) : "";
+      if (
+        tryValidateInitDataWithToken(
+          initData,
+          plain,
+          req,
+          res,
+          next,
+        )
+      ) {
+        return;
+      }
+    }
+
+    if (slugHint != null) {
+      const row = await prisma.business.findFirst({
+        where: { slug: { equals: slugHint, mode: "insensitive" } } as any,
         select: { botToken: true },
       });
       const plain =
@@ -176,10 +198,11 @@ export async function requireTelegramAuth(
         /* ignore */
       }
       console.warn(
-        "[telegram-auth] все проверки подписи не прошли: hasHash=%s envTokens=%s startParamBizId=%s scan=%s",
+        "[telegram-auth] все проверки подписи не прошли: hasHash=%s envTokens=%s startParamBizId=%s startParamSlug=%s scan=%s",
         hasHexHash,
         envToks.length,
         businessIdHint ?? "none",
+        slugHint ?? "none",
         scanOn,
       );
     }

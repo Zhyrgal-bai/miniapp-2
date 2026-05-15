@@ -58,14 +58,14 @@ function miniAppOpenUrl(b: Pick<PlatformMyBusinessDTO, "id" | "slug">): string {
   const origin = window.location.origin.replace(/\/$/, "");
   const s = typeof b.slug === "string" ? b.slug.trim() : "";
   if (s !== "") {
-    return `${origin}/store/${encodeURIComponent(s)}`;
+    return `${origin}/s/${encodeURIComponent(s)}`;
   }
   return `${origin}/?shop=${encodeURIComponent(String(b.id))}`;
 }
 
 function miniAppNavigatePath(b: Pick<PlatformMyBusinessDTO, "id" | "slug">): string {
   const s = typeof b.slug === "string" ? b.slug.trim() : "";
-  if (s !== "") return `/store/${encodeURIComponent(s)}`;
+  if (s !== "") return `/s/${encodeURIComponent(s)}`;
   return `/?shop=${encodeURIComponent(String(b.id))}`;
 }
 

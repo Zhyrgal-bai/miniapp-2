@@ -11,7 +11,9 @@
   overflow: hidden;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  transition:
+    transform var(--sf-motion-duration-normal, 250ms) ease,
+    box-shadow var(--sf-motion-duration-normal, 250ms) ease;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -22,7 +24,7 @@
 }
 
 .product-card:hover {
-  transform: var(--sf-card-hover-transform, translateY(-2px));
+  transform: var(--sf-card-hover-transform, translateY(var(--sf-interaction-lift, -2px)));
   box-shadow: var(--sf-card-hover-shadow, var(--sf-shadow-card));
   border-color: var(--sf-color-border);
 }
@@ -215,7 +217,7 @@
 .image-slider {
   display: flex;
   height: 100%;
-  transition: transform 0.28s ease-out;
+  transition: transform var(--sf-motion-duration-normal, 280ms) ease-out;
   will-change: transform;
 }
 
@@ -231,7 +233,7 @@
   height: 100%;
   object-fit: cover;
   display: block;
-  transition: transform 0.3s ease;
+  transition: transform var(--sf-motion-duration-normal, 300ms) ease;
 }
 
 .product-card:hover .image-slide img {

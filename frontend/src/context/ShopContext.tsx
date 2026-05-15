@@ -2,7 +2,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { parseStoreSlugFromPath, readShopIdString } from "../utils/storeParams";
+import { readShopIdString, readStoreSlugString } from "../utils/storeParams";
 import { useCartStore } from "../store/useCartStore";
 
 export type ShopContextValue = {
@@ -42,21 +42,19 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     void searchTick;
     void telegramTick;
     void slugResolveTick;
-    const shopIdString = readShopIdString(pathname);
+    const shopIdString = readShopIdString(pathname, search);
     const n = shopIdString ? Number(shopIdString) : NaN;
     const businessId = Number.isInteger(n) && n > 0 ? n : null;
-    const pathSlug = parseStoreSlugFromPath(pathname);
+    const pathSlug = readStoreSlugString(pathname, search);
     const tenantResolving = Boolean(pathSlug) && !shopIdString;
-    const storefrontSlug =
-      pathSlug ??
-      (typeof window !== "undefined" ? sessionStorage.getItem("miniapp-store-slug") : null);
+    const storefrontSlug = pathSlug ?? null;
     return {
       businessId,
       shopIdString,
       storefrontSlug: storefrontSlug && storefrontSlug.trim() !== "" ? storefrontSlug : null,
       tenantResolving,
     };
-  }, [searchTick, telegramTick, slugResolveTick, pathname]);
+  }, [searchTick, telegramTick, slugResolveTick, pathname, search]);
 
   useEffect(() => {
     useCartStore.getState().syncTenantShopId(value.shopIdString ?? null);

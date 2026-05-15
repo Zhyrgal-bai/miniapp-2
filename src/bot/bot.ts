@@ -568,6 +568,7 @@ export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
       .trim()
       .replace(/\/$/, "");
     if (shop && base) {
+      // Backward compatibility: numeric tenant links still work while storefront resolves slug-first.
       let url = `${base}/?shop=${encodeURIComponent(shop)}`;
       try {
         const bid = Number(shop);
@@ -581,7 +582,7 @@ export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
               ? String((row as any).slug).trim().toLowerCase()
               : null;
           if (slug) {
-            url = `${base}/store/${encodeURIComponent(slug)}`;
+            url = `${base}/s/${encodeURIComponent(slug)}`;
           }
         }
       } catch {

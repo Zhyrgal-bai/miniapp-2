@@ -8,6 +8,8 @@ export type CatalogCardPresetId =
   | "minimal_list"
   | "modern_cards"
   | "marketplace"
+  | "premium_showcase"
+  | "snackable_mobile"
   | "fashion"
   | "overlay_cta"
   | "bottom_cta"
@@ -57,6 +59,25 @@ const PRESETS: Record<CatalogCardPresetId, Record<string, unknown>> = {
     priceStyle: "compact",
     ctaStyle: "full",
   },
+  premium_showcase: {
+    variant: "luxury",
+    density: "airy",
+    imageRatio: "portrait",
+    shadow: true,
+    hoverEffect: "lift",
+    badgeStyle: "luxury",
+    priceStyle: "bold",
+    ctaStyle: "pill",
+  },
+  snackable_mobile: {
+    variant: "modern",
+    density: "compact",
+    imageRatio: "square",
+    rounded: true,
+    hoverEffect: "none",
+    ctaStyle: "full",
+    priceStyle: "compact",
+  },
   fashion: {
     variant: "fashion",
     density: "normal",
@@ -95,6 +116,16 @@ const PRESETS: Record<CatalogCardPresetId, Record<string, unknown>> = {
 
 export function isCatalogCardPresetId(v: unknown): v is CatalogCardPresetId {
   return typeof v === "string" && v in PRESETS;
+}
+
+export function defaultCatalogCardPresetForBusinessType(
+  businessTypeRaw: string | null | undefined,
+): CatalogCardPresetId {
+  const businessType = String(businessTypeRaw ?? "").trim().toLowerCase();
+  if (businessType.includes("fashion") || businessType.includes("clothing")) return "premium_showcase";
+  if (businessType.includes("coffee") || businessType.includes("fastfood")) return "snackable_mobile";
+  if (businessType.includes("flower")) return "modern_cards";
+  return "marketplace";
 }
 
 /** Deep-merge: base storefront card config wins over preset for each key present on base. */

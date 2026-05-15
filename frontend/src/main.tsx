@@ -34,6 +34,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 element={<Navigate to="/merchant" replace />}
               />
               <Route path="/store/:slug" element={<App />} />
+              <Route path="/s/:slug" element={<App />} />
               <Route path="/" element={<RootAppOrPlatform />} />
               <Route path="*" element={<App />} />
             </Routes>

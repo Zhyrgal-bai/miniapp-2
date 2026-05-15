@@ -68,6 +68,32 @@ export function parseBusinessIdFromWebAppStartParam(initData: string): number | 
   return null;
 }
 
+export function parseStoreSlugFromWebAppStartParam(initData: string): string | null {
+  const raw = initData.trim();
+  if (raw === "") return null;
+  let params: URLSearchParams;
+  try {
+    params = new URLSearchParams(raw);
+  } catch {
+    return null;
+  }
+  const sp = params.get("start_param")?.trim() ?? "";
+  if (sp === "") return null;
+
+  const parsed = (() => {
+    const prefixed = /^(?:slug|store|s|shop)[_:-](.+)$/i.exec(sp);
+    if (prefixed) return prefixed[1] ?? "";
+    return sp;
+  })()
+    .trim()
+    .toLowerCase();
+
+  if (parsed === "" || parsed.includes("/")) return null;
+  if (parsed.length < 2 || parsed.length > 80) return null;
+  if (/^\d+$/.test(parsed) || /^shop[_-]?\d+$/i.test(parsed)) return null;
+  return parsed;
+}
+
 /**
  * Стандарт Telegram: секретный ключ = HMAC-SHA256(key="WebAppData", msg=botToken).
  */

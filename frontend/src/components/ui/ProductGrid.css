@@ -20,6 +20,16 @@
   margin-inline: 0;
 }
 
+.sf-root[data-sf-layout="editorial"] .product-grid:not(.product-grid--list):not(.product-grid--solo):not(.product-grid--empty):not(.product-grid--rail),
+.sf-root[data-sf-layout="immersive"] .product-grid:not(.product-grid--list):not(.product-grid--solo):not(.product-grid--empty):not(.product-grid--rail) {
+  grid-template-columns: repeat(auto-fit, minmax(var(--sf-catalog-min-card, 164px), 1fr));
+}
+
+.sf-root[data-sf-layout="marketplace"] .product-grid:not(.product-grid--list):not(.product-grid--solo):not(.product-grid--empty):not(.product-grid--rail) {
+  --pg-gap-x: max(10px, var(--sf-grid-gap, 12px));
+  --pg-gap-y: max(12px, calc(var(--sf-grid-gap, 12px) + 2px));
+}
+
 /* Outside commerce shell (no --sf-catalog-cols): viewport-based fallback */
 @supports not (container-type: inline-size) {
   .product-grid:not(.product-grid--list):not(.product-grid--solo):not(.product-grid--empty):not(.product-grid--rail) {

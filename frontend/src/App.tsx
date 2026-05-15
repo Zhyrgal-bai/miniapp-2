@@ -14,6 +14,7 @@ import { useCartStore } from "./store/useCartStore";
 import { useAdminPanelVisible, useAdminAccessBootstrap } from "@/utils/admin";
 import { fetchMyOrders } from "./services/myOrdersApi";
 import { getWebAppUserId } from "./utils/telegramUserId";
+import { getTelegramWebApp } from "./utils/telegram";
 import {
   readPendingFinikOrder,
   clearPendingFinikOrder,
@@ -73,7 +74,7 @@ export default function App() {
   const location = useLocation();
   const { businessId, shopIdString } = useShop();
   const { theme, templateId } = useTheme();
-  const { payload, loading: storefrontLoading } = useStorefrontPayload();
+  const { payload, loading: storefrontLoading, error: storefrontError } = useStorefrontPayload();
   const [page, setPage] = useState<AppNavPage>(initialPageFromPath);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [myOrdersAttention, setMyOrdersAttention] = useState(false);
@@ -117,9 +118,8 @@ export default function App() {
   const allowWithoutShop =
     page === "admin" || adminByHash || page === "faq";
   const slugPath = parseStoreSlugFromPath(location.pathname);
-  const slugBoot =
-    Boolean(slugPath) && storefrontLoading && businessId == null && !allowWithoutShop;
-  const shopMissing = !allowWithoutShop && businessId == null && !storefrontLoading;
+  const tenantBoot = !allowWithoutShop && businessId == null && storefrontLoading;
+  const shopMissing = !allowWithoutShop && businessId == null && !tenantBoot;
 
   const items = useCartStore((state) => state.items);
   const totalQuantity = items.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
@@ -551,18 +551,18 @@ export default function App() {
     if (!shopIdString || !payload?.storefrontSlug) return;
     if (slugPath) return;
     const sp = new URLSearchParams(location.search);
-    if (!sp.has("shop")) return;
+    if (!sp.has("shop") && !sp.has("businessId")) return;
     const slug = String(payload.storefrontSlug).trim();
     if (!slug) return;
     navigate({ pathname: `/store/${encodeURIComponent(slug)}`, search: "" }, { replace: true });
   }, [shopIdString, payload?.storefrontSlug, location.search, location.pathname, navigate, slugPath]);
 
-  if (slugBoot) {
+  if (tenantBoot) {
     return (
       <ThemeVarsProvider theme={theme}>
         <div className="app app--tenant-loading" role="status">
           <p className="shop-missing__hint" style={{ textAlign: "center", padding: "32px 20px" }}>
-            Загрузка витрины…
+            Открываем витрину…
           </p>
         </div>
       </ThemeVarsProvider>
@@ -570,17 +570,38 @@ export default function App() {
   }
 
   if (shopMissing) {
+    const openViaTelegram = () => {
+      const tg = getTelegramWebApp();
+      const close = (tg as { close?: () => void } | undefined)?.close;
+      if (typeof close === "function") {
+        close();
+      } else {
+        window.location.reload();
+      }
+    };
     return (
       <div className="app app--shop-missing">
         <div className="shop-missing" role="alert">
-          <p className="shop-missing__title">Магазин не найден</p>
+          <p className="shop-missing__title">Не удалось открыть витрину</p>
           <p className="shop-missing__hint">
-            Откройте витрину по адресу{" "}
-            <code className="shop-missing__code">/store/ваш-магазин</code>, параметром{" "}
-            <code className="shop-missing__code">?shop=ID</code> или{" "}
-            <code className="shop-missing__code">?businessId=ID</code>, либо через кнопку «Открыть» в
-            Telegram (Mini App).
+            Откройте Mini App через кнопку «Открыть» в Telegram. Старые ссылки{" "}
+            <code className="shop-missing__code">?shop=ID</code> /{" "}
+            <code className="shop-missing__code">?businessId=ID</code> поддерживаются и будут
+            автоматически перенаправлены.
           </p>
+          {storefrontError ? (
+            <p className="shop-missing__hint" style={{ marginTop: 6 }}>
+              {storefrontError}
+            </p>
+          ) : null}
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+            <button type="button" className="checkout-btn" onClick={() => window.location.reload()}>
+              Повторить
+            </button>
+            <button type="button" className="go-shop" onClick={openViaTelegram}>
+              Открыть через Telegram
+            </button>
+          </div>
         </div>
       </div>
     );

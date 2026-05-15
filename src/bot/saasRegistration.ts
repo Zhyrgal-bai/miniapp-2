@@ -290,7 +290,7 @@ function storefrontMiniAppRelativePath(b: {
   slug: string | null;
 }): string {
   const s = typeof b.slug === "string" ? b.slug.trim() : "";
-  if (s !== "") return `/store/${encodeURIComponent(s)}`;
+  if (s !== "") return `/s/${encodeURIComponent(s)}`;
   return `/?shop=${encodeURIComponent(String(b.id))}`;
 }
 
@@ -348,7 +348,7 @@ async function replyMerchantStoreDashboard(
         typeof r.business.slug === "string" ? r.business.slug.trim() : "";
       const ref =
         slug !== ""
-          ? `store/${slug}`
+          ? `s/${slug}`
           : `shop=${r.business.id}`;
       lines.push(`${i + 1}. «${r.business.name}» — ${ref}`);
     });

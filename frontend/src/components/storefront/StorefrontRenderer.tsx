@@ -17,12 +17,16 @@ import "./storefrontKits.css";
 import {
   buildStorefrontLayoutCssVars,
   kitFromTemplateId,
+  storefrontLayoutPresetFromStyleConfig,
+  storefrontMotionLevelFromStyleConfig,
 } from "../../storefront/buildStorefrontLayoutCssVars";
 import {
+  defaultCatalogCardPresetForBusinessType,
   mergeStorefrontCardConfigWithResponsive,
   type StorefrontCardViewportTier,
 } from "../../storefront/catalogCardPresets";
 import { StorefrontFeed } from "./StorefrontFeed";
+import { StorefrontIdentityBand } from "./StorefrontIdentityBand";
 
 type StorefrontKitId = "minimal" | "luxury" | "fashion" | "neon" | "default";
 
@@ -90,12 +94,18 @@ export function StorefrontRenderer(props: {
   }, []);
 
   const mergedCardConfig = useMemo(
-    () =>
-      mergeStorefrontCardConfigWithResponsive(
-        props.payload.storefrontCardConfig ?? undefined,
-        cardViewportTier,
-      ),
-    [props.payload.storefrontCardConfig, cardViewportTier],
+    () => {
+      const rawCfg =
+        props.payload.storefrontCardConfig &&
+        typeof props.payload.storefrontCardConfig === "object"
+          ? { ...(props.payload.storefrontCardConfig as Record<string, unknown>) }
+          : {};
+      if (typeof rawCfg.catalogCardPreset !== "string" || rawCfg.catalogCardPreset.trim() === "") {
+        rawCfg.catalogCardPreset = defaultCatalogCardPresetForBusinessType(props.payload.businessType);
+      }
+      return mergeStorefrontCardConfigWithResponsive(rawCfg, cardViewportTier);
+    },
+    [props.payload.storefrontCardConfig, cardViewportTier, props.payload.businessType],
   );
 
   const filterByCategory = useCallback(
@@ -182,6 +192,12 @@ export function StorefrontRenderer(props: {
   const hasFeaturedSection = firstFeaturedSectionId != null;
 
   const styleCfg = props.payload.storefrontStyleConfig as Record<string, unknown> | undefined;
+  const layoutPreset = storefrontLayoutPresetFromStyleConfig(styleCfg ?? null);
+  const motionLevel = storefrontMotionLevelFromStyleConfig(styleCfg ?? null);
+  const brandTone =
+    typeof (styleCfg as { brand?: { tone?: unknown } } | undefined)?.brand?.tone === "string"
+      ? String((styleCfg as { brand?: { tone?: unknown } }).brand?.tone).trim().toLowerCase()
+      : "default";
   const catalogBold =
     styleCfg != null &&
     typeof styleCfg.catalog === "object" &&
@@ -215,14 +231,42 @@ export function StorefrontRenderer(props: {
     });
   }, [styleCfg]);
 
+  const identityTextCfg = props.payload.storefrontTextConfig ?? undefined;
+  const showIdentityBand = useMemo(() => {
+    const storeName = String(props.payload.storeName ?? "").trim();
+    const cfg = identityTextCfg as Record<string, unknown> | undefined;
+    const keys = [
+      "brandTagline",
+      "brandPersonality",
+      "brandTrust1",
+      "brandTrust2",
+      "brandTrust3",
+      "heroDefaultSubtitle",
+    ];
+    const hasTextHints = keys.some((k) => typeof cfg?.[k] === "string" && String(cfg[k]).trim() !== "");
+    return storeName !== "" || hasTextHints;
+  }, [props.payload.storeName, identityTextCfg]);
+
   return (
     <ThemeVarsProvider theme={theme}>
       <div
         data-sf-kit={kit}
+        data-sf-layout={layoutPreset}
+        data-sf-motion={motionLevel}
+        data-sf-brand-tone={brandTone || "default"}
         className={`sf-root${catalogBold ? " sf-root--catalog-bold" : ""}`}
         style={cssVars as unknown as React.CSSProperties}
       >
         <StorefrontFeed>
+          {showIdentityBand ? (
+            <div className="sf-feed__chunk sf-feed__chunk--identity sf-feed__chunk--stack">
+              <StorefrontIdentityBand
+                storeName={props.payload.storeName}
+                textConfig={identityTextCfg}
+                styleConfig={styleCfg}
+              />
+            </div>
+          ) : null}
           {sections.map((s) => {
             const chunk = (() => {
               switch (s.type) {
@@ -259,7 +303,13 @@ export function StorefrontRenderer(props: {
                     />
                   );
                 case "promo":
-                  return <PromoSection key={s.id} config={s.config} />;
+                  return (
+                    <PromoSection
+                      key={s.id}
+                      config={s.config}
+                      textConfig={props.payload.storefrontTextConfig ?? undefined}
+                    />
+                  );
                 case "categories":
                   return (
                     <CategoriesSection

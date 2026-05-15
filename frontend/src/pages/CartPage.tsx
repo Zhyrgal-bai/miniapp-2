@@ -57,7 +57,7 @@ export default function CartPage({ onGoToCheckout }: Props) {
   }, 0);
 
   const handleGoShop = () => {
-    const shop = readShopIdString(pathname);
+    const shop = readShopIdString(pathname, search);
     if (!shop) {
       window.location.href = "/";
       return;
