@@ -82,7 +82,11 @@ export function parseStoreSlugFromPath(pathname: string): string | undefined {
   return slug;
 }
 
-function storeSlugFromQuery(pathname?: string, rawSearch?: string): string | undefined {
+function storeSlugFromQuery(
+  pathname?: string,
+  rawSearch?: string,
+  opts?: { includeSessionFallback?: boolean },
+): string | undefined {
   if (typeof window === "undefined") return undefined;
   const path = pathname ?? window.location.pathname ?? "";
   if (parseStoreSlugFromPath(path)) return undefined;
@@ -96,8 +100,11 @@ function storeSlugFromQuery(pathname?: string, rawSearch?: string): string | und
   if (fromTgQuery) return fromTgQuery;
   const fromInit = parseStartParamTenant(startParamFromSignedInitData()).storefrontSlug;
   if (fromInit) return fromInit;
-  const fromSession = normalizeStoreSlug(sessionStorage.getItem(SLUG_SESSION_KEY));
-  if (fromSession && isLikelyMiniAppEnv()) return fromSession;
+  const includeSessionFallback = opts?.includeSessionFallback !== false;
+  if (includeSessionFallback) {
+    const fromSession = normalizeStoreSlug(sessionStorage.getItem(SLUG_SESSION_KEY));
+    if (fromSession && isLikelyMiniAppEnv()) return fromSession;
+  }
   return undefined;
 }
 
@@ -106,20 +113,11 @@ export function readStoreSlugString(pathname?: string, rawSearch?: string): stri
   const path = pathname ?? window.location.pathname ?? "";
   const pathSlug = parseStoreSlugFromPath(path);
   if (pathSlug) return pathSlug;
-  return storeSlugFromQuery(path, rawSearch);
+  return storeSlugFromQuery(path, rawSearch, { includeSessionFallback: true });
 }
 
 function readLegacyShopIdFromQueryOrTelegram(pathname?: string, rawSearch?: string): string | undefined {
   if (typeof window === "undefined") return undefined;
-
-  const path = pathname ?? window.location.pathname ?? "";
-  const slug = parseStoreSlugFromPath(path) ?? storeSlugFromQuery(path, rawSearch);
-  if (slug) {
-    const savedSlug = normalizeStoreSlug(sessionStorage.getItem(SLUG_SESSION_KEY));
-    const id = parseDigits(sessionStorage.getItem(STORAGE_KEY));
-    if (savedSlug === slug && id) return id;
-    return undefined;
-  }
 
   const baseSearch = rawSearch ?? window.location.search;
   const sp = new URLSearchParams(baseSearch);
@@ -127,14 +125,25 @@ function readLegacyShopIdFromQueryOrTelegram(pathname?: string, rawSearch?: stri
     parseDigits(sp.get("shop")) ?? parseDigits(sp.get("businessId"));
   const tgFromQuery = parseStartParamTenant(sp.get("tgWebAppStartParam") ?? undefined);
   const tgInit = parseStartParamTenant(startParamFromSignedInitData());
+  const idFromLaunch = urlShop ?? tgFromQuery.shopIdString ?? tgInit.shopIdString;
 
-  const id = urlShop ?? tgFromQuery.shopIdString ?? tgInit.shopIdString;
-
-  if (id) {
-    sessionStorage.setItem(STORAGE_KEY, id);
+  // Legacy links must always work, even if session keeps a previous slug.
+  if (idFromLaunch) {
+    sessionStorage.setItem(STORAGE_KEY, idFromLaunch);
     if (tgFromQuery.storefrontSlug) sessionStorage.setItem(SLUG_SESSION_KEY, tgFromQuery.storefrontSlug);
     else if (tgInit.storefrontSlug) sessionStorage.setItem(SLUG_SESSION_KEY, tgInit.storefrontSlug);
-    return id;
+    return idFromLaunch;
+  }
+
+  const path = pathname ?? window.location.pathname ?? "";
+  const slug =
+    parseStoreSlugFromPath(path) ??
+    storeSlugFromQuery(path, rawSearch, { includeSessionFallback: false });
+  if (slug) {
+    const savedSlug = normalizeStoreSlug(sessionStorage.getItem(SLUG_SESSION_KEY));
+    const id = parseDigits(sessionStorage.getItem(STORAGE_KEY));
+    if (savedSlug === slug && id) return id;
+    return undefined;
   }
 
   const mem = parseDigits(sessionStorage.getItem(STORAGE_KEY));
