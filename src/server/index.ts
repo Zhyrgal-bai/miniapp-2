@@ -264,6 +264,7 @@ app.use(
       "x-telegram-id",
       "x-telegram-init-data",
       "x-business-id",
+      "x-operator-session",
     ],
   })
 );

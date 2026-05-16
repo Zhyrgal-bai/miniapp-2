@@ -725,7 +725,12 @@ export default function PlatformPage() {
       setOperatorUnlockOpen(false);
       setInfoBanner("Operator mode активирован.");
     } catch (e) {
-      setOperatorUnlockError(e instanceof Error ? e.message : "Не удалось войти");
+      const msg = e instanceof Error ? e.message : "Не удалось войти";
+      setOperatorUnlockError(
+        msg === "Load failed" || msg === "Failed to fetch"
+          ? "Нет соединения с API. Проверьте деплой и VITE_API_URL."
+          : msg,
+      );
     } finally {
       setOperatorUnlockBusy(false);
     }

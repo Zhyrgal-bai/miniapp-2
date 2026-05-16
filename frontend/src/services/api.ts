@@ -19,6 +19,13 @@ const envUrl =
     ? import.meta.env.VITE_API_URL.trim()
     : "";
 
+const envFallbackUrl =
+  typeof import.meta.env.VITE_FALLBACK_API_URL === "string"
+    ? import.meta.env.VITE_FALLBACK_API_URL.trim()
+    : "";
+
+const DEFAULT_RENDER_API_ORIGIN = "https://miniapp-store.onrender.com";
+
 /** База API: задайте `VITE_API_URL` в `frontend/.env` (тот же публичный URL, что `API_URL` на бэкенде). */
 export const API_BASE_URL =
   envUrl !== "" ? normalizeApiRoot(envUrl) : "";
@@ -33,7 +40,15 @@ let warnedEmptyApiBase = false;
  * здесь получится относительный `/api/...` → браузер бьёт в origin фронта, а не в Render → initData/API «не работают».
  */
 export function apiAbsoluteUrl(path: string): string {
-  const base = normalizeBaseUrl(API_BASE_URL);
+  const vercelLikelyHost =
+    typeof window !== "undefined" && /\.vercel\.app$/i.test(window.location.hostname);
+  const fallbackBase =
+    envFallbackUrl !== ""
+      ? normalizeApiRoot(envFallbackUrl)
+      : vercelLikelyHost
+        ? DEFAULT_RENDER_API_ORIGIN
+        : "";
+  const base = normalizeBaseUrl(API_BASE_URL || fallbackBase);
   const p = path.startsWith("/") ? path : `/${path}`;
   if (
     base === "" &&
