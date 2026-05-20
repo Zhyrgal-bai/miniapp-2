@@ -3,6 +3,26 @@
   color: #ffffff;
 }
 
+.admin-order-search {
+  margin-bottom: 12px;
+}
+
+.admin-order-search__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-size: 15px;
+  font-family: inherit;
+}
+
+.admin-order-search__input::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+
 .analytics {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -3,6 +3,7 @@ import {
   adminService,
   type AdminOrderListItem,
 } from "../../services/admin.service";
+import { orderDisplayLabel } from "@repo-shared/orderDisplay";
 
 const FILTER_TABS = [
   "ALL",
@@ -41,6 +42,7 @@ const ORDER_STATUS_LABEL_RU: Record<string, string> = {
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<AdminOrderListItem[]>([]);
   const [filter, setFilter] = useState<FilterTab>("ALL");
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -84,9 +86,24 @@ export default function AdminOrdersPage() {
   }, [load]);
 
   const filtered = useMemo(() => {
-    if (filter === "ALL") return orders;
-    return orders.filter((o) => canonicalStatus(o.status) === filter);
-  }, [orders, filter]);
+    const list = filter === "ALL" ? orders : orders.filter((o) => canonicalStatus(o.status) === filter);
+    const q = search.trim().toLowerCase();
+    if (!q) return list;
+    const digits = q.replace(/\D/g, "");
+    return list.filter((o) => {
+      const label = orderDisplayLabel(o).toLowerCase();
+      const num = (o.orderNumber ?? "").toLowerCase();
+      const phone = o.phone.replace(/\D/g, "");
+      return (
+        label.includes(q) ||
+        num.includes(q) ||
+        String(o.id).includes(q) ||
+        o.name.toLowerCase().includes(q) ||
+        o.phone.toLowerCase().includes(q) ||
+        (digits.length >= 3 && phone.includes(digits))
+      );
+    });
+  }, [orders, filter, search]);
 
   useEffect(() => {
     setTrackingDraft((prev) => {
@@ -183,10 +200,20 @@ export default function AdminOrdersPage() {
       <header className="admin-dash-page__head">
         <h1 className="admin-dash-page__title">Заказы</h1>
         <p className="admin-dash-page__subtitle">
-          Заказы из базы; список обновляется каждые 3 с. Кнопки в Telegram
-          меняют тот же заказ по номеру.
+          Управление заказами только в Mini App. Список обновляется каждые 3 с.
         </p>
       </header>
+
+      <div className="admin-order-search">
+        <input
+          type="search"
+          className="admin-order-search__input"
+          placeholder="Поиск: номер, телефон, имя"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          aria-label="Поиск заказов"
+        />
+      </div>
 
       {error && (
         <div className="admin-form-error admin-dash-page__alert" role="alert">
@@ -266,7 +293,7 @@ export default function AdminOrdersPage() {
                 <div className="admin-order-card__identity">
                   <h2 className="admin-order-card__client">{order.name}</h2>
                   <p className="admin-order-card__subline">
-                    Заказ №{order.id}
+                    Заказ {order.displayNumber ?? orderDisplayLabel(order)}
                     {order.buyerTelegramId ? (
                       <>
                         {" · "}

@@ -16,6 +16,7 @@ import { fetchMyOrders } from "./services/myOrdersApi";
 import { getWebAppUserId } from "./utils/telegramUserId";
 import { getTelegramWebApp } from "./utils/telegram";
 import { ensureTelegramMobileUx } from "./utils/telegramWebAppBootstrap";
+import { resetBodyScrollLock } from "./utils/bodyScrollLock";
 import {
   readPendingFinikOrder,
   clearPendingFinikOrder,
@@ -96,7 +97,16 @@ export default function App() {
   }, [businessId, refreshAdminGate]);
 
   useEffect(() => {
+    resetBodyScrollLock();
     ensureTelegramMobileUx();
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        resetBodyScrollLock();
+        ensureTelegramMobileUx();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
 
   const tenantNav = useMemo(() => {
@@ -723,6 +733,7 @@ export default function App() {
       <div
         ref={sfAppRef}
         data-sf-kit={sfKit}
+        data-sf-scroll-root=""
         className="sf-root sf-app"
         data-sf-product-sheet={productSheetOpen ? "open" : undefined}
         style={sfVars as unknown as React.CSSProperties}

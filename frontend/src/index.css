@@ -3,14 +3,19 @@
 @tailwind utilities;
 
 /**
- * Не цеплять body/#root к `height: 100%`: тогда контент выше вьюпорта не даёт
- * скролла (типично в Telegram Mini App и при localhost /merchant).
- * Минимум — высота экрана, рост — по контенту.
+ * Mini App scroll: when storefront shell is mounted, only `.sf-root.sf-app` scrolls.
+ * Avoid `height: 100%` chains that trap overflow on body without a scroll outlet.
  */
 html {
   min-height: 100%;
   min-height: 100dvh;
-  overscroll-behavior-y: none;
+}
+
+html:has(.sf-root.sf-app),
+body:has(.sf-root.sf-app) {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 body {
@@ -30,6 +35,11 @@ body {
 #root {
   min-height: 100%;
   min-height: 100dvh;
+}
+
+#root:has(.sf-root.sf-app) {
+  height: 100%;
+  overflow: hidden;
 }
 
 * {

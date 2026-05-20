@@ -119,6 +119,7 @@ model Business {
   promos      Promo[]
   orderItems  OrderItem[]
   paymentRequests PaymentRequest[]
+  dailyOrderCounters BusinessDailyOrderCounter[]
 
   /// Платежи Finik только за SaaS-подписку (не заказы витрины).
   subscriptionFinikPayments SubscriptionFinikPayment[]
@@ -397,6 +398,9 @@ model Order {
   id     Int       @id @default(autoincrement())
   status OrderStatus @default(NEW)
 
+  /// Human-friendly per-business daily number, e.g. 2105-001 (DDMM-seq).
+  orderNumber String?
+
   /// Buyer display name snapshot (from Telegram / form).
   name    String
   phone   String
@@ -430,7 +434,21 @@ model Order {
 
   @@index([businessId])
   @@index([businessId, status])
+  @@index([businessId, orderNumber])
   @@index([buyerUserId])
+}
+
+/// Per-tenant daily order sequence (resets each calendar day in ORDER_DAY_TZ).
+model BusinessDailyOrderCounter {
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  /// DDMM key, e.g. "2105" for 21 May.
+  dayKey  String
+  lastSeq Int    @default(0)
+
+  @@id([businessId, dayKey])
+  @@index([businessId])
 }
 
 /// Line item belongs to Order; duplicated `businessId` enables tenant-only deletes / analytics queries without joins.

@@ -114,7 +114,7 @@ import {
   type OrderStatus,
 } from "./orderStatus.js";
 import {
-  adminNewOrderNotifyKeyboard,
+  adminMiniAppNotifyKeyboard,
   bot,
   bots,
   getBotForOwner,
@@ -151,6 +151,12 @@ import {
   tryApplyPromoDb,
 } from "./promoRepo.js";
 import { notifyAfterOrderStatusChangeFromApi } from "./orderTelegramNotify.js";
+import {
+  allocateHumanOrderNumber,
+  formatNewOrderTelegramMessage,
+  orderDisplayLabel,
+} from "./orderNumber.js";
+import { buildMerchantAdminOrdersWebAppUrl } from "./miniAppUrls.js";
 import {
   createFinikMerchantSession,
   mountFinikWebhookRoutes,
@@ -3745,6 +3751,7 @@ async function performOrderStatusUpdate(
     });
     void notifyAfterOrderStatusChangeFromApi({
       id: updated.id,
+      orderNumber: updated.orderNumber,
       businessId: updated.businessId,
       status: updated.status,
       total: updated.total,
@@ -3885,6 +3892,7 @@ async function handleAdminOrderPatch(req: Request, res: Response) {
     ) {
       void notifyAfterOrderStatusChangeFromApi({
         id: updated.id,
+        orderNumber: updated.orderNumber,
         businessId: updated.businessId,
         status: updated.status,
         total: updated.total,
@@ -4219,6 +4227,8 @@ async function fetchAdminOrdersPayload(businessId: number) {
         : "—";
     return {
       id: o.id,
+      orderNumber: o.orderNumber?.trim() || null,
+      displayNumber: orderDisplayLabel(o),
       name:
         (o.buyerUser?.name && o.buyerUser.name.trim()) ||
         (o.name && o.name.trim()) ||
@@ -4301,12 +4311,12 @@ app.post("/orders/list", async (req: Request, res: Response) => {
 /** Уведомление админу в Telegram о новом заказе из POST /orders (Prisma). */
 async function notifyAdminNewOrderTelegram(input: {
   orderId: number;
+  orderNumber: string | null;
   businessId: number;
   customerName: string;
   phone: string;
-  address: string;
   total: number;
-  items: { name: string; quantity: number }[];
+  itemCount: number;
 }): Promise<void> {
   const chatId = getNotifyTargetChatId(input.businessId);
   if (chatId == null) {
@@ -4316,22 +4326,27 @@ async function notifyAdminNewOrderTelegram(input: {
     return;
   }
 
-  const message =
-    `🛒 Новый заказ #${input.orderId}\n\n` +
-    `👤 Имя: ${input.customerName}\n` +
-    `📞 Телефон: ${input.phone}\n` +
-    `📍 Адрес: ${input.address}\n\n` +
-    `💰 Сумма: ${input.total} сом\n\n` +
-    `📦 Товары:\n` +
-    input.items.map((i) => `- ${i.name} x${i.quantity}`).join("\n");
+  const displayNum =
+    input.orderNumber?.trim() ||
+    orderDisplayLabel({ id: input.orderId, orderNumber: null });
+  const message = formatNewOrderTelegramMessage({
+    orderNumber: displayNum,
+    customerName: input.customerName,
+    phone: input.phone,
+    total: input.total,
+    itemCount: input.itemCount,
+  });
+
+  const adminUrl = await buildMerchantAdminOrdersWebAppUrl(input.businessId);
+  const replyMarkup = adminMiniAppNotifyKeyboard(adminUrl);
 
   try {
     const tgBot = getBotForOwner(input.businessId) ?? bot;
     if (tgBot) {
       await tgBot.telegram.sendMessage(chatId, message, {
-        reply_markup: adminNewOrderNotifyKeyboard(input.orderId),
+        reply_markup: replyMarkup,
       });
-      console.log("TELEGRAM ORDER NOTIFY: ok", input.orderId);
+      console.log("TELEGRAM ORDER NOTIFY: ok", displayNum);
       return;
     }
 
@@ -4351,7 +4366,7 @@ async function notifyAdminNewOrderTelegram(input: {
         body: JSON.stringify({
           chat_id: chatId,
           text: message,
-          reply_markup: adminNewOrderNotifyKeyboard(input.orderId),
+          reply_markup: replyMarkup,
         }),
       }
     );
@@ -4366,7 +4381,7 @@ async function notifyAdminNewOrderTelegram(input: {
         json
       );
     } else {
-      console.log("TELEGRAM ORDER NOTIFY: ok", input.orderId);
+      console.log("TELEGRAM ORDER NOTIFY: ok", displayNum);
     }
   } catch (error) {
     console.error("TELEGRAM ORDER NOTIFY error:", error);
@@ -4533,10 +4548,13 @@ app.post("/orders", async (req: Request, res: Response) => {
         }
       }
 
+      const orderNumber = await allocateHumanOrderNumber(tx, businessId);
+
       const order = await tx.order.create({
         data: {
           businessId,
           buyerUserId: buyerUserInner.id,
+          orderNumber,
           name: orderNameDisplay,
           phone: customerPhoneValue,
           address: addrFinal,
@@ -4604,25 +4622,27 @@ app.post("/orders", async (req: Request, res: Response) => {
       orderForResponse.phone?.trim() || customerPhoneValue || "—";
 
     const orderItemsAny = (orderForResponse as any).items as Array<{ name: string; quantity: number }> | undefined;
+    const itemCount = Array.isArray(orderItemsAny)
+      ? orderItemsAny.reduce(
+          (sum: number, i: { quantity?: number }) =>
+            sum + Math.max(0, Number(i?.quantity ?? 0)),
+          0,
+        )
+      : 0;
     void notifyAdminNewOrderTelegram({
       orderId: orderForResponse.id,
+      orderNumber: orderForResponse.orderNumber,
       businessId: orderForResponse.businessId,
       customerName: displayName,
       phone,
-      address,
       total: orderForResponse.total,
-      items: Array.isArray(orderItemsAny)
-        ? orderItemsAny.map((i: any) => ({
-            name: String(i?.name ?? ""),
-            quantity: Number(i?.quantity ?? 0),
-          }))
-        : [],
+      itemCount: itemCount > 0 ? itemCount : 1,
     });
 
     void createMerchantNotification({
       businessId: orderForResponse.businessId,
       kind: "ORDER_NEW",
-      title: `Новый заказ #${orderForResponse.id}`,
+      title: `Новый заказ ${orderDisplayLabel(orderForResponse)}`,
       body: `${displayName} · ${orderForResponse.total} сом`,
       href: "#/admin/orders",
     });

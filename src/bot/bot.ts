@@ -26,6 +26,11 @@ import {
   getDynamicOwnerBot,
   getDynamicTokenForBusiness,
 } from "./dynamicBots.js";
+import { buildMerchantAdminOrdersWebAppUrl } from "../server/miniAppUrls.js";
+import {
+  formatNewOrderTelegramMessage,
+  orderDisplayLabel,
+} from "../server/orderNumber.js";
 
 export {
   activeDynamicBotsByToken,
@@ -151,49 +156,39 @@ export function getNotifyTargetChatId(
   return undefined;
 }
 
-/** Этап 2: одна строка — как в ТЗ (новый заказ + сообщение «клиент оплатил»). */
-export function adminConfirmPaymentOnlyKeyboard(orderId: number) {
+/** Notification-only: open Mini App admin (no workflow buttons). */
+export function adminMiniAppNotifyKeyboard(adminWebAppUrl: string | null) {
+  if (!adminWebAppUrl?.trim()) {
+    return { inline_keyboard: [] as Array<Array<{ text: string; web_app: { url: string } }>> };
+  }
   return {
     inline_keyboard: [
-      [
-        {
-          text: "💰 Подтвердить оплату",
-          callback_data: `confirm_${orderId}`,
-        },
-      ],
+      [{ text: "📱 Открыть Mini App", web_app: { url: adminWebAppUrl.trim() } }],
     ],
   };
 }
 
-/** Этап 3: одна строка «Отправлено» (как в ТЗ). */
-export function adminShipOnlyKeyboard(orderId: number) {
-  return {
-    inline_keyboard: [
-      [{ text: "🚚 Отправлено", callback_data: `ship_${orderId}` }],
-    ],
-  };
+/** @deprecated Use adminMiniAppNotifyKeyboard — workflow buttons removed. */
+export function adminConfirmPaymentOnlyKeyboard(_orderId: number) {
+  return { inline_keyboard: [] as Array<Array<{ text: string; callback_data: string }>> };
 }
 
-/** Уведомление админу о новом заказе: этапы 2–3 + принять/отклонить. */
-export function adminNewOrderNotifyKeyboard(orderId: number) {
-  return {
-    inline_keyboard: [
-      ...adminConfirmPaymentOnlyKeyboard(orderId).inline_keyboard,
-      [
-        { text: "✅ Принять", callback_data: `accept_${orderId}` },
-        { text: "❌ Отклонить", callback_data: `cancel_${orderId}` },
-      ],
-      ...adminShipOnlyKeyboard(orderId).inline_keyboard,
-    ],
-  };
+/** @deprecated Use adminMiniAppNotifyKeyboard — workflow buttons removed. */
+export function adminShipOnlyKeyboard(_orderId: number) {
+  return { inline_keyboard: [] as Array<Array<{ text: string; callback_data: string }>> };
 }
 
-/** @deprecated для новых заказов используйте adminNewOrderNotifyKeyboard */
+/** @deprecated Use adminMiniAppNotifyKeyboard — workflow buttons removed. */
+export function adminNewOrderNotifyKeyboard(_orderId: number) {
+  return { inline_keyboard: [] as Array<Array<{ text: string; callback_data: string }>> };
+}
+
+/** @deprecated */
 export function adminOrderInlineKeyboard(orderId: number) {
   return adminNewOrderNotifyKeyboard(orderId);
 }
 
-/** @deprecated используйте adminOrderInlineKeyboard */
+/** @deprecated */
 export const adminMemoryOrderInlineKeyboard = adminOrderInlineKeyboard;
 
 async function loadOrderForBot(orderId: number) {
@@ -235,10 +230,11 @@ export function yaOpltilKeyboard(orderId: number) {
 }
 
 async function buildAcceptedPaymentMessage(
-  orderId: number,
+  order: { id: number; orderNumber?: string | null },
   businessId: number,
   orderTotal: number
 ): Promise<{ text: string; qrUrl: string; qrCaption: string }> {
+  const label = orderDisplayLabel(order);
   const details = await listPaymentDetailsFromDb(prisma, businessId);
   const mbankRow = details.find((d) => d.type.toLowerCase() === "mbank");
   const mbankVal =
@@ -246,14 +242,14 @@ async function buildAcceptedPaymentMessage(
       ? mbankRow.value.trim()
       : DEFAULT_MBANK_FALLBACK;
   const text =
-    `💳 Оплата заказа #${orderId}\n\n` +
+    `💳 Оплата заказа ${label}\n\n` +
     `Сумма: ${orderTotal} сом\n\n` +
     `MBANK: ${mbankVal}\n\n` +
     `👇 После оплаты нажмите:`;
   return {
     text,
     qrUrl: mbankOrderQrImageUrl(orderTotal),
-    qrCaption: mbankPaymentQrCaption(orderId, orderTotal),
+    qrCaption: mbankPaymentQrCaption(order.id, orderTotal),
   };
 }
 
@@ -275,12 +271,14 @@ export async function sendAcceptedPaymentPromptToTelegramUser(params: {
   telegram: Telegraf["telegram"];
   telegramUserId: number;
   orderId: number;
+  orderNumber?: string | null;
   businessId: number;
   orderTotal: number;
 }): Promise<void> {
-  const { telegram, telegramUserId, orderId, businessId, orderTotal } = params;
+  const { telegram, telegramUserId, orderId, orderNumber, businessId, orderTotal } =
+    params;
   const { text, qrUrl, qrCaption } = await buildAcceptedPaymentMessage(
-    orderId,
+    { id: orderId, orderNumber: orderNumber ?? null },
     businessId,
     orderTotal
   );
@@ -293,6 +291,7 @@ export async function sendAcceptedPaymentPromptToTelegramUser(params: {
 /** То же при смене статуса через API (нет ctx.telegram). */
 export async function sendAcceptedPaymentPromptForOrderFromApi(order: {
   id: number;
+  orderNumber?: string | null;
   businessId: number;
   total: number;
   buyerUser?: { telegramId: string } | null;
@@ -305,7 +304,7 @@ export async function sendAcceptedPaymentPromptForOrderFromApi(order: {
   const tgId = rawTg !== undefined ? Number(rawTg) : NaN;
   if (!Number.isFinite(tgId) || tgId <= 0) return;
   const { text, qrUrl, qrCaption } = await buildAcceptedPaymentMessage(
-    order.id,
+    order,
     order.businessId,
     order.total
   );
@@ -684,6 +683,7 @@ export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
         return;
       }
 
+      const orderLabel = orderDisplayLabel(row);
       const buyerTg = buyerTelegramFromOrderRow(row);
       const order = {
         status: row.status as OrderStatus,
@@ -692,69 +692,16 @@ export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
 
       console.log("CALLBACK:", data, "order", orderId, "status", order.status);
 
-      // ---------- ACCEPT (админ) ----------
-      if (action === "accept") {
-        if (order.status !== "NEW") {
-          await ctx.answerCbQuery("Уже обработано");
-          return;
-        }
-
-        const rowAfter = await updateOrderStatusInDb(orderId, "ACCEPTED");
-
-        await ctx.editMessageText(`🟢 Заказ #${orderId} принят. Ожидаем оплату.`, {
-          reply_markup: { inline_keyboard: [] },
-        });
-
-        const tgId = order.customerTelegramId;
-        if (tgId != null && Number.isFinite(tgId)) {
-          if (String(row.paymentMethod ?? "").toLowerCase() === "finik") {
-            await ctx.telegram.sendMessage(
-              tgId,
-              `✅ Заказ #${orderId} принят.\n\n` +
-                `Оплата через Finik: после оплаты статус обновится автоматически. ` +
-                `Откройте мини-приложение → «Мои заказы».`
-            );
-          } else {
-            await sendAcceptedPaymentPromptToTelegramUser({
-              telegram: ctx.telegram,
-              telegramUserId: tgId,
-              orderId: rowAfter.id,
-              businessId: rowAfter.businessId,
-              orderTotal: rowAfter.total,
-            });
-          }
-        }
-
-        await ctx.answerCbQuery("Обновлено ✅");
-        return;
-      }
-
-      // ---------- SHIP (админ) — callback_data: ship_${orderId} ----------
-      if (action === "ship" || action === "done" || data.startsWith("ship_")) {
-        if (order.status === "SHIPPED") {
-          await ctx.answerCbQuery("Уже отправлено");
-          return;
-        }
-        if (order.status !== "CONFIRMED") {
-          await ctx.answerCbQuery("Сначала подтвердите оплату");
-          return;
-        }
-
-        const rowAfter = await updateOrderStatusInDb(orderId, "SHIPPED");
-
-        await ctx.editMessageText(`🚚 Заказ #${orderId} отправлен`, {
-          reply_markup: { inline_keyboard: [] },
-        });
-
-        const shipTg = buyerTelegramFromOrderRow(rowAfter);
-        if (shipTg != null && shipTg > 0) {
-          await ctx.telegram.sendMessage(
-            shipTg,
-            `🚚 Заказ отправлен!\n\nВаш заказ #${rowAfter.id} уже в пути 📦`
-          );
-        }
-
-        await ctx.answerCbQuery("Заказ отправлен 🚚");
+      const adminWorkflowActions = new Set([
+        "accept",
+        "ship",
+        "done",
+        "confirm",
+        "cancel",
+        "reject",
+      ]);
+      if (adminWorkflowActions.has(action)) {
+        await ctx.answerCbQuery("Управление заказами — в Mini App");
         return;
       }
 
@@ -776,7 +723,7 @@ export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
         await updateOrderStatusInDb(orderId, "PAID_PENDING");
 
         await ctx.editMessageText(
-          `💳 Оплата заказа #${orderId}\n\nЗаявка отправлена администратору. Ожидайте подтверждения.`,
+          `💳 Оплата заказа ${orderLabel}\n\nЗаявка отправлена администратору. Ожидайте подтверждения.`,
           { reply_markup: { inline_keyboard: [] } }
         );
 
@@ -786,102 +733,17 @@ export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
             "CHAT_ID не задан и не было /start — не удалось уведомить админа об оплате"
           );
         } else {
+          const adminUrl = await buildMerchantAdminOrdersWebAppUrl(row.businessId);
           await ctx.telegram.sendMessage(
             adminChat,
-            `💰 Клиент оплатил заказ #${orderId}\nПроверь оплату`,
+            `💰 Клиент оплатил заказ ${orderLabel}\n\nПроверьте оплату в Mini App.`,
             {
-              reply_markup: {
-                inline_keyboard: [
-                  ...adminConfirmPaymentOnlyKeyboard(orderId).inline_keyboard,
-                  [
-                    {
-                      text: "❌ Отклонить",
-                      callback_data: `cancel_${orderId}`,
-                    },
-                  ],
-                ],
-              },
+              reply_markup: adminMiniAppNotifyKeyboard(adminUrl),
             }
           );
         }
 
         await ctx.answerCbQuery("Ожидайте подтверждения 🙏");
-        return;
-      }
-
-      // ---------- CONFIRM (админ) — callback_data: confirm_${orderId} ----------
-      if (action === "confirm" || data.startsWith("confirm_")) {
-        if (order.status !== "PAID_PENDING") {
-          await ctx.answerCbQuery(
-            order.status === "NEW"
-              ? "Сначала примите заказ и дождитесь оплаты"
-              : "Уже обработано"
-          );
-          return;
-        }
-
-        const rowAfter = await updateOrderStatusInDb(orderId, "CONFIRMED");
-
-        await ctx.editMessageText(`🟢 Оплата подтверждена · заказ #${orderId}`, {
-          reply_markup: adminShipOnlyKeyboard(orderId),
-        });
-
-        const confTg = buyerTelegramFromOrderRow(rowAfter);
-        if (confTg != null && confTg > 0) {
-          await ctx.telegram.sendMessage(
-            confTg,
-            `💰 Оплата подтверждена!\n\nВаш заказ #${rowAfter.id} готовится к отправке 📦`
-          );
-        }
-
-        await ctx.answerCbQuery("Оплата подтверждена ✅");
-        return;
-      }
-
-      // ---------- CANCEL / REJECT (админ): отмена NEW или отклонение оплаты ----------
-      if (action === "reject" || action === "cancel") {
-        if (order.status === "NEW") {
-          await updateOrderStatusInDb(orderId, "CANCELLED");
-
-          await ctx.editMessageText(`❌ Заказ #${orderId} отклонён`, {
-            reply_markup: { inline_keyboard: [] },
-          });
-
-          const tgId = order.customerTelegramId;
-          if (tgId != null && Number.isFinite(tgId)) {
-            await ctx.telegram.sendMessage(
-              tgId,
-              "❌ Заказ отклонён администратором."
-            );
-          }
-
-          await ctx.answerCbQuery("Обновлено ✅");
-          return;
-        }
-
-        if (order.status !== "PAID_PENDING") {
-          await ctx.answerCbQuery("Недоступно для этого статуса");
-          return;
-        }
-
-        const rowBack = await updateOrderStatusInDb(orderId, "ACCEPTED");
-
-        await ctx.editMessageText(`❌ Оплата не подтверждена\nЗаказ #${orderId}`, {
-          reply_markup: { inline_keyboard: [] },
-        });
-
-        const tgId = order.customerTelegramId;
-        if (tgId != null && Number.isFinite(tgId)) {
-          await sendAcceptedPaymentPromptToTelegramUser({
-            telegram: ctx.telegram,
-            telegramUserId: tgId,
-            orderId: rowBack.id,
-            businessId: rowBack.businessId,
-            orderTotal: rowBack.total,
-          });
-        }
-
-        await ctx.answerCbQuery("Обновлено ✅");
         return;
       }
 

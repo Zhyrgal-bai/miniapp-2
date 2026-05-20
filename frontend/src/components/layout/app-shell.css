@@ -30,16 +30,27 @@
   --app-accent-hover: var(--sf-color-danger);
 }
 
-/* Один непрерывный фон на весь экран Mini App (без «чёрной полосы» под коротким контентом) */
+/* Один scroll container для всего Mini App storefront */
 .sf-root.sf-app {
   min-height: 100dvh;
+  height: 100dvh;
+  max-height: 100dvh;
   box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
   touch-action: pan-y pinch-zoom;
 }
 
+.sf-root.sf-app.sf-scroll-locked {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}
+
 .sf-root.sf-app .app__content {
   overflow: visible;
+  min-height: min-content;
 }
 
 .app {
@@ -51,7 +62,7 @@
   padding-top: calc(
     var(--app-header-approx) + env(safe-area-inset-top, 0px) + var(--app-header-pad-y)
   );
-  min-height: 100%;
+  min-height: 0;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -71,6 +82,7 @@
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 10px;
+  pointer-events: none;
   padding-top: max(var(--app-header-pad-y), env(safe-area-inset-top, 0px));
   padding-bottom: var(--app-header-pad-y);
   padding-left: max(var(--app-header-pad-x), env(safe-area-inset-left, 0px));
@@ -81,6 +93,10 @@
   -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid color-mix(in srgb, var(--app-border) 82%, transparent);
   box-shadow: var(--sf-shadow-card, 0 8px 20px color-mix(in srgb, black 30%, transparent));
+}
+
+.app-header > * {
+  pointer-events: auto;
 }
 
 .sf-app .app-header {
@@ -755,11 +771,15 @@
   }
 }
 
-/* Host for createPortal — must stay inside .sf-app for --sf-* inheritance */
+/* Host for createPortal — zero-size anchor; children use their own fixed positioning */
 #sf-theme-portal-root {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
   z-index: 2300;
+  overflow: visible;
   pointer-events: none;
 }
 

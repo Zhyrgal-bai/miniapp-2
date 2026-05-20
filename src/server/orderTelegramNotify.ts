@@ -4,22 +4,25 @@ import {
   getBotTokenForOwner,
   getNotifyTargetChatId,
   sendAcceptedPaymentPromptForOrderFromApi,
+  adminMiniAppNotifyKeyboard,
 } from "../bot/bot.js";
 import type { OrderStatus } from "./orderStatus.js";
+import { orderDisplayLabel } from "./orderNumber.js";
+import { buildMerchantAdminOrdersWebAppUrl } from "./miniAppUrls.js";
 
 function customerTextForStatus(
   status: OrderStatus,
-  orderId: number
+  label: string
 ): string | null {
   if (status === "ACCEPTED") return "Заказ принят";
   if (status === "CONFIRMED") {
-    return `Оплата подтверждена ✅\n\nВаш заказ #${orderId} готовится к отправке 📦`;
+    return `Оплата подтверждена ✅\n\nВаш заказ ${label} готовится к отправке 📦`;
   }
   if (status === "SHIPPED") {
-    return `🚚 Заказ отправлен!\n\nВаш заказ #${orderId} уже в пути 📦`;
+    return `🚚 Заказ отправлен!\n\nВаш заказ ${label} уже в пути 📦`;
   }
   if (status === "DELIVERED") {
-    return `✅ Заказ доставлен!\n\nВаш заказ #${orderId} — можете оформить возврат при необходимости в «Мои заказы».`;
+    return `✅ Заказ доставлен!\n\nВаш заказ ${label} — возврат при необходимости в «Мои заказы».`;
   }
   return null;
 }
@@ -56,10 +59,10 @@ async function sendTelegramText(
 
 /**
  * После смены статуса через API (мини-апп / админка): уведомить клиента и админ-чат.
- * Пути бота (callback) сами шлют сообщения — эта функция только для HTTP PUT.
  */
 export async function notifyAfterOrderStatusChangeFromApi(order: {
   id: number;
+  orderNumber?: string | null;
   businessId: number;
   status: string;
   total: number;
@@ -67,6 +70,7 @@ export async function notifyAfterOrderStatusChangeFromApi(order: {
   paymentMethod?: string | null;
 }): Promise<void> {
   const status = order.status as OrderStatus;
+  const label = orderDisplayLabel(order);
   const rawTg = order.buyerUser?.telegramId;
   const tgId = rawTg !== undefined ? Number(rawTg) : NaN;
   const isFinik = String(order.paymentMethod ?? "").toLowerCase() === "finik";
@@ -75,7 +79,7 @@ export async function notifyAfterOrderStatusChangeFromApi(order: {
     try {
       if (isFinik) {
         const text =
-          `✅ Заказ #${order.id} принят.\n\n` +
+          `✅ Заказ ${label} принят.\n\n` +
           `Оплата через Finik: после оплаты статус обновится автоматически. ` +
           `Следите в мини-приложении → «Мои заказы».`;
         const tBot = getBotForOwner(order.businessId) ?? bot;
@@ -87,6 +91,7 @@ export async function notifyAfterOrderStatusChangeFromApi(order: {
       } else {
         await sendAcceptedPaymentPromptForOrderFromApi({
           id: order.id,
+          orderNumber: order.orderNumber ?? null,
           businessId: order.businessId,
           total: order.total,
           buyerUser: order.buyerUser,
@@ -97,7 +102,7 @@ export async function notifyAfterOrderStatusChangeFromApi(order: {
       console.error("notify customer ACCEPTED payment prompt:", e);
     }
   } else {
-    const text = customerTextForStatus(status, order.id);
+    const text = customerTextForStatus(status, label);
     if (text != null && Number.isFinite(tgId) && tgId > 0) {
       const tBot = getBotForOwner(order.businessId) ?? bot;
       if (tBot) {
@@ -115,11 +120,15 @@ export async function notifyAfterOrderStatusChangeFromApi(order: {
   const adminChat = getNotifyTargetChatId(order.businessId);
   if (adminChat == null) return;
 
-  const adminLine = `📱 Заказ #${order.id} → ${order.status}\n(обновлено в приложении)`;
+  const adminLine = `📱 Заказ ${label} → ${order.status}\n(обновлено в Mini App)`;
+  const adminUrl = await buildMerchantAdminOrdersWebAppUrl(order.businessId);
+  const replyMarkup = adminMiniAppNotifyKeyboard(adminUrl);
   const tBot = getBotForOwner(order.businessId) ?? bot;
   if (tBot) {
     try {
-      await tBot.telegram.sendMessage(adminChat, adminLine);
+      await tBot.telegram.sendMessage(adminChat, adminLine, {
+        reply_markup: replyMarkup,
+      });
     } catch (e) {
       console.error("notify admin (bot):", e);
     }

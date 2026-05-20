@@ -1,5 +1,6 @@
 export type MyOrderRow = {
   id: number;
+  orderNumber?: string | null;
   /** Тенант (магазин) */
   businessId?: number;
   userId?: number;

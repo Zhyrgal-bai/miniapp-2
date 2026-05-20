@@ -5,6 +5,7 @@ import { useShop } from "../context/ShopContext";
 import { useStorefrontPayload } from "../components/storefront/runtime/StorefrontPayloadContext";
 import { getWebAppUserId } from "../utils/telegramUserId";
 import type { MyOrderRow } from "../types/myOrder";
+import { orderDisplayLabel } from "@repo-shared/orderDisplay";
 import { orderSupportPhase } from "@repo-shared/supportPhase";
 import {
   SF_ORDERS_INTENT_KEY,
@@ -252,7 +253,7 @@ function OrderPaymentBlock({
         />
       ) : null}
       <div className="my-orders__pay-info">
-        <p className="my-orders__pay-info-title">💳 Оплата заказа #{order.id}</p>
+        <p className="my-orders__pay-info-title">💳 Оплата заказа {orderDisplayLabel(order)}</p>
         <p className="my-orders__pay-info-sum">{order.total} сом</p>
         {phone ? <p className="my-orders__pay-info-phone">MBank: {phone}</p> : null}
         {optima ? <p className="my-orders__pay-info-phone">Optima: {optima}</p> : null}
@@ -652,7 +653,7 @@ export default function MyOrders({
           ← К списку
         </button>
         <header className="my-orders__head">
-          <h1 className="my-orders__title">Заказ #{order.id}</h1>
+          <h1 className="my-orders__title">Заказ {orderDisplayLabel(order)}</h1>
           {dateLabel ? (
             <p className="my-orders__subtitle">{dateLabel}</p>
           ) : null}
@@ -904,7 +905,7 @@ export default function MyOrders({
         >
           ← Назад
         </button>
-        <h1 className="my-orders__title">Возврат · заказ #{order.id}</h1>
+        <h1 className="my-orders__title">Возврат · заказ {orderDisplayLabel(order)}</h1>
         <p className="my-orders__muted">
           Доступно после доставки. Укажите позицию (необязательно), причину и
           фото.
@@ -1035,7 +1036,7 @@ export default function MyOrders({
           return (
             <article key={order.id} className="my-orders__card">
               <div className="my-orders__card-head">
-                <h3 className="my-orders__card-title">Заказ #{order.id}</h3>
+                <h3 className="my-orders__card-title">Заказ {orderDisplayLabel(order)}</h3>
                 {dateLabel ? (
                   <time className="my-orders__date" dateTime={order.createdAt}>
                     {dateLabel}

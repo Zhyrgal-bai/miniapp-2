@@ -111,6 +111,8 @@ export type AdminPromoRecord = {
 
 export type AdminOrderListItem = {
   id: number;
+  orderNumber?: string | null;
+  displayNumber?: string;
   name: string;
   phone: string;
   status: string;
