@@ -7,6 +7,7 @@ import { getWebAppUserId } from "../utils/telegramUserId";
 import type { MyOrderRow } from "../types/myOrder";
 import { orderDisplayLabel } from "@repo-shared/orderDisplay";
 import { orderSupportPhase } from "@repo-shared/supportPhase";
+import { returnReasonLabelRu } from "@repo-shared/supportLabels";
 import {
   SF_ORDERS_INTENT_KEY,
   type OrdersListIntent,
@@ -14,16 +15,18 @@ import {
 import {
   createReturnRequest,
   createSupportTicket,
-  fetchMyOrderDetail,
+  ensureGeneralSupportSession,
   fetchReturnRequestsForOrder,
-  fetchSupportTicket,
-  fetchSupportTicketsForOrder,
   postSupportTicketMessage,
   uploadSupportPhoto,
   type ReturnReason,
   type SupportTicketRow,
   type SupportTicketType,
 } from "../services/supportCustomerApi";
+import { OrderTimeline } from "../components/support/OrderTimeline";
+import { SupportChatMessages } from "../components/support/SupportChatMessages";
+import { RETURN_STATUS_RU, mapStatus } from "../i18n/statusMaps";
+import "../components/support/supportUi.css";
 import "./MyOrders.css";
 
 export type { MyOrderRow };
@@ -48,19 +51,6 @@ function orderStatusVisual(status: string): { icon: string; label: string } {
     CANCELLED: { icon: "❌", label: "Отменён" },
   };
   return map[u] ?? { icon: "•", label: status };
-}
-
-function orderStatusProgress(status: string): number {
-  const u = status.toUpperCase();
-  const map: Record<string, number> = {
-    NEW: 10,
-    ACCEPTED: 30,
-    PAID_PENDING: 60,
-    CONFIRMED: 80,
-    SHIPPED: 90,
-    DELIVERED: 100,
-  };
-  return map[u] ?? 0;
 }
 
 function formatOrderDate(iso: string | undefined): string | null {
@@ -276,62 +266,67 @@ function OrderPaymentBlock({
 type Screen =
   | { kind: "list" }
   | { kind: "order"; order: MyOrderRow }
-  | { kind: "ticket"; orderId: number; ticketId: number }
+  | { kind: "chat"; order: MyOrderRow }
   | { kind: "return"; order: MyOrderRow };
 
-function TicketThreadView({
-  ticket,
+function OrderSupportChat({
+  order,
+  sessionTicket,
   busy,
   draft,
   onDraft,
   onSend,
   onAddPhoto,
 }: {
-  ticket: SupportTicketRow;
+  order: MyOrderRow;
+  sessionTicket: SupportTicketRow | null;
   busy: boolean;
   draft: string;
   onDraft: (s: string) => void;
   onSend: () => void;
   onAddPhoto: () => void;
 }) {
-  const msgs = Array.isArray(ticket.messages) ? ticket.messages : [];
+  const msgs = sessionTicket?.messages ?? [];
   return (
-    <div className="my-orders__ticket">
-      <ul className="my-orders__ticket-msgs">
-        {msgs.map((m, i) => (
-          <li key={m.id ?? i} className="my-orders__ticket-msg">
-            <span className="my-orders__ticket-sender">{m.senderType}</span>
-            <p className="my-orders__ticket-text">{m.text}</p>
-          </li>
-        ))}
-      </ul>
-      <div className="my-orders__ticket-actions">
-        <button
-          type="button"
-          className="my-orders__scenario-btn"
-          disabled={busy}
-          onClick={() => onAddPhoto()}
-        >
-          📎 Фото
-        </button>
-      </div>
-      <textarea
-        className="my-orders__ticket-input"
-        rows={3}
-        placeholder="Уточнение для поддержки…"
-        value={draft}
-        disabled={busy}
-        onChange={(e) => onDraft(e.target.value)}
-      />
-      <button
-        type="button"
-        className="my-orders__scenario-btn"
-        disabled={busy || !draft.trim()}
-        onClick={() => onSend()}
-      >
-        Отправить
-      </button>
-    </div>
+    <section className="my-orders__section my-orders__section--chat">
+      <h2 className="my-orders__section-title">Чат с магазином</h2>
+      {sessionTicket == null ? (
+        <p className="my-orders__muted">Подключаем чат…</p>
+      ) : (
+        <>
+          <SupportChatMessages messages={msgs} />
+          <div className="my-orders__chat-composer">
+            <button
+              type="button"
+              className="my-orders__scenario-btn my-orders__scenario-btn--ghost"
+              disabled={busy}
+              onClick={() => onAddPhoto()}
+            >
+              📎 Фото
+            </button>
+            <textarea
+              className="my-orders__ticket-input"
+              rows={2}
+              placeholder="Напишите сообщение…"
+              value={draft}
+              disabled={busy}
+              onChange={(e) => onDraft(e.target.value)}
+            />
+            <button
+              type="button"
+              className="my-orders__scenario-btn"
+              disabled={busy || !draft.trim()}
+              onClick={() => onSend()}
+            >
+              Отправить
+            </button>
+          </div>
+        </>
+      )}
+      <p className="my-orders__muted my-orders__chat-order-ref">
+        Заказ {orderDisplayLabel(order)}
+      </p>
+    </section>
   );
 }
 
@@ -349,13 +344,13 @@ export default function MyOrders({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [screen, setScreen] = useState<Screen>({ kind: "list" });
-  const [ticketRow, setTicketRow] = useState<SupportTicketRow | null>(null);
-  const [ticketsForOrder, setTicketsForOrder] = useState<SupportTicketRow[]>([]);
+  const [sessionTicket, setSessionTicket] = useState<SupportTicketRow | null>(null);
   const [returnsForOrder, setReturnsForOrder] = useState<
     Array<{ id: number; status: string; reason: string }>
   >([]);
   const [ticketDraft, setTicketDraft] = useState("");
   const [supportBusy, setSupportBusy] = useState(false);
+  const [chatLoading, setChatLoading] = useState(false);
 
   const [returnReason, setReturnReason] = useState<ReturnReason>("OTHER");
   const [returnItemId, setReturnItemId] = useState<number | "">("");
@@ -450,11 +445,7 @@ export default function MyOrders({
         return;
       }
       try {
-        const [tix, ret] = await Promise.all([
-          fetchSupportTicketsForOrder(userId, shopIdString, orderId),
-          fetchReturnRequestsForOrder(userId, shopIdString, orderId),
-        ]);
-        setTicketsForOrder(tix);
+        const ret = await fetchReturnRequestsForOrder(userId, shopIdString, orderId);
         setReturnsForOrder(
           ret.map((r) => ({
             id: r.id,
@@ -469,15 +460,8 @@ export default function MyOrders({
     [userId, shopIdString]
   );
 
-  useEffect(() => {
-    if (screen.kind !== "order") return;
-    void refreshOrderContext(screen.order.id);
-  }, [screen, refreshOrderContext]);
-
-  useEffect(() => {
-    if (screen.kind !== "ticket") return;
-    let cancelled = false;
-    void (async () => {
+  const loadSupportSession = useCallback(
+    async (orderId: number) => {
       if (
         !Number.isFinite(userId) ||
         userId <= 0 ||
@@ -486,22 +470,29 @@ export default function MyOrders({
       ) {
         return;
       }
+      setChatLoading(true);
       try {
-        const t = await fetchSupportTicket(
-          userId,
-          shopIdString,
-          screen.ticketId
-        );
-        if (!cancelled) setTicketRow(t);
+        const session = await ensureGeneralSupportSession(userId, shopIdString, orderId);
+        setSessionTicket(session);
       } catch (e) {
         console.error(e);
-        if (!cancelled) setTicketRow(null);
+        setSessionTicket(null);
+      } finally {
+        setChatLoading(false);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [screen, userId, shopIdString]);
+    },
+    [userId, shopIdString]
+  );
+
+  useEffect(() => {
+    if (screen.kind !== "order" && screen.kind !== "chat") return;
+    void refreshOrderContext(screen.order.id);
+  }, [screen, refreshOrderContext]);
+
+  useEffect(() => {
+    if (screen.kind !== "order" && screen.kind !== "chat") return;
+    void loadSupportSession(screen.order.id);
+  }, [screen, loadSupportSession]);
 
   async function openScenario(order: MyOrderRow, type: SupportTicketType) {
     if (
@@ -518,10 +509,10 @@ export default function MyOrders({
         orderId: order.id,
         type,
       });
-      setScreen({ kind: "ticket", orderId: order.id, ticketId: t.id });
-      await refreshOrderContext(order.id);
+      setSessionTicket(t);
+      setScreen({ kind: "chat", order });
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Не удалось создать обращение");
+      alert(e instanceof Error ? e.message : "Не удалось отправить");
     } finally {
       setSupportBusy(false);
     }
@@ -529,11 +520,12 @@ export default function MyOrders({
 
   async function sendTicketMessage() {
     if (
-      screen.kind !== "ticket" ||
+      (screen.kind !== "chat" && screen.kind !== "order") ||
       !Number.isFinite(userId) ||
       userId <= 0 ||
       shopIdString == null ||
-      !/^\d+$/.test(shopIdString)
+      !/^\d+$/.test(shopIdString) ||
+      sessionTicket == null
     ) {
       return;
     }
@@ -544,10 +536,10 @@ export default function MyOrders({
       const t = await postSupportTicketMessage(
         userId,
         shopIdString,
-        screen.ticketId,
+        sessionTicket.id,
         text
       );
-      setTicketRow(t);
+      setSessionTicket(t);
       setTicketDraft("");
     } catch (e) {
       alert(e instanceof Error ? e.message : "Ошибка");
@@ -582,20 +574,15 @@ export default function MyOrders({
           );
           if (screen.kind === "return") {
             setReturnPhotos((p) => [...p, url].slice(0, 8));
-          } else if (screen.kind === "ticket") {
-            await postSupportTicketMessage(
+          } else if (sessionTicket != null) {
+            const t = await postSupportTicketMessage(
               userId,
               shopIdString,
-              screen.ticketId,
+              sessionTicket.id,
               "Фото",
               [url]
             );
-            const t = await fetchSupportTicket(
-              userId,
-              shopIdString,
-              screen.ticketId
-            );
-            setTicketRow(t);
+            setSessionTicket(t);
           }
         } catch (e) {
           alert(e instanceof Error ? e.message : "Загрузка не удалась");
@@ -629,7 +616,8 @@ export default function MyOrders({
       setReturnPhotos([]);
       setReturnComment("");
       await refreshOrderContext(order.id);
-      setScreen({ kind: "order", order });
+      await loadSupportSession(order.id);
+      setScreen({ kind: "chat", order });
     } catch (e) {
       alert(e instanceof Error ? e.message : "Ошибка");
     } finally {
@@ -639,7 +627,6 @@ export default function MyOrders({
 
   const renderOrderDetail = (order: MyOrderRow) => {
     const phase = orderSupportPhase(order.status);
-    const pct = orderStatusProgress(order.status);
     const statusVis = orderStatusVisual(order.status);
     const dateLabel = formatOrderDate(order.createdAt);
 
@@ -659,25 +646,13 @@ export default function MyOrders({
           ) : null}
         </header>
 
-        <div className="my-orders__status-row" aria-label="Статус заказа">
+        <OrderTimeline status={order.status} />
+
+        <div className="my-orders__status-row" aria-label="Текущий статус">
           <span className="my-orders__status-icon" aria-hidden>
             {statusVis.icon}
           </span>
           <span className="my-orders__status-label">{statusVis.label}</span>
-        </div>
-        <div
-          className="my-orders__progress-wrap"
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={pct}
-        >
-          <div className="my-orders__progress-track">
-            <div
-              className="my-orders__progress-fill"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
         </div>
 
         <p className="my-orders__total-line">
@@ -728,7 +703,7 @@ export default function MyOrders({
                   disabled={supportBusy}
                   onClick={() => void openScenario(order, "GENERAL")}
                 >
-                  Связаться с поддержкой
+                  Связаться с магазином
                 </button>
               </>
             )}
@@ -740,7 +715,7 @@ export default function MyOrders({
                   disabled={supportBusy}
                   onClick={() => void openScenario(order, "TRACKING")}
                 >
-                  Вопрос по треку
+                  Где посылка?
                 </button>
                 <button
                   type="button"
@@ -748,7 +723,7 @@ export default function MyOrders({
                   disabled={supportBusy}
                   onClick={() => void openScenario(order, "DELIVERY")}
                 >
-                  Проблема с доставкой
+                  Вопрос по доставке
                 </button>
                 <button
                   type="button"
@@ -756,7 +731,7 @@ export default function MyOrders({
                   disabled={supportBusy}
                   onClick={() => void openScenario(order, "GENERAL")}
                 >
-                  Поддержка
+                  Связаться с магазином
                 </button>
               </>
             )}
@@ -773,7 +748,7 @@ export default function MyOrders({
                     setScreen({ kind: "return", order });
                   }}
                 >
-                  Возврат
+                  Возврат товара
                 </button>
                 <button
                   type="button"
@@ -789,48 +764,39 @@ export default function MyOrders({
                   disabled={supportBusy}
                   onClick={() => void openScenario(order, "QUALITY")}
                 >
-                  Качество / повреждение
+                  Проблема с товаром
                 </button>
               </>
             )}
             {order.status.toUpperCase() === "CANCELLED" && (
-              <p className="my-orders__muted">Заказ отменён</p>
+              <button
+                type="button"
+                className="my-orders__scenario-btn"
+                disabled={supportBusy}
+                onClick={() => void openScenario(order, "GENERAL")}
+              >
+                Задать вопрос
+              </button>
             )}
           </div>
+          <button
+            type="button"
+            className="my-orders__open-chat"
+            disabled={supportBusy || chatLoading}
+            onClick={() => setScreen({ kind: "chat", order })}
+          >
+            💬 Открыть чат
+          </button>
         </section>
-
-        {ticketsForOrder.length > 0 && (
-          <section className="my-orders__section">
-            <h2 className="my-orders__section-title">Обращения</h2>
-            <ul className="my-orders__ticket-list">
-              {ticketsForOrder.map((t) => (
-                <li key={t.id}>
-                  <button
-                    type="button"
-                    className="my-orders__linkish"
-                    onClick={() =>
-                      setScreen({
-                        kind: "ticket",
-                        orderId: order.id,
-                        ticketId: t.id,
-                      })
-                    }
-                  >
-                    Тикет #{t.id} · {t.status} · {t.type}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
 
         {returnsForOrder.length > 0 && (
           <section className="my-orders__section">
             <h2 className="my-orders__section-title">Возвраты</h2>
-            <ul className="my-orders__items">
+            <ul className="my-orders__returns-list">
               {returnsForOrder.map((r) => (
                 <li key={r.id}>
-                  #{r.id} — {r.reason}: {r.status}
+                  {returnReasonLabelRu(r.reason)} —{" "}
+                  {mapStatus(r.status, RETURN_STATUS_RU)}
                 </li>
               ))}
             </ul>
@@ -844,52 +810,30 @@ export default function MyOrders({
     return renderOrderDetail(screen.order);
   }
 
-  if (screen.kind === "ticket") {
+  if (screen.kind === "chat") {
     return (
       <div className="my-orders my-orders--detail">
         <button
           type="button"
           className="my-orders__back"
-          onClick={() => {
-            setTicketRow(null);
-            void (async () => {
-              if (
-                shopIdString &&
-                /^\d+$/.test(shopIdString) &&
-                Number.isFinite(userId)
-              ) {
-                try {
-                  const fresh = await fetchMyOrderDetail(
-                    userId,
-                    shopIdString,
-                    screen.orderId
-                  );
-                  setScreen({ kind: "order", order: fresh });
-                } catch {
-                  const fallback = orders.find((o) => o.id === screen.orderId);
-                  if (fallback) setScreen({ kind: "order", order: fallback });
-                  else setScreen({ kind: "list" });
-                }
-              } else {
-                setScreen({ kind: "list" });
-              }
-            })();
-          }}
+          onClick={() => setScreen({ kind: "order", order: screen.order })}
         >
           ← К заказу
         </button>
-        <h1 className="my-orders__title">Обращение #{screen.ticketId}</h1>
-        {!ticketRow && <p className="my-orders__muted">Загрузка…</p>}
-        {ticketRow && (
-          <TicketThreadView
-            ticket={ticketRow}
-            busy={supportBusy}
-            draft={ticketDraft}
-            onDraft={setTicketDraft}
-            onSend={() => void sendTicketMessage()}
-            onAddPhoto={() => void pickSupportPhoto(screen.orderId)}
-          />
-        )}
+        <header className="my-orders__head">
+          <h1 className="my-orders__title">
+            Чат · {orderDisplayLabel(screen.order)}
+          </h1>
+        </header>
+        <OrderSupportChat
+          order={screen.order}
+          sessionTicket={sessionTicket}
+          busy={supportBusy}
+          draft={ticketDraft}
+          onDraft={setTicketDraft}
+          onSend={() => void sendTicketMessage()}
+          onAddPhoto={() => void pickSupportPhoto(screen.order.id)}
+        />
       </div>
     );
   }
@@ -939,11 +883,11 @@ export default function MyOrders({
               setReturnReason(e.target.value as ReturnReason)
             }
           >
-            <option value="SIZE">Размер</option>
-            <option value="DAMAGE">Повреждение</option>
-            <option value="WRONG_ITEM">Неверный товар</option>
-            <option value="QUALITY">Качество</option>
-            <option value="OTHER">Другое</option>
+            <option value="SIZE">{returnReasonLabelRu("SIZE")}</option>
+            <option value="DAMAGE">{returnReasonLabelRu("DAMAGE")}</option>
+            <option value="WRONG_ITEM">{returnReasonLabelRu("WRONG_ITEM")}</option>
+            <option value="QUALITY">{returnReasonLabelRu("QUALITY")}</option>
+            <option value="OTHER">{returnReasonLabelRu("OTHER")}</option>
           </select>
         </label>
         <label className="my-orders__field">
@@ -1030,7 +974,6 @@ export default function MyOrders({
 
       <div className="my-orders__list">
         {orders.map((order) => {
-          const pct = orderStatusProgress(order.status);
           const statusVis = orderStatusVisual(order.status);
           const dateLabel = formatOrderDate(order.createdAt);
           return (
@@ -1049,22 +992,6 @@ export default function MyOrders({
                   {statusVis.icon}
                 </span>
                 <span className="my-orders__status-label">{statusVis.label}</span>
-              </div>
-
-              <div
-                className="my-orders__progress-wrap"
-                role="progressbar"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={pct}
-                aria-label="Прогресс заказа"
-              >
-                <div className="my-orders__progress-track">
-                  <div
-                    className="my-orders__progress-fill"
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
               </div>
 
               <p className="my-orders__total-line">

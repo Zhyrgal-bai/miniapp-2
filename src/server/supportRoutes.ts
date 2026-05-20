@@ -22,6 +22,11 @@ import {
 } from "./merchantPermissions.js";
 import { createMerchantNotification } from "./merchantNotificationsService.js";
 import { buildSupportSuggestions } from "./supportSuggestionService.js";
+import { orderDisplayLabel } from "../shared/orderDisplay.js";
+import {
+  returnReasonLabelRu,
+  ticketTypeLabelRu,
+} from "../shared/supportLabels.js";
 
 type Deps = {
   upload: multer.Multer;
@@ -130,7 +135,7 @@ function buildOrderSupportIntro(order: CustomerOrderWithItems): string {
   const itemUnits = order.items.reduce((s, it) => s + it.quantity, 0);
   const lines: string[] = [];
   lines.push(
-    `Здравствуйте! Чат поддержки магазина по заказу №${String(order.id)}.`
+    `Здравствуйте! Чат поддержки магазина по заказу ${orderDisplayLabel(order)}.`
   );
   lines.push(
     `Сумма заказа: ${String(order.total)} сом · позиций: ${String(itemUnits)} · статус: ${phaseLabelRu(phase)}.`
@@ -171,25 +176,7 @@ function customerFirstMessageForTicketType(
   type: SupportTicketType,
   fallbackText: string
 ): string {
-  if (fallbackText.trim()) return fallbackText.trim();
-  switch (type) {
-    case SupportTicketType.CANCEL_REQUEST:
-      return "Запрос на отмену заказа";
-    case SupportTicketType.ADDRESS_CHANGE:
-      return "Нужно изменить адрес доставки";
-    case SupportTicketType.DELIVERY:
-      return "Вопрос по доставке";
-    case SupportTicketType.TRACKING:
-      return "Вопрос по трек-номеру";
-    case SupportTicketType.QUALITY:
-      return "Вопрос по качеству товара";
-    case SupportTicketType.RETURN:
-      return "Вопрос по возврату";
-    case SupportTicketType.EXCHANGE:
-      return "Запрос на обмен";
-    default:
-      return "Обращение в поддержку";
-  }
+  return topicActionMessage(type, fallbackText);
 }
 
 async function insertFirstTicketMessages(
@@ -245,6 +232,118 @@ async function insertFirstTicketMessages(
     where: { id: ticketId },
     data: { updatedAt: new Date() },
   });
+}
+
+const CLOSED_TICKET_STATUSES: SupportTicketStatus[] = [
+  SupportTicketStatus.CLOSED,
+  SupportTicketStatus.RESOLVED,
+];
+
+const ticketInclude = {
+  messages: { orderBy: { createdAt: "asc" as const } },
+  order: { include: { items: true } },
+};
+
+async function findActiveOrderThread(
+  businessId: number,
+  userId: number,
+  orderId: number
+) {
+  return prisma.supportTicket.findFirst({
+    where: {
+      businessId,
+      userId,
+      orderId,
+      status: { notIn: CLOSED_TICKET_STATUSES },
+    },
+    orderBy: { updatedAt: "desc" },
+    include: ticketInclude,
+  });
+}
+
+async function findLatestOrderThread(
+  businessId: number,
+  userId: number,
+  orderId: number
+) {
+  return prisma.supportTicket.findFirst({
+    where: { businessId, userId, orderId },
+    orderBy: { updatedAt: "desc" },
+    include: ticketInclude,
+  });
+}
+
+function topicActionMessage(type: SupportTicketType, text: string): string {
+  const label = ticketTypeLabelRu(type);
+  const trimmed = text.trim();
+  if (trimmed) return `${label}\n\n${trimmed}`;
+  return label;
+}
+
+async function appendTopicToThread(
+  tx: Prisma.TransactionClient,
+  opts: {
+    ticketId: number;
+    businessId: number;
+    userId: number;
+    type: SupportTicketType;
+    text: string;
+    attachments?: Prisma.JsonArray;
+  }
+): Promise<void> {
+  const { ticketId, businessId, userId, type, text, attachments = [] } = opts;
+  const body = topicActionMessage(type, text);
+  await tx.supportMessage.create({
+    data: {
+      ticketId,
+      businessId,
+      senderType: SupportSenderType.CUSTOMER,
+      senderId: userId,
+      text: body,
+      attachments,
+    },
+  });
+  await tx.supportTicket.update({
+    where: { id: ticketId },
+    data: {
+      type,
+      status: SupportTicketStatus.OPEN,
+      updatedAt: new Date(),
+    },
+  });
+}
+
+function customerDisplayFromTicket(row: {
+  user?: { name?: string | null } | null;
+  order?: { name?: string | null } | null;
+}): { displayName: string; initial: string } {
+  const name =
+    row.user?.name?.trim() ||
+    row.order?.name?.trim() ||
+    "Покупатель";
+  const initial = name.charAt(0).toUpperCase() || "?";
+  return { displayName: name, initial };
+}
+
+function dedupeMerchantTickets<
+  T extends {
+    id: number;
+    orderId: number;
+    userId: number;
+    updatedAt: Date;
+  },
+>(rows: T[]): T[] {
+  const byKey = new Map<string, T>();
+  for (const row of rows) {
+    const key = `${row.orderId}:${row.userId}`;
+    const prev = byKey.get(key);
+    if (!prev || row.updatedAt > prev.updatedAt) {
+      byKey.set(key, row);
+    }
+  }
+  return [...byKey.values()].sort(
+    (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()
+  );
 }
 
 function stripInternal<T extends { internalNote?: string | null }>(
@@ -329,13 +428,15 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
 
       const tickets = await prisma.supportTicket.findMany({
         where: { businessId, orderId, userId },
-        orderBy: { id: "desc" },
-        include: {
-          messages: { orderBy: { createdAt: "asc" }, take: 50 },
-        },
+        orderBy: { updatedAt: "desc" },
+        take: 1,
+        include: ticketInclude,
       });
+      const thread =
+        tickets[0] ??
+        (await findLatestOrderThread(businessId, userId, orderId));
       return res.json(
-        jsonWithBigInt(tickets.map((t) => stripInternal(t, false)))
+        jsonWithBigInt(thread ? [stripInternal(thread, false)] : [])
       );
     } catch (e) {
       console.error("GET /support/tickets:", e);
@@ -363,20 +464,7 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
         return res.status(404).json({ error: NOT_FOUND });
       }
 
-      const existing = await prisma.supportTicket.findFirst({
-        where: {
-          businessId,
-          userId,
-          orderId,
-          status: SupportTicketStatus.OPEN,
-          type: SupportTicketType.GENERAL,
-        },
-        orderBy: { id: "desc" },
-        include: {
-          messages: { orderBy: { createdAt: "asc" } },
-          order: { include: { items: true } },
-        },
-      });
+      const existing = await findActiveOrderThread(businessId, userId, orderId);
 
       if (existing) {
         return res.json(jsonWithBigInt(stripInternal(existing, false)));
@@ -405,10 +493,7 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
 
       const full = await prisma.supportTicket.findFirst({
         where: { id: ticket.id, businessId, userId },
-        include: {
-          messages: { orderBy: { createdAt: "asc" } },
-          order: { include: { items: true } },
-        },
+        include: ticketInclude,
       });
       return res.status(201).json(jsonWithBigInt(stripInternal(full!, false)));
     } catch (e) {
@@ -447,6 +532,30 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
       }
 
       const ticket = await prisma.$transaction(async (tx) => {
+        const existing = await tx.supportTicket.findFirst({
+          where: {
+            businessId,
+            userId,
+            orderId,
+            status: { notIn: CLOSED_TICKET_STATUSES },
+          },
+          orderBy: { updatedAt: "desc" },
+        });
+
+        if (existing) {
+          if (typeRaw === SupportTicketType.GENERAL && text.trim() === "") {
+            return existing;
+          }
+          await appendTopicToThread(tx, {
+            ticketId: existing.id,
+            businessId,
+            userId,
+            type: typeRaw,
+            text,
+          });
+          return existing;
+        }
+
         const t = await tx.supportTicket.create({
           data: {
             businessId,
@@ -470,17 +579,14 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
       void createMerchantNotification({
         businessId,
         kind: MerchantNotificationKind.SUPPORT_TICKET,
-        title: "Новый тикет поддержки",
-        body: text.slice(0, 120) || `Заказ #${orderId}`,
+        title: "Новое сообщение в поддержке",
+        body: text.slice(0, 120) || ticketTypeLabelRu(typeRaw),
         href: "/admin/support",
       });
 
       const full = await prisma.supportTicket.findFirst({
         where: { id: ticket.id, businessId, userId },
-        include: {
-          messages: { orderBy: { createdAt: "asc" } },
-          order: { include: { items: true } },
-        },
+        include: ticketInclude,
       });
       return res.status(201).json(jsonWithBigInt(stripInternal(full!, false)));
     } catch (e) {
@@ -589,10 +695,7 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
 
         const full = await prisma.supportTicket.findFirst({
           where: { id: ticketId, businessId, userId },
-          include: {
-            messages: { orderBy: { createdAt: "asc" } },
-            order: { include: { items: true } },
-          },
+          include: ticketInclude,
         });
         return res.json(jsonWithBigInt(stripInternal(full!, false)));
       } catch (e) {
@@ -749,22 +852,47 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
             status: "PENDING",
           },
         });
-        const ticket = await tx.supportTicket.create({
-          data: {
+
+        let ticket = await tx.supportTicket.findFirst({
+          where: {
             businessId,
             userId,
             orderId,
-            type: SupportTicketType.RETURN,
-            status: "OPEN",
+            status: { notIn: CLOSED_TICKET_STATUSES },
           },
+          orderBy: { updatedAt: "desc" },
         });
+
+        if (!ticket) {
+          ticket = await tx.supportTicket.create({
+            data: {
+              businessId,
+              userId,
+              orderId,
+              type: SupportTicketType.RETURN,
+              status: "OPEN",
+            },
+          });
+          await tx.supportMessage.create({
+            data: {
+              ticketId: ticket.id,
+              businessId,
+              senderType: SupportSenderType.SYSTEM,
+              senderId: null,
+              text: buildOrderSupportIntro(order),
+              attachments: [],
+            },
+          });
+        }
+
+        const reasonLabel = returnReasonLabelRu(reasonRaw);
         await tx.supportMessage.create({
           data: {
             ticketId: ticket.id,
             businessId,
             senderType: SupportSenderType.SYSTEM,
             senderId: null,
-            text: `Заявка на возврат #${ret.id} (${reasonRaw}).`,
+            text: `Заявка на возврат: ${reasonLabel}.`,
             attachments: [],
           },
         });
@@ -779,10 +907,24 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
               attachments: photos,
             },
           });
+        } else if (photos.length > 0) {
+          await tx.supportMessage.create({
+            data: {
+              ticketId: ticket.id,
+              businessId,
+              senderType: SupportSenderType.CUSTOMER,
+              senderId: userId,
+              text: "Фото к заявке на возврат",
+              attachments: photos,
+            },
+          });
         }
         await tx.supportTicket.update({
           where: { id: ticket.id },
-          data: { updatedAt: new Date() },
+          data: {
+            type: SupportTicketType.RETURN,
+            updatedAt: new Date(),
+          },
         });
         return ret;
       });
@@ -827,18 +969,39 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
         where.orderId = orderId;
       }
 
-      const tickets = await prisma.supportTicket.findMany({
+      const ticketsRaw = await prisma.supportTicket.findMany({
         where,
         orderBy: { updatedAt: "desc" },
         take: 200,
         include: {
-          user: { select: { id: true, telegramId: true, name: true } },
-          order: { select: { id: true, status: true, total: true } },
+          user: { select: { id: true, name: true } },
+          order: {
+            select: {
+              id: true,
+              orderNumber: true,
+              status: true,
+              total: true,
+              name: true,
+            },
+          },
           messages: {
             orderBy: { createdAt: "desc" },
             take: 1,
           },
         },
+      });
+      const tickets = dedupeMerchantTickets(ticketsRaw).map((row) => {
+        const { displayName, initial } = customerDisplayFromTicket(row);
+        const lastMsg = row.messages[0];
+        return {
+          ...row,
+          customerDisplayName: displayName,
+          customerInitial: initial,
+          lastMessageText: lastMsg?.text ?? null,
+          lastMessageAt: lastMsg?.createdAt ?? row.updatedAt,
+          orderLabel: orderDisplayLabel(row.order),
+          needsReply: row.status === SupportTicketStatus.PENDING_MERCHANT,
+        };
       });
       return res.json(jsonWithBigInt(tickets));
     } catch (e) {
@@ -864,13 +1027,21 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
           include: {
             messages: { orderBy: { createdAt: "asc" } },
             order: { include: { items: true, buyerUser: true } },
-            user: { select: { id: true, telegramId: true, name: true } },
+            user: { select: { id: true, name: true } },
           },
         });
         if (!ticket) {
           return res.status(404).json({ error: NOT_FOUND });
         }
-        return res.json(jsonWithBigInt(ticket));
+        const { displayName, initial } = customerDisplayFromTicket(ticket);
+        return res.json(
+          jsonWithBigInt({
+            ...ticket,
+            customerDisplayName: displayName,
+            customerInitial: initial,
+            orderLabel: orderDisplayLabel(ticket.order),
+          })
+        );
       } catch (e) {
         console.error("GET /merchant/support/tickets/:id:", e);
         res.status(500).json({ error: "Ошибка" });

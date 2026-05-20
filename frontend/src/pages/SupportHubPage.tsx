@@ -4,21 +4,26 @@ import { fetchMyOrders } from "../services/myOrdersApi";
 import { useShop } from "../context/ShopContext";
 import { useStorefrontPayload } from "../components/storefront/runtime/StorefrontPayloadContext";
 import { getWebAppUserId } from "../utils/telegramUserId";
+import { getTelegramUser } from "../utils/telegram";
+import { telegramDisplayName } from "../utils/telegramUserMark";
 import type { MyOrderRow } from "../types/myOrder";
+import { orderDisplayLabel } from "@repo-shared/orderDisplay";
 import { orderSupportPhase, type SupportPhase } from "@repo-shared/supportPhase";
+import { returnReasonLabelRu } from "@repo-shared/supportLabels";
 import {
   createReturnRequest,
   createSupportTicket,
   ensureGeneralSupportSession,
-  fetchSupportTicket,
-  fetchSupportTicketsForOrder,
   postSupportTicketMessage,
   uploadSupportPhoto,
   type ReturnReason,
   type SupportTicketRow,
   type SupportTicketType,
 } from "../services/supportCustomerApi";
+import { SupportChatMessages } from "../components/support/SupportChatMessages";
+import { PersonAvatar } from "../components/support/PersonAvatar";
 import "./SupportHubPage.css";
+import "../components/support/supportUi.css";
 
 type HubScreen = { kind: "chat" } | { kind: "return"; order: MyOrderRow };
 
@@ -44,26 +49,26 @@ function phaseLabelRu(phase: SupportPhase): string {
 
 function quickChipsForOrder(order: MyOrderRow): QuickChip[] {
   const phase = orderSupportPhase(order.status);
+  const label = orderDisplayLabel(order);
   switch (phase) {
     case "PROCESSING":
       return [
-        { key: "cancel", label: "Отмена", kind: "ticket", ticketType: "CANCEL_REQUEST" },
-        { key: "ex", label: "Обмен", kind: "ticket", ticketType: "EXCHANGE" },
-        { key: "q", label: "Проблема", kind: "ticket", ticketType: "QUALITY" },
-        { key: "tr", label: "Где посылка", kind: "ticket", ticketType: "TRACKING" },
+        { key: "cancel", label: "Отменить заказ", kind: "ticket", ticketType: "CANCEL_REQUEST" },
+        { key: "addr", label: "Изменить адрес", kind: "ticket", ticketType: "ADDRESS_CHANGE" },
+        { key: "pay", label: "Проблема с оплатой", kind: "draft", text: "Проблема с оплатой заказа" },
+        { key: "shop", label: "Связаться с магазином", kind: "ticket", ticketType: "GENERAL" },
       ];
     case "SHIPPING":
       return [
-        { key: "tr", label: "Трекинг", kind: "ticket", ticketType: "TRACKING" },
-        { key: "del", label: "Доставка", kind: "ticket", ticketType: "DELIVERY" },
-        { key: "ret", label: "Возврат", kind: "ticket", ticketType: "RETURN" },
-        { key: "q", label: "Проблема", kind: "ticket", ticketType: "QUALITY" },
+        { key: "tr", label: "Где посылка?", kind: "ticket", ticketType: "TRACKING" },
+        { key: "del", label: "Вопрос по доставке", kind: "ticket", ticketType: "DELIVERY" },
+        { key: "shop", label: "Связаться с магазином", kind: "ticket", ticketType: "GENERAL" },
       ];
     case "DELIVERED":
       return [
-        { key: "retf", label: "Возврат", kind: "return" },
+        { key: "retf", label: "Возврат товара", kind: "return" },
         { key: "ex", label: "Обмен", kind: "ticket", ticketType: "EXCHANGE" },
-        { key: "q", label: "Проблема", kind: "ticket", ticketType: "QUALITY" },
+        { key: "q", label: "Проблема с товаром", kind: "ticket", ticketType: "QUALITY" },
       ];
     case "CANCELLED":
       return [
@@ -71,11 +76,13 @@ function quickChipsForOrder(order: MyOrderRow): QuickChip[] {
           key: "ask",
           label: "Вопрос по отмене",
           kind: "draft",
-          text: `Вопрос по отменённому заказу №${order.id}`,
+          text: `Вопрос по отменённому заказу ${label}`,
         },
       ];
     default:
-      return [];
+      return [
+        { key: "shop", label: "Связаться с магазином", kind: "ticket", ticketType: "GENERAL" },
+      ];
   }
 }
 
@@ -108,37 +115,8 @@ function OrderContextCard({ order }: { order: MyOrderRow }) {
           ))}
         </div>
       ) : null}
-      <div className="sf-support-order-card__id">Заказ №{order.id}</div>
+      <div className="sf-support-order-card__id">Заказ {orderDisplayLabel(order)}</div>
     </div>
-  );
-}
-
-function MessageList({
-  messages,
-}: {
-  messages: NonNullable<SupportTicketRow["messages"]>;
-}) {
-  return (
-    <ul className="sf-support-msgs" aria-live="polite">
-      {messages.map((m, i) => {
-        const st = String(m.senderType ?? "").toUpperCase();
-        const isMine = st === "CUSTOMER";
-        const isSystem = st === "SYSTEM";
-        return (
-          <li
-            key={m.id ?? `m-${i}`}
-            className={`sf-support-msg${isMine ? " sf-support-msg--mine" : ""}${isSystem ? " sf-support-msg--system" : ""}`}
-          >
-            {!isMine ? (
-              <span className="sf-support-msg__who">
-                {isSystem ? "Поддержка" : st === "MERCHANT" ? "Магазин" : "Поддержка"}
-              </span>
-            ) : null}
-            <p className="sf-support-msg__text">{m.text}</p>
-          </li>
-        );
-      })}
-    </ul>
   );
 }
 
@@ -151,15 +129,14 @@ export default function SupportHubPage({
   onBack,
   onGoShopping,
 }: SupportHubPageProps) {
+  const tgUser = getTelegramUser();
   const [orders, setOrders] = useState<MyOrderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [sessionLoading, setSessionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [screen, setScreen] = useState<HubScreen>({ kind: "chat" });
-  const [generalTicket, setGeneralTicket] = useState<SupportTicketRow | null>(null);
-  const [topicTicket, setTopicTicket] = useState<SupportTicketRow | null>(null);
-  const [ticketsForOrder, setTicketsForOrder] = useState<SupportTicketRow[]>([]);
+  const [sessionTicket, setSessionTicket] = useState<SupportTicketRow | null>(null);
   const [ticketDraft, setTicketDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [orderPickerOpen, setOrderPickerOpen] = useState(false);
@@ -222,7 +199,7 @@ export default function SupportHubPage({
     [orders, selectedId]
   );
 
-  const refreshSessionAndTickets = useCallback(
+  const refreshSession = useCallback(
     async (orderId: number) => {
       if (
         !Number.isFinite(userId) ||
@@ -234,15 +211,11 @@ export default function SupportHubPage({
       }
       setSessionLoading(true);
       try {
-        const [session, tix] = await Promise.all([
-          ensureGeneralSupportSession(userId, shopIdString, orderId),
-          fetchSupportTicketsForOrder(userId, shopIdString, orderId),
-        ]);
-        setGeneralTicket(session);
-        setTicketsForOrder(tix);
+        const session = await ensureGeneralSupportSession(userId, shopIdString, orderId);
+        setSessionTicket(session);
       } catch (e) {
         console.error(e);
-        setGeneralTicket(null);
+        setSessionTicket(null);
       } finally {
         setSessionLoading(false);
       }
@@ -252,19 +225,17 @@ export default function SupportHubPage({
 
   useEffect(() => {
     if (selectedId == null) return;
-    setTopicTicket(null);
-    void refreshSessionAndTickets(selectedId);
-  }, [selectedId, refreshSessionAndTickets]);
+    void refreshSession(selectedId);
+  }, [selectedId, refreshSession]);
 
-  const activeTicket = topicTicket ?? generalTicket;
   const displayOrder: MyOrderRow | null =
-    activeTicket?.order != null
-      ? (activeTicket.order as MyOrderRow)
+    sessionTicket?.order != null
+      ? (sessionTicket.order as MyOrderRow)
       : selectedOrder;
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeTicket?.messages, topicTicket?.id, generalTicket?.id]);
+  }, [sessionTicket?.messages]);
 
   const canUseApi =
     Number.isFinite(userId) &&
@@ -273,39 +244,25 @@ export default function SupportHubPage({
     /^\d+$/.test(shopIdString) &&
     selectedId != null;
 
-  async function openTopicTicket(type: SupportTicketType) {
+  async function sendTopic(type: SupportTicketType, text = "") {
     if (!canUseApi || selectedOrder == null) return;
     setBusy(true);
     try {
       const t = await createSupportTicket(userId, shopIdString!, {
         orderId: selectedOrder.id,
         type,
+        text,
       });
-      const full = await fetchSupportTicket(userId, shopIdString!, t.id);
-      setTopicTicket(full);
-      await refreshSessionAndTickets(selectedOrder.id);
+      setSessionTicket(t);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Не удалось создать обращение");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function openExistingTicket(ticketId: number) {
-    if (!canUseApi || selectedOrder == null) return;
-    setBusy(true);
-    try {
-      const full = await fetchSupportTicket(userId, shopIdString!, ticketId);
-      setTopicTicket(full);
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "Ошибка");
+      alert(e instanceof Error ? e.message : "Не удалось отправить");
     } finally {
       setBusy(false);
     }
   }
 
   async function sendMessage() {
-    if (!canUseApi || activeTicket == null) return;
+    if (!canUseApi || sessionTicket == null) return;
     const text = ticketDraft.trim();
     if (!text) return;
     setBusy(true);
@@ -313,11 +270,10 @@ export default function SupportHubPage({
       const t = await postSupportTicketMessage(
         userId,
         shopIdString!,
-        activeTicket.id,
+        sessionTicket.id,
         text
       );
-      if (topicTicket && topicTicket.id === t.id) setTopicTicket(t);
-      else setGeneralTicket(t);
+      setSessionTicket(t);
       setTicketDraft("");
     } catch (e) {
       alert(e instanceof Error ? e.message : "Ошибка");
@@ -327,7 +283,7 @@ export default function SupportHubPage({
   }
 
   function pickPhoto() {
-    if (!canUseApi || activeTicket == null || selectedId == null) return;
+    if (!canUseApi || sessionTicket == null || selectedId == null) return;
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
@@ -346,12 +302,11 @@ export default function SupportHubPage({
           const t = await postSupportTicketMessage(
             userId,
             shopIdString!,
-            activeTicket.id,
+            sessionTicket.id,
             "Фото",
             [url]
           );
-          if (topicTicket && topicTicket.id === t.id) setTopicTicket(t);
-          else setGeneralTicket(t);
+          setSessionTicket(t);
         } catch (e) {
           alert(e instanceof Error ? e.message : "Загрузка не удалась");
         } finally {
@@ -377,7 +332,7 @@ export default function SupportHubPage({
       setReturnPhotos([]);
       setReturnComment("");
       setScreen({ kind: "chat" });
-      await refreshSessionAndTickets(order.id);
+      await refreshSession(order.id);
       await load();
     } catch (e) {
       alert(e instanceof Error ? e.message : "Ошибка");
@@ -399,18 +354,16 @@ export default function SupportHubPage({
       setTicketDraft(c.text);
       return;
     }
-    void openTopicTicket(c.ticketType);
+    void sendTopic(c.ticketType);
   }
 
-  const otherOpenTickets = useMemo(() => {
-    const open = ticketsForOrder.filter(
-      (t) =>
-        String(t.status).toUpperCase() === "OPEN" &&
-        String(t.type).toUpperCase() !== "GENERAL"
-    );
-    if (topicTicket == null) return open;
-    return open.filter((t) => t.id !== topicTicket.id);
-  }, [ticketsForOrder, topicTicket]);
+  const returnReasonOptions: { value: ReturnReason; label: string }[] = [
+    { value: "SIZE", label: returnReasonLabelRu("SIZE") },
+    { value: "DAMAGE", label: returnReasonLabelRu("DAMAGE") },
+    { value: "WRONG_ITEM", label: returnReasonLabelRu("WRONG_ITEM") },
+    { value: "QUALITY", label: returnReasonLabelRu("QUALITY") },
+    { value: "OTHER", label: returnReasonLabelRu("OTHER") },
+  ];
 
   if (screen.kind === "return") {
     const order = screen.order;
@@ -423,8 +376,8 @@ export default function SupportHubPage({
         >
           ← Назад
         </button>
-        <h1 className="sf-support-hub__title">Возврат</h1>
-        <p className="sf-support-hub__sub">Заказ #{order.id}</p>
+        <h1 className="sf-support-hub__title">Возврат товара</h1>
+        <p className="sf-support-hub__sub">Заказ {orderDisplayLabel(order)}</p>
         <label className="sf-support-hub__field">
           <span>Позиция</span>
           <select
@@ -454,11 +407,11 @@ export default function SupportHubPage({
               setReturnReason(e.target.value as ReturnReason)
             }
           >
-            <option value="SIZE">Размер</option>
-            <option value="DAMAGE">Повреждение</option>
-            <option value="WRONG_ITEM">Неверный товар</option>
-            <option value="QUALITY">Качество</option>
-            <option value="OTHER">Другое</option>
+            {returnReasonOptions.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
           </select>
         </label>
         <label className="sf-support-hub__field">
@@ -531,25 +484,23 @@ export default function SupportHubPage({
           ←
         </button>
         <div className="sf-support-temu__brand">
-          <span className="sf-support-temu__brand-name">
-            {readTxt("supportHubTitle", "Поддержка")}
-          </span>
-          <span className="sf-support-temu__brand-sub">
-            {readTxt("supportHubSubtitle", "Служба поддержки")}
-          </span>
+          <PersonAvatar
+            name={telegramDisplayName(tgUser)}
+            photoUrl={tgUser?.photo_url}
+            size="sm"
+          />
+          <div>
+            <span className="sf-support-temu__brand-name">
+              {readTxt("supportHubTitle", "Поддержка")}
+            </span>
+            <span className="sf-support-temu__brand-sub">
+              {telegramDisplayName(tgUser)}
+              {tgUser?.username ? ` · @${tgUser.username}` : ""}
+            </span>
+          </div>
         </div>
         <span className="sf-support-temu__topbar-spacer" aria-hidden />
       </header>
-
-      {topicTicket ? (
-        <button
-          type="button"
-          className="sf-support-temu__back-to-general"
-          onClick={() => setTopicTicket(null)}
-        >
-          ← К чату заказа
-        </button>
-      ) : null}
 
       <div className="sf-support-temu__scroll">
         {loading && (
@@ -563,21 +514,18 @@ export default function SupportHubPage({
 
         {!loading && !error && orders.length === 0 && (
           <>
-            <ul className="sf-support-msgs">
-              <li className="sf-support-msg sf-support-msg--system">
-                <span className="sf-support-msg__who">Поддержка</span>
-                <p className="sf-support-msg__text">
-                  Здравствуйте! Чат по заказу доступен после оформления покупки.
-                </p>
-              </li>
-              <li className="sf-support-msg sf-support-msg--system">
-                <span className="sf-support-msg__who">Поддержка</span>
-                <p className="sf-support-msg__text">
-                  Справка и контакты — в боковом меню. Закройте экран или
-                  перейдите в каталог.
-                </p>
-              </li>
-            </ul>
+            <SupportChatMessages
+              messages={[
+                {
+                  senderType: "SYSTEM",
+                  text: "Здравствуйте! Чат по заказу доступен после оформления покупки.",
+                },
+                {
+                  senderType: "SYSTEM",
+                  text: "Справка и контакты — в боковом меню. Закройте экран или перейдите в каталог.",
+                },
+              ]}
+            />
             {onGoShopping ? (
               <button
                 type="button"
@@ -593,11 +541,11 @@ export default function SupportHubPage({
         {!loading && !error && orders.length > 0 && displayOrder && (
           <>
             <OrderContextCard order={displayOrder} />
-            {sessionLoading && !activeTicket ? (
+            {sessionLoading && !sessionTicket ? (
               <p className="sf-support-hub__muted">Подключаем чат…</p>
             ) : null}
-            {activeTicket?.messages && activeTicket.messages.length > 0 ? (
-              <MessageList messages={activeTicket.messages} />
+            {sessionTicket?.messages && sessionTicket.messages.length > 0 ? (
+              <SupportChatMessages messages={sessionTicket.messages} />
             ) : null}
             <div ref={endRef} />
           </>
@@ -606,50 +554,27 @@ export default function SupportHubPage({
 
       {!loading && !error && orders.length > 0 && selectedOrder && (
         <>
-          {otherOpenTickets.length > 0 ? (
-            <div className="sf-support-temu__open-threads" role="navigation">
-              <span className="sf-support-temu__open-threads-label">
-                Открытые темы
-              </span>
-              <div className="sf-support-temu__chips-row">
-                {otherOpenTickets.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    className="sf-support-chip sf-support-chip--ghost"
-                    disabled={busy}
-                    onClick={() => void openExistingTicket(t.id)}
-                  >
-                    {String(t.type)} · #{t.id}
-                  </button>
-                ))}
-              </div>
+          <div className="sf-support-temu__chips-wrap">
+            <div className="sf-support-temu__chips-row">
+              {quickChipsForOrder(selectedOrder).map((c) => (
+                <button
+                  key={c.key}
+                  type="button"
+                  className="sf-support-chip"
+                  disabled={busy}
+                  onClick={() => onChip(c)}
+                >
+                  {c.label}
+                </button>
+              ))}
             </div>
-          ) : null}
-
-          {!topicTicket ? (
-            <div className="sf-support-temu__chips-wrap">
-              <div className="sf-support-temu__chips-row">
-                {quickChipsForOrder(selectedOrder).map((c) => (
-                  <button
-                    key={c.key}
-                    type="button"
-                    className="sf-support-chip"
-                    disabled={busy}
-                    onClick={() => onChip(c)}
-                  >
-                    {c.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
+          </div>
 
           <div className="sf-support-temu__composer">
             <button
               type="button"
               className="sf-support-temu__composer-icon"
-              disabled={busy || !activeTicket}
+              disabled={busy || !sessionTicket}
               onClick={() => pickPhoto()}
               aria-label="Прикрепить фото"
             >
@@ -668,12 +593,12 @@ export default function SupportHubPage({
               type="text"
               className="sf-support-temu__composer-input"
               placeholder={
-                activeTicket
-                  ? "Введите ваш запрос…"
+                sessionTicket
+                  ? "Напишите сообщение…"
                   : "Подождите загрузки чата…"
               }
               value={ticketDraft}
-              disabled={busy || !activeTicket}
+              disabled={busy || !sessionTicket}
               onChange={(e) => setTicketDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") void sendMessage();
@@ -682,7 +607,7 @@ export default function SupportHubPage({
             <button
               type="button"
               className="sf-support-temu__composer-send"
-              disabled={busy || !activeTicket || !ticketDraft.trim()}
+              disabled={busy || !sessionTicket || !ticketDraft.trim()}
               onClick={() => void sendMessage()}
             >
               →
@@ -713,7 +638,9 @@ export default function SupportHubPage({
                     setOrderPickerOpen(false);
                   }}
                 >
-                  <span className="sf-support-sheet__item-id">№{o.id}</span>
+                  <span className="sf-support-sheet__item-id">
+                    {orderDisplayLabel(o)}
+                  </span>
                   <span className="sf-support-sheet__item-meta">
                     {o.total} сом · {phaseLabelRu(orderSupportPhase(o.status))}
                   </span>

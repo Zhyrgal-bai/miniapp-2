@@ -1,14 +1,40 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { adminService, type SupportSuggestion } from "../../services/admin.service";
 import { SF_ADMIN_SUPPORT_TAB_KEY } from "../../utils/accountMenuStorage";
+import { formatTimeAgoRu } from "../../utils/formatTimeAgo";
+import { orderDisplayLabel } from "@repo-shared/orderDisplay";
 import {
   mapStatus,
   RETURN_STATUS_RU,
-  TICKET_SENDER_RU,
   TICKET_STATUS_RU,
+  TICKET_TYPE_RU,
 } from "../../i18n/statusMaps";
+import { PersonAvatar } from "../../components/support/PersonAvatar";
+import { SupportChatMessages } from "../../components/support/SupportChatMessages";
+import type { SupportMessageRow } from "../../services/supportCustomerApi";
+import "../../components/support/supportUi.css";
 
 type Tab = "tickets" | "returns";
+
+type InboxTicket = {
+  id: number;
+  status: string;
+  type: string;
+  orderId: number;
+  customerDisplayName?: string;
+  customerInitial?: string;
+  lastMessageText?: string | null;
+  lastMessageAt?: string;
+  orderLabel?: string;
+  needsReply?: boolean;
+  order?: { id: number; orderNumber?: string | null; name?: string | null };
+  messages?: SupportMessageRow[];
+};
+
+type TicketDetail = InboxTicket & {
+  messages: SupportMessageRow[];
+  internalNote?: string | null;
+};
 
 const TICKET_STATUS_OPTIONS = [
   "OPEN",
@@ -18,27 +44,31 @@ const TICKET_STATUS_OPTIONS = [
   "CLOSED",
 ] as const;
 
-const RETURN_STATUS_OPTIONS = [
-  "PENDING",
-  "APPROVED",
-  "REJECTED",
-  "REFUNDED",
-  "RETURNED",
-] as const;
-
 function pickString(v: unknown): string | null {
   return typeof v === "string" && v.trim() !== "" ? v : null;
 }
 
-function ticketPreview(row: unknown): string {
-  if (!row || typeof row !== "object") return "—";
-  const messages = (row as { messages?: unknown }).messages;
-  if (!Array.isArray(messages) || messages.length === 0) return "—";
-  const m0 = messages[0];
-  if (!m0 || typeof m0 !== "object") return "—";
-  const t = (m0 as { text?: unknown }).text;
-  const s = typeof t === "string" ? t.trim() : "";
-  return s.length > 120 ? `${s.slice(0, 117)}…` : s || "—";
+function asInboxTicket(row: unknown): InboxTicket | null {
+  if (!row || typeof row !== "object") return null;
+  const id = (row as { id?: unknown }).id;
+  if (typeof id !== "number") return null;
+  return row as InboxTicket;
+}
+
+function lastMessagePreview(row: InboxTicket): string {
+  const direct = row.lastMessageText?.trim();
+  if (direct) return direct.length > 100 ? `${direct.slice(0, 97)}…` : direct;
+  const messages = row.messages;
+  if (!Array.isArray(messages) || messages.length === 0) return "Нет сообщений";
+  const last = messages[messages.length - 1];
+  const t = last?.text?.trim() ?? "";
+  return t.length > 100 ? `${t.slice(0, 97)}…` : t || "—";
+}
+
+function orderLabelForTicket(row: InboxTicket): string {
+  if (row.orderLabel?.trim()) return row.orderLabel;
+  if (row.order) return orderDisplayLabel(row.order);
+  return "Заказ";
 }
 
 export default function AdminSupportPage() {
@@ -46,11 +76,11 @@ export default function AdminSupportPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [tickets, setTickets] = useState<unknown[]>([]);
+  const [tickets, setTickets] = useState<InboxTicket[]>([]);
   const [returns, setReturns] = useState<unknown[]>([]);
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
   const [selectedReturnId, setSelectedReturnId] = useState<number | null>(null);
-  const [ticketDetail, setTicketDetail] = useState<unknown | null>(null);
+  const [ticketDetail, setTicketDetail] = useState<TicketDetail | null>(null);
   const [replyText, setReplyText] = useState("");
   const [suggestions, setSuggestions] = useState<SupportSuggestion[]>([]);
   const [internalNote, setInternalNote] = useState("");
@@ -58,7 +88,10 @@ export default function AdminSupportPage() {
 
   const loadTickets = useCallback(async () => {
     const data = await adminService.listSupportTickets();
-    setTickets(data);
+    const parsed = (Array.isArray(data) ? data : [])
+      .map(asInboxTicket)
+      .filter((t): t is InboxTicket => t != null);
+    setTickets(parsed);
   }, []);
 
   const loadReturns = useCallback(async () => {
@@ -104,12 +137,10 @@ export default function AdminSupportPage() {
           adminService.getSupportTicket(selectedTicketId),
           adminService.getSupportSuggestions(selectedTicketId),
         ]);
-        if (!cancelled) {
-          setTicketDetail(d);
+        if (!cancelled && d && typeof d === "object") {
+          setTicketDetail(d as TicketDetail);
           setSuggestions(sug);
           const note =
-            d &&
-            typeof d === "object" &&
             "internalNote" in d &&
             typeof (d as { internalNote?: unknown }).internalNote === "string"
               ? (d as { internalNote: string }).internalNote
@@ -149,7 +180,7 @@ export default function AdminSupportPage() {
       await adminService.postSupportTicketMessage(selectedTicketId, text);
       setReplyText("");
       const d = await adminService.getSupportTicket(selectedTicketId);
-      setTicketDetail(d);
+      setTicketDetail(d as TicketDetail);
       await loadTickets();
     } catch (e) {
       console.error(e);
@@ -167,7 +198,7 @@ export default function AdminSupportPage() {
     setBusy(true);
     try {
       const d = await adminService.patchSupportTicket(selectedTicketId, patch);
-      setTicketDetail(d);
+      setTicketDetail(d as TicketDetail);
       await loadTickets();
     } catch (e) {
       console.error(e);
@@ -193,18 +224,22 @@ export default function AdminSupportPage() {
     }
   }
 
-  const messages = useMemo(() => {
-    if (!ticketDetail || typeof ticketDetail !== "object") return [];
-    const m = (ticketDetail as { messages?: unknown }).messages;
-    return Array.isArray(m) ? m : [];
+  const detailMessages = useMemo(() => {
+    if (!ticketDetail?.messages) return [];
+    return ticketDetail.messages;
   }, [ticketDetail]);
+
+  const detailCustomerName =
+    ticketDetail?.customerDisplayName?.trim() ||
+    ticketDetail?.order?.name?.trim() ||
+    "Покупатель";
 
   return (
     <div className="admin-dash-page">
       <header className="admin-dash-page__head">
-        <h1 className="admin-dash-page__title">Поддержка и возвраты</h1>
+        <h1 className="admin-dash-page__title">Сообщения покупателей</h1>
         <p className="admin-dash-page__subtitle">
-          Тикеты и заявки на возврат по вашему магазину.
+          Чат по заказам и заявки на возврат — как в мессенджере.
         </p>
       </header>
 
@@ -214,7 +249,7 @@ export default function AdminSupportPage() {
           className={`admin-order-card__btn${tab === "tickets" ? " admin-order-card__btn--accept" : ""}`}
           onClick={() => setTab("tickets")}
         >
-          Тикеты
+          Диалоги
         </button>
         <button
           type="button"
@@ -243,58 +278,72 @@ export default function AdminSupportPage() {
 
       {!loading && tab === "tickets" && (
         <div className="admin-support-grid">
-          <div className="admin-support-list">
+          <div className="sf-inbox admin-support-list">
             {tickets.length === 0 && (
-              <p className="admin-dash-page__muted">Нет тикетов</p>
+              <p className="admin-dash-page__muted" style={{ padding: 16 }}>
+                Пока нет сообщений
+              </p>
             )}
             {tickets.map((row) => {
-              if (!row || typeof row !== "object") return null;
-              const id = (row as { id?: unknown }).id;
-              if (typeof id !== "number") return null;
-              const active = selectedTicketId === id;
+              const active = selectedTicketId === row.id;
+              const name = row.customerDisplayName?.trim() || "Покупатель";
+              const when = formatTimeAgoRu(row.lastMessageAt);
               return (
                 <button
-                  key={id}
+                  key={row.id}
                   type="button"
-                  className={`admin-support-list__item${active ? " admin-support-list__item--active" : ""}`}
-                  onClick={() => setSelectedTicketId(id)}
+                  className={`sf-inbox__item admin-support-list__item${active ? " admin-support-list__item--active sf-inbox__item--active" : ""}${row.needsReply ? " sf-inbox__item--unread" : ""}`}
+                  onClick={() => setSelectedTicketId(row.id)}
                 >
-                  <span className="admin-support-list__id">#{id}</span>
-                  <span className="admin-support-list__meta">
-                    заказ #
-                    {String((row as { orderId?: unknown }).orderId ?? "—")} ·{" "}
-                    {pickString((row as { status?: unknown }).status) ?? "—"}
-                  </span>
-                  <span className="admin-support-list__preview">
-                    {ticketPreview(row)}
-                  </span>
+                  <PersonAvatar name={name} size="md" />
+                  <div className="sf-inbox__body">
+                    <div className="sf-inbox__top">
+                      <span className="sf-inbox__name">{name}</span>
+                      {when ? (
+                        <span className="sf-inbox__time">{when}</span>
+                      ) : null}
+                    </div>
+                    <div className="sf-inbox__meta">
+                      {orderLabelForTicket(row)}
+                      {" · "}
+                      {mapStatus(row.type, TICKET_TYPE_RU)}
+                    </div>
+                    <div className="sf-inbox__preview">{lastMessagePreview(row)}</div>
+                  </div>
                 </button>
               );
             })}
           </div>
 
-          <div className="admin-support-detail">
+          <div className="admin-support-detail sf-inbox-chat">
             {selectedTicketId == null && (
-              <p className="admin-dash-page__muted">Выберите тикет</p>
+              <p className="admin-dash-page__muted">Выберите диалог</p>
             )}
             {selectedTicketId != null && ticketDetail != null ? (
               <>
-                <h2 className="admin-support-detail__title">
-                  Тикет #{selectedTicketId}
-                </h2>
-                <p className="admin-dash-page__muted">
-                  Заказ #
-                  {(ticketDetail as { orderId?: number }).orderId ?? "—"}
-                </p>
+                <header className="sf-inbox-chat__header">
+                  <PersonAvatar name={detailCustomerName} size="lg" />
+                  <div>
+                    <h2 className="sf-inbox-chat__title">{detailCustomerName}</h2>
+                    <p className="sf-inbox-chat__sub">
+                      {ticketDetail.orderLabel ??
+                        (ticketDetail.order
+                          ? orderDisplayLabel(ticketDetail.order)
+                          : "Заказ")}
+                      {" · "}
+                      {mapStatus(ticketDetail.status, TICKET_STATUS_RU)}
+                    </p>
+                  </div>
+                </header>
 
                 <div className="admin-form-row">
                   <label className="admin-field-label" htmlFor="ticket-status">
-                    Статус
+                    Статус диалога
                   </label>
                   <select
                     id="ticket-status"
                     className="admin-input"
-                    value={pickString((ticketDetail as { status?: unknown }).status) ?? "OPEN"}
+                    value={pickString(ticketDetail.status) ?? "OPEN"}
                     disabled={busy}
                     onChange={(e) =>
                       void saveTicketPatch({ status: e.target.value })
@@ -308,51 +357,14 @@ export default function AdminSupportPage() {
                   </select>
                 </div>
 
-                <div className="admin-form-row">
-                  <label className="admin-field-label" htmlFor="internal-note">
-                    Внутренняя заметка (не видна клиенту)
-                  </label>
-                  <textarea
-                    id="internal-note"
-                    className="admin-input"
-                    rows={3}
-                    value={internalNote}
-                    disabled={busy}
-                    onChange={(e) => setInternalNote(e.target.value)}
+                <div className="sf-inbox-chat__messages">
+                  <SupportChatMessages
+                    messages={detailMessages}
+                    perspective="merchant"
+                    customerAvatarName={detailCustomerName}
+                    merchantAvatarName="Вы"
                   />
-                  <button
-                    type="button"
-                    className="admin-order-card__btn admin-order-card__btn--confirm"
-                    disabled={busy}
-                    onClick={() =>
-                      void saveTicketPatch({ internalNote: internalNote.trim() || null })
-                    }
-                  >
-                    Сохранить заметку
-                  </button>
                 </div>
-
-                <ul className="admin-support-timeline">
-                  {messages.map((msg, idx) => {
-                    if (!msg || typeof msg !== "object") return null;
-                    const st = (msg as { senderType?: unknown }).senderType;
-                    const text = (msg as { text?: unknown }).text;
-                    const createdAt = (msg as { createdAt?: unknown }).createdAt;
-                    return (
-                      <li key={idx} className="admin-support-timeline__item">
-                        <span className="admin-support-timeline__who">
-                          {mapStatus(String(st ?? ""), TICKET_SENDER_RU)}
-                        </span>
-                        <time className="admin-support-timeline__time">
-                          {String(createdAt ?? "")}
-                        </time>
-                        <p className="admin-support-timeline__text">
-                          {typeof text === "string" ? text : "—"}
-                        </p>
-                      </li>
-                    );
-                  })}
-                </ul>
 
                 <div className="admin-form-row">
                   <span className="admin-field-label">Быстрые ответы</span>
@@ -373,11 +385,11 @@ export default function AdminSupportPage() {
                     </div>
                   ) : (
                     <p className="admin-dash-page__muted" style={{ margin: 0 }}>
-                      Подсказки появятся после загрузки тикета
+                      Подсказки появятся после загрузки диалога
                     </p>
                   )}
                   <label className="admin-field-label" htmlFor="reply-text">
-                    Ответ клиенту
+                    Ответ покупателю
                   </label>
                   <textarea
                     id="reply-text"
@@ -386,6 +398,7 @@ export default function AdminSupportPage() {
                     value={replyText}
                     disabled={busy}
                     onChange={(e) => setReplyText(e.target.value)}
+                    placeholder="Напишите ответ…"
                   />
                   <button
                     type="button"
@@ -396,6 +409,30 @@ export default function AdminSupportPage() {
                     Отправить
                   </button>
                 </div>
+
+                <details className="admin-support-internal">
+                  <summary className="admin-field-label">Заметка для себя</summary>
+                  <textarea
+                    id="internal-note"
+                    className="admin-input"
+                    rows={2}
+                    value={internalNote}
+                    disabled={busy}
+                    onChange={(e) => setInternalNote(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="admin-order-card__btn admin-order-card__btn--confirm"
+                    disabled={busy}
+                    onClick={() =>
+                      void saveTicketPatch({
+                        internalNote: internalNote.trim() || null,
+                      })
+                    }
+                  >
+                    Сохранить
+                  </button>
+                </details>
               </>
             ) : null}
           </div>
@@ -404,31 +441,39 @@ export default function AdminSupportPage() {
 
       {!loading && tab === "returns" && (
         <div className="admin-support-grid">
-          <div className="admin-support-list">
+          <div className="sf-inbox admin-support-list">
             {returns.length === 0 && (
-              <p className="admin-dash-page__muted">Нет заявок</p>
+              <p className="admin-dash-page__muted" style={{ padding: 16 }}>
+                Нет заявок на возврат
+              </p>
             )}
             {returns.map((row) => {
               if (!row || typeof row !== "object") return null;
               const id = (row as { id?: unknown }).id;
               if (typeof id !== "number") return null;
               const active = selectedReturnId === id;
+              const order = (row as { order?: { orderNumber?: string | null; id?: number } })
+                .order;
+              const orderLbl = order ? orderDisplayLabel(order as { id: number; orderNumber?: string | null }) : "Заказ";
               return (
                 <button
                   key={id}
                   type="button"
-                  className={`admin-support-list__item${active ? " admin-support-list__item--active" : ""}`}
+                  className={`sf-inbox__item admin-support-list__item${active ? " admin-support-list__item--active sf-inbox__item--active" : ""}`}
                   onClick={() => setSelectedReturnId(id)}
                 >
-                  <span className="admin-support-list__id">#{id}</span>
-                  <span className="admin-support-list__meta">
-                    заказ #
-                    {String((row as { orderId?: unknown }).orderId ?? "—")} ·{" "}
-                    {pickString((row as { status?: unknown }).status) ?? "—"}
-                  </span>
-                  <span className="admin-support-list__preview">
-                    {pickString((row as { reason?: unknown }).reason) ?? "—"}
-                  </span>
+                  <PersonAvatar name={orderLbl} size="md" />
+                  <div className="sf-inbox__body">
+                    <div className="sf-inbox__top">
+                      <span className="sf-inbox__name">{orderLbl}</span>
+                    </div>
+                    <div className="sf-inbox__meta">
+                      {mapStatus(pickString((row as { status?: unknown }).status), RETURN_STATUS_RU)}
+                    </div>
+                    <div className="sf-inbox__preview">
+                      {pickString((row as { reason?: unknown }).reason) ?? "—"}
+                    </div>
+                  </div>
                 </button>
               );
             })}
@@ -440,9 +485,20 @@ export default function AdminSupportPage() {
             )}
             {selectedReturn && (
               <>
-                <h2 className="admin-support-detail__title">
-                  Возврат #{selectedReturnId}
-                </h2>
+                <h2 className="admin-support-detail__title">Возврат</h2>
+                <p>
+                  Заказ:{" "}
+                  <strong>
+                    {(selectedReturn.order as { orderNumber?: string } | undefined)
+                      ? orderDisplayLabel(
+                          selectedReturn.order as {
+                            id: number;
+                            orderNumber?: string | null;
+                          }
+                        )
+                      : "—"}
+                  </strong>
+                </p>
                 <p>
                   Статус:{" "}
                   <strong>
@@ -532,13 +588,6 @@ export default function AdminSupportPage() {
                     )}
                   </div>
                 </div>
-
-                <p className="admin-dash-page__muted" style={{ marginTop: 16 }}>
-                  Допустимые статусы:{" "}
-                  {RETURN_STATUS_OPTIONS.map((s) =>
-                    mapStatus(s, RETURN_STATUS_RU),
-                  ).join(", ")}
-                </p>
               </>
             )}
           </div>

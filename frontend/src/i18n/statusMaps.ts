@@ -11,11 +11,23 @@ export const ORDER_STATUS_RU: Record<string, string> = {
 };
 
 export const TICKET_STATUS_RU: Record<string, string> = {
-  OPEN: "Открыт",
-  PENDING_CUSTOMER: "Ждём клиента",
-  PENDING_MERCHANT: "Ждём магазин",
-  RESOLVED: "Решён",
-  CLOSED: "Закрыт",
+  OPEN: "Новое обращение",
+  PENDING_CUSTOMER: "Ждём ответ клиента",
+  PENDING_MERCHANT: "Нужен ответ",
+  RESOLVED: "Решено",
+  CLOSED: "Закрыто",
+};
+
+export const TICKET_TYPE_RU: Record<string, string> = {
+  GENERAL: "Общий чат",
+  DELIVERY: "Доставка",
+  QUALITY: "Качество товара",
+  RETURN: "Возврат",
+  EXCHANGE: "Обмен",
+  CANCEL_REQUEST: "Отмена",
+  ADDRESS_CHANGE: "Адрес",
+  TRACKING: "Трек",
+  OTHER: "Другое",
 };
 
 export const TICKET_SENDER_RU: Record<string, string> = {
