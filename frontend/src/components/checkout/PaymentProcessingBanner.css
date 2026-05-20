@@ -1,0 +1,39 @@
+.payment-processing-banner {
+  position: fixed;
+  top: calc(var(--app-header-approx, 56px) + env(safe-area-inset-top, 0px) + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1400;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(92vw, 400px);
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sf-color-primary) 92%, black);
+  color: var(--sf-on-primary, #fff);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 8px 24px color-mix(in srgb, black 25%, transparent);
+  pointer-events: none;
+}
+
+.payment-processing-banner__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: payment-banner-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes payment-banner-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

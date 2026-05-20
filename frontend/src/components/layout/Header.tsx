@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { getTelegramUser } from "../../utils/telegram";
+import { useBodyScrollLock } from "../../utils/bodyScrollLock";
 import { telegramDisplayInitial } from "../../utils/telegramUserMark";
 import { APP_NAME } from "../../config/brand";
 import "./app-shell.css";
@@ -63,14 +64,7 @@ export default function Header({
 
   const showAccountPanel = Boolean(accountMenu);
 
-  useEffect(() => {
-    if (!userMenuOpen || !showAccountPanel) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [userMenuOpen, showAccountPanel]);
+  useBodyScrollLock(userMenuOpen && showAccountPanel);
 
   useEffect(() => {
     if (!userMenuOpen) return;

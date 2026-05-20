@@ -16,6 +16,10 @@ import { computeBadges } from "../storefront/commerce/badgeEngine";
 import { profileForBusinessType } from "../storefront/commerce/businessBehaviorProfiles";
 import { computeCtaModel } from "../storefront/commerce/ctaEngine";
 import { recordRecentlyViewed } from "../storefront/discovery/recentlyViewed";
+import {
+  trackAddToCart,
+  trackProductView,
+} from "../../services/storefrontAnalytics";
 
 type Props = {
   product: Product;
@@ -26,6 +30,7 @@ type Props = {
   textConfig?: Record<string, unknown>;
   kit?: "minimal" | "luxury" | "fashion" | "neon" | "default";
   businessId?: number;
+  businessType?: string;
 };
 
 function readTextConfigString(cfg: unknown, key: string): string {
@@ -113,7 +118,7 @@ function normalizeCardConfig(raw: Record<string, unknown> | undefined): {
   };
 }
 
-export default function ProductCard({ product, showToast, onOpenDetail, cardConfig, textConfig, kit = "default", businessId }: Props) {
+export default function ProductCard({ product, showToast, onOpenDetail, cardConfig, textConfig, kit = "default", businessId, businessType }: Props) {
   useTheme(); // keep existing context behavior for now (legacy vars)
   const cfg = useMemo(() => normalizeCardConfig(cardConfig), [cardConfig]);
   const addLabel =
@@ -164,7 +169,10 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   }, [product, selectedColor]);
 
   const outOfStock = isOutOfStock(product);
-  const profile = useMemo(() => profileForBusinessType(undefined), []);
+  const profile = useMemo(
+    () => profileForBusinessType(businessType),
+    [businessType],
+  );
 
   const images = useMemo(
     () =>
@@ -264,6 +272,9 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
       color: lineColor,
       quantity: capped,
     });
+    if (businessId && product.id) {
+      trackAddToCart(businessId, product.id);
+    }
   };
 
   const canAddToCart =
@@ -324,13 +335,16 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   };
 
   const openDetail = () => {
-    if (businessId && product.id) recordRecentlyViewed({ businessId, product });
+    if (businessId && product.id) {
+      recordRecentlyViewed({ businessId, product });
+      trackProductView(businessId, product.id);
+    }
     if (onOpenDetail) onOpenDetail(product);
   };
 
   const badges = useMemo(() => {
-    return computeBadges({ product, kit });
-  }, [product, kit]);
+    return computeBadges({ product, businessType, kit });
+  }, [product, kit, businessType]);
 
   const badgeClass = (id: string): string => {
     switch (id) {

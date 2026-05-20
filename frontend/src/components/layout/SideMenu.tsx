@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
+import { useBodyScrollLock } from "../../utils/bodyScrollLock";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAdminPanelVisible } from "@/utils/admin";
 import { getTelegramUser } from "../../utils/telegram";
@@ -108,14 +109,7 @@ export default function SideMenu({
     return typeof v === "string" && v.trim() !== "" ? v : fb;
   };
 
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
+  useBodyScrollLock(open);
 
   const homeActive = currentPage === "home";
   const cartActive = currentPage === "cart";

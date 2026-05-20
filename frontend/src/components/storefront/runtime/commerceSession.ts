@@ -96,6 +96,15 @@ export function loadCommerceSession(businessId: number): CommerceSessionState {
   };
 }
 
+const COMMERCE_SESSION_CHANGED = "sf:commerceSessionChanged";
+
+function notifyCommerceSessionChanged(businessId: number): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent(COMMERCE_SESSION_CHANGED, { detail: { businessId } }),
+  );
+}
+
 export function saveCommerceSession(state: CommerceSessionState): void {
   const bid = Number(state.businessId);
   if (!Number.isFinite(bid) || bid <= 0) return;
@@ -110,6 +119,7 @@ export function saveCommerceSession(state: CommerceSessionState): void {
   };
   try {
     sessionStorage.setItem(key(bid), JSON.stringify(next));
+    notifyCommerceSessionChanged(bid);
   } catch {
     /* ignore */
   }
@@ -144,6 +154,26 @@ export function recordViewProduct(params: { businessId: number; product: Product
     st.events.push({ type: "view_category", ts: t, categoryId: cid });
   }
   st.events.push({ type: "view_product", ts: t, productId: pid, categoryId: cid ?? null });
+  saveCommerceSession(st);
+}
+
+/** Category chip tap — feeds «Потому что вы смотрели» without opening a product. */
+export function recordViewCategory(params: {
+  businessId: number;
+  categoryId: number;
+}): void {
+  const bid = Number(params.businessId);
+  const cid = Number(params.categoryId);
+  if (!Number.isFinite(bid) || bid <= 0 || !Number.isFinite(cid) || cid <= 0) return;
+  const st = loadCommerceSession(bid);
+  const t = now();
+  st.viewedCategories = upsertRecent(
+    st.viewedCategories,
+    { categoryId: cid, ts: t },
+    (a, b) => a.categoryId === b.categoryId,
+    MAX_VIEWED_CATEGORIES,
+  );
+  st.events.push({ type: "view_category", ts: t, categoryId: cid });
   saveCommerceSession(st);
 }
 

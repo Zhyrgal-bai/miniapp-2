@@ -1,0 +1,53 @@
+/**
+ * Motion design tokens — lightweight, consistent, no heavy glow.
+ * Controlled by data-sf-motion on .sf-root (normal | reduced | expressive).
+ */
+.sf-root {
+  --sf-motion-fast: 160ms;
+  --sf-motion-base: 220ms;
+  --sf-motion-enter: 280ms;
+  --sf-motion-press: 120ms;
+  --sf-motion-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --sf-motion-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --sf-motion-press-scale: 0.97;
+}
+
+.sf-root[data-sf-motion="reduced"] {
+  --sf-motion-fast: 0ms;
+  --sf-motion-base: 0ms;
+  --sf-motion-enter: 0ms;
+  --sf-motion-press: 0ms;
+  --sf-motion-press-scale: 1;
+}
+
+.sf-root[data-sf-motion="expressive"] {
+  --sf-motion-enter: 340ms;
+  --sf-motion-press-scale: 0.95;
+}
+
+/* Shared press feedback for commerce controls */
+.sf-commerce-feed .product-card,
+.sf-hero__cta,
+.sf-chip--filter,
+.sf-pds-footer__cta,
+.order-btn {
+  transition: transform var(--sf-motion-press) var(--sf-motion-ease),
+    opacity var(--sf-motion-fast) ease;
+}
+
+.sf-commerce-feed .product-card:active,
+.sf-hero__cta:active,
+.sf-chip--filter:active,
+.sf-pds-footer__cta:active {
+  transform: scale(var(--sf-motion-press-scale));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-root {
+    --sf-motion-fast: 0ms;
+    --sf-motion-base: 0ms;
+    --sf-motion-enter: 0ms;
+    --sf-motion-press: 0ms;
+    --sf-motion-press-scale: 1;
+  }
+}

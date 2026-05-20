@@ -467,6 +467,7 @@ export async function submitPlatformRegisterRequest(payload: {
   botToken: string;
   phone: string;
   telegramId: number;
+  referralCode?: string;
 }): Promise<void> {
   void payload.telegramId;
   const res = await fetch(apiAbsoluteUrl("/api/platform/register-request"), {
@@ -481,6 +482,7 @@ export async function submitPlatformRegisterRequest(payload: {
       botToken: payload.botToken,
       phone: payload.phone,
       telegramId: payload.telegramId,
+      referralCode: payload.referralCode,
     }),
   });
   if (!res.ok) {
@@ -555,4 +557,96 @@ export async function postPlatformToggleBot(params: {
     throw new Error("Некорректный ответ сервера");
   }
   return { ok: j.ok, isActive: j.isActive };
+}
+
+export type StoreReadinessPayload = {
+  score: number;
+  maxScore: number;
+  checklist: Array<{
+    id: string;
+    label: string;
+    done: boolean;
+    weight: number;
+    href?: string;
+  }>;
+  recommendations: string[];
+};
+
+export async function fetchStoreReadiness(
+  businessId: number,
+): Promise<StoreReadinessPayload> {
+  const url = new URL(apiAbsoluteUrl("/api/platform/store-readiness"));
+  url.searchParams.set("businessId", String(businessId));
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    credentials: "omit",
+    headers: { ...telegramWebAppInitDataHeader() },
+  });
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(j.error ?? `HTTP ${res.status}`);
+  }
+  return (await res.json()) as StoreReadinessPayload;
+}
+
+export async function postPlatformFeedback(input: {
+  kind: "bug" | "feature" | "ux" | "other";
+  message: string;
+  businessId?: number;
+  page?: string;
+}): Promise<void> {
+  const res = await fetch(apiAbsoluteUrl("/api/platform/feedback"), {
+    method: "POST",
+    credentials: "omit",
+    headers: {
+      "Content-Type": "application/json",
+      ...telegramWebAppInitDataHeader(),
+    },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(j.error ?? `HTTP ${res.status}`);
+  }
+}
+
+export async function fetchMerchantReferral(
+  businessId: number,
+): Promise<{ code: string; link: string; signups: number; isPublic: boolean }> {
+  const url = new URL(apiAbsoluteUrl("/api/platform/referral"));
+  url.searchParams.set("businessId", String(businessId));
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    credentials: "omit",
+    headers: { ...telegramWebAppInitDataHeader() },
+  });
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(j.error ?? `HTTP ${res.status}`);
+  }
+  return (await res.json()) as {
+    code: string;
+    link: string;
+    signups: number;
+    isPublic: boolean;
+  };
+}
+
+export async function setStoreListingPublic(input: {
+  businessId: number;
+  isPublic: boolean;
+}): Promise<void> {
+  const res = await fetch(apiAbsoluteUrl("/api/platform/store-listing/visibility"), {
+    method: "POST",
+    credentials: "omit",
+    headers: {
+      "Content-Type": "application/json",
+      ...telegramWebAppInitDataHeader(),
+    },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(j.error ?? `HTTP ${res.status}`);
+  }
 }

@@ -139,12 +139,111 @@ export type AdminAnalytics = {
   rangeSince?: string;
   ordersInRange?: number;
   revenueInRange?: number;
-  dailySeries?: Array<{ day: string; revenue: number; orders: number }>;
+  paidOrdersInRange?: number;
+  averageOrderValue?: number;
+  conversionRate?: number | null;
+  repeatCustomers?: number;
+  visitorsInRange?: number;
+  uniqueVisitorsInRange?: number;
+  dau?: number;
+  wau?: number;
+  dailySeries?: Array<{
+    day: string;
+    revenue: number;
+    orders: number;
+    visitors?: number;
+  }>;
   topSku?: Array<{
     productId: number | null;
     name: string;
     quantity: number;
+    revenue?: number;
   }>;
+  support?: {
+    openTickets: number;
+    pendingMerchant: number;
+    resolvedInRange: number;
+    openReturns: number;
+  };
+};
+
+export type MerchantInsight = {
+  code: string;
+  severity: "info" | "success" | "warning";
+  title: string;
+  body: string;
+  actionLabel?: string;
+  actionHref?: string;
+};
+
+export type MerchantInsightsPayload = {
+  rangeDays: number;
+  insights: MerchantInsight[];
+  generatedAt: string;
+};
+
+export type GrowthChecklistItem = {
+  id: string;
+  label: string;
+  done: boolean;
+  weight: number;
+  href?: string;
+};
+
+export type MerchantGrowthPayload = {
+  score: number;
+  maxScore: number;
+  checklist: GrowthChecklistItem[];
+  recommendations: string[];
+};
+
+export type GrowthMilestone = {
+  id: string;
+  label: string;
+  done: boolean;
+  achievedAt: string | null;
+};
+
+export type MerchantGrowthDashboard = {
+  rangeDays: number;
+  growth: MerchantGrowthPayload;
+  insights: MerchantInsightsPayload;
+  retention: {
+    status: "active" | "at_risk" | "inactive";
+    nudges: string[];
+    daysSinceLastOrder: number | null;
+    readinessScore: number;
+  };
+  milestones: GrowthMilestone[];
+  optimizationTips: string[];
+  referral: { signups: number; code: string | null };
+  engagement: {
+    ordersInRange: number;
+    revenueInRange: number;
+    conversionRate: number | null;
+    uniqueVisitors: number;
+  };
+};
+
+export type SupportSuggestion = {
+  id: string;
+  label: string;
+  text: string;
+};
+
+export type MerchantNotificationItem = {
+  id: number;
+  kind: string;
+  title: string;
+  body: string | null;
+  href: string | null;
+  readAt: string | null;
+  createdAt: string;
+};
+
+export type MerchantNotificationsPayload = {
+  unreadCount: number;
+  items: MerchantNotificationItem[];
 };
 
 export type CategoryCreateInput = {
@@ -435,6 +534,44 @@ export const adminService = {
     };
   },
 
+  async getInsights(rangeDays: 7 | 30 | 90 = 30): Promise<MerchantInsightsPayload> {
+    const d = await adminPost<MerchantInsightsPayload>(
+      "/merchant/intelligence/insights",
+      { rangeDays },
+    );
+    return {
+      rangeDays: typeof d?.rangeDays === "number" ? d.rangeDays : rangeDays,
+      insights: Array.isArray(d?.insights) ? d.insights : [],
+      generatedAt: typeof d?.generatedAt === "string" ? d.generatedAt : "",
+    };
+  },
+
+  async getGrowth(): Promise<MerchantGrowthPayload> {
+    const d = await adminGet<MerchantGrowthPayload>("/merchant/intelligence/growth");
+    return {
+      score: typeof d?.score === "number" ? d.score : 0,
+      maxScore: typeof d?.maxScore === "number" ? d.maxScore : 100,
+      checklist: Array.isArray(d?.checklist) ? d.checklist : [],
+      recommendations: Array.isArray(d?.recommendations) ? d.recommendations : [],
+    };
+  },
+
+  async getGrowthDashboard(
+    rangeDays: 7 | 30 | 90 = 30,
+  ): Promise<MerchantGrowthDashboard> {
+    const d = await adminPost<MerchantGrowthDashboard>("/merchant/growth/dashboard", {
+      rangeDays,
+    });
+    return d;
+  },
+
+  async getSupportSuggestions(ticketId: number): Promise<SupportSuggestion[]> {
+    const d = await adminGet<{ suggestions?: SupportSuggestion[] }>(
+      `/merchant/support/tickets/${ticketId}/suggestions`,
+    );
+    return Array.isArray(d?.suggestions) ? d.suggestions : [];
+  },
+
   async getCategories(): Promise<Category[]> {
     const userId = requireAdminUserId();
     const res = await api.get<Category[]>(apiAbsoluteUrl("/categories"), {
@@ -570,6 +707,42 @@ export const adminService = {
         businessId: input.businessId,
         permissions: input.permissions,
       }),
+    });
+    if (!res.ok) throw new Error(await readFetchError(res));
+  },
+
+  async getNotifications(limit = 20): Promise<MerchantNotificationsPayload> {
+    const telegramUserId = requireAdminUserId();
+    const url = new URL(resolveAdminUrl("/merchant/notifications"));
+    url.searchParams.set("userId", String(telegramUserId));
+    url.searchParams.set("limit", String(limit));
+    const res = await fetch(url.toString(), {
+      headers: withTenantHeaders(
+        { "x-telegram-id": String(telegramUserId) },
+        url.toString(),
+      ),
+    });
+    if (!res.ok) throw new Error(await readFetchError(res));
+    const data = (await res.json()) as MerchantNotificationsPayload;
+    return {
+      unreadCount: Number(data.unreadCount) || 0,
+      items: Array.isArray(data.items) ? data.items : [],
+    };
+  },
+
+  async markAllNotificationsRead(): Promise<void> {
+    const telegramUserId = requireAdminUserId();
+    const url = resolveAdminUrl("/merchant/notifications/read-all");
+    const res = await fetch(url, {
+      method: "POST",
+      headers: withTenantHeaders(
+        {
+          "Content-Type": "application/json",
+          "x-telegram-id": String(telegramUserId),
+        },
+        url,
+      ),
+      body: JSON.stringify({}),
     });
     if (!res.ok) throw new Error(await readFetchError(res));
   },

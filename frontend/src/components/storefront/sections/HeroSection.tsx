@@ -253,7 +253,7 @@ export function HeroSection(props: {
           style={heroRootStyle}
         >
           <div className="sf-hero__copy" aria-live="polite">
-            <div className="sf-hero__kicker">EDITORIAL</div>
+            <div className="sf-hero__kicker">Подборка</div>
             <div className="sf-hero__title">{title}</div>
             {subtitle ? <div className="sf-hero__subtitle">{subtitle}</div> : null}
             {ctaText && ctaPosition !== "hidden" ? (

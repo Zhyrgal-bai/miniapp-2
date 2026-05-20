@@ -34,6 +34,8 @@
 .sf-root.sf-app {
   min-height: 100dvh;
   box-sizing: border-box;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y pinch-zoom;
 }
 
 .app {

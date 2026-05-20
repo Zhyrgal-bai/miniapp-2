@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { adminService } from "../../services/admin.service";
+import { adminService, type SupportSuggestion } from "../../services/admin.service";
 import { SF_ADMIN_SUPPORT_TAB_KEY } from "../../utils/accountMenuStorage";
+import {
+  mapStatus,
+  RETURN_STATUS_RU,
+  TICKET_SENDER_RU,
+  TICKET_STATUS_RU,
+} from "../../i18n/statusMaps";
 
 type Tab = "tickets" | "returns";
 
@@ -46,6 +52,7 @@ export default function AdminSupportPage() {
   const [selectedReturnId, setSelectedReturnId] = useState<number | null>(null);
   const [ticketDetail, setTicketDetail] = useState<unknown | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [suggestions, setSuggestions] = useState<SupportSuggestion[]>([]);
   const [internalNote, setInternalNote] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -87,14 +94,19 @@ export default function AdminSupportPage() {
   useEffect(() => {
     if (selectedTicketId == null) {
       setTicketDetail(null);
+      setSuggestions([]);
       return;
     }
     let cancelled = false;
     void (async () => {
       try {
-        const d = await adminService.getSupportTicket(selectedTicketId);
+        const [d, sug] = await Promise.all([
+          adminService.getSupportTicket(selectedTicketId),
+          adminService.getSupportSuggestions(selectedTicketId),
+        ]);
         if (!cancelled) {
           setTicketDetail(d);
+          setSuggestions(sug);
           const note =
             d &&
             typeof d === "object" &&
@@ -290,7 +302,7 @@ export default function AdminSupportPage() {
                   >
                     {TICKET_STATUS_OPTIONS.map((s) => (
                       <option key={s} value={s}>
-                        {s}
+                        {mapStatus(s, TICKET_STATUS_RU)}
                       </option>
                     ))}
                   </select>
@@ -329,7 +341,7 @@ export default function AdminSupportPage() {
                     return (
                       <li key={idx} className="admin-support-timeline__item">
                         <span className="admin-support-timeline__who">
-                          {String(st ?? "—")}
+                          {mapStatus(String(st ?? ""), TICKET_SENDER_RU)}
                         </span>
                         <time className="admin-support-timeline__time">
                           {String(createdAt ?? "")}
@@ -343,6 +355,27 @@ export default function AdminSupportPage() {
                 </ul>
 
                 <div className="admin-form-row">
+                  <span className="admin-field-label">Быстрые ответы</span>
+                  {suggestions.length > 0 ? (
+                    <div className="admin-support-suggestions">
+                      {suggestions.map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          className="admin-support-suggestions__chip"
+                          disabled={busy}
+                          title={s.text}
+                          onClick={() => setReplyText(s.text)}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="admin-dash-page__muted" style={{ margin: 0 }}>
+                      Подсказки появятся после загрузки тикета
+                    </p>
+                  )}
                   <label className="admin-field-label" htmlFor="reply-text">
                     Ответ клиенту
                   </label>
@@ -413,7 +446,7 @@ export default function AdminSupportPage() {
                 <p>
                   Статус:{" "}
                   <strong>
-                    {pickString(selectedReturn.status) ?? "—"}
+                    {mapStatus(pickString(selectedReturn.status), RETURN_STATUS_RU)}
                   </strong>
                 </p>
                 <p>
@@ -501,7 +534,10 @@ export default function AdminSupportPage() {
                 </div>
 
                 <p className="admin-dash-page__muted" style={{ marginTop: 16 }}>
-                  Допустимые статусы: {RETURN_STATUS_OPTIONS.join(", ")}
+                  Допустимые статусы:{" "}
+                  {RETURN_STATUS_OPTIONS.map((s) =>
+                    mapStatus(s, RETURN_STATUS_RU),
+                  ).join(", ")}
                 </p>
               </>
             )}

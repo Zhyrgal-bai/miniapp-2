@@ -9,6 +9,7 @@ import {
 } from "../../utils/product";
 import { getVariantCssBackground } from "../../utils/variantColor";
 import { useTheme } from "../../context/ThemeContext";
+import { useBodyScrollLock } from "../../utils/bodyScrollLock";
 import "./ProductDetailModal.css";
 
 type ProductDetailModalProps = {
@@ -34,14 +35,7 @@ export default function ProductDetailModal({
     setImgIndex(0);
   }, [product?.id]);
 
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
+  useBodyScrollLock(open);
 
   useEffect(() => {
     if (!open) return;

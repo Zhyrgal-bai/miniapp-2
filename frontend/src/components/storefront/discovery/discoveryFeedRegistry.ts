@@ -22,6 +22,8 @@ export type DiscoveryContext = {
   businessId: number;
   featuredProducts: Product[];
   catalogProducts: Product[];
+  /** Server co-purchase product IDs (optional). */
+  coPurchaseIds?: number[];
 };
 
 function bySoldDesc(a: Product, b: Product): number {
@@ -39,8 +41,29 @@ export function buildDiscoveryRails(ctx: DiscoveryContext & { textConfig?: Recor
     return typeof v === "string" && v.trim() !== "" ? v : fb;
   };
 
-  // Trending: use sold metric if present, else fallback to featured order.
-  const trending = [...(ctx.featuredProducts ?? [])].sort(bySoldDesc).slice(0, 12);
+  // Co-purchase rail from server recommendations.
+  const coIds = ctx.coPurchaseIds ?? [];
+  if (coIds.length >= 2) {
+    const byId = new Map(ctx.catalogProducts.map((p) => [Number(p.id ?? 0), p] as const));
+    const bought = coIds
+      .map((id) => byId.get(id))
+      .filter(Boolean) as Product[];
+    if (bought.length >= 2) {
+      rails.push({
+        id: "bought_together",
+        title: readText("titleBoughtTogether", ru.discovery.titleBoughtTogether),
+        layout: "horizontalRail",
+        products: bought.slice(0, 12),
+      });
+    }
+  }
+
+  // Trending: prefer full catalog bestsellers; fallback to featured.
+  const trendingPool =
+    (ctx.catalogProducts?.length ?? 0) >= 4
+      ? ctx.catalogProducts
+      : ctx.featuredProducts ?? [];
+  const trending = [...trendingPool].sort(bySoldDesc).slice(0, 12);
   if (trending.length) {
     rails.push({
       id: "trending",
@@ -48,7 +71,7 @@ export function buildDiscoveryRails(ctx: DiscoveryContext & { textConfig?: Recor
         ctx.businessType === "fastfood"
           ? ru.discovery.titleHotNow
           : readText("titleTrending", ru.discovery.titleTrending),
-      layout: ctx.kit === "fashion" ? "editorialStrip" : "horizontalRail",
+      layout: ctx.kit === "fashion" ? "editorialStrip" : "marketplaceGrid",
       products: trending,
     });
   }

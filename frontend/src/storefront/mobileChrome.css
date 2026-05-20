@@ -1,0 +1,54 @@
+/**
+ * Mobile chrome — z-index stack + sheet/sticky coordination.
+ * Desktop/tablet: centered commerce shell (not desktop website).
+ */
+:root {
+  --sf-z-sticky-categories: 120;
+  --sf-z-sticky-cart: 900;
+  --sf-z-floating-cart: 950;
+  --sf-z-header: 1300;
+  --sf-z-product-sheet: 2800;
+}
+
+.sf-commerce-shell {
+  max-width: var(--sf-content-max, 430px);
+  margin-inline: auto;
+}
+
+/* Sticky cart above content but below header/sheet */
+.sf-sticky-cart-slot {
+  z-index: var(--sf-z-sticky-cart);
+}
+
+.floating-cart {
+  z-index: var(--sf-z-floating-cart);
+}
+
+/* Hide bottom chrome when product sheet is open */
+.sf-root.sf-app[data-sf-product-sheet="open"] .sf-sticky-cart-slot,
+.sf-root.sf-app[data-sf-product-sheet="open"] .floating-cart {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(12px);
+  transition: opacity var(--sf-motion-fast, 160ms) ease,
+    transform var(--sf-motion-fast, 160ms) ease;
+}
+
+@media (min-width: 640px) {
+  .sf-root.sf-app {
+    --sf-content-max: 480px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .sf-root.sf-app {
+    --sf-content-max: 440px;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--sf-color-border) 40%, transparent);
+  }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .sf-categories-sticky {
+    top: calc(var(--app-header-approx, 48px) + env(safe-area-inset-top, 0px));
+  }
+}

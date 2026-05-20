@@ -129,6 +129,12 @@ model Business {
   supportMessages SupportMessage[]
   returnRequests  ReturnRequest[]
 
+  storefrontEvents StorefrontEvent[]
+  merchantNotifications MerchantNotification[]
+  automationRules AutomationRule[]
+  platformListing PlatformStoreListing?
+  referralCode MerchantReferralCode?
+
   @@index([isActive])
   @@index([subscriptionStatus])
   @@index([isBlocked])
@@ -613,4 +619,164 @@ model Promo {
 
   @@unique([businessId, code])
   @@index([businessId])
+}
+
+/// Storefront engagement events for audience & conversion analytics.
+enum StorefrontEventType {
+  STORE_VIEW
+  PRODUCT_VIEW
+  ADD_TO_CART
+  CHECKOUT_START
+}
+
+model StorefrontEvent {
+  id         Int                 @id @default(autoincrement())
+  businessId Int
+  business   Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  eventType  StorefrontEventType
+  /// Anonymous visitor fingerprint (hashed telegram id or session id).
+  visitorKey String
+  userId     Int?
+  productId  Int?
+  meta       Json                @default("{}")
+
+  createdAt DateTime @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([businessId, eventType, createdAt])
+  @@index([businessId, visitorKey])
+}
+
+/// In-app merchant notification center (per tenant).
+enum MerchantNotificationKind {
+  ORDER_NEW
+  SUPPORT_MESSAGE
+  SUPPORT_TICKET
+  PAYMENT_ISSUE
+  SUBSCRIPTION_EXPIRING
+  WEBHOOK_FAILED
+  SYSTEM
+}
+
+model MerchantNotification {
+  id         Int                      @id @default(autoincrement())
+  businessId Int
+  business   Business                 @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  kind       MerchantNotificationKind
+  title      String
+  body       String?
+  href       String?
+  readAt     DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([businessId, readAt])
+  @@index([businessId, createdAt])
+}
+
+/// Merchant automation rules foundation (Phase 1 — schema only; runner Phase 2).
+enum AutomationRuleStatus {
+  ACTIVE
+  PAUSED
+}
+
+model AutomationRule {
+  id         Int                  @id @default(autoincrement())
+  businessId Int
+  business   Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  /// Built-in rule id, e.g. conversion_low_alert
+  ruleKey    String
+  name       String
+  status     AutomationRuleStatus @default(ACTIVE)
+  config     Json                 @default("{}")
+  lastRunAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, ruleKey])
+  @@index([businessId, status])
+}
+
+/// Onboarding & product validation funnel (beta / release metrics).
+model PlatformFunnelEvent {
+  id         Int      @id @default(autoincrement())
+  step       String
+  telegramId String?
+  businessId Int?
+  meta       Json     @default("{}")
+
+  createdAt DateTime @default(now())
+
+  @@index([step, createdAt])
+  @@index([telegramId, createdAt])
+  @@index([businessId, createdAt])
+}
+
+/// Beta / release feedback from merchants and shoppers.
+model ProductFeedback {
+  id         Int      @id @default(autoincrement())
+  kind       String
+  message    String
+  telegramId String?
+  businessId Int?
+  page       String?
+  meta       Json     @default("{}")
+  status     String   @default("open")
+
+  createdAt DateTime @default(now())
+
+  @@index([status, createdAt])
+  @@index([businessId, createdAt])
+}
+
+/// Public marketplace directory entry (opt-in visibility).
+model PlatformStoreListing {
+  businessId   Int          @id
+  business     Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  slug         String       @unique
+  displayName  String
+  tagline      String?
+  logoUrl      String?
+  businessType BusinessType
+  isPublic     Boolean      @default(false)
+  isFeatured   Boolean      @default(false)
+  featuredRank Int?
+  trendScore   Int          @default(0)
+  delistedAt   DateTime?
+  publishedAt  DateTime?
+
+  updatedAt DateTime @updatedAt
+
+  @@index([isPublic, isFeatured])
+  @@index([businessType, isPublic])
+  @@index([trendScore])
+}
+
+/// Merchant-to-merchant referral code.
+model MerchantReferralCode {
+  id         Int      @id @default(autoincrement())
+  businessId Int      @unique
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  code       String   @unique
+  signups    Int      @default(0)
+
+  createdAt DateTime @default(now())
+  signupsLog MerchantReferralSignup[]
+
+  @@index([code])
+}
+
+model MerchantReferralSignup {
+  id                    Int                  @id @default(autoincrement())
+  referralCodeId        Int
+  referralCode          MerchantReferralCode @relation(fields: [referralCodeId], references: [id], onDelete: Cascade)
+  referrerBusinessId    Int
+  applicantTelegramId   String
+  registrationRequestId Int?
+
+  createdAt DateTime @default(now())
+
+  @@index([referrerBusinessId, createdAt])
+  @@index([applicantTelegramId])
 }

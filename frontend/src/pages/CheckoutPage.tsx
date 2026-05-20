@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { useCartStore } from "../store/useCartStore";
-import { api, apiAbsoluteUrl } from "../services/api";
+import { api } from "../services/api";
 import { fetchMyOrders } from "../services/myOrdersApi";
 import { useShop } from "../context/ShopContext";
 import { getTelegramUser, getTelegramWebAppUserId } from "../utils/telegram";
@@ -10,23 +10,15 @@ import MapPicker from "../components/checkout/MapPicker";
 import "../components/ui/CheckoutPage.css";
 import { buildCatalogRequestParams } from "../utils/storeParams";
 import { setPendingFinikOrder } from "../utils/pendingFinikOrder";
+import { openTelegramExternalLink } from "../utils/telegramWebAppBootstrap";
+import { t } from "../i18n";
+import { trackCheckoutStart } from "../services/storefrontAnalytics";
 
 type Props = {
   onBack?: () => void;
 };
 
-function promoApplyUrl(): string {
-  if (
-    (typeof import.meta.env.VITE_API_URL !== "string" ||
-      import.meta.env.VITE_API_URL.trim() === "") &&
-    import.meta.env.DEV
-  ) {
-    console.warn("VITE_API_URL is not set — set it in frontend/.env for checkout / promos");
-  }
-  return apiAbsoluteUrl("/promo/apply");
-}
-
-const PROMO_APPLY_ERROR = "Неверный или использован";
+const PROMO_APPLY_ERROR = "Неверный или использован промокод";
 
 type NominatimSearchItem = {
   place_id: number;
@@ -79,6 +71,13 @@ export default function CheckoutPage({ onBack }: Props) {
   const [finikRedirectMessage, setFinikRedirectMessage] = useState<
     string | null
   >(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (businessId != null && businessId > 0) {
+      trackCheckoutStart(businessId);
+    }
+  }, [businessId]);
 
   const totalPrice = items.reduce(
     (sum, item) => sum + item.price * (item.quantity ?? 1),
@@ -139,31 +138,28 @@ export default function CheckoutPage({ onBack }: Props) {
       setPromoPreview(null);
       return null;
     }
-    const applyRes = await fetch(promoApplyUrl(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, total: totalPrice, businessId }),
-    });
-    const data = (await applyRes.json().catch(() => ({}))) as {
-      newTotal?: number;
-      discount?: number;
-    };
-    if (!applyRes.ok) {
+    try {
+      const applyRes = await api.post<{ newTotal?: number; discount?: number }>(
+        "/promo/apply",
+        { code, total: totalPrice, businessId },
+      );
+      const data = applyRes.data;
+      if (
+        data.newTotal == null ||
+        data.discount == null ||
+        !Number.isFinite(data.newTotal)
+      ) {
+        alert(PROMO_APPLY_ERROR);
+        setPromoPreview(null);
+        return null;
+      }
+      setPromoPreview({ newTotal: data.newTotal, discount: data.discount });
+      return data.newTotal;
+    } catch {
       alert(PROMO_APPLY_ERROR);
       setPromoPreview(null);
       return null;
     }
-    if (
-      data.newTotal == null ||
-      data.discount == null ||
-      !Number.isFinite(data.newTotal)
-    ) {
-      alert(PROMO_APPLY_ERROR);
-      setPromoPreview(null);
-      return null;
-    }
-    setPromoPreview({ newTotal: data.newTotal, discount: data.discount });
-    return data.newTotal;
   };
 
   const runAddressSearch = useCallback(async (q: string) => {
@@ -365,6 +361,8 @@ export default function CheckoutPage({ onBack }: Props) {
     };
 
     setSubmitting(true);
+    setCheckoutError(null);
+    let redirecting = false;
     try {
       const tenantParams =
         businessId != null
@@ -406,6 +404,7 @@ export default function CheckoutPage({ onBack }: Props) {
           : null;
 
       if (payUrl) {
+        redirecting = true;
         const resolvedBusinessId =
           businessId != null && businessId > 0
             ? businessId
@@ -415,31 +414,33 @@ export default function CheckoutPage({ onBack }: Props) {
         if (resolvedBusinessId != null) {
           setPendingFinikOrder({ orderId: data.id, businessId: resolvedBusinessId });
         }
-        setFinikRedirectMessage("Переход к оплате...");
-        clearCart();
-        setName("");
-        setPhone("");
-        setPhoneFromSavedOrder(false);
-        setAddress("");
-        setLat(null);
-        setLng(null);
-        setPromo("");
-        setComment("");
-        setPromoPreview(null);
+        setFinikRedirectMessage(t("checkout.redirecting"));
         window.setTimeout(() => {
-          window.location.href = payUrl;
-        }, 500);
+          openTelegramExternalLink(payUrl);
+          clearCart();
+          setName("");
+          setPhone("");
+          setPhoneFromSavedOrder(false);
+          setAddress("");
+          setLat(null);
+          setLng(null);
+          setPromo("");
+          setComment("");
+          setPromoPreview(null);
+        }, 400);
         return;
       }
 
-      alert(
-        "Не удалось получить ссылку на оплату Finik. Заказ создан — откройте «Мои заказы» или попробуйте снова."
+      setCheckoutError(
+        "Не удалось получить ссылку на оплату. Заказ создан — откройте «Мои заказы»."
       );
     } catch (err) {
       console.error(err);
-      alert(orderErrorMessage(err));
+      setCheckoutError(orderErrorMessage(err));
     } finally {
-      setSubmitting(false);
+      if (!redirecting) {
+        setSubmitting(false);
+      }
     }
   };
 
@@ -461,9 +462,10 @@ export default function CheckoutPage({ onBack }: Props) {
   }
 
   return (
-    <div className="checkout">
+    <div className="checkout checkout--flow">
       {finikRedirectMessage != null && (
         <div className="checkout-finik-overlay" role="status" aria-live="polite">
+          <div className="checkout-finik-overlay__spinner" aria-hidden />
           <p className="checkout-finik-overlay__text">{finikRedirectMessage}</p>
         </div>
       )}
@@ -473,8 +475,22 @@ export default function CheckoutPage({ onBack }: Props) {
         </button>
       )}
 
-      <h2>Оформление заказа</h2>
+      <h2>{t("checkout.title")}</h2>
 
+      {checkoutError != null && (
+        <div className="checkout-error-banner" role="alert">
+          <p>{checkoutError}</p>
+          <button
+            type="button"
+            className="checkout-error-banner__retry"
+            onClick={() => setCheckoutError(null)}
+          >
+            {t("common.retry")}
+          </button>
+        </div>
+      )}
+
+      <div className="checkout-form-scroll">
       <div className="form">
         <input
           placeholder="Ваше имя"
@@ -624,16 +640,15 @@ export default function CheckoutPage({ onBack }: Props) {
         <div className="checkout-payment">
           <p className="checkout-payment__label">Оплата</p>
           <p className="checkout-payment__summary" aria-live="polite">
-            Оплата только через <strong>Finik</strong>. После нажатия «Оформить заказ»
-            откроется страница оплаты; после успешной оплаты вы вернётесь в приложение
-            на главный экран.
+            {t("checkout.paymentHint")}
           </p>
         </div>
       </div>
+      </div>
 
-      <div className="checkout-footer">
+      <div className="checkout-footer checkout-footer--sticky">
         <div className="total">
-          <span>Итого</span>
+          <span>{t("checkout.total")}</span>
           <strong>
             {promoPreview ? promoPreview.newTotal : totalPrice} сом
           </strong>
@@ -652,11 +667,13 @@ export default function CheckoutPage({ onBack }: Props) {
 
         <button
           type="button"
-          className="order-btn"
+          className="order-btn order-btn--primary"
           onClick={handleSubmit}
-          disabled={submitting}
+          disabled={submitting || finikRedirectMessage != null}
         >
-          {submitting ? "Отправка…" : "ОФОРМИТЬ ЗАКАЗ"}
+          {submitting
+            ? t("checkout.submitting")
+            : t("checkout.submit")}
         </button>
       </div>
     </div>

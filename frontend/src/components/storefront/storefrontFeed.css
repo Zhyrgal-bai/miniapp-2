@@ -1,0 +1,173 @@
+/**
+ * Unified commerce feed — connected discovery rhythm.
+ * Spacing is locked (design governance); merchants cannot override via builder.
+ */
+.sf-commerce-feed {
+  --sf-feed-gap: 20px;
+  --sf-rail-gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-feed-gap);
+}
+
+.sf-commerce-feed--embedded {
+  padding: 0;
+}
+
+.sf-commerce-feed--standalone {
+  padding: var(--sf-section-pad-y, 12px) var(--sf-section-pad-x, 12px);
+}
+
+.sf-commerce-feed__block--rail {
+  position: relative;
+  padding-top: 4px;
+}
+
+.sf-commerce-feed__block--rail::before {
+  content: "";
+  display: block;
+  height: 1px;
+  margin: 0 0 var(--sf-rail-gap);
+  background: color-mix(in srgb, var(--sf-color-border, currentColor) 55%, transparent);
+  opacity: 0.65;
+}
+
+.sf-commerce-feed__block--primary + .sf-commerce-feed__block--rail::before {
+  margin-top: 4px;
+}
+
+.sf-commerce-feed__title {
+  margin: 0 0 10px;
+  font-size: 1.125rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--sf-color-text);
+}
+
+.sf-commerce-feed__rail-title {
+  margin: 0 0 10px;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: color-mix(in srgb, var(--sf-color-text) 88%, var(--sf-color-muted));
+}
+
+.sf-commerce-feed__grid-wrap {
+  border-radius: var(--sf-section-radius, 16px);
+}
+
+/* Horizontal snap rails */
+.sf-commerce-rail__track--snap {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: var(--sf-section-pad-x, 12px);
+  padding-bottom: 4px;
+  margin-inline: calc(-1 * var(--sf-section-pad-x, 12px));
+  padding-inline: var(--sf-section-pad-x, 12px);
+}
+
+.sf-commerce-rail__track--snap .sf-commerce-rail__item {
+  flex: 0 0 clamp(132px, 38vw, 168px);
+  scroll-snap-align: start;
+}
+
+/* Grid rails (marketplace density) */
+.sf-commerce-rail__track--grid {
+  display: grid;
+  grid-template-columns: repeat(var(--sf-discovery-cols, 2), minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sf-commerce-rail__track--grid .sf-commerce-rail__item {
+  min-width: 0;
+}
+
+/* Editorial wide cards */
+.sf-commerce-rail__track--editorial {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  margin-inline: calc(-1 * var(--sf-section-pad-x, 12px));
+  padding-inline: var(--sf-section-pad-x, 12px);
+}
+
+.sf-commerce-rail__track--editorial .sf-commerce-rail__item {
+  flex: 0 0 min(72vw, 280px);
+  scroll-snap-align: center;
+}
+
+/* Sticky categories */
+.sf-categories-sticky-wrap {
+  position: relative;
+  z-index: 120;
+}
+
+.sf-categories-sticky {
+  position: sticky;
+  top: calc(var(--app-header-approx, 56px) + env(safe-area-inset-top, 0px));
+  z-index: 120;
+  padding-bottom: 8px;
+  background: linear-gradient(
+    180deg,
+    var(--sf-color-background) 0%,
+    color-mix(in srgb, var(--sf-color-background) 92%, transparent) 100%
+  );
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.sf-section__title--compact {
+  margin-bottom: 8px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--sf-color-muted);
+}
+
+.sf-chips--sticky .sf-chip--filter {
+  transition: transform var(--sf-motion-press, 120ms) var(--sf-motion-ease, ease),
+    background-color var(--sf-motion-fast, 160ms) ease;
+}
+
+.sf-chips--sticky .sf-chip--filter:active {
+  transform: scale(var(--sf-motion-press-scale, 0.97));
+}
+
+.sf-feed__chunk--commerce {
+  padding-inline: 0;
+}
+
+.sf-storefront-feed.sf-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sf-feed__chunk--stack {
+  animation: sf-feed-enter var(--sf-motion-enter, 280ms) var(--sf-motion-ease-out, ease-out) both;
+}
+
+@keyframes sf-feed-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-feed__chunk--stack {
+    animation: none;
+  }
+}

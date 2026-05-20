@@ -72,6 +72,39 @@ import { validateUx } from "../ux/validators.js";
 import { validateImageFile, uploadTenantImage } from "../media/upload.js";
 import { extractCloudinaryPublicIds, safeDeleteCloudinaryAsset } from "../media/delete.js";
 import { invalidateStorefrontCache } from "./storefrontCache.js";
+import { buildMerchantAnalytics } from "./merchantAnalyticsService.js";
+import { buildMerchantInsights } from "./merchantInsightsService.js";
+import { buildMerchantGrowth } from "./merchantGrowthService.js";
+import { getCoPurchaseRecommendations } from "./recommendationsService.js";
+import { maybeEmitSmartAlerts } from "./smartAlertsService.js";
+import { assertEnvironmentOrExit } from "./envValidation.js";
+import {
+  funnelSummarySince,
+  ingestPlatformFunnelEvents,
+} from "./platformFunnelService.js";
+import {
+  createProductFeedback,
+  listProductFeedback,
+} from "./productFeedbackService.js";
+import {
+  getDiscoverStoreBySlug,
+  listDiscoverStores,
+  refreshDiscoverTrendScores,
+  setStoreListingVisibility,
+  syncPlatformStoreListing,
+} from "./platformDiscoverService.js";
+import {
+  getOrCreateMerchantReferralCode,
+  recordReferralSignup,
+} from "./merchantReferralService.js";
+import { maybeEmitRetentionNudges } from "./merchantRetentionService.js";
+import { buildMerchantGrowthDashboard } from "./merchantGrowthDashboardService.js";
+import {
+  createMerchantNotification,
+  ingestStorefrontEvents,
+  listMerchantNotifications,
+  markMerchantNotificationsRead,
+} from "./merchantNotificationsService.js";
 import {
   normalizePublicStoreSlug,
   sendStorefrontPublicPayload,
@@ -269,6 +302,21 @@ app.use(
   })
 );
 app.use(jsonBodyLimits);
+
+app.get("/health", (_req: Request, res: Response) => {
+  res.json({ ok: true, ts: new Date().toISOString() });
+});
+
+app.get("/ready", async (_req: Request, res: Response) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ ok: true, db: true, ts: new Date().toISOString() });
+  } catch (e) {
+    console.error("GET /ready:", e);
+    res.status(503).json({ ok: false, db: false });
+  }
+});
+
 /** Диагностика: телеграм-вебхуки без тела или с 403/404 в gate — видно ли запрос вообще. */
 app.use((req: Request, _res: Response, next: () => void) => {
   const p =
@@ -916,6 +964,17 @@ app.post(
       res.status(result.statusCode).json({ error: result.error });
       return;
     }
+    const refCode =
+      typeof shaped.data.referralCode === "string"
+        ? shaped.data.referralCode.trim()
+        : "";
+    if (refCode !== "") {
+      void recordReferralSignup({
+        code: refCode,
+        applicantTelegramId: authTid,
+        registrationRequestId: result.id,
+      });
+    }
     res.status(201).json({ ok: true, id: result.id });
   } catch (e) {
     console.error("POST /api/platform/register-request:", e);
@@ -1201,6 +1260,7 @@ app.post("/api/merchant/storefront-builder/publish", async (req: Request, res: R
       });
     }
     invalidateStorefrontCache(merchant.businessId);
+    void syncPlatformStoreListing(merchant.businessId);
     res.json({ ok: true, publishedAt: new Date().toISOString(), ux });
   } catch (e) {
     console.error("POST /api/merchant/storefront-builder/publish:", e);
@@ -1521,6 +1581,38 @@ app.get("/api/platform/admin/requests", async (req: Request, res: Response) => {
     res.json(rows);
   } catch (e) {
     console.error("GET /api/platform/admin/requests:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.get("/api/platform/admin/funnel/summary", async (req: Request, res: Response) => {
+  try {
+    const unlocked = await requireOperatorUnlock(req, res);
+    if (!unlocked) return;
+    const days = Number(req.query.days);
+    const rangeDays = days === 7 || days === 30 || days === 90 ? days : 30;
+    const since = new Date(Date.now() - rangeDays * 86400000);
+    const steps = await funnelSummarySince(since);
+    res.json({ rangeDays, since: since.toISOString(), steps });
+  } catch (e) {
+    console.error("GET /api/platform/admin/funnel/summary:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.get("/api/platform/admin/feedback", async (req: Request, res: Response) => {
+  try {
+    const unlocked = await requireOperatorUnlock(req, res);
+    if (!unlocked) return;
+    const statusQ =
+      typeof req.query.status === "string" ? req.query.status : undefined;
+    const items = await listProductFeedback({
+      ...(statusQ ? { status: statusQ } : {}),
+      limit: 80,
+    });
+    res.json({ items });
+  } catch (e) {
+    console.error("GET /api/platform/admin/feedback:", e);
     res.status(500).json({ error: "Ошибка сервера" });
   }
 });
@@ -2914,6 +3006,129 @@ async function merchantMyBusinessesHandler(
 app.get("/my-businesses", merchantMyBusinessesHandler);
 app.get("/api/my-businesses", merchantMyBusinessesHandler);
 
+app.post("/api/platform/funnel/events", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromWebApp(req);
+    const body = req.body as {
+      events?: Array<{
+        step?: unknown;
+        businessId?: unknown;
+        meta?: unknown;
+      }>;
+    };
+    const raw = Array.isArray(body?.events) ? body.events : [];
+    const count = await ingestPlatformFunnelEvents(
+      raw.map((ev) => ({
+        step: String(ev.step ?? ""),
+        telegramId,
+        businessId:
+          typeof ev.businessId === "number" && ev.businessId > 0
+            ? ev.businessId
+            : null,
+        meta:
+          ev.meta != null && typeof ev.meta === "object" && !Array.isArray(ev.meta)
+            ? (ev.meta as Record<string, unknown>)
+            : {},
+      })),
+    );
+    res.json({ ok: true, ingested: count });
+  } catch (e) {
+    console.error("POST /api/platform/funnel/events:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post("/api/platform/feedback", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromWebApp(req);
+    const body = req.body as {
+      kind?: unknown;
+      message?: unknown;
+      businessId?: unknown;
+      page?: unknown;
+    };
+    const message = typeof body.message === "string" ? body.message : "";
+    const kind = typeof body.kind === "string" ? body.kind : "other";
+    const businessId =
+      typeof body.businessId === "number" && body.businessId > 0
+        ? body.businessId
+        : null;
+    const page = typeof body.page === "string" ? body.page : null;
+    const row = await createProductFeedback({
+      kind,
+      message,
+      telegramId,
+      businessId,
+      page,
+    });
+    res.status(201).json({ ok: true, id: row.id });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === "MESSAGE_TOO_SHORT") {
+      return res.status(400).json({ error: "Сообщение слишком короткое" });
+    }
+    console.error("POST /api/platform/feedback:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.get("/api/platform/store-readiness", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromWebApp(req);
+    if (!telegramId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const bidRaw = req.query.businessId;
+    const businessId = Number(
+      typeof bidRaw === "string" ? bidRaw : Array.isArray(bidRaw) ? bidRaw[0] : NaN,
+    );
+    if (!Number.isInteger(businessId) || businessId <= 0) {
+      return res.status(400).json({ error: "Нужен businessId" });
+    }
+    const owned = await prisma.membership.findFirst({
+      where: {
+        businessId,
+        role: { in: [MembershipRole.OWNER, MembershipRole.ADMIN] },
+        user: { telegramId },
+      },
+      select: { id: true },
+    });
+    if (!owned) {
+      return res.status(403).json({ error: "Нет доступа" });
+    }
+    const payload = await buildMerchantGrowth(businessId);
+    res.json(payload);
+  } catch (e) {
+    console.error("GET /api/platform/store-readiness:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post("/api/telemetry/client-error", async (req: Request, res: Response) => {
+  try {
+    const body = req.body as {
+      message?: unknown;
+      page?: unknown;
+      component?: unknown;
+    };
+    const message = String(body.message ?? "").trim().slice(0, 500);
+    if (message.length < 2) {
+      return res.status(400).json({ error: "Invalid" });
+    }
+    console.warn("[client-error]", {
+      message,
+      page: typeof body.page === "string" ? body.page.slice(0, 128) : null,
+      component:
+        typeof body.component === "string" ? body.component.slice(0, 64) : null,
+      ts: new Date().toISOString(),
+    });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("POST /api/telemetry/client-error:", e);
+    res.status(500).json({ error: "Ошибка" });
+  }
+});
+
 // ================== UPLOAD (Cloudinary, только персонал магазина) ==================
 app.post(
   "/upload",
@@ -3731,108 +3946,300 @@ app.post("/analytics", async (req: Request, res: Response) => {
     const body = req.body as { rangeDays?: unknown } | null | undefined;
     const rd = Number(body?.rangeDays);
     const rangeDays = rd === 7 || rd === 30 || rd === 90 ? rd : 30;
-    const since = new Date(Date.now() - rangeDays * 86400000);
 
-    const orders = await prisma.order.findMany({
-      where: { businessId: merchant.businessId },
-    });
-
-    const paidStatuses = new Set<string>(["CONFIRMED", "SHIPPED", "DELIVERED"]);
-
-    const totalOrders = orders.length;
-    const totalRevenue = orders
-      .filter((o) => paidStatuses.has(o.status))
-      .reduce((sum, o) => sum + o.total, 0);
-    const accepted = orders.filter((o) => o.status === "ACCEPTED").length;
-    const pending = orders.filter((o) => o.status === "PAID_PENDING").length;
-    const shipped = orders.filter((o) => o.status === "SHIPPED").length;
-    const delivered = orders.filter((o) => o.status === "DELIVERED").length;
-    const done = shipped + delivered;
-
-    const byStatus: Record<string, number> = {};
-    for (const o of orders) {
-      byStatus[o.status] = (byStatus[o.status] ?? 0) + 1;
-    }
-
-    const ordersInRange = await prisma.order.findMany({
-      where: {
-        businessId: merchant.businessId,
-        createdAt: { gte: since },
-      },
-      select: { id: true, total: true, status: true, createdAt: true },
-    });
-
-    const revenueInRange = ordersInRange
-      .filter((o) => paidStatuses.has(o.status))
-      .reduce((sum, o) => sum + o.total, 0);
-
-    const dayMap = new Map<string, { revenue: number; orders: number }>();
-    for (const o of ordersInRange) {
-      const key = o.createdAt.toISOString().slice(0, 10);
-      const row = dayMap.get(key) ?? { revenue: 0, orders: 0 };
-      row.orders += 1;
-      if (paidStatuses.has(o.status)) row.revenue += o.total;
-      dayMap.set(key, row);
-    }
-    const dailySeries = [...dayMap.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([day, v]) => ({ day, revenue: v.revenue, orders: v.orders }));
-
-    const topSkuRows = await prisma.orderItem.groupBy({
-      by: ["productId"],
-      where: {
-        businessId: merchant.businessId,
-        productId: { not: null },
-        order: { createdAt: { gte: since } },
-      },
-      _sum: { quantity: true },
-      orderBy: { _sum: { quantity: "desc" } },
-      take: 10,
-    });
-
-    const pids = topSkuRows
-      .map((r) => r.productId)
-      .filter((id): id is number => typeof id === "number");
-    const products =
-      pids.length > 0
-        ? await prisma.product.findMany({
-            where: { businessId: merchant.businessId, id: { in: pids } },
-            select: { id: true, name: true },
-          })
-        : [];
-    const nameById = new Map(products.map((p) => [p.id, p.name]));
-
-    const topSku = topSkuRows.map((r) => {
-      const pid = r.productId;
-      return {
-        productId: pid,
-        name:
-          typeof pid === "number"
-            ? nameById.get(pid) ?? `Товар #${pid}`
-            : "—",
-        quantity: Number(r._sum.quantity ?? 0) || 0,
-      };
-    });
-
-    res.json({
-      totalOrders,
-      totalRevenue,
-      accepted,
-      pending,
-      shipped,
-      delivered,
-      done,
-      byStatus,
+    const payload = await buildMerchantAnalytics({
+      businessId: merchant.businessId,
       rangeDays,
-      rangeSince: since.toISOString(),
-      ordersInRange: ordersInRange.length,
-      revenueInRange,
-      dailySeries,
-      topSku,
     });
+    void maybeEmitSmartAlerts({
+      businessId: merchant.businessId,
+      rangeDays,
+    });
+    void maybeEmitRetentionNudges(merchant.businessId);
+    res.json(payload);
   } catch (e) {
     console.error("ANALYTICS ERROR:", e);
     res.status(500).json({ error: "analytics failed" });
+  }
+});
+
+app.post("/merchant/intelligence/insights", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.analyticsView);
+    if (!merchant) return;
+
+    const body = req.body as { rangeDays?: unknown } | null | undefined;
+    const rd = Number(body?.rangeDays);
+    const rangeDays = rd === 7 || rd === 30 || rd === 90 ? rd : 30;
+
+    const payload = await buildMerchantInsights({
+      businessId: merchant.businessId,
+      rangeDays,
+    });
+    res.json(payload);
+  } catch (e) {
+    console.error("POST /merchant/intelligence/insights:", e);
+    res.status(500).json({ error: "insights failed" });
+  }
+});
+
+app.get("/merchant/intelligence/growth", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.analyticsView);
+    if (!merchant) return;
+
+    const payload = await buildMerchantGrowth(merchant.businessId);
+    res.json(payload);
+  } catch (e) {
+    console.error("GET /merchant/intelligence/growth:", e);
+    res.status(500).json({ error: "growth failed" });
+  }
+});
+
+app.post("/merchant/growth/dashboard", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.analyticsView);
+    if (!merchant) return;
+
+    const body = req.body as { rangeDays?: unknown } | null | undefined;
+    const rd = Number(body?.rangeDays);
+    const rangeDays = rd === 7 || rd === 30 || rd === 90 ? rd : 30;
+
+    const payload = await buildMerchantGrowthDashboard({
+      businessId: merchant.businessId,
+      rangeDays,
+    });
+    void maybeEmitRetentionNudges(merchant.businessId);
+    res.json(payload);
+  } catch (e) {
+    console.error("POST /merchant/growth/dashboard:", e);
+    res.status(500).json({ error: "growth dashboard failed" });
+  }
+});
+
+app.get("/api/discover/stores", async (req: Request, res: Response) => {
+  try {
+    void refreshDiscoverTrendScores().catch(() => undefined);
+    const featured = req.query.featured === "1" || req.query.featured === "true";
+    const typeQ = typeof req.query.type === "string" ? req.query.type.trim() : "";
+    const q = typeof req.query.q === "string" ? req.query.q : undefined;
+    const limitRaw = Number(req.query.limit);
+    const limit =
+      Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 48) : 24;
+    const businessTypes = ["clothing", "coffee", "fastfood", "flowers"] as const;
+    const businessType = businessTypes.includes(typeQ as (typeof businessTypes)[number])
+      ? (typeQ as (typeof businessTypes)[number])
+      : undefined;
+    const discoverInput: {
+      featured?: boolean;
+      businessType?: (typeof businessTypes)[number];
+      q?: string;
+      limit: number;
+    } = { limit };
+    if (featured) discoverInput.featured = true;
+    if (businessType) discoverInput.businessType = businessType;
+    if (q) discoverInput.q = q;
+    const items = await listDiscoverStores(discoverInput);
+    res.json({ items });
+  } catch (e) {
+    console.error("GET /api/discover/stores:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.get("/api/discover/stores/:slug", async (req: Request, res: Response) => {
+  try {
+    const slug = String(req.params.slug ?? "").trim().toLowerCase();
+    const card = await getDiscoverStoreBySlug(slug);
+    if (!card) {
+      return res.status(404).json({ error: "Не найдено" });
+    }
+    res.json(card);
+  } catch (e) {
+    console.error("GET /api/discover/stores/:slug:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post("/api/platform/store-listing/visibility", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromWebApp(req);
+    if (!telegramId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const body = req.body as { businessId?: unknown; isPublic?: unknown };
+    const businessId = Number(body.businessId);
+    if (!Number.isInteger(businessId) || businessId <= 0) {
+      return res.status(400).json({ error: "Нужен businessId" });
+    }
+    const owned = await prisma.membership.findFirst({
+      where: {
+        businessId,
+        role: { in: [MembershipRole.OWNER, MembershipRole.ADMIN] },
+        user: { telegramId },
+      },
+    });
+    if (!owned) {
+      return res.status(403).json({ error: "Нет доступа" });
+    }
+    const isPublic = body.isPublic === true;
+    await syncPlatformStoreListing(businessId);
+    await setStoreListingVisibility({ businessId, isPublic });
+    res.json({ ok: true, isPublic });
+  } catch (e) {
+    console.error("POST /api/platform/store-listing/visibility:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.get("/api/platform/referral", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromWebApp(req);
+    if (!telegramId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const bidRaw = req.query.businessId;
+    const businessId = Number(
+      typeof bidRaw === "string" ? bidRaw : Array.isArray(bidRaw) ? bidRaw[0] : NaN,
+    );
+    if (!Number.isInteger(businessId) || businessId <= 0) {
+      return res.status(400).json({ error: "Нужен businessId" });
+    }
+    const owned = await prisma.membership.findFirst({
+      where: {
+        businessId,
+        role: { in: [MembershipRole.OWNER, MembershipRole.ADMIN] },
+        user: { telegramId },
+      },
+    });
+    if (!owned) {
+      return res.status(403).json({ error: "Нет доступа" });
+    }
+    const front =
+      process.env.FRONT_URL?.trim() ||
+      process.env.MINI_APP_URL?.trim() ||
+      process.env.FRONTEND_URL?.trim() ||
+      "";
+    const payload = await getOrCreateMerchantReferralCode({
+      businessId,
+      baseUrl: front !== "" ? front : "https://t.me",
+    });
+    res.json(payload);
+  } catch (e) {
+    console.error("GET /api/platform/referral:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.get("/api/storefront/recommendations", async (req: Request, res: Response) => {
+  try {
+    const businessId = await resolveCatalogBusinessId(req, res);
+    if (businessId == null) return;
+
+    const productIdRaw = req.query.productId;
+    const productId =
+      productIdRaw != null && String(productIdRaw).trim() !== ""
+        ? Number(productIdRaw)
+        : null;
+    const limitRaw = Number(req.query.limit);
+    const limit =
+      Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 24) : 8;
+
+    const items = await getCoPurchaseRecommendations({
+      businessId,
+      productId:
+        productId != null && Number.isInteger(productId) && productId > 0
+          ? productId
+          : null,
+      limit,
+    });
+    res.json({ items });
+  } catch (e) {
+    console.error("GET /api/storefront/recommendations:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post("/api/storefront/events", async (req: Request, res: Response) => {
+  try {
+    const businessId = await resolveCatalogBusinessId(req, res);
+    if (businessId == null) return;
+
+    const body = req.body as {
+      events?: Array<{
+        eventType?: unknown;
+        visitorKey?: unknown;
+        userId?: unknown;
+        productId?: unknown;
+        meta?: unknown;
+      }>;
+    };
+    const raw = Array.isArray(body?.events) ? body.events : [];
+    const count = await ingestStorefrontEvents({
+      businessId,
+      events: raw.map((ev) => ({
+        eventType: String(ev.eventType ?? ""),
+        visitorKey: String(ev.visitorKey ?? ""),
+        userId: typeof ev.userId === "number" ? ev.userId : null,
+        productId: typeof ev.productId === "number" ? ev.productId : null,
+        meta:
+          ev.meta != null && typeof ev.meta === "object" && !Array.isArray(ev.meta)
+            ? (ev.meta as Record<string, unknown>)
+            : {},
+      })),
+    });
+    res.json({ ok: true, ingested: count });
+  } catch (e) {
+    console.error("POST /api/storefront/events:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.get("/merchant/notifications", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
+    const limit = Number(req.query.limit);
+    const out = await listMerchantNotifications({
+      businessId: merchant.businessId,
+      limit: Number.isFinite(limit) ? limit : 20,
+    });
+    res.json(out);
+  } catch (e) {
+    console.error("GET /merchant/notifications:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post("/merchant/notifications/read-all", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
+    await markMerchantNotificationsRead({ businessId: merchant.businessId });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("POST /merchant/notifications/read-all:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post("/merchant/notifications/:id/read", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res);
+    if (!merchant) return;
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ error: "Invalid id" });
+      return;
+    }
+    await markMerchantNotificationsRead({
+      businessId: merchant.businessId,
+      notificationId: id,
+    });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("POST /merchant/notifications/:id/read:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
   }
 });
 
@@ -4331,6 +4738,14 @@ app.post("/orders", async (req: Request, res: Response) => {
         : [],
     });
 
+    void createMerchantNotification({
+      businessId: orderForResponse.businessId,
+      kind: "ORDER_NEW",
+      title: `Новый заказ #${orderForResponse.id}`,
+      body: `${displayName} · ${orderForResponse.total} сом`,
+      href: "#/admin/orders",
+    });
+
     if (totalComputed.promoRaw) {
       try {
         await consumePromoDb(prisma, order.businessId, totalComputed.promoRaw);
@@ -4661,6 +5076,7 @@ async function bootstrapBots(): Promise<void> {
 const PORT = process.env.PORT || 3000;
 
 void (async () => {
+  assertEnvironmentOrExit();
   try {
     await connectDatabase();
     console.log("DB connected ✅");

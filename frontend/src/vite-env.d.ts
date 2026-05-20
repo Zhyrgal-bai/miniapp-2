@@ -25,8 +25,14 @@ interface TelegramWebApp {
   ready: () => void;
   /** Развернуть на весь экран внутри Telegram */
   expand?: () => void;
+  /** Bot API 7.7+ — уменьшает закрытие Mini App свайпом вниз */
+  disableVerticalSwipes?: () => void;
+  /** Opens external https links inside Telegram when available */
+  openLink?: (url: string) => void;
   /** Opens `https://t.me/...` inside Telegram when available */
   openTelegramLink?: (url: string) => void;
+  setHeaderColor?: (color: string) => void;
+  setBackgroundColor?: (color: string) => void;
 }
 
 interface ImportMetaEnv {

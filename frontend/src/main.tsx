@@ -5,6 +5,7 @@ import App from "./App";
 import { ShopProvider } from "./context/ShopContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { StorefrontPayloadProvider } from "./components/storefront/runtime/StorefrontPayloadContext";
+import DiscoverPage from "./pages/DiscoverPage";
 import MerchantDashboardPage from "./pages/MerchantDashboardPage";
 import MerchantRegisterPage from "./pages/MerchantRegisterPage";
 import RootAppOrPlatform from "./pages/RootAppOrPlatform";
@@ -13,9 +14,9 @@ import "./index.css";
 /** Последним в бандле: перебивает ProductCard.css / ProductGrid.css / kits (порядок каскада). */
 import "./components/storefront/storefrontBones.css";
 import "./components/storefront/commerceShell.css";
+import { bootstrapTelegramWebApp } from "./utils/telegramWebAppBootstrap";
 
-const tg = window.Telegram?.WebApp;
-tg?.ready();
+bootstrapTelegramWebApp();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -24,6 +25,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <ThemeProvider>
           <StorefrontPayloadProvider>
             <Routes>
+              <Route path="/discover" element={<DiscoverPage />} />
               <Route
                 path="/merchant/register"
                 element={<MerchantRegisterPage />}

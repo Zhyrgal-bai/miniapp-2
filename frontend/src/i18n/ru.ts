@@ -5,6 +5,7 @@ export const ru = {
     titleRecentlyViewed: "Вы смотрели",
     titleBecauseViewed: "Потому что вы смотрели",
     titleRelated: "Похожие товары",
+    titleBoughtTogether: "Часто покупают вместе",
     titleHotNow: "Горячее сейчас",
   },
   admin: {
@@ -25,5 +26,38 @@ export const ru = {
   },
   common: {
     loading: "Загрузка…",
+    retry: "Повторить",
+    back: "Назад",
+    save: "Сохранить",
+    cancel: "Отмена",
+    confirm: "Подтвердить",
+  },
+  checkout: {
+    title: "Оформление заказа",
+    emptyCart: "Корзина пуста",
+    backToCart: "← Корзина",
+    submit: "Оформить заказ",
+    submitting: "Создаём заказ…",
+    redirecting: "Переход к оплате…",
+    paymentProcessing: "Проверяем оплату…",
+    paymentSuccess: "Оплата прошла успешно!",
+    paymentHint:
+      "Оплата через Finik. После оформления откроется страница оплаты — вернитесь в приложение для подтверждения.",
+    total: "Итого",
+    promoApply: "Применить",
+  },
+  platform: {
+    operatorMode: "Режим оператора",
+    operatorUnlock: "Вход оператора",
+    webhookOk: "Webhook в порядке",
+    webhookError: "Ошибка webhook",
+  },
+  badges: {
+    new: "Новинка",
+    sale: "Скидка",
+    hot: "Хит",
+    best: "Лучшее",
+    limited: "Лимит",
+    low: "Мало",
   },
 } as const;

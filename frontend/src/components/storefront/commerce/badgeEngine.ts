@@ -1,4 +1,7 @@
 import type { Product } from "../../../types";
+import { ru } from "../../../i18n/ru";
+
+const BADGE_LABELS = ru.badges;
 
 export type BadgeId =
   | "NEW"
@@ -53,12 +56,12 @@ export function computeBadges(params: {
 
   // SALE
   if (p.isSale || (typeof p.discountPercent === "number" && p.discountPercent > 0)) {
-    badges.push({ id: "SALE", label: "SALE", tone: "danger", priority: 95 });
+    badges.push({ id: "SALE", label: BADGE_LABELS.sale, tone: "danger", priority: 95 });
   }
 
   // NEW
   if (isNewByDate(p)) {
-    badges.push({ id: "NEW", label: "NEW", tone: "primary", priority: 80 });
+    badges.push({ id: "NEW", label: BADGE_LABELS.new, tone: "primary", priority: 80 });
   }
 
   // BESTSELLER / HOT from sold metric
@@ -66,16 +69,16 @@ export function computeBadges(params: {
   const bestThreshold = bt === "fastfood" ? 40 : bt === "flowers" ? 12 : 25;
   const hotThreshold = bt === "fastfood" ? 18 : bt === "flowers" ? 6 : 12;
   if (sold >= bestThreshold) {
-    badges.push({ id: "BESTSELLER", label: "BEST", tone: "success", priority: 90 });
+    badges.push({ id: "BESTSELLER", label: BADGE_LABELS.best, tone: "success", priority: 90 });
   } else if (sold >= hotThreshold) {
-    badges.push({ id: "HOT", label: "HOT", tone: "warning", priority: 70 });
+    badges.push({ id: "HOT", label: BADGE_LABELS.hot, tone: "warning", priority: 70 });
   }
 
   // LOW_STOCK
   const stock = sumStock(p);
   const lowThreshold = bt === "fastfood" ? 3 : bt === "flowers" ? 4 : 5;
   if (stock != null && stock > 0 && stock <= lowThreshold) {
-    badges.push({ id: "LOW_STOCK", label: "LOW", tone: "warning", priority: 85 });
+    badges.push({ id: "LOW_STOCK", label: BADGE_LABELS.low, tone: "warning", priority: 85 });
   }
 
   // LIMITED (manual hook for now)
@@ -86,7 +89,7 @@ export function computeBadges(params: {
       ? ((p as unknown as { attributes?: unknown }).attributes as Record<string, unknown>)
       : null;
   if (attrs?.limited === true) {
-    badges.push({ id: "LIMITED", label: "LIMITED", tone: "neutral", priority: 75 });
+    badges.push({ id: "LIMITED", label: BADGE_LABELS.limited, tone: "neutral", priority: 75 });
   }
 
   return badges.sort((a, b) => b.priority - a.priority);

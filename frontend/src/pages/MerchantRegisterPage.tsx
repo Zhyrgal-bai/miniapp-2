@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { getTelegramWebApp } from "../utils/telegram";
 import { resolveMerchantTelegramUserId } from "../utils/telegramUserId";
 import { submitPlatformRegisterRequest } from "../services/platformApi";
+import { trackPlatformFunnel } from "../services/platformFunnel";
 import "./MerchantRegisterPage.css";
 
 const SS_SHOP = "miniapp-active-shop";
@@ -39,6 +40,8 @@ function parseBackButton(tg: unknown): BackBtn | null {
  */
 export default function MerchantRegisterPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const referralCode = searchParams.get("ref")?.trim() ?? "";
   const [storeName, setStoreName] = useState("");
   const [botToken, setBotToken] = useState("");
   const [phone, setPhone] = useState("");
@@ -64,6 +67,10 @@ export default function MerchantRegisterPage() {
     } catch {
       /* ignore */
     }
+  }, []);
+
+  useEffect(() => {
+    trackPlatformFunnel("register_start");
   }, []);
 
   useEffect(() => {
@@ -96,7 +103,9 @@ export default function MerchantRegisterPage() {
         botToken: botToken.trim(),
         phone: phone.trim(),
         telegramId: uid,
+        referralCode: referralCode !== "" ? referralCode : undefined,
       });
+      trackPlatformFunnel("register_submit");
       try {
         sessionStorage.setItem(MERCHANT_REGISTER_SENT_KEY, "1");
       } catch {
@@ -148,6 +157,7 @@ export default function MerchantRegisterPage() {
               className="mr__subtitle"
             >
               Заполните поля — заявка уйдёт на проверку
+              {referralCode !== "" ? " (по приглашению)" : ""}
             </p>
           </div>
 

@@ -6,6 +6,8 @@ import {
   hasMerchantPermission,
   type MerchantPermissionId,
 } from "../../permissions/merchantPermissions";
+import { AdminNotificationBell } from "./AdminNotificationBell";
+import "./adminOperations.css";
 
 type NavItem = {
   href: string;
@@ -34,7 +36,7 @@ const navAll: NavItem[] = [
   {
     href: "#/admin/users",
     match: "users",
-    label: "Пользователи",
+    label: "Команда",
     icon: "👥",
     ownerOnly: true,
   },
@@ -62,7 +64,7 @@ const navAll: NavItem[] = [
   {
     href: "#/admin/analytics",
     match: "analytics",
-    label: "Аналитика",
+    label: "Операции",
     icon: "📊",
     permission: MERCHANT_PERM.analyticsView,
   },
@@ -107,7 +109,10 @@ export default function AdminLayout({
     <div className="admin-dash">
       <aside className="admin-dash__sidebar">
         <div className="admin-dash__brand">
-          <span className="admin-dash__brand-title">Админ</span>
+          <div className="admin-dash__brand-row">
+            <span className="admin-dash__brand-title">Админ</span>
+            <AdminNotificationBell />
+          </div>
           <button type="button" className="admin-dash__exit" onClick={onExit}>
             ← В магазин
           </button>

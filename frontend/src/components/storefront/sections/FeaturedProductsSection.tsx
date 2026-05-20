@@ -17,6 +17,7 @@ export function FeaturedProductsSection(props: {
   storefrontStyleConfig?: Record<string, unknown>;
   kit?: "minimal" | "luxury" | "fashion" | "neon" | "default";
   businessId?: number;
+  businessType?: string;
   onOpenProduct?: (product: Product) => void;
   /** Сразу под сеткой (например ленты discovery) — внутри той же секции и паддингов. */
   afterGrid?: ReactNode;
@@ -58,6 +59,7 @@ export function FeaturedProductsSection(props: {
             textConfig={props.textConfig}
             kit={props.kit}
             businessId={props.businessId}
+            businessType={props.businessType}
           />
         )}
         {props.afterGrid != null ? props.afterGrid : null}

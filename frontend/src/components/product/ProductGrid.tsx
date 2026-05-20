@@ -12,6 +12,7 @@ type ProductGridProps = {
   textConfig?: Record<string, unknown>;
   kit?: "minimal" | "luxury" | "fashion" | "neon" | "default";
   businessId?: number;
+  businessType?: string;
 };
 
 export default function ProductGrid({
@@ -23,6 +24,7 @@ export default function ProductGrid({
   textConfig,
   kit,
   businessId,
+  businessType,
 }: ProductGridProps) {
   const readTxt = (k: string, fb: string) => {
     const v = (textConfig as Record<string, unknown> | undefined)?.[k];
@@ -77,6 +79,7 @@ export default function ProductGrid({
           textConfig={textConfig}
           kit={kit}
           businessId={businessId}
+          businessType={businessType}
         />
       ))}
     </div>

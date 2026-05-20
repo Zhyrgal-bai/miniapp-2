@@ -10,8 +10,13 @@ import { FeaturedProductsSection } from "./sections/FeaturedProductsSection";
 import { FooterSection } from "./sections/FooterSection";
 import { ReviewsSection } from "./sections/ReviewsSection";
 import { FaqSection } from "./sections/FaqSection";
-import { DiscoveryRails } from "./discovery/DiscoveryRails";
+import { CommerceDiscoveryFeed } from "./discovery/CommerceDiscoveryFeed";
 import { CatalogFooterSlider } from "./sections/CatalogFooterSlider";
+import { recordViewCategory } from "./runtime/commerceSession";
+import "./storefrontFeed.css";
+import "../../storefront/commerceCards.css";
+import "../../storefront/motionTokens.css";
+import "../../storefront/mobileChrome.css";
 import { ProductDetailSheet } from "./product/ProductDetailSheet";
 import "./storefrontKits.css";
 import {
@@ -27,6 +32,7 @@ import {
 } from "../../storefront/catalogCardPresets";
 import { StorefrontFeed } from "./StorefrontFeed";
 import { StorefrontIdentityBand } from "./StorefrontIdentityBand";
+import { trackStoreView } from "../../services/storefrontAnalytics";
 
 type StorefrontKitId = "minimal" | "luxury" | "fashion" | "neon" | "default";
 
@@ -158,6 +164,12 @@ export function StorefrontRenderer(props: {
   useEffect(() => {
     setSheetProduct(null);
     setActiveCategoryId(null);
+  }, [props.payload.businessId]);
+
+  useEffect(() => {
+    const bid = props.payload.businessId;
+    if (!Number.isFinite(bid) || bid <= 0) return;
+    trackStoreView(bid);
   }, [props.payload.businessId]);
 
   const openProduct = useCallback((p: Product) => {
@@ -318,37 +330,57 @@ export function StorefrontRenderer(props: {
                       categories={props.payload.categories ?? []}
                       textConfig={props.payload.storefrontTextConfig ?? undefined}
                       activeCategoryId={activeCategoryId}
-                      onSelectCategory={setActiveCategoryId}
+                      onSelectCategory={(id) => {
+                        setActiveCategoryId(id);
+                        if (id != null) {
+                          recordViewCategory({
+                            businessId: props.payload.businessId,
+                            categoryId: id,
+                          });
+                        }
+                      }}
                     />
                   );
                 case "featuredProducts": {
                   const pairDiscovery = s.id === firstFeaturedSectionId;
+                  const cfgTitle =
+                    typeof s.config.title === "string" && String(s.config.title).trim() !== ""
+                      ? String(s.config.title)
+                      : typeof props.payload.storefrontTextConfig?.titleHits === "string" &&
+                          String(props.payload.storefrontTextConfig.titleHits).trim() !== ""
+                        ? String(props.payload.storefrontTextConfig.titleHits)
+                        : "Хиты";
+                  if (!pairDiscovery) {
+                    return (
+                      <FeaturedProductsSection
+                        config={s.config}
+                        products={featuredFiltered}
+                        catalogProductCount={featuredAll.length}
+                        cardConfig={mergedCardConfig}
+                        textConfig={props.payload.storefrontTextConfig ?? undefined}
+                        storefrontStyleConfig={styleCfg}
+                        kit={kit}
+                        businessId={props.payload.businessId}
+                        businessType={props.payload.businessType}
+                        onOpenProduct={openProduct}
+                      />
+                    );
+                  }
                   return (
-                    <FeaturedProductsSection
-                      config={s.config}
-                      products={featuredFiltered}
+                    <CommerceDiscoveryFeed
+                      variant="embedded"
+                      kit={kit}
+                      businessType={props.payload.businessType}
+                      businessId={props.payload.businessId}
+                      featuredProducts={featuredAll}
+                      primaryProducts={featuredFiltered}
+                      primaryTitle={cfgTitle}
                       catalogProductCount={featuredAll.length}
                       cardConfig={mergedCardConfig}
                       textConfig={props.payload.storefrontTextConfig ?? undefined}
-                      storefrontStyleConfig={styleCfg}
-                      kit={kit}
-                      businessId={props.payload.businessId}
+                      catalogProducts={catalog === null ? [] : catalogFiltered}
                       onOpenProduct={openProduct}
-                      afterGrid={
-                        pairDiscovery ? (
-                          <DiscoveryRails
-                            variant="embedded"
-                            kit={kit}
-                            businessType={props.payload.businessType}
-                            businessId={props.payload.businessId}
-                            featuredProducts={featuredFiltered}
-                            cardConfig={mergedCardConfig}
-                            textConfig={props.payload.storefrontTextConfig ?? undefined}
-                            catalogProducts={catalog === null ? undefined : catalogFiltered}
-                            onOpenProduct={openProduct}
-                          />
-                        ) : null
-                      }
+                      catalogBold={catalogBold}
                     />
                   );
                 }
@@ -387,18 +419,27 @@ export function StorefrontRenderer(props: {
             );
           })}
 
-          {!hasFeaturedSection ? (
-            <div className="sf-feed__chunk sf-feed__chunk--discovery sf-feed__chunk--stack">
-              <DiscoveryRails
-                variant="full"
+          {!hasFeaturedSection && catalog !== null ? (
+            <div className="sf-feed__chunk sf-feed__chunk--commerce sf-feed__chunk--stack">
+              <CommerceDiscoveryFeed
+                variant="standalone"
                 kit={kit}
                 businessType={props.payload.businessType}
                 businessId={props.payload.businessId}
                 featuredProducts={featuredFiltered}
+                primaryProducts={featuredFiltered}
+                primaryTitle={
+                  typeof props.payload.storefrontTextConfig?.titleHits === "string" &&
+                  String(props.payload.storefrontTextConfig.titleHits).trim() !== ""
+                    ? String(props.payload.storefrontTextConfig.titleHits)
+                    : "Каталог"
+                }
+                catalogProductCount={featuredAll.length || catalogFiltered.length}
                 cardConfig={mergedCardConfig}
                 textConfig={props.payload.storefrontTextConfig ?? undefined}
-                catalogProducts={catalog === null ? undefined : catalogFiltered}
+                catalogProducts={catalogFiltered}
                 onOpenProduct={openProduct}
+                catalogBold={catalogBold}
               />
             </div>
           ) : null}

@@ -33,6 +33,7 @@ import {
   type AdminSupportTabIntent,
 } from "./utils/accountMenuStorage";
 import SideMenu from "./components/layout/SideMenu";
+import PaymentProcessingBanner from "./components/checkout/PaymentProcessingBanner";
 import FloatingCart from "./components/layout/FloatingCart";
 import { StickyCartBar } from "./components/storefront/cart/StickyCartBar";
 import "./components/storefront/cart/stickyCart.css";
@@ -652,6 +653,8 @@ export default function App() {
         onNavToAdmin={goAdminSection}
       />
 
+      <PaymentProcessingBanner businessId={businessId} />
+
       <div className="content app__content">
         <div className="sf-commerce-shell" data-sf-shell={commerceShellMode}>
           {page === "home" && <HomePage />}
@@ -701,7 +704,7 @@ export default function App() {
       />
 
       <StickyCartBar
-        visible={page === "home"}
+        visible={page === "home" && !productSheetOpen}
         onOpenCart={handleFloatingCartClick}
         onCheckout={handleCheckoutQuick}
       />

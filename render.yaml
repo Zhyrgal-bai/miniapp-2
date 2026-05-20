@@ -15,7 +15,7 @@ services:
     buildCommand: npm install && npm run build
     # Миграции и запуск: scripts/productionStart.mjs (migrate deploy + node dist/server/index.js)
     startCommand: npm start
-    healthCheckPath: /
+    healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
         value: "22"

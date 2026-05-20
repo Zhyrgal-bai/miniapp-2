@@ -31,6 +31,7 @@ export const platformRegisterRequestShape = z
     phone: z.string(),
     telegramId: z.union([z.string(), z.number()]).optional(),
     finikApiKey: z.string().optional(),
+    referralCode: z.string().optional(),
   })
   .superRefine((val, ctx) => {
     if (val.botToken === "") {

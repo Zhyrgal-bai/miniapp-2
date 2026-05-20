@@ -7,6 +7,7 @@ import {
   SupportSenderType,
   SupportTicketStatus,
   SupportTicketType,
+  MerchantNotificationKind,
 } from "@prisma/client";
 import { uploadImageBuffer } from "../media/cloudinary.js";
 import { isCloudinaryConfigured } from "./cloudinary.js";
@@ -19,6 +20,8 @@ import {
   MERCHANT_PERM,
   type MerchantPermissionId,
 } from "./merchantPermissions.js";
+import { createMerchantNotification } from "./merchantNotificationsService.js";
+import { buildSupportSuggestions } from "./supportSuggestionService.js";
 
 type Deps = {
   upload: multer.Multer;
@@ -464,6 +467,14 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
         return t;
       });
 
+      void createMerchantNotification({
+        businessId,
+        kind: MerchantNotificationKind.SUPPORT_TICKET,
+        title: "Новый тикет поддержки",
+        body: text.slice(0, 120) || `Заказ #${orderId}`,
+        href: "/admin/support",
+      });
+
       const full = await prisma.supportTicket.findFirst({
         where: { id: ticket.id, businessId, userId },
         include: {
@@ -566,6 +577,14 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
                 : ticket.status,
             updatedAt: new Date(),
           },
+        });
+
+        void createMerchantNotification({
+          businessId,
+          kind: MerchantNotificationKind.SUPPORT_MESSAGE,
+          title: "Сообщение от клиента",
+          body: text.slice(0, 120),
+          href: `/admin/support`,
         });
 
         const full = await prisma.supportTicket.findFirst({
@@ -768,6 +787,14 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
         return ret;
       });
 
+      void createMerchantNotification({
+        businessId,
+        kind: MerchantNotificationKind.SUPPORT_TICKET,
+        title: "Заявка на возврат",
+        body: reasonRaw.slice(0, 120),
+        href: "/admin/support",
+      });
+
       const full = await prisma.returnRequest.findFirst({
         where: { id: created.id, businessId, userId },
         include: { orderItem: true },
@@ -846,6 +873,50 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
         return res.json(jsonWithBigInt(ticket));
       } catch (e) {
         console.error("GET /merchant/support/tickets/:id:", e);
+        res.status(500).json({ error: "Ошибка" });
+      }
+    }
+  );
+
+  app.get(
+    "/merchant/support/tickets/:ticketId/suggestions",
+    async (req: Request, res: Response) => {
+      try {
+        const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.supportManage);
+        if (!merchant) return;
+
+        const ticketId = parseTicketIdParam(req.params.ticketId);
+        if (ticketId == null) {
+          return res.status(400).json({ error: "Неверный тикет" });
+        }
+
+        const ticket = await prisma.supportTicket.findFirst({
+          where: { id: ticketId, businessId: merchant.businessId },
+          include: {
+            order: { select: { status: true } },
+          },
+        });
+        if (!ticket) {
+          return res.status(404).json({ error: NOT_FOUND });
+        }
+
+        const lastCustomer = await prisma.supportMessage.findFirst({
+          where: {
+            ticketId,
+            businessId: merchant.businessId,
+            senderType: SupportSenderType.CUSTOMER,
+          },
+          orderBy: { createdAt: "desc" },
+          select: { text: true },
+        });
+        const suggestions = buildSupportSuggestions({
+          ticketType: ticket.type,
+          orderStatus: ticket.order?.status ?? null,
+          lastCustomerText: lastCustomer?.text ?? null,
+        });
+        return res.json({ suggestions });
+      } catch (e) {
+        console.error("GET /merchant/support/tickets/:id/suggestions:", e);
         res.status(500).json({ error: "Ошибка" });
       }
     }

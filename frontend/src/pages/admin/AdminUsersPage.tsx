@@ -9,6 +9,7 @@ import {
   MERCHANT_PERM,
   type MerchantPermissionId,
 } from "../../permissions/merchantPermissions";
+import { mapStatus, MEMBERSHIP_ROLE_RU } from "../../i18n/statusMaps";
 
 function roleBadgeClass(role: string): string {
   const u = role.toUpperCase();
@@ -192,16 +193,15 @@ export default function AdminUsersPage() {
               <div key={`${r.userId}-${businessId}`} className="admin-members-row">
                 <div className="admin-members-row__main">
                   <p className="admin-members-row__name">
-                    {r.name?.trim()
-                      ? r.name.trim()
-                      : `Telegram ${r.telegramId}`}
+                    {r.name?.trim() ? r.name.trim() : "Участник команды"}
                   </p>
                   <p className="admin-members-row__meta">
-                    id {r.telegramId}
-                    {" · "}user #{r.userId}
+                    {mapStatus(rl, MEMBERSHIP_ROLE_RU)}
                   </p>
                   <p style={{ margin: "10px 0 0" }}>
-                    <span className={roleBadgeClass(rl)}>{rl}</span>
+                    <span className={roleBadgeClass(rl)}>
+                      {mapStatus(rl, MEMBERSHIP_ROLE_RU)}
+                    </span>
                   </p>
                   {rl === "ADMIN" ? (
                     <div style={{ marginTop: 12 }}>

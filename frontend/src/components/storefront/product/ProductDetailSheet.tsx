@@ -15,6 +15,7 @@ import {
 import { getMaxOrderQty } from "../../../commerce/quantityPolicy";
 import { getVariantCssBackground } from "../../../utils/variantColor";
 import { recordRecentlyViewed } from "../discovery/recentlyViewed";
+import { useBodyScrollLock } from "../../../utils/bodyScrollLock";
 import "./ProductDetailSheet.css";
 
 export type ProductDetailSheetProps = {
@@ -73,13 +74,7 @@ export function ProductDetailSheet({
     };
   }, [product.id]);
 
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
+  useBodyScrollLock(true);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

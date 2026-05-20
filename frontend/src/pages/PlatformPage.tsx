@@ -19,6 +19,8 @@ import {
   fetchPlatformMyBusinesses,
   fetchOperatorCapabilities,
   fetchPlatformStoreSettings,
+  fetchMerchantReferral,
+  setStoreListingPublic,
   postOperatorLock,
   postOperatorReauth,
   postOperatorUnlock,
@@ -26,9 +28,13 @@ import {
   postPlatformSubscriptionPaymentCreate,
   postPlatformUpdateFinik,
   savePlatformStoreSettings,
+  fetchStoreReadiness,
+  postPlatformFeedback,
   type PlatformMyBusinessDTO,
   type PlatformStoreSettingsDTO,
+  type StoreReadinessPayload,
 } from "../services/platformApi";
+import { trackPlatformFunnel } from "../services/platformFunnel";
 import {
   MerchantSettingsRenderer,
   type SchemaObject as MerchantSchemaObject,
@@ -231,6 +237,18 @@ export default function PlatformPage() {
     Record<string, unknown>
   >({});
 
+  const [readiness, setReadiness] = useState<StoreReadinessPayload | null>(null);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackBusy, setFeedbackBusy] = useState(false);
+  const [feedbackOk, setFeedbackOk] = useState<string | null>(null);
+
+  const [growthReferral, setGrowthReferral] = useState<{
+    link: string;
+    signups: number;
+  } | null>(null);
+  const [marketplacePublic, setMarketplacePublic] = useState(false);
+  const [growthBusy, setGrowthBusy] = useState(false);
+
   const [onboardingDone, setOnboardingDone] = useState(readOnboardingCompleted);
   type OnboardingStep = 1 | 2 | 3 | "success";
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>(1);
@@ -384,11 +402,63 @@ export default function PlatformPage() {
       /* ignore */
     }
     void loadBusinesses();
+    trackPlatformFunnel("platform_view");
     return () => {
       if (flashTimer != null) window.clearTimeout(flashTimer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- явная загрузка при входе (/merchant), как load() в ТЗ
   }, []);
+
+  useEffect(() => {
+    if (onboardingStep === 1) trackPlatformFunnel("onboarding_step_1");
+    if (onboardingStep === 2) trackPlatformFunnel("onboarding_step_2");
+    if (onboardingStep === 3) trackPlatformFunnel("onboarding_step_3");
+  }, [onboardingStep]);
+
+  useEffect(() => {
+    const first = businesses[0];
+    if (first == null || first.id <= 0) {
+      setReadiness(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchStoreReadiness(first.id)
+      .then((r) => {
+        if (!cancelled) setReadiness(r);
+      })
+      .catch(() => {
+        if (!cancelled) setReadiness(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [businesses]);
+
+  useEffect(() => {
+    const first = businesses[0];
+    if (first == null || first.id <= 0 || isPlatformAdmin) {
+      setGrowthReferral(null);
+      setMarketplacePublic(false);
+      return;
+    }
+    let cancelled = false;
+    void fetchMerchantReferral(first.id)
+      .then((r) => {
+        if (!cancelled) {
+          setGrowthReferral({ link: r.link, signups: r.signups });
+          setMarketplacePublic(r.isPublic);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setGrowthReferral(null);
+          setMarketplacePublic(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [businesses, isPlatformAdmin]);
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -771,6 +841,7 @@ export default function PlatformPage() {
       /* ignore */
     }
     navigate("/merchant/register");
+    trackPlatformFunnel("register_start");
   }, [navigate]);
 
   const markOnboardingComplete = useCallback(() => {
@@ -779,7 +850,69 @@ export default function PlatformPage() {
     }
     setOnboardingDone(true);
     setOnboardingStep(1);
+    trackPlatformFunnel("onboarding_complete");
   }, []);
+
+  const openStorefront = useCallback(
+    (b: PlatformMyBusinessDTO) => {
+      trackPlatformFunnel("store_open", { businessId: b.id });
+      navigate(miniAppNavigatePath(b));
+    },
+    [navigate],
+  );
+
+  const submitFeedback = useCallback(async () => {
+    const text = feedbackText.trim();
+    if (text.length < 4) return;
+    setFeedbackBusy(true);
+    setFeedbackOk(null);
+    try {
+      await postPlatformFeedback({
+        kind: "ux",
+        message: text,
+        businessId: businesses[0]?.id,
+        page: "platform",
+      });
+      setFeedbackText("");
+      setFeedbackOk("Спасибо! Мы получили ваше сообщение.");
+    } catch {
+      setFeedbackOk("Не удалось отправить. Попробуйте позже.");
+    } finally {
+      setFeedbackBusy(false);
+    }
+  }, [feedbackText, businesses]);
+
+  const copyReferralLink = useCallback(async () => {
+    const link = growthReferral?.link;
+    if (link == null || link === "") return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setInfoBanner("Реферальная ссылка скопирована");
+    } catch {
+      setError("Не удалось скопировать ссылку");
+    }
+  }, [growthReferral?.link]);
+
+  const toggleMarketplacePublic = useCallback(async () => {
+    const first = businesses[0];
+    if (first == null || first.id <= 0) return;
+    setGrowthBusy(true);
+    setError(null);
+    try {
+      const next = !marketplacePublic;
+      await setStoreListingPublic({ businessId: first.id, isPublic: next });
+      setMarketplacePublic(next);
+      setInfoBanner(
+        next
+          ? "Магазин будет виден в маркетплейсе после публикации витрины"
+          : "Магазин скрыт из маркетплейса",
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось изменить видимость");
+    } finally {
+      setGrowthBusy(false);
+    }
+  }, [businesses, marketplacePublic]);
 
   /** Fallback: нижняя зелёная кнопка Telegram — открывает отдельный маршрут с формой. */
   const openCreateHandlerRef = useRef(goToMerchantRegister);
@@ -1075,6 +1208,77 @@ export default function PlatformPage() {
               </motion.div>
             ) : null}
             {businesses.length > 0 ? (
+              <>
+            {readiness ? (
+              <div className="mp-panel mb-4" role="status">
+                <p className="text-sm font-semibold text-white">
+                  Готовность магазина: {readiness.score}/{readiness.maxScore}
+                </p>
+                {readiness.recommendations.length > 0 ? (
+                  <ul className="mt-2 list-disc pl-4 text-sm text-slate-400">
+                    {readiness.recommendations.map((r) => (
+                      <li key={r}>{r}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-sm text-emerald-400">
+                    Отлично — магазин готов к продажам.
+                  </p>
+                )}
+              </div>
+            ) : null}
+            {!isPlatformAdmin && businesses.length > 0 ? (
+              <div className="mp-panel mb-4">
+                <p className="text-sm font-semibold text-white">Рост и экосистема</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Приглашайте других merchants и откройте магазин в публичном маркетплейсе.
+                </p>
+                {growthReferral ? (
+                  <div className="mt-3 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-3">
+                    <div className="text-xs font-medium text-slate-300">
+                      Реферальная ссылка
+                    </div>
+                    <div className="mt-1 break-all font-mono text-[11px] text-slate-400">
+                      {growthReferral.link}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="mp-btn mp-btn--secondary mp-btn--sm"
+                        onClick={() => void copyReferralLink()}
+                      >
+                        Скопировать
+                      </button>
+                      <span className="inline-flex items-center text-xs text-slate-400">
+                        Приглашено: {growthReferral.signups}
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
+                <label className="mt-3 flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={marketplacePublic}
+                    disabled={growthBusy}
+                    onChange={() => void toggleMarketplacePublic()}
+                  />
+                  <span className="text-sm text-slate-300">
+                    Показать в маркетплейсе платформы
+                    <span className="mt-0.5 block text-xs text-slate-500">
+                      Нужна опубликованная витрина. Вы управляете видимостью.
+                    </span>
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  className="mp-btn mp-btn--ghost mp-btn--sm mt-3"
+                  onClick={() => navigate("/discover")}
+                >
+                  Открыть маркетплейс →
+                </button>
+              </div>
+            ) : null}
               <ul className="mp-store-list">
                 {businesses.map((b, index) => {
                   const toggleBusy = pendingByBusiness[b.id] === "toggle";
@@ -1208,7 +1412,7 @@ export default function PlatformPage() {
                               type="button"
                               disabled={subLocked}
                               onClick={() =>
-                                navigate(miniAppNavigatePath(b))
+                                openStorefront(b)
                               }
                               className="mp-btn mp-btn--primary mp-btn--sm min-w-0"
                               title={
@@ -1331,6 +1535,34 @@ export default function PlatformPage() {
                   );
                 })}
               </ul>
+            <div className="mp-panel mt-4">
+              <p className="text-sm font-semibold text-white">Обратная связь (beta)</p>
+              <p className="mt-1 text-xs text-slate-400">
+                Нашли баг или непонятный экран? Напишите — это помогает улучшить продукт.
+              </p>
+              <textarea
+                className="mp-input mt-3 w-full min-h-[72px] rounded-lg border border-slate-600 bg-slate-900 p-2 text-sm text-white"
+                rows={3}
+                value={feedbackText}
+                disabled={feedbackBusy}
+                placeholder="Опишите проблему или идею…"
+                onChange={(e) => setFeedbackText(e.target.value)}
+              />
+              <button
+                type="button"
+                className="mp-btn mp-btn--secondary mt-2"
+                disabled={feedbackBusy || feedbackText.trim().length < 4}
+                onClick={() => void submitFeedback()}
+              >
+                {feedbackBusy ? "Отправка…" : "Отправить"}
+              </button>
+              {feedbackOk ? (
+                <p className="mt-2 text-sm text-slate-300" role="status">
+                  {feedbackOk}
+                </p>
+              ) : null}
+            </div>
+              </>
             ) : null}
           </>
         )}
@@ -1561,7 +1793,7 @@ export default function PlatformPage() {
                           type="button"
                           onClick={() => {
                             markOnboardingComplete();
-                            navigate(miniAppNavigatePath(businesses[0]))
+                            openStorefront(businesses[0]!)
                           }}
                           className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg"
                         >

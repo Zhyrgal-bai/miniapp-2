@@ -32,13 +32,14 @@ export function CategoriesSection(props: {
   if (!props.categories?.length) return null;
 
   return (
-    <section className="sf-section sf-section--categories sf-section--padded">
-      <div className="sf-section__title">{title}</div>
-      <div
-        className="sf-chips sf-chips--rail"
-        role={interactive ? "tablist" : undefined}
-        aria-label={title}
-      >
+    <section className="sf-section sf-section--categories sf-section--padded sf-categories-sticky-wrap">
+      <div className="sf-categories-sticky">
+        <div className="sf-section__title sf-section__title--compact">{title}</div>
+        <div
+          className="sf-chips sf-chips--rail sf-chips--sticky"
+          role={interactive ? "tablist" : undefined}
+          aria-label={title}
+        >
         {interactive ? (
           <button
             type="button"
@@ -68,6 +69,7 @@ export function CategoriesSection(props: {
             </div>
           ),
         )}
+      </div>
       </div>
     </section>
   );
