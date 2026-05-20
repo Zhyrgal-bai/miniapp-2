@@ -6,16 +6,30 @@
   z-index: 1400;
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 8px 10px;
   max-width: min(92vw, 400px);
   padding: 10px 14px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--sf-color-primary) 92%, black);
-  color: var(--sf-on-primary, #fff);
+  border-radius: 16px;
   font-size: 13px;
   font-weight: 600;
   box-shadow: 0 8px 24px color-mix(in srgb, black 25%, transparent);
+}
+
+.payment-processing-banner--checking {
+  background: color-mix(in srgb, var(--sf-color-primary) 92%, black);
+  color: var(--sf-on-primary, #fff);
   pointer-events: none;
+}
+
+.payment-processing-banner--success {
+  background: color-mix(in srgb, #2e7d32 92%, black);
+  color: #fff;
+}
+
+.payment-processing-banner--failed {
+  background: color-mix(in srgb, #c62828 92%, black);
+  color: #fff;
 }
 
 .payment-processing-banner__dot {
@@ -24,6 +38,36 @@
   border-radius: 50%;
   background: currentColor;
   animation: payment-banner-pulse 1.2s ease-in-out infinite;
+}
+
+.payment-processing-banner__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: color-mix(in srgb, white 22%, transparent);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.payment-processing-banner__action {
+  margin-left: auto;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 999px;
+  background: color-mix(in srgb, white 22%, transparent);
+  color: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.payment-processing-banner__action:active {
+  opacity: 0.85;
 }
 
 @keyframes payment-banner-pulse {

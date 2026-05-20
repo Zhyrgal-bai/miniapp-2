@@ -16,6 +16,7 @@ import {
 import { adminService } from "../../services/admin.service";
 import { api, TENANT_HEADER } from "../../services/api";
 import type { Product } from "../../types";
+import { ru } from "../../i18n/ru";
 
 const TEMPLATE_LABELS: Record<StoreTemplateId, string> = {
   red: "Красный",
@@ -23,7 +24,7 @@ const TEMPLATE_LABELS: Record<StoreTemplateId, string> = {
   light: "Светлый",
   luxury: "Премиум",
   minimal: "Минимал",
-  fashion: "Fashion",
+  fashion: ru.admin.fashionTemplate,
   neon: "Неон",
 };
 

@@ -7,6 +7,10 @@ export type PlatformAdminRequestDTO = {
   phone: string;
   status: string;
   createdAt: string;
+  telegramId: string;
+  ownerUsername: string | null;
+  businessType: string;
+  botUsername: string | null;
 };
 
 export type PlatformAdminBusinessDTO = {
@@ -104,6 +108,7 @@ export async function postPlatformAdminApprove(params: {
 export async function postPlatformAdminReject(params: {
   telegramId: number;
   requestId: number;
+  rejectReason?: string;
   operatorSessionToken?: string;
 }): Promise<void> {
   const res = await fetch(apiAbsoluteUrl("/api/platform/admin/reject"), {
@@ -113,7 +118,10 @@ export async function postPlatformAdminReject(params: {
       ...adminHeaders(params.telegramId, params),
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ requestId: params.requestId }),
+    body: JSON.stringify({
+      requestId: params.requestId,
+      rejectReason: params.rejectReason,
+    }),
   });
   await throwIfNotOk(res);
 }

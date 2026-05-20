@@ -603,7 +603,7 @@
 /* —— Admin dashboard shell —— */
 .admin-dash {
   display: flex;
-  min-height: min(100vh, 720px);
+  min-height: 0;
   gap: 0;
   padding: 0;
   margin: -12px;
@@ -688,7 +688,9 @@
   flex: 1 1 auto;
   min-width: 0;
   padding: 16px 14px 24px;
-  overflow-x: auto;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  overflow: visible;
+  touch-action: pan-y;
 }
 
 .admin-dash-page__head {
@@ -1401,7 +1403,9 @@
   align-items: flex-start;
   justify-content: center;
   padding: 16px;
-  overflow-y: auto;
+  padding-top: max(16px, env(safe-area-inset-top, 0px));
+  overscroll-behavior: none;
+  touch-action: none;
 }
 
 .admin-modal {
@@ -1412,9 +1416,11 @@
   background: #12151c;
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
-  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  touch-action: pan-y;
 }
 
 .admin-modal__head {
@@ -1451,6 +1457,9 @@
   overflow-y: auto;
   flex: 1;
   min-height: 0;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 .admin-modal__row2 {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useBodyScrollLock } from "../utils/bodyScrollLock";
 import { fetchMyOrders } from "../services/myOrdersApi";
 import { useShop } from "../context/ShopContext";
 import { useStorefrontPayload } from "../components/storefront/runtime/StorefrontPayloadContext";
@@ -162,6 +163,8 @@ export default function SupportHubPage({
   const [ticketDraft, setTicketDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [orderPickerOpen, setOrderPickerOpen] = useState(false);
+
+  useBodyScrollLock(orderPickerOpen);
 
   const [returnReason, setReturnReason] = useState<ReturnReason>("OTHER");
   const [returnItemId, setReturnItemId] = useState<number | "">("");

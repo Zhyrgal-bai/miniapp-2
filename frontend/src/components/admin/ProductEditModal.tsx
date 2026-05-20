@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useBodyScrollLock } from "../../utils/bodyScrollLock";
+import { ru } from "../../i18n/ru";
 import { adminService } from "../../services/admin.service";
 import { PRODUCT_SIZES } from "../../constants/productCatalog";
 import type { Category, Product, Variant } from "../../types";
@@ -114,6 +116,8 @@ export default function ProductEditModal({
   onClose,
   onSaved,
 }: Props) {
+  useBodyScrollLock(open);
+
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -557,7 +561,7 @@ export default function ProductEditModal({
                       checked={isNew}
                       onChange={(e) => setIsNew(e.target.checked)}
                     />
-                    <span className="admin-size-chip-text">NEW</span>
+                    <span className="admin-size-chip-text">{ru.admin.sizeNew}</span>
                   </label>
                   <label className="admin-size-chip">
                     <input

@@ -322,7 +322,7 @@ export default function AdminAnalyticsPage() {
       {tab === "growth" && dashboard && (
         <>
           <section className="admin-dash-section admin-ops-growth">
-            <h2 className="admin-dash-section__title">Growth dashboard</h2>
+            <h2 className="admin-dash-section__title">{ru.admin.growthDashboard}</h2>
             <div className="admin-ops-growth__score">
               <span className="admin-ops-growth__value">{dashboard.growth.score}</span>
               <span className="admin-ops-growth__max">/ {dashboard.growth.maxScore}</span>
@@ -375,7 +375,7 @@ export default function AdminAnalyticsPage() {
           )}
 
           <section className="admin-dash-section">
-            <h2 className="admin-dash-section__title">Milestones</h2>
+            <h2 className="admin-dash-section__title">{ru.admin.milestones}</h2>
             <div className="admin-ops-growth__checklist">
               {dashboard.milestones.map((m) => (
                 <div

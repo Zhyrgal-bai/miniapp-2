@@ -38,6 +38,10 @@
   touch-action: pan-y pinch-zoom;
 }
 
+.sf-root.sf-app .app__content {
+  overflow: visible;
+}
+
 .app {
   min-height: 100%;
   position: relative;
@@ -771,6 +775,8 @@
   background: color-mix(in srgb, var(--app-base) 62%, transparent);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
+  overscroll-behavior: none;
+  touch-action: none;
 }
 
 /* Storefront-themed overlay */
@@ -799,6 +805,7 @@
     16px 0 48px color-mix(in srgb, black 45%, transparent),
     0 0 0 1px color-mix(in srgb, var(--app-border) 40%, transparent) inset;
   overflow: hidden;
+  touch-action: pan-y;
 }
 
 /* Storefront-themed drawer */
@@ -840,6 +847,9 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   padding: max(20px, env(safe-area-inset-top, 0px)) 20px 16px;
   display: flex;
   flex-direction: column;
@@ -880,6 +890,37 @@
 
 .app-drawer__brand-btn:active {
   transform: scale(0.99);
+}
+
+.app-drawer__brand-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-drawer__brand-logo {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--sf-radius-md, 14px);
+  object-fit: cover;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border, var(--app-border)) 55%, transparent);
+  box-shadow: 0 4px 14px color-mix(in srgb, black 12%, transparent);
+}
+
+.app-drawer__brand-logo--ph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--sf-color-primary, #22c55e) 18%, var(--sf-color-surface, var(--app-surface)));
+  color: var(--sf-color-primary, #22c55e);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.app-drawer__brand-text {
+  min-width: 0;
+  flex: 1;
 }
 
 .app-drawer__brand-title {

@@ -596,6 +596,12 @@ model RegistrationRequest {
   businessType BusinessType
 
   telegramId String
+  /// Telegram @username без @ (если есть).
+  ownerUsername String?
+  /// @username бота мерчанта (из getMe при submit).
+  botUsername   String?
+  rejectReason  String?
+
   status     RegistrationStatus @default(PENDING)
   createdAt  DateTime             @default(now())
   updatedAt  DateTime             @updatedAt

@@ -1,8 +1,8 @@
 import { RegistrationStatus } from "@prisma/client";
 import { prisma } from "./db.js";
 import { cleanInput, validateKgPhone } from "./orderInputSanitize.js";
-import { isValidFinikApiKey } from "../bot/saasRegistrationValidation.js";
 import {
+  fetchTelegramBotGetMe,
   MSG_BOT_ALREADY_REGISTERED,
   precheckBotTokenBeforeRegistrationPersist,
 } from "./registrationTokenGate.js";
@@ -15,8 +15,9 @@ export type PlatformRegisterBody = {
   botToken?: unknown;
   phone?: unknown;
   telegramId?: unknown;
-  finikApiKey?: unknown;
   businessType?: unknown;
+  ownerUsername?: unknown;
+  finikApiKey?: unknown;
 };
 
 export type PlatformRegisterResult =
@@ -80,16 +81,11 @@ export async function validateAndPersistPlatformRegistration(
   }
 
   const finikRaw =
-    typeof body.finikApiKey === "string" ? body.finikApiKey.trim() : "";
+    typeof (body as { finikApiKey?: unknown }).finikApiKey === "string"
+      ? (body as { finikApiKey: string }).finikApiKey.trim()
+      : "";
   let finikApiKeyToStore: string | null = null;
   if (finikRaw !== "") {
-    if (!isValidFinikApiKey(finikRaw)) {
-      return {
-        ok: false,
-        statusCode: 400,
-        error: "Некорректный API-ключ Finik",
-      };
-    }
     finikApiKeyToStore = finikRaw;
   }
 
@@ -129,6 +125,13 @@ export async function validateAndPersistPlatformRegistration(
 
   try {
     const businessType = normalizeBusinessType(body.businessType);
+    const getMe = await fetchTelegramBotGetMe(botToken);
+    const botUsername = getMe.username;
+    const ownerUsername =
+      typeof body.ownerUsername === "string"
+        ? body.ownerUsername.trim().replace(/^@/, "").slice(0, 64) || null
+        : null;
+
     const row = await prisma.registrationRequest.create({
       data: {
         name: storeRaw,
@@ -137,6 +140,8 @@ export async function validateAndPersistPlatformRegistration(
         finikApiKey: finikApiKeyToStore,
         businessType,
         telegramId,
+        ownerUsername,
+        botUsername,
         status: RegistrationStatus.PENDING,
       },
       select: { id: true },

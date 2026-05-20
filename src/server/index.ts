@@ -39,7 +39,11 @@ import {
   platformToggleBotBodySchema,
 } from "./platformRouteBodySchemas.js";
 import { validateAndPersistPlatformRegistration } from "./platformRegisterRequest.js";
-import { validateOrderOptions, validateProductAttributes } from "./templateValidation.js";
+import { getMerchantRegistrationStatus } from "./registrationStatusService.js";
+import {
+  validateOrderOptionsForCheckout,
+  validateProductAttributes,
+} from "./templateValidation.js";
 import {
   approveRegistrationRequestById,
   extendBusinessSubscriptionAdmin,
@@ -86,17 +90,6 @@ import {
   createProductFeedback,
   listProductFeedback,
 } from "./productFeedbackService.js";
-import {
-  getDiscoverStoreBySlug,
-  listDiscoverStores,
-  refreshDiscoverTrendScores,
-  setStoreListingVisibility,
-  syncPlatformStoreListing,
-} from "./platformDiscoverService.js";
-import {
-  getOrCreateMerchantReferralCode,
-  recordReferralSignup,
-} from "./merchantReferralService.js";
 import { maybeEmitRetentionNudges } from "./merchantRetentionService.js";
 import { buildMerchantGrowthDashboard } from "./merchantGrowthDashboardService.js";
 import {
@@ -922,6 +915,21 @@ app.post("/api/platform/update-finik", async (req: Request, res: Response) => {
   }
 });
 
+app.get("/api/platform/registration-status", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromWebApp(req);
+    if (!telegramId) {
+      res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
+      return;
+    }
+    const payload = await getMerchantRegistrationStatus(telegramId);
+    res.json(payload);
+  } catch (e) {
+    console.error("GET /api/platform/registration-status:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
 app.post(
   "/api/platform/register-request",
   strictLimiter,
@@ -958,22 +966,13 @@ app.post(
       botToken: shaped.data.botToken,
       phone: shaped.data.phone,
       finikApiKey: shaped.data.finikApiKey,
+      businessType: shaped.data.businessType,
+      ownerUsername: shaped.data.ownerUsername,
       telegramId: authTid,
     });
     if (!result.ok) {
       res.status(result.statusCode).json({ error: result.error });
       return;
-    }
-    const refCode =
-      typeof shaped.data.referralCode === "string"
-        ? shaped.data.referralCode.trim()
-        : "";
-    if (refCode !== "") {
-      void recordReferralSignup({
-        code: refCode,
-        applicantTelegramId: authTid,
-        registrationRequestId: result.id,
-      });
     }
     res.status(201).json({ ok: true, id: result.id });
   } catch (e) {
@@ -1260,7 +1259,6 @@ app.post("/api/merchant/storefront-builder/publish", async (req: Request, res: R
       });
     }
     invalidateStorefrontCache(merchant.businessId);
-    void syncPlatformStoreListing(merchant.businessId);
     res.json({ ok: true, publishedAt: new Date().toISOString(), ux });
   } catch (e) {
     console.error("POST /api/merchant/storefront-builder/publish:", e);
@@ -1649,7 +1647,10 @@ app.post("/api/platform/admin/reject", async (req: Request, res: Response) => {
       res.status(400).json({ error: "Нужен корректный requestId" });
       return;
     }
-    const out = await rejectRegistrationRequestById(requestId);
+    const rejectReasonRaw = (req.body as { rejectReason?: unknown }).rejectReason;
+    const rejectReason =
+      typeof rejectReasonRaw === "string" ? rejectReasonRaw : undefined;
+    const out = await rejectRegistrationRequestById(requestId, rejectReason);
     if (!out.ok) {
       res.status(out.statusCode).json({ error: out.message });
       return;
@@ -4017,120 +4018,6 @@ app.post("/merchant/growth/dashboard", async (req: Request, res: Response) => {
   }
 });
 
-app.get("/api/discover/stores", async (req: Request, res: Response) => {
-  try {
-    void refreshDiscoverTrendScores().catch(() => undefined);
-    const featured = req.query.featured === "1" || req.query.featured === "true";
-    const typeQ = typeof req.query.type === "string" ? req.query.type.trim() : "";
-    const q = typeof req.query.q === "string" ? req.query.q : undefined;
-    const limitRaw = Number(req.query.limit);
-    const limit =
-      Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 48) : 24;
-    const businessTypes = ["clothing", "coffee", "fastfood", "flowers"] as const;
-    const businessType = businessTypes.includes(typeQ as (typeof businessTypes)[number])
-      ? (typeQ as (typeof businessTypes)[number])
-      : undefined;
-    const discoverInput: {
-      featured?: boolean;
-      businessType?: (typeof businessTypes)[number];
-      q?: string;
-      limit: number;
-    } = { limit };
-    if (featured) discoverInput.featured = true;
-    if (businessType) discoverInput.businessType = businessType;
-    if (q) discoverInput.q = q;
-    const items = await listDiscoverStores(discoverInput);
-    res.json({ items });
-  } catch (e) {
-    console.error("GET /api/discover/stores:", e);
-    res.status(500).json({ error: "Ошибка сервера" });
-  }
-});
-
-app.get("/api/discover/stores/:slug", async (req: Request, res: Response) => {
-  try {
-    const slug = String(req.params.slug ?? "").trim().toLowerCase();
-    const card = await getDiscoverStoreBySlug(slug);
-    if (!card) {
-      return res.status(404).json({ error: "Не найдено" });
-    }
-    res.json(card);
-  } catch (e) {
-    console.error("GET /api/discover/stores/:slug:", e);
-    res.status(500).json({ error: "Ошибка сервера" });
-  }
-});
-
-app.post("/api/platform/store-listing/visibility", async (req: Request, res: Response) => {
-  try {
-    const telegramId = platformTelegramIdFromWebApp(req);
-    if (!telegramId) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-    const body = req.body as { businessId?: unknown; isPublic?: unknown };
-    const businessId = Number(body.businessId);
-    if (!Number.isInteger(businessId) || businessId <= 0) {
-      return res.status(400).json({ error: "Нужен businessId" });
-    }
-    const owned = await prisma.membership.findFirst({
-      where: {
-        businessId,
-        role: { in: [MembershipRole.OWNER, MembershipRole.ADMIN] },
-        user: { telegramId },
-      },
-    });
-    if (!owned) {
-      return res.status(403).json({ error: "Нет доступа" });
-    }
-    const isPublic = body.isPublic === true;
-    await syncPlatformStoreListing(businessId);
-    await setStoreListingVisibility({ businessId, isPublic });
-    res.json({ ok: true, isPublic });
-  } catch (e) {
-    console.error("POST /api/platform/store-listing/visibility:", e);
-    res.status(500).json({ error: "Ошибка сервера" });
-  }
-});
-
-app.get("/api/platform/referral", async (req: Request, res: Response) => {
-  try {
-    const telegramId = platformTelegramIdFromWebApp(req);
-    if (!telegramId) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-    const bidRaw = req.query.businessId;
-    const businessId = Number(
-      typeof bidRaw === "string" ? bidRaw : Array.isArray(bidRaw) ? bidRaw[0] : NaN,
-    );
-    if (!Number.isInteger(businessId) || businessId <= 0) {
-      return res.status(400).json({ error: "Нужен businessId" });
-    }
-    const owned = await prisma.membership.findFirst({
-      where: {
-        businessId,
-        role: { in: [MembershipRole.OWNER, MembershipRole.ADMIN] },
-        user: { telegramId },
-      },
-    });
-    if (!owned) {
-      return res.status(403).json({ error: "Нет доступа" });
-    }
-    const front =
-      process.env.FRONT_URL?.trim() ||
-      process.env.MINI_APP_URL?.trim() ||
-      process.env.FRONTEND_URL?.trim() ||
-      "";
-    const payload = await getOrCreateMerchantReferralCode({
-      businessId,
-      baseUrl: front !== "" ? front : "https://t.me",
-    });
-    res.json(payload);
-  } catch (e) {
-    console.error("GET /api/platform/referral:", e);
-    res.status(500).json({ error: "Ошибка сервера" });
-  }
-});
-
 app.get("/api/storefront/recommendations", async (req: Request, res: Response) => {
   try {
     const businessId = await resolveCatalogBusinessId(req, res);
@@ -4590,13 +4477,7 @@ app.post("/orders", async (req: Request, res: Response) => {
       it.options != null && typeof it.options === "object" && !Array.isArray(it.options)
         ? (it.options as Record<string, unknown>)
         : {};
-    // Backward-compatible: size/color still come from legacy fields
-    const withLegacy = {
-      ...mergedOptions,
-      ...(it.size ? { size: it.size } : {}),
-      ...(it.color ? { color: it.color } : {}),
-    };
-    const v = validateOrderOptions(businessType as any, withLegacy);
+    const v = validateOrderOptionsForCheckout(businessType as any, mergedOptions);
     if (!v.ok) {
       return res.status(400).json({ error: v.error, details: v.details });
     }

@@ -179,11 +179,7 @@ async function replyAfterRegistrationExit(ctx: Context): Promise<void> {
   }
 
   if (hasPending) {
-    await removeReplyKeyboardStub(ctx);
-    await ctx.reply(
-      "Заявка на рассмотрении — ответ будет в этом чате.",
-      adminReplyKeyboardExtraIfAdmin(ctx),
-    );
+    await replyPendingApplicationStatus(ctx);
     return;
   }
 
@@ -193,11 +189,13 @@ async function replyAfterRegistrationExit(ctx: Context): Promise<void> {
     return;
   }
 
-  await removeReplyKeyboardStub(ctx);
-  await ctx.reply(
-    "Можно начать заново: отправьте /start — создадим магазин.\n\nКоманда /cancel в любой момент сбрасывает анкету.",
-    adminReplyKeyboardExtraIfAdmin(ctx),
-  );
+  const rejected = await getLatestRejectedRegistration(telegramIdStr);
+  if (rejected) {
+    await replyRejectedApplicationStatus(ctx, telegramIdStr);
+    return;
+  }
+
+  await replyLaunchLayerWelcome(ctx);
 }
 
 /**
@@ -250,7 +248,8 @@ function logSaas(
     | "registration_started"
     | "registration_completed"
     | "rejected_attempt"
-    | "merchant_dashboard_opened",
+    | "merchant_dashboard_opened"
+    | "launch_layer_opened",
   meta: Record<string, unknown>
 ): void {
   console.log(`[saasRegistration] ${event}`, meta);
@@ -286,6 +285,96 @@ function miniAppMerchantCabinetUrl(): string | null {
   const base = merchantMiniAppBaseUrl();
   if (base === "") return null;
   return `${base}/merchant`;
+}
+
+function miniAppMerchantRegisterUrl(): string | null {
+  const base = merchantMiniAppBaseUrl();
+  if (base === "") return null;
+  return `${base}/merchant/register`;
+}
+
+function launchLayerInlineKeyboard(): {
+  inline_keyboard: Array<
+    Array<
+      | { text: string; web_app: { url: string } }
+      | { text: string; callback_data: string }
+    >
+  >;
+} {
+  const registerUrl = miniAppMerchantRegisterUrl();
+  const cabinetUrl = miniAppMerchantCabinetUrl();
+  const rows: Array<
+    Array<
+      | { text: string; web_app: { url: string } }
+      | { text: string; callback_data: string }
+    >
+  > = [];
+  if (registerUrl != null) {
+    rows.push([{ text: "📱 Открыть Mini App", web_app: { url: registerUrl } }]);
+  }
+  if (cabinetUrl != null) {
+    rows.push([{ text: "📊 Кабинет", web_app: { url: cabinetUrl } }]);
+  }
+  return { inline_keyboard: rows };
+}
+
+async function getLatestRejectedRegistration(telegramId: string) {
+  return prisma.registrationRequest.findFirst({
+    where: { telegramId, status: RegistrationStatus.REJECTED },
+    orderBy: { id: "desc" },
+    select: { name: true, rejectReason: true },
+  });
+}
+
+/** Информационный слой: приветствие + Mini App, без chat-регистрации. */
+async function replyLaunchLayerWelcome(ctx: Context): Promise<void> {
+  await removeReplyKeyboardStub(ctx);
+  const registerUrl = miniAppMerchantRegisterUrl();
+  const lines = [
+    "👋 Добро пожаловать в ARCHA",
+    "",
+    "Создайте магазин в Mini App — заявка уйдёт на проверку оператору.",
+    "",
+    "Здесь вы получите уведомление об одобрении или отклонении.",
+  ];
+  if (registerUrl == null) {
+    lines.push("", "⚠️ Mini App временно недоступен — администратор настраивает адрес.");
+  }
+  await ctx.reply(lines.join("\n"), {
+    reply_markup: launchLayerInlineKeyboard(),
+    ...adminReplyKeyboardExtraIfAdmin(ctx),
+  });
+}
+
+async function replyPendingApplicationStatus(ctx: Context): Promise<void> {
+  await removeReplyKeyboardStub(ctx);
+  await ctx.reply(
+    "⏳ Заявка на рассмотрении.\n\nМы проверим данные и сообщим результат здесь.",
+    {
+      reply_markup: launchLayerInlineKeyboard(),
+      ...adminReplyKeyboardExtraIfAdmin(ctx),
+    },
+  );
+}
+
+async function replyRejectedApplicationStatus(
+  ctx: Context,
+  telegramId: string,
+): Promise<void> {
+  const rejected = await getLatestRejectedRegistration(telegramId);
+  await removeReplyKeyboardStub(ctx);
+  let text = "❌ Последняя заявка отклонена.";
+  if (rejected?.name) {
+    text += `\n\nМагазин: «${rejected.name}»`;
+  }
+  if (rejected?.rejectReason?.trim()) {
+    text += `\n\nПричина: ${rejected.rejectReason.trim()}`;
+  }
+  text += "\n\nМожно подать новую заявку в Mini App.";
+  await ctx.reply(text, {
+    reply_markup: launchLayerInlineKeyboard(),
+    ...adminReplyKeyboardExtraIfAdmin(ctx),
+  });
 }
 
 /** Магазины, где пользователь — OWNER или ADMIN. */
@@ -588,7 +677,7 @@ export function attachSaasRegistrationFlows(bot: Telegraf, role: BotRole): void 
     if (ctx.chat?.type !== "private") return;
     resetRegistrationSessionCompletely(ctx);
     try {
-      await ctx.reply("❌ Регистрация отменена", {
+      await ctx.reply("Главное меню", {
         reply_markup: { remove_keyboard: true },
       });
     } catch {
@@ -610,23 +699,6 @@ export function attachSaasRegistrationFlows(bot: Telegraf, role: BotRole): void 
       await next();
     } catch (e) {
       console.error("registrationSuperAdmin middleware:", e);
-      await next();
-    }
-  });
-
-  bot.use(async (ctx, next) => {
-    try {
-      const sess = getRegistrationSession(ctx);
-      if (!sess?.step) {
-        await next();
-        return;
-      }
-      if (await registrationFlow(bot, ctx)) {
-        return;
-      }
-      await next();
-    } catch (e) {
-      console.error("saasRegistration middleware:", e);
       await next();
     }
   });
@@ -955,10 +1027,7 @@ export async function handleRegistrationStartCommand(
 
     if (hasPending) {
       await removeReplyKeyboardStub(ctx);
-      await ctx.reply(
-        "Заявка на рассмотрении — ответ будет в этом чате.",
-        adminReplyKeyboardExtraIfAdmin(ctx),
-      );
+      await replyPendingApplicationStatus(ctx);
       logSaas("rejected_attempt", {
         reason: "already_pending_request",
         telegramUserId: telegramIdStr,
@@ -976,14 +1045,14 @@ export async function handleRegistrationStartCommand(
       return true;
     }
 
-    sess.data = {};
-    sess.step = "businessType";
+    const rejected = await getLatestRejectedRegistration(telegramIdStr);
+    if (rejected) {
+      await replyRejectedApplicationStatus(ctx, telegramIdStr);
+      return true;
+    }
 
-    await ctx.reply("Выберите тип бизнеса:", {
-      reply_markup: businessTypePickerMarkup(),
-    });
-
-    logSaas("registration_started", { telegramUserId: telegramIdStr });
+    await replyLaunchLayerWelcome(ctx);
+    logSaas("launch_layer_opened", { telegramUserId: telegramIdStr });
     return true;
   } catch (err: unknown) {
     logStartHandlerError(err, "START ERROR (unexpected)");
@@ -1013,33 +1082,15 @@ export async function handleRegistrationCallbacks(
   if (typeof data !== "string") return false;
 
   if (data.startsWith("bt_")) {
-    const sess = getRegistrationSession(ctx);
-    if (ctx.chat?.type !== "private" || !sess) {
-      await ctx.answerCbQuery("Только в личном чате").catch(() => undefined);
-      return true;
+    await ctx.answerCbQuery("Регистрация только в Mini App").catch(() => undefined);
+    const registerUrl = miniAppMerchantRegisterUrl();
+    if (registerUrl != null) {
+      await ctx.reply("Создайте магазин в Mini App:", {
+        reply_markup: {
+          inline_keyboard: [[{ text: "📱 Открыть Mini App", web_app: { url: registerUrl } }]],
+        },
+      });
     }
-    if (sess.step !== "businessType") {
-      await ctx.answerCbQuery().catch(() => undefined);
-      return true;
-    }
-    const map: Record<string, BusinessType> = {
-      bt_clothing: "clothing",
-      bt_coffee: "coffee",
-      bt_fastfood: "fastfood",
-      bt_flowers: "flowers",
-    };
-    const picked = map[data];
-    if (!isBusinessType(picked)) {
-      await ctx.answerCbQuery("Неизвестный тип").catch(() => undefined);
-      return true;
-    }
-    sess.data.businessType = picked;
-    sess.step = "name";
-    await ctx.answerCbQuery("Выбрано").catch(() => undefined);
-    await ctx.reply(
-      "Давайте создадим ваш магазин 🚀\nВведите название магазина.",
-      wizardExtra(ctx),
-    );
     return true;
   }
 
@@ -1066,29 +1117,17 @@ export async function handleRegistrationCallbacks(
         await ctx.answerCbQuery("Сначала дождитесь решения по заявке");
         return true;
       }
-      const sess = getRegistrationSession(ctx);
-      if (!sess) {
-        await ctx.answerCbQuery("Нажмите /start");
-        return true;
+      const registerUrl = miniAppMerchantRegisterUrl();
+      await ctx.answerCbQuery("Открываем Mini App").catch(() => undefined);
+      if (registerUrl != null) {
+        await ctx.reply("Новый магазин — заполните заявку в Mini App:", {
+          reply_markup: {
+            inline_keyboard: [[{ text: "📱 Открыть Mini App", web_app: { url: registerUrl } }]],
+          },
+        });
+      } else {
+        await ctx.reply("Mini App временно недоступен. Попробуйте позже.");
       }
-      if (sess.step) {
-        await ctx.answerCbQuery("Завершите текущую регистрацию");
-        return true;
-      }
-      sess.step = "businessType";
-      sess.data = {};
-      sess.lastAttemptAt = Date.now();
-      await ctx
-        .answerCbQuery("Выберите тип бизнеса")
-        .catch(() => undefined);
-      await ctx.reply(
-        "Новый магазин 🚀\nВыберите тип бизнеса:",
-        { reply_markup: businessTypePickerMarkup() },
-      );
-      logSaas("registration_started", {
-        telegramUserId: tid,
-        reason: "add_store_from_dashboard",
-      });
     } catch (e) {
       console.error("saas_new_store callback:", e);
       await ctx.answerCbQuery("Позже попробуйте").catch(() => undefined);

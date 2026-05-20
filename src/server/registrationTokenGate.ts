@@ -13,14 +13,27 @@ export const MSG_BOT_ALREADY_REGISTERED =
   "❌ Этот бот уже зарегистрирован";
 
 export async function verifyTelegramGetMeOk(tokenTrimmed: string): Promise<boolean> {
+  const me = await fetchTelegramBotGetMe(tokenTrimmed);
+  return me.ok;
+}
+
+export async function fetchTelegramBotGetMe(tokenTrimmed: string): Promise<{
+  ok: boolean;
+  username: string | null;
+}> {
   const meRes = await fetch(
     `https://api.telegram.org/bot${encodeURIComponent(tokenTrimmed)}/getMe`,
   );
   const meJson = (await meRes.json().catch(() => ({}))) as {
     ok?: boolean;
-    result?: { id?: number };
+    result?: { id?: number; username?: string };
   };
-  return meRes.ok === true && meJson.ok === true && meJson.result != null;
+  const ok = meRes.ok === true && meJson.ok === true && meJson.result != null;
+  const username =
+    typeof meJson.result?.username === "string"
+      ? meJson.result.username.trim().replace(/^@/, "") || null
+      : null;
+  return { ok, username };
 }
 
 export async function botTokenBlockedForNewRegistration(

@@ -35,6 +35,50 @@ function buildApproveUserNotifyMessage(merchantBotUsername: string | null): stri
   return text;
 }
 
+function buildRejectUserNotifyMessage(
+  storeName: string,
+  rejectReason: string | null,
+): string {
+  let text =
+    `Заявка на магазин «${storeName}» отклонена.\n\n`;
+  if (rejectReason != null && rejectReason.trim() !== "") {
+    text += `Причина: ${rejectReason.trim()}\n\n`;
+  }
+  text +=
+    "Вы можете подать новую заявку в Mini App — нажмите «Открыть Mini App» в боте.";
+  return text;
+}
+
+async function notifyRegistrationRejectedUser(
+  telegramId: string,
+  storeName: string,
+  rejectReason: string | null,
+): Promise<void> {
+  if (!/^\d+$/.test(telegramId)) {
+    console.warn("[platformAdmin] skip reject notify: invalid telegramId");
+    return;
+  }
+  if (!mainTelegrafBot) {
+    console.warn(
+      "[platformAdmin] main bot unavailable — reject notify skipped:",
+      telegramId,
+    );
+    return;
+  }
+  try {
+    await mainTelegrafBot.telegram.sendMessage(
+      telegramId,
+      buildRejectUserNotifyMessage(storeName, rejectReason),
+    );
+  } catch (e) {
+    console.error(
+      "[platformAdmin] reject notify sendMessage:",
+      telegramId,
+      e,
+    );
+  }
+}
+
 async function notifyRegistrationApprovedUser(
   telegramId: string,
   merchantBotUsername: string | null,
@@ -170,6 +214,10 @@ export type PlatformAdminRequestRow = {
   phone: string;
   status: RegistrationStatus;
   createdAt: string;
+  telegramId: string;
+  ownerUsername: string | null;
+  businessType: string;
+  botUsername: string | null;
 };
 
 export async function listPendingRegistrationRequestsForAdmin(): Promise<
@@ -184,6 +232,10 @@ export async function listPendingRegistrationRequestsForAdmin(): Promise<
       phone: true,
       status: true,
       createdAt: true,
+      telegramId: true,
+      ownerUsername: true,
+      businessType: true,
+      botUsername: true,
     },
   });
   return rows.map((r) => ({
@@ -192,6 +244,10 @@ export async function listPendingRegistrationRequestsForAdmin(): Promise<
     phone: r.phone,
     status: r.status,
     createdAt: r.createdAt.toISOString(),
+    telegramId: r.telegramId,
+    ownerUsername: r.ownerUsername,
+    businessType: r.businessType,
+    botUsername: r.botUsername,
   }));
 }
 
@@ -372,6 +428,7 @@ export type RejectOutcome =
 
 export async function rejectRegistrationRequestById(
   requestId: number,
+  rejectReason?: string,
 ): Promise<RejectOutcome> {
   if (!Number.isInteger(requestId) || requestId <= 0) {
     return { ok: false, statusCode: 400, message: "Неверный requestId" };
@@ -389,10 +446,22 @@ export async function rejectRegistrationRequestById(
     };
   }
 
+  const reasonTrimmed =
+    typeof rejectReason === "string" ? rejectReason.trim().slice(0, 500) : "";
+
   await prisma.registrationRequest.update({
     where: { id: requestId },
-    data: { status: RegistrationStatus.REJECTED },
+    data: {
+      status: RegistrationStatus.REJECTED,
+      rejectReason: reasonTrimmed !== "" ? reasonTrimmed : null,
+    },
   });
+
+  await notifyRegistrationRejectedUser(
+    row.telegramId.trim(),
+    row.name,
+    reasonTrimmed !== "" ? reasonTrimmed : null,
+  );
 
   return { ok: true };
 }

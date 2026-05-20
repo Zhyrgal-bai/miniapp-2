@@ -5,16 +5,20 @@ import { getTelegramWebApp } from "./telegram";
  * expand + disableVerticalSwipes reduce accidental Mini App close on swipe.
  */
 export function bootstrapTelegramWebApp(): void {
+  ensureTelegramMobileUx();
+}
+
+/** Re-apply TMA mobile settings (safe to call on route changes). */
+export function ensureTelegramMobileUx(): void {
   const tg = getTelegramWebApp();
   if (tg == null) return;
 
   tg.ready();
   tg.expand?.();
 
-  // Bot API 7.7+ — optional; no-op on older clients
+  // Bot API 7.7+ — prevents swipe-down closing Mini App during vertical scroll
   tg.disableVerticalSwipes?.();
 
-  // Prefer theme-aware header if available
   tg.setHeaderColor?.("secondary_bg_color");
   tg.setBackgroundColor?.("bg_color");
 }

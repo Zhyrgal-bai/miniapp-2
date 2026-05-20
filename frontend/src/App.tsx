@@ -15,6 +15,7 @@ import { useAdminPanelVisible, useAdminAccessBootstrap } from "@/utils/admin";
 import { fetchMyOrders } from "./services/myOrdersApi";
 import { getWebAppUserId } from "./utils/telegramUserId";
 import { getTelegramWebApp } from "./utils/telegram";
+import { ensureTelegramMobileUx } from "./utils/telegramWebAppBootstrap";
 import {
   readPendingFinikOrder,
   clearPendingFinikOrder,
@@ -93,6 +94,10 @@ export default function App() {
   useEffect(() => {
     void refreshAdminGate(businessId ?? undefined);
   }, [businessId, refreshAdminGate]);
+
+  useEffect(() => {
+    ensureTelegramMobileUx();
+  }, []);
 
   const tenantNav = useMemo(() => {
     if (!shopIdString) {
@@ -653,7 +658,10 @@ export default function App() {
         onNavToAdmin={goAdminSection}
       />
 
-      <PaymentProcessingBanner businessId={businessId} />
+      <PaymentProcessingBanner
+        businessId={businessId}
+        onViewOrders={() => handleNav("my-orders")}
+      />
 
       <div className="content app__content">
         <div className="sf-commerce-shell" data-sf-shell={commerceShellMode}>

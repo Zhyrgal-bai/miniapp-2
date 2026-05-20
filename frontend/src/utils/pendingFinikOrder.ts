@@ -5,11 +5,13 @@ export type PendingFinikOrderPayload = {
   orderId: number;
   businessId: number;
   startedAt: number;
+  paymentUrl?: string;
 };
 
 export function setPendingFinikOrder(
   input: Pick<PendingFinikOrderPayload, "orderId" | "businessId"> & {
     startedAt?: number;
+    paymentUrl?: string;
   }
 ): void {
   try {
@@ -17,6 +19,9 @@ export function setPendingFinikOrder(
       orderId: input.orderId,
       businessId: input.businessId,
       startedAt: input.startedAt ?? Date.now(),
+      ...(typeof input.paymentUrl === "string" && input.paymentUrl.trim() !== ""
+        ? { paymentUrl: input.paymentUrl.trim() }
+        : {}),
     };
     localStorage.setItem(SF_PENDING_FINIK_ORDER_KEY, JSON.stringify(payload));
   } catch {
@@ -37,7 +42,11 @@ export function readPendingFinikOrder(): PendingFinikOrderPayload | null {
     if (!Number.isInteger(orderId) || orderId <= 0) return null;
     if (!Number.isInteger(businessId) || businessId <= 0) return null;
     if (!Number.isFinite(startedAt) || startedAt <= 0) return null;
-    return { orderId, businessId, startedAt };
+    const paymentUrl =
+      typeof o.paymentUrl === "string" && o.paymentUrl.trim() !== ""
+        ? o.paymentUrl.trim()
+        : undefined;
+    return { orderId, businessId, startedAt, ...(paymentUrl ? { paymentUrl } : {}) };
   } catch {
     return null;
   }

@@ -209,10 +209,15 @@
   box-shadow: var(--sf-btn-shadow, var(--sf-shadow-card));
   border: 1px solid var(--sf-btn-border, color-mix(in srgb, var(--sf-color-primary) 55%, transparent));
   cursor: grab;
-  touch-action: none;
+  touch-action: pan-y pinch-zoom;
   user-select: none;
   -webkit-user-select: none;
   transition: all 0.3s ease;
+}
+
+.floating-cart--dragging {
+  touch-action: none;
+  cursor: grabbing;
 }
 
 .floating-cart--storefront {

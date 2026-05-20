@@ -184,3 +184,42 @@ export function validateOrderOptions(
   return validateObjectAgainstSchema(schema, options);
 }
 
+/**
+ * Lenient checkout validation: ignores unknown/stale keys, does not require
+ * template-only options (size/color live on OrderItem columns).
+ */
+export function validateOrderOptionsForCheckout(
+  businessType: BusinessType,
+  options: unknown,
+): ValidationResult<Record<string, unknown>> {
+  const schema = safeSchemaFor(businessType, (t) => t.orderOptionsSchema);
+  if (!isPlainObject(options)) options = {};
+  const input = options as Record<string, unknown>;
+
+  const out: Record<string, unknown> = {};
+  const details: Record<string, string> = {};
+
+  for (const [key, field] of Object.entries(schema)) {
+    const raw = input[key];
+    if (raw === undefined || raw === null || raw === "") {
+      if (field.default !== undefined) {
+        out[key] = field.default;
+      }
+      continue;
+    }
+    const r = validateField(key, field, raw);
+    if (!r.ok) {
+      details[key] = r.error;
+      continue;
+    }
+    if (r.value !== undefined) {
+      out[key] = r.value;
+    }
+  }
+
+  if (Object.keys(details).length > 0) {
+    return { ok: false, error: "Некорректные параметры товара", details };
+  }
+  return { ok: true, value: out };
+}
+

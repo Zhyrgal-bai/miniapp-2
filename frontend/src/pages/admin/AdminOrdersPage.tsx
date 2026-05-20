@@ -204,7 +204,7 @@ export default function AdminOrdersPage() {
             className={`admin-filter-tabs__btn${filter === tab ? " admin-filter-tabs__btn--active" : ""}`}
             onClick={() => setFilter(tab)}
           >
-            {tab === "ALL" ? "Все" : tab.replace(/_/g, " ")}
+            {tab === "ALL" ? "Все" : ORDER_STATUS_LABEL_RU[tab] ?? tab}
           </button>
         ))}
       </div>

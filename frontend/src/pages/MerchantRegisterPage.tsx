@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { getTelegramWebApp } from "../utils/telegram";
 import { resolveMerchantTelegramUserId } from "../utils/telegramUserId";
-import { submitPlatformRegisterRequest } from "../services/platformApi";
+import {
+  fetchRegistrationStatus,
+  submitPlatformRegisterRequest,
+} from "../services/platformApi";
 import { trackPlatformFunnel } from "../services/platformFunnel";
 import "./MerchantRegisterPage.css";
 
@@ -10,6 +13,32 @@ const SS_SHOP = "miniapp-active-shop";
 
 /** То же ключ — в PlatformPage после возврата показать успех и перезагрузить список. */
 export const MERCHANT_REGISTER_SENT_KEY = "merchant-register-sent";
+
+type BusinessType = "clothing" | "coffee" | "fastfood" | "flowers";
+
+const BUSINESS_TYPES: Array<{
+  id: BusinessType;
+  emoji: string;
+  label: string;
+}> = [
+  { id: "clothing", emoji: "👕", label: "Одежда" },
+  { id: "coffee", emoji: "☕", label: "Кофейня" },
+  { id: "fastfood", emoji: "🍔", label: "Фастфуд" },
+  { id: "flowers", emoji: "🌸", label: "Цветочный" },
+];
+
+const STEP_LABELS = [
+  "Тип бизнеса",
+  "Название",
+  "Токен бота",
+  "Телефон",
+  "Проверка",
+  "Отправка",
+];
+
+function businessTypeLabel(id: BusinessType | ""): string {
+  return BUSINESS_TYPES.find((b) => b.id === id)?.label ?? "—";
+}
 
 type BackBtn = {
   show: () => void;
@@ -19,9 +48,7 @@ type BackBtn = {
 };
 
 function parseBackButton(tg: unknown): BackBtn | null {
-  const bb = (
-    tg as { BackButton?: Partial<BackBtn> } | undefined
-  )?.BackButton;
+  const bb = (tg as { BackButton?: Partial<BackBtn> } | undefined)?.BackButton;
   if (
     bb == null ||
     typeof bb.show !== "function" ||
@@ -34,19 +61,17 @@ function parseBackButton(tg: unknown): BackBtn | null {
   return bb as BackBtn;
 }
 
-/**
- * Отдельная страница заявки на магазин — в Telegram WebView модальные слои часто не видны,
- * переход по маршруту работает надёжно.
- */
 export default function MerchantRegisterPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const referralCode = searchParams.get("ref")?.trim() ?? "";
+  const [step, setStep] = useState(1);
+  const [businessType, setBusinessType] = useState<BusinessType | "">("");
   const [storeName, setStoreName] = useState("");
   const [botToken, setBotToken] = useState("");
   const [phone, setPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [gateLoading, setGateLoading] = useState(true);
+  const [gateMessage, setGateMessage] = useState<string | null>(null);
 
   const goMerchant = useCallback(() => {
     navigate("/merchant", { replace: true });
@@ -74,25 +99,89 @@ export default function MerchantRegisterPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const status = await fetchRegistrationStatus();
+        if (cancelled) return;
+        if (status.status === "pending") {
+          setGateMessage(
+            `Заявка «${status.storeName ?? "магазин"}» уже на рассмотрении.`,
+          );
+        } else if (status.status === "has_stores") {
+          setGateMessage("У вас уже есть магазин. Новую заявку можно подать позже.");
+        } else if (status.status === "rejected") {
+          setGateMessage(null);
+        }
+      } catch {
+        if (!cancelled) setGateMessage(null);
+      } finally {
+        if (!cancelled) setGateLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const goBackStep = useCallback(() => {
+    if (step <= 1) {
+      goMerchant();
+      return;
+    }
+    setSubmitError(null);
+    setStep((s) => s - 1);
+  }, [step, goMerchant]);
+
+  useEffect(() => {
     const tg = getTelegramWebApp();
     const bb = parseBackButton(tg);
     if (bb) {
       bb.show();
-      bb.onClick(goMerchant);
+      bb.onClick(goBackStep);
     }
     return () => {
       if (bb) {
-        bb.offClick(goMerchant);
+        bb.offClick(goBackStep);
         bb.hide();
       }
     };
-  }, [goMerchant]);
+  }, [goBackStep]);
 
-  const handleSubmit = async (ev: React.FormEvent) => {
-    ev.preventDefault();
+  const ownerUsername = useMemo(() => {
+    const tg = getTelegramWebApp() as {
+      initDataUnsafe?: { user?: { username?: string } };
+    } | null;
+    const u = tg?.initDataUnsafe?.user?.username;
+    return typeof u === "string" ? u.trim().replace(/^@/, "") : undefined;
+  }, []);
+
+  const canNext = useMemo(() => {
+    if (step === 1) return businessType !== "";
+    if (step === 2) return storeName.trim().length >= 2;
+    if (step === 3) return botToken.trim().length > 10;
+    if (step === 4) return phone.trim().length >= 9;
+    return true;
+  }, [step, businessType, storeName, botToken, phone]);
+
+  const goNext = () => {
+    if (!canNext) return;
+    setSubmitError(null);
+    if (step < 5) {
+      setStep((s) => s + 1);
+      return;
+    }
+    setStep(6);
+  };
+
+  const handleSubmit = async () => {
     const uid = resolveMerchantTelegramUserId(getTelegramWebApp());
     if (!Number.isFinite(uid) || uid <= 0) {
       setSubmitError("Нет данных пользователя Telegram. Откройте из Mini App.");
+      return;
+    }
+    if (businessType === "") {
+      setSubmitError("Выберите тип бизнеса");
       return;
     }
     setSubmitting(true);
@@ -103,7 +192,8 @@ export default function MerchantRegisterPage() {
         botToken: botToken.trim(),
         phone: phone.trim(),
         telegramId: uid,
-        referralCode: referralCode !== "" ? referralCode : undefined,
+        businessType,
+        ownerUsername,
       });
       trackPlatformFunnel("register_submit");
       try {
@@ -114,10 +204,48 @@ export default function MerchantRegisterPage() {
       goMerchant();
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : "Не удалось отправить");
+      setStep(5);
     } finally {
       setSubmitting(false);
     }
   };
+
+  if (gateLoading) {
+    return (
+      <div className="mr">
+        <p className="mr__loading">Загрузка…</p>
+      </div>
+    );
+  }
+
+  if (gateMessage != null) {
+    return (
+      <div className="mr">
+        <header className="mr__header">
+          <div className="mr__brand">
+            <p className="mr__brand-name">ARCHA</p>
+            <p className="mr__brand-sub">Регистрация</p>
+          </div>
+          <button type="button" onClick={goMerchant} className="mr__close">
+            Закрыть
+          </button>
+        </header>
+        <div className="mr__form">
+          <div className="mr__card">
+            <div className="mr__card-head">
+              <h1 className="mr__title">Заявка уже отправлена</h1>
+              <p className="mr__subtitle">{gateMessage}</p>
+            </div>
+            <div className="mr__submit-wrap">
+              <button type="button" onClick={goMerchant} className="mr__submit">
+                В кабинет
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mr">
@@ -131,7 +259,9 @@ export default function MerchantRegisterPage() {
         />
         <div className="mr__brand">
           <p className="mr__brand-name">ARCHA</p>
-          <p className="mr__brand-sub">Новый магазин</p>
+          <p className="mr__brand-sub">
+            Шаг {Math.min(step, 5)} из 5 · {STEP_LABELS[step - 1]}
+          </p>
         </div>
         <button
           type="button"
@@ -143,75 +273,142 @@ export default function MerchantRegisterPage() {
         </button>
       </header>
 
-      <form
-        className="mr__form"
-        onSubmit={(e) => void handleSubmit(e)}
-      >
+      <div className="mr__progress" aria-hidden>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <span
+            key={n}
+            className={`mr__progress-dot${n <= step ? " mr__progress-dot--active" : ""}`}
+          />
+        ))}
+      </div>
+
+      <div className="mr__form">
         <div className="mr__card">
-          <div className="mr__card-head">
-            <h1 id="merchant-register-title" className="mr__title">
-              Создание магазина
-            </h1>
-            <p
-              id="merchant-register-desc"
-              className="mr__subtitle"
-            >
-              Заполните поля — заявка уйдёт на проверку
-              {referralCode !== "" ? " (по приглашению)" : ""}
-            </p>
-          </div>
+          {step === 1 ? (
+            <>
+              <div className="mr__card-head">
+                <h1 className="mr__title">Тип бизнеса</h1>
+                <p className="mr__subtitle">Выберите шаблон для вашего магазина</p>
+              </div>
+              <ul className="mr__type-list">
+                {BUSINESS_TYPES.map((t) => (
+                  <li key={t.id}>
+                    <button
+                      type="button"
+                      className={`mr__type-btn${businessType === t.id ? " mr__type-btn--active" : ""}`}
+                      onClick={() => setBusinessType(t.id)}
+                    >
+                      <span className="mr__type-emoji">{t.emoji}</span>
+                      <span>{t.label}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
 
-          <div className="mr__fields">
-            <div className="mr__field">
-              <label htmlFor="mr-store-name" className="mr__label">
-                Название
-              </label>
-              <input
-                id="mr-store-name"
-                type="text"
-                required
-                minLength={2}
-                maxLength={160}
-                autoComplete="organization"
-                placeholder="Например: Archa Store"
-                value={storeName}
-                onChange={(e) => setStoreName(e.target.value)}
-                className="mr__input"
-              />
-            </div>
-            <div className="mr__field">
-              <label htmlFor="mr-bot-token" className="mr__label">
-                Токен бота
-              </label>
-              <input
-                id="mr-bot-token"
-                type="password"
-                autoComplete="off"
-                required
-                placeholder="От BotFather"
-                value={botToken}
-                onChange={(e) => setBotToken(e.target.value)}
-                className="mr__input mr__input--mono"
-              />
-            </div>
-            <div className="mr__field">
-              <label htmlFor="mr-phone" className="mr__label">
-                Телефон
-              </label>
-              <input
-                id="mr-phone"
-                type="tel"
-                required
-                inputMode="tel"
-                placeholder="+996…"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="mr__input"
-              />
-            </div>
-          </div>
+          {step === 2 ? (
+            <>
+              <div className="mr__card-head">
+                <h1 className="mr__title">Название магазина</h1>
+                <p className="mr__subtitle">Как увидят клиенты</p>
+              </div>
+              <div className="mr__field mr__field--solo">
+                <input
+                  id="mr-store-name"
+                  type="text"
+                  autoFocus
+                  minLength={2}
+                  maxLength={160}
+                  autoComplete="organization"
+                  placeholder="Например: Archa Store"
+                  value={storeName}
+                  onChange={(e) => setStoreName(e.target.value)}
+                  className="mr__input"
+                />
+              </div>
+            </>
+          ) : null}
 
-          <p className="mr__hint">+996 и 9 цифр или 0 и 9 цифр</p>
+          {step === 3 ? (
+            <>
+              <div className="mr__card-head">
+                <h1 className="mr__title">Токен бота</h1>
+                <p className="mr__subtitle">
+                  Создайте бота в @BotFather и вставьте токен
+                </p>
+              </div>
+              <div className="mr__field mr__field--solo">
+                <input
+                  id="mr-bot-token"
+                  type="password"
+                  autoFocus
+                  autoComplete="off"
+                  placeholder="1234567890:ABC…"
+                  value={botToken}
+                  onChange={(e) => setBotToken(e.target.value)}
+                  className="mr__input mr__input--mono"
+                />
+              </div>
+            </>
+          ) : null}
+
+          {step === 4 ? (
+            <>
+              <div className="mr__card-head">
+                <h1 className="mr__title">Телефон</h1>
+                <p className="mr__subtitle">Для связи оператора с вами</p>
+              </div>
+              <div className="mr__field mr__field--solo">
+                <input
+                  id="mr-phone"
+                  type="tel"
+                  autoFocus
+                  inputMode="tel"
+                  placeholder="+996…"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="mr__input"
+                />
+              </div>
+              <p className="mr__hint">+996 и 9 цифр или 0 и 9 цифр</p>
+            </>
+          ) : null}
+
+          {step >= 5 ? (
+            <>
+              <div className="mr__card-head">
+                <h1 className="mr__title">Проверьте заявку</h1>
+                <p className="mr__subtitle">
+                  После отправки магазин создастся только после одобрения
+                </p>
+              </div>
+              <dl className="mr__review">
+                <div className="mr__review-row">
+                  <dt>Тип</dt>
+                  <dd>{businessTypeLabel(businessType)}</dd>
+                </div>
+                <div className="mr__review-row">
+                  <dt>Название</dt>
+                  <dd>{storeName.trim()}</dd>
+                </div>
+                <div className="mr__review-row">
+                  <dt>Токен бота</dt>
+                  <dd className="mr__review-masked">••••••••</dd>
+                </div>
+                <div className="mr__review-row">
+                  <dt>Телефон</dt>
+                  <dd>{phone.trim()}</dd>
+                </div>
+                {ownerUsername ? (
+                  <div className="mr__review-row">
+                    <dt>Telegram</dt>
+                    <dd>@{ownerUsername}</dd>
+                  </div>
+                ) : null}
+              </dl>
+            </>
+          ) : null}
 
           {submitError ? (
             <p className="mr__err" role="alert">
@@ -220,16 +417,28 @@ export default function MerchantRegisterPage() {
           ) : null}
 
           <div className="mr__submit-wrap">
-            <button
-              type="submit"
-              disabled={submitting}
-              className="mr__submit"
-            >
-              {submitting ? "Отправка…" : "Отправить заявку"}
-            </button>
+            {step < 5 ? (
+              <button
+                type="button"
+                disabled={!canNext}
+                onClick={goNext}
+                className="mr__submit"
+              >
+                Далее
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => void handleSubmit()}
+                className="mr__submit"
+              >
+                {submitting ? "Отправка…" : "Отправить заявку"}
+              </button>
+            )}
           </div>
         </div>
-      </form>
+      </div>
     </div>
   );
 }

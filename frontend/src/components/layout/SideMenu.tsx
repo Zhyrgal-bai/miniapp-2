@@ -8,6 +8,8 @@ import {
   telegramDisplayName,
 } from "../../utils/telegramUserMark";
 import { APP_NAME } from "../../config/brand";
+import { useTheme } from "../../context/ThemeContext";
+import { ru } from "../../i18n/ru";
 import "./app-shell.css";
 import { useStorefrontPayload } from "../storefront/runtime/StorefrontPayloadContext";
 
@@ -103,11 +105,19 @@ export default function SideMenu({
   const admin = useAdminPanelVisible();
   const adminActive = activeAdminSection(hash);
   const { payload } = useStorefrontPayload();
+  const { theme } = useTheme();
   const txt = payload?.storefrontTextConfig ?? {};
   const readTxt = (k: string, fb: string) => {
     const v = (txt as Record<string, unknown>)[k];
     return typeof v === "string" && v.trim() !== "" ? v : fb;
   };
+
+  const storeName = payload?.storeName?.trim() || APP_NAME;
+  const logoUrl =
+    typeof theme.logoUrl === "string" && theme.logoUrl.trim() !== ""
+      ? theme.logoUrl.trim()
+      : "";
+  const brandTagline = readTxt("brandTagline", readTxt("drawerTagline", ""));
 
   useBodyScrollLock(open);
 
@@ -141,14 +151,6 @@ export default function SideMenu({
             animate={{ x: 0 }}
             exit={{ x: -300 }}
             transition={{ type: "spring", damping: 30, stiffness: 320 }}
-            drag="x"
-            dragConstraints={{ left: -130, right: 0 }}
-            dragElastic={0.06}
-            onDragEnd={(_, info) => {
-              if (info.offset.x < -48 || info.velocity.x < -400) {
-                onClose();
-              }
-            }}
           >
             <div className="app-drawer__pull" aria-hidden />
             <div className="app-drawer__scroll">
@@ -161,8 +163,27 @@ export default function SideMenu({
                     onClose();
                   }}
                 >
-                  <div className="app-drawer__brand-title">{APP_NAME}</div>
-                  <div className="app-drawer__brand-tag">одежда</div>
+                  <div className="app-drawer__brand-row">
+                    {logoUrl !== "" ? (
+                      <img
+                        src={logoUrl}
+                        alt=""
+                        className="app-drawer__brand-logo"
+                        width={48}
+                        height={48}
+                      />
+                    ) : (
+                      <div className="app-drawer__brand-logo app-drawer__brand-logo--ph" aria-hidden>
+                        {storeName.slice(0, 1).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="app-drawer__brand-text">
+                      <div className="app-drawer__brand-title">{storeName}</div>
+                      {brandTagline !== "" ? (
+                        <div className="app-drawer__brand-tag">{brandTagline}</div>
+                      ) : null}
+                    </div>
+                  </div>
                 </button>
               </div>
 
@@ -181,7 +202,7 @@ export default function SideMenu({
                   <span className="app-drawer__link-icon" aria-hidden>
                     📦
                   </span>
-                  {readTxt("menuOrdersLabel", "Мои заказы")}
+                  {readTxt("menuOrdersLabel", ru.menu.orders)}
                 </button>
 
                 <button
@@ -195,7 +216,7 @@ export default function SideMenu({
                   <span className="app-drawer__link-icon" aria-hidden>
                     🛍
                   </span>
-                  {readTxt("menuShopLabel", "Магазин")}
+                  {readTxt("menuShopLabel", ru.menu.shop)}
                 </button>
 
                 <button
@@ -212,7 +233,7 @@ export default function SideMenu({
                       <span className="app-drawer__cart-badge">{cartCount}</span>
                     )}
                   </span>
-                  {readTxt("menuCartLabel", "Корзина")}
+                  {readTxt("menuCartLabel", ru.menu.cart)}
                 </button>
 
                 <button
@@ -226,7 +247,7 @@ export default function SideMenu({
                   <span className="app-drawer__link-icon" aria-hidden>
                     💬
                   </span>
-                  {readTxt("menuSupportLabel", "Поддержка")}
+                  {readTxt("menuSupportLabel", ru.menu.support)}
                 </button>
 
                 {admin && (
@@ -268,7 +289,7 @@ export default function SideMenu({
                   <span className="app-drawer__link-icon" aria-hidden>
                     ❓
                   </span>
-                  {readTxt("menuFaqLabel", "FAQ")}
+                  {readTxt("menuFaqLabel", ru.menu.faq)}
                 </button>
               </nav>
             </div>

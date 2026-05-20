@@ -8,19 +8,22 @@ import { ArchaHeader } from "../components/archa/ArchaHeader";
 import { archa } from "../components/archa/archaUi";
 import {
   fetchPlatformAdminBusinesses,
+  fetchPlatformAdminRequests,
+  postPlatformAdminApprove,
+  postPlatformAdminReject,
   postPlatformAdminDisable,
   postPlatformAdminEnable,
   postPlatformAdminExtend,
   postPlatformAdminPurgeBusiness,
   postPlatformAdminUnblock,
   type PlatformAdminBusinessDTO,
+  type PlatformAdminRequestDTO,
 } from "../services/platformAdminApi";
 import {
   fetchPlatformMyBusinesses,
   fetchOperatorCapabilities,
   fetchPlatformStoreSettings,
-  fetchMerchantReferral,
-  setStoreListingPublic,
+  fetchRegistrationStatus,
   postOperatorLock,
   postOperatorReauth,
   postOperatorUnlock,
@@ -41,6 +44,9 @@ import {
 } from "../components/merchant/MerchantSettingsRenderer";
 import { MERCHANT_REGISTER_SENT_KEY } from "./MerchantRegisterPage";
 import "./MerchantPage.css";
+import type { RegistrationStatusPayload } from "../services/platformApi";
+import { ru } from "../i18n/ru";
+import { useBodyScrollLock } from "../utils/bodyScrollLock";
 
 function platformStatusLabel(status: string): string {
   const map: Record<string, string> = {
@@ -54,6 +60,16 @@ function platformStatusLabel(status: string): string {
     expired: "⏹ Истёк",
   };
   return map[status] ?? status;
+}
+
+function businessTypeLabel(type: string | undefined): string {
+  const map: Record<string, string> = {
+    clothing: "👕 Одежда",
+    coffee: "☕ Кофейня",
+    fastfood: "🍔 Фастфуд",
+    flowers: "🌸 Цветочный",
+  };
+  return type != null && map[type] != null ? map[type] : type ?? "—";
 }
 
 function webhookUrlLine(b: PlatformMyBusinessDTO): string {
@@ -138,37 +154,37 @@ function subscriptionBadge(status: string): { label: string; className: string }
   const s = status.toLowerCase();
   if (s === "trialing") {
     return {
-      label: "Trial",
+      label: ru.platform.trial,
       className: "mp-tag mp-tag--sub-trial",
     };
   }
   if (s === "active") {
     return {
-      label: "Active",
+      label: ru.platform.active,
       className: "mp-tag mp-tag--sub-active",
     };
   }
   if (s === "inactive") {
     return {
-      label: "Inactive",
+      label: ru.platform.inactive,
       className: "mp-tag mp-tag--sub-muted",
     };
   }
   if (s === "subscription_expired" || s === "expired") {
     return {
-      label: "Expired",
+      label: ru.platform.expired,
       className: "mp-tag mp-tag--sub-muted",
     };
   }
   if (s === "past_due") {
     return {
-      label: "Past due",
+      label: ru.platform.pastDue,
       className: "mp-tag mp-tag--sub-warn",
     };
   }
   if (s === "canceled") {
     return {
-      label: "Canceled",
+      label: ru.platform.canceled,
       className: "mp-tag mp-tag--sub-muted",
     };
   }
@@ -191,12 +207,12 @@ function webhookBadge(ws: PlatformMyBusinessDTO["webhookStatus"]): {
 } {
   if (ws === "OK") {
     return {
-      label: "✔ Webhook OK",
+      label: `✔ ${ru.platform.webhookOk}`,
       className: "mp-tag mp-tag--hook-ok",
     };
   }
   return {
-    label: "❌ Webhook",
+    label: `❌ ${ru.platform.webhookError}`,
     className: "mp-tag mp-tag--hook-bad",
   };
 }
@@ -242,17 +258,23 @@ export default function PlatformPage() {
   const [feedbackBusy, setFeedbackBusy] = useState(false);
   const [feedbackOk, setFeedbackOk] = useState<string | null>(null);
 
-  const [growthReferral, setGrowthReferral] = useState<{
-    link: string;
-    signups: number;
-  } | null>(null);
-  const [marketplacePublic, setMarketplacePublic] = useState(false);
-  const [growthBusy, setGrowthBusy] = useState(false);
+  const [registrationStatus, setRegistrationStatus] =
+    useState<RegistrationStatusPayload | null>(null);
+  const [operatorRequests, setOperatorRequests] = useState<
+    PlatformAdminRequestDTO[]
+  >([]);
+  const [operatorRequestsLoading, setOperatorRequestsLoading] = useState(false);
+  const [operatorRequestBusyId, setOperatorRequestBusyId] = useState<number | null>(
+    null,
+  );
+  const [rejectModalRequestId, setRejectModalRequestId] = useState<number | null>(
+    null,
+  );
+  const [rejectReasonDraft, setRejectReasonDraft] = useState("");
 
   const [onboardingDone, setOnboardingDone] = useState(readOnboardingCompleted);
   type OnboardingStep = 1 | 2 | 3 | "success";
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>(1);
-  const onboardingZeroStoresRef = useRef(false);
   const prevZeroStores = useRef(false);
 
   const [merchantTelegramId, setMerchantTelegramId] = useState<number>(NaN);
@@ -333,6 +355,12 @@ export default function PlatformPage() {
       setOperatorSessionToken(null);
       const rows = await fetchPlatformMyBusinesses({ telegramId });
       setBusinesses(rows);
+      if (rows.length === 0) {
+        const regStatus = await fetchRegistrationStatus().catch(() => null);
+        setRegistrationStatus(regStatus);
+      } else {
+        setRegistrationStatus(null);
+      }
     } catch (e) {
       setMerchantTelegramId(NaN);
       setOperatorIdentity(false);
@@ -347,16 +375,37 @@ export default function PlatformPage() {
 
   const loadOperatorBusinesses = useCallback(
     async (telegramId: number, token: string) => {
-      const adminRows = await fetchPlatformAdminBusinesses({
-        telegramId,
-        operatorSessionToken: token,
-      });
+      const [adminRows, requestRows] = await Promise.all([
+        fetchPlatformAdminBusinesses({
+          telegramId,
+          operatorSessionToken: token,
+        }),
+        fetchPlatformAdminRequests(telegramId, { operatorSessionToken: token }),
+      ]);
       setBusinesses(
         adminRows
           .filter((r) => r.id > 0)
           .map(adminBusinessToCard),
       );
+      setOperatorRequests(requestRows);
       setIsPlatformAdmin(true);
+    },
+    [],
+  );
+
+  const loadOperatorRequestsOnly = useCallback(
+    async (telegramId: number, token: string) => {
+      setOperatorRequestsLoading(true);
+      try {
+        const rows = await fetchPlatformAdminRequests(telegramId, {
+          operatorSessionToken: token,
+        });
+        setOperatorRequests(rows);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Не удалось загрузить заявки");
+      } finally {
+        setOperatorRequestsLoading(false);
+      }
     },
     [],
   );
@@ -364,7 +413,7 @@ export default function PlatformPage() {
   const ensureOperatorReauth = useCallback(async (): Promise<boolean> => {
     const token = operatorSessionToken?.trim();
     if (!token) {
-      setError("Operator session не активна.");
+      setError("Сессия оператора не активна.");
       return false;
     }
     const pass = window.prompt("Подтвердите пароль оператора");
@@ -434,51 +483,14 @@ export default function PlatformPage() {
     };
   }, [businesses]);
 
-  useEffect(() => {
-    const first = businesses[0];
-    if (first == null || first.id <= 0 || isPlatformAdmin) {
-      setGrowthReferral(null);
-      setMarketplacePublic(false);
-      return;
-    }
-    let cancelled = false;
-    void fetchMerchantReferral(first.id)
-      .then((r) => {
-        if (!cancelled) {
-          setGrowthReferral({ link: r.link, signups: r.signups });
-          setMarketplacePublic(r.isPublic);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setGrowthReferral(null);
-          setMarketplacePublic(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [businesses, isPlatformAdmin]);
-
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "auto";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
-
-  useEffect(() => {
-    onboardingZeroStoresRef.current =
-      !onboardingDone && !loading && !error && businesses.length === 0;
-  }, [onboardingDone, loading, error, businesses.length]);
-
   const onboardingBaseOk = !onboardingDone && !loading && !error;
   useEffect(() => {
     const zero = onboardingBaseOk && businesses.length === 0;
     if (zero && !prevZeroStores.current) setOnboardingStep(1);
     prevZeroStores.current = zero;
   }, [onboardingBaseOk, businesses.length]);
+
+  useBodyScrollLock(operatorUnlockOpen || rejectModalRequestId != null);
 
   useEffect(() => {
     if (settingsBusinessId == null) {
@@ -556,7 +568,7 @@ export default function PlatformPage() {
     if (!(await ensureOperatorReauth())) return;
     const token = operatorSessionToken?.trim();
     if (!token) {
-      setError("Operator session не активна.");
+      setError("Сессия оператора не активна.");
       return;
     }
     setError(null);
@@ -596,7 +608,7 @@ export default function PlatformPage() {
     }
     const token = operatorSessionToken?.trim();
     if (!token) {
-      setError("Operator session не активна.");
+      setError("Сессия оператора не активна.");
       return;
     }
     setError(null);
@@ -650,7 +662,7 @@ export default function PlatformPage() {
     if (!(await ensureOperatorReauth())) return;
     const token = operatorSessionToken?.trim();
     if (!token) {
-      setError("Operator session не активна.");
+      setError("Сессия оператора не активна.");
       return;
     }
     const confirmed = window.confirm(
@@ -690,7 +702,7 @@ export default function PlatformPage() {
     if (!(await ensureOperatorReauth())) return;
     const token = operatorSessionToken?.trim();
     if (!token) {
-      setError("Operator session не активна.");
+      setError("Сессия оператора не активна.");
       return;
     }
     setError(null);
@@ -720,7 +732,7 @@ export default function PlatformPage() {
     if (!(await ensureOperatorReauth())) return;
     const token = operatorSessionToken?.trim();
     if (!token) {
-      setError("Operator session не активна.");
+      setError("Сессия оператора не активна.");
       return;
     }
     setError(null);
@@ -793,12 +805,12 @@ export default function PlatformPage() {
       await loadOperatorBusinesses(merchantTelegramId, out.token);
       setOperatorPassword("");
       setOperatorUnlockOpen(false);
-      setInfoBanner("Operator mode активирован.");
+      setInfoBanner(ru.platform.operatorActivated);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Не удалось войти";
       setOperatorUnlockError(
         msg === "Load failed" || msg === "Failed to fetch"
-          ? "Нет соединения с API. Проверьте деплой и VITE_API_URL."
+          ? ru.common.networkError
           : msg,
       );
     } finally {
@@ -821,7 +833,7 @@ export default function PlatformPage() {
       setOperatorPassword("");
       setOperatorUnlockError(null);
       await loadBusinesses();
-      setInfoBanner("Operator mode закрыт.");
+      setInfoBanner(ru.platform.operatorClosed);
     }
   };
 
@@ -882,37 +894,57 @@ export default function PlatformPage() {
     }
   }, [feedbackText, businesses]);
 
-  const copyReferralLink = useCallback(async () => {
-    const link = growthReferral?.link;
-    if (link == null || link === "") return;
-    try {
-      await navigator.clipboard.writeText(link);
-      setInfoBanner("Реферальная ссылка скопирована");
-    } catch {
-      setError("Не удалось скопировать ссылку");
-    }
-  }, [growthReferral?.link]);
-
-  const toggleMarketplacePublic = useCallback(async () => {
-    const first = businesses[0];
-    if (first == null || first.id <= 0) return;
-    setGrowthBusy(true);
+  const handleApproveRequest = async (requestId: number) => {
+    if (!Number.isFinite(merchantTelegramId)) return;
+    if (!(await ensureOperatorReauth())) return;
+    const token = operatorSessionToken?.trim();
+    if (!token) return;
+    setOperatorRequestBusyId(requestId);
     setError(null);
     try {
-      const next = !marketplacePublic;
-      await setStoreListingPublic({ businessId: first.id, isPublic: next });
-      setMarketplacePublic(next);
-      setInfoBanner(
-        next
-          ? "Магазин будет виден в маркетплейсе после публикации витрины"
-          : "Магазин скрыт из маркетплейса",
-      );
+      await postPlatformAdminApprove({
+        telegramId: merchantTelegramId,
+        requestId,
+        operatorSessionToken: token,
+      });
+      await loadOperatorBusinesses(merchantTelegramId, token);
+      setInfoBanner(ru.platform.requestApproved);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось изменить видимость");
+      setError(e instanceof Error ? e.message : "Не удалось одобрить");
     } finally {
-      setGrowthBusy(false);
+      setOperatorRequestBusyId(null);
     }
-  }, [businesses, marketplacePublic]);
+  };
+
+  const handleRejectRequest = async () => {
+    if (rejectModalRequestId == null || !Number.isFinite(merchantTelegramId)) return;
+    if (!(await ensureOperatorReauth())) return;
+    const token = operatorSessionToken?.trim();
+    if (!token) return;
+    const reason = rejectReasonDraft.trim();
+    if (reason.length < 3) {
+      setError("Укажите причину отклонения (минимум 3 символа)");
+      return;
+    }
+    setOperatorRequestBusyId(rejectModalRequestId);
+    setError(null);
+    try {
+      await postPlatformAdminReject({
+        telegramId: merchantTelegramId,
+        requestId: rejectModalRequestId,
+        rejectReason: reason,
+        operatorSessionToken: token,
+      });
+      await loadOperatorRequestsOnly(merchantTelegramId, token);
+      setRejectModalRequestId(null);
+      setRejectReasonDraft("");
+      setInfoBanner(ru.platform.requestRejected);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось отклонить");
+    } finally {
+      setOperatorRequestBusyId(null);
+    }
+  };
 
   /** Fallback: нижняя зелёная кнопка Telegram — открывает отдельный маршрут с формой. */
   const openCreateHandlerRef = useRef(goToMerchantRegister);
@@ -933,6 +965,7 @@ export default function PlatformPage() {
     if (
       loading ||
       businesses.length > 0 ||
+      registrationStatus?.status === "pending" ||
       tg == null ||
       mb == null ||
       typeof mb.onClick !== "function" ||
@@ -974,7 +1007,7 @@ export default function PlatformPage() {
         /* ignore */
       }
     };
-  }, [loading, businesses.length]);
+  }, [loading, businesses.length, registrationStatus?.status]);
 
   const closeSettingsModal = () => {
     setSettingsBusinessId(null);
@@ -1099,8 +1132,15 @@ export default function PlatformPage() {
     onboardingBaseOk &&
     (businesses.length === 0 || onboardingStep === "success");
 
-  /** Нижний «Создать» — всегда после загрузки, кроме полноэкранного онбординга (чтобы не дублировать с оверлеем). */
-  const showBottomCreateBar = !loading && !showOnboardingLayer;
+  const regPending = registrationStatus?.status === "pending";
+
+  /** Нижний «Создать» — после загрузки, если нет магазина и нет pending-заявки. */
+  const showBottomCreateBar =
+    !loading &&
+    !showOnboardingLayer &&
+    !isPlatformAdmin &&
+    businesses.length === 0 &&
+    !regPending;
 
   return (
     <>
@@ -1124,7 +1164,7 @@ export default function PlatformPage() {
                   setOperatorUnlockOpen(true);
                 }}
               >
-                Operator Mode
+                {ru.platform.operatorMode}
               </button>
             ) : null}
             {isPlatformAdmin ? (
@@ -1133,22 +1173,15 @@ export default function PlatformPage() {
                 className="mp-btn mp-btn--ghost mp-btn--sm"
                 onClick={() => void handleOperatorLock()}
               >
-                Закрыть Operator Mode
+                {ru.platform.operatorModeClose}
               </button>
             ) : null}
           </div>
           <p className="mp-access-hint">
             {isPlatformAdmin ? (
-              <>
-                Режим оператора платформы: видны все магазины, включение/отключение
-                бота, вебхуки, удаление и ручное продление подписки.
-              </>
+              <>{ru.platform.operatorHint}</>
             ) : (
-              <>
-                Этот кабинет открыт только вам: список магазинов приходит с сервера по
-                подписанным данным Telegram Mini App. Управление ботом и удаление
-                магазина выполняет только оператор платформы.
-              </>
+              <>{ru.platform.merchantHint}</>
             )}
           </p>
 
@@ -1187,25 +1220,149 @@ export default function PlatformPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
               >
-                <p className="text-lg font-semibold text-white">
-                  У вас пока нет магазинов
-                </p>
-                <p className="mt-2 text-base leading-relaxed text-slate-400">
-                  Заявка после одобрения появится в списке. Нажмите «Создать» ниже
-                  или откройте форму снизу экрана.
-                </p>
-                <button
-                  type="button"
-                  onClick={(ev) => {
-                    ev.preventDefault();
-                    ev.stopPropagation();
-                    goToMerchantRegister();
-                  }}
-                  className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg mt-8"
-                >
-                  ➕ Создать
-                </button>
+                {registrationStatus?.status === "pending" ? (
+                  <>
+                    <p className="text-lg font-semibold text-white">
+                      ⏳ Заявка на рассмотрении
+                    </p>
+                    <p className="mt-2 text-base leading-relaxed text-slate-400">
+                      «{registrationStatus.storeName ?? "Магазин"}» — оператор проверит
+                      данные. Уведомление придёт в Telegram-бот.
+                    </p>
+                  </>
+                ) : registrationStatus?.status === "rejected" ? (
+                  <>
+                    <p className="text-lg font-semibold text-white">
+                      ❌ Заявка отклонена
+                    </p>
+                    <p className="mt-2 text-base leading-relaxed text-slate-400">
+                      {registrationStatus.storeName
+                        ? `«${registrationStatus.storeName}»`
+                        : "Последняя заявка"}
+                      {registrationStatus.rejectReason
+                        ? `: ${registrationStatus.rejectReason}`
+                        : "."}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={(ev) => {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        goToMerchantRegister();
+                      }}
+                      className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg mt-8"
+                    >
+                      Подать новую заявку
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-lg font-semibold text-white">
+                      У вас пока нет магазинов
+                    </p>
+                    <p className="mt-2 text-base leading-relaxed text-slate-400">
+                      Создайте магазин в Mini App — заявка уйдёт на проверку оператору.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={(ev) => {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        goToMerchantRegister();
+                      }}
+                      className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg mt-8"
+                    >
+                      ➕ Создать магазин
+                    </button>
+                  </>
+                )}
               </motion.div>
+            ) : null}
+            {isPlatformAdmin ? (
+              <div className="mp-panel mb-4">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-white">
+                    {ru.platform.requestsInbox} ({operatorRequests.length})
+                  </p>
+                  <button
+                    type="button"
+                    className="mp-btn mp-btn--ghost mp-btn--sm"
+                    disabled={operatorRequestsLoading}
+                    onClick={() => {
+                      const token = operatorSessionToken?.trim();
+                      if (!token || !Number.isFinite(merchantTelegramId)) return;
+                      void loadOperatorRequestsOnly(merchantTelegramId, token);
+                    }}
+                  >
+                    {operatorRequestsLoading ? "…" : ru.common.refresh}
+                  </button>
+                </div>
+                {operatorRequests.length === 0 ? (
+                  <p className="mt-2 text-sm text-slate-400">{ru.platform.noPendingRequests}</p>
+                ) : (
+                  <ul className="mt-3 space-y-3">
+                    {operatorRequests.map((req) => (
+                      <li
+                        key={req.id}
+                        className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <p className="font-semibold text-white">{req.storeName}</p>
+                            <p className="mt-1 text-xs text-slate-400">
+                              #{req.id} · {businessTypeLabel(req.businessType)} ·{" "}
+                              {formatRuDateShort(req.createdAt) ?? req.createdAt}
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              className="mp-btn mp-btn--primary mp-btn--sm"
+                              disabled={operatorRequestBusyId === req.id}
+                              onClick={() => void handleApproveRequest(req.id)}
+                            >
+                              {ru.common.approve}
+                            </button>
+                            <button
+                              type="button"
+                              className="mp-btn mp-btn--secondary mp-btn--sm"
+                              disabled={operatorRequestBusyId === req.id}
+                              onClick={() => {
+                                setRejectReasonDraft("");
+                                setRejectModalRequestId(req.id);
+                              }}
+                            >
+                              {ru.common.reject}
+                            </button>
+                          </div>
+                        </div>
+                        <dl className="mt-3 grid gap-1 text-xs text-slate-400">
+                          <div>
+                            <span className="text-slate-500">{ru.platform.telegramId}: </span>
+                            {req.telegramId}
+                          </div>
+                          {req.ownerUsername ? (
+                            <div>
+                              <span className="text-slate-500">Username: </span>@
+                              {req.ownerUsername}
+                            </div>
+                          ) : null}
+                          <div>
+                            <span className="text-slate-500">Телефон: </span>
+                            {req.phone}
+                          </div>
+                          {req.botUsername ? (
+                            <div>
+                              <span className="text-slate-500">{ru.platform.botLabel}: </span>@
+                              {req.botUsername}
+                            </div>
+                          ) : null}
+                        </dl>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             ) : null}
             {businesses.length > 0 ? (
               <>
@@ -1225,58 +1382,6 @@ export default function PlatformPage() {
                     Отлично — магазин готов к продажам.
                   </p>
                 )}
-              </div>
-            ) : null}
-            {!isPlatformAdmin && businesses.length > 0 ? (
-              <div className="mp-panel mb-4">
-                <p className="text-sm font-semibold text-white">Рост и экосистема</p>
-                <p className="mt-1 text-xs text-slate-400">
-                  Приглашайте других merchants и откройте магазин в публичном маркетплейсе.
-                </p>
-                {growthReferral ? (
-                  <div className="mt-3 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-3">
-                    <div className="text-xs font-medium text-slate-300">
-                      Реферальная ссылка
-                    </div>
-                    <div className="mt-1 break-all font-mono text-[11px] text-slate-400">
-                      {growthReferral.link}
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        className="mp-btn mp-btn--secondary mp-btn--sm"
-                        onClick={() => void copyReferralLink()}
-                      >
-                        Скопировать
-                      </button>
-                      <span className="inline-flex items-center text-xs text-slate-400">
-                        Приглашено: {growthReferral.signups}
-                      </span>
-                    </div>
-                  </div>
-                ) : null}
-                <label className="mt-3 flex cursor-pointer items-start gap-3">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={marketplacePublic}
-                    disabled={growthBusy}
-                    onChange={() => void toggleMarketplacePublic()}
-                  />
-                  <span className="text-sm text-slate-300">
-                    Показать в маркетплейсе платформы
-                    <span className="mt-0.5 block text-xs text-slate-500">
-                      Нужна опубликованная витрина. Вы управляете видимостью.
-                    </span>
-                  </span>
-                </label>
-                <button
-                  type="button"
-                  className="mp-btn mp-btn--ghost mp-btn--sm mt-3"
-                  onClick={() => navigate("/discover")}
-                >
-                  Открыть маркетплейс →
-                </button>
               </div>
             ) : null}
               <ul className="mp-store-list">
@@ -1587,6 +1692,48 @@ export default function PlatformPage() {
         </div>
       ) : null}
 
+      {rejectModalRequestId != null ? (
+        <div className="mp-settings-backdrop">
+          <div
+            className="mp-settings-dialog-shell"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reject-request-title"
+          >
+            <h2 id="reject-request-title" className="text-lg font-semibold text-white">
+              {ru.platform.rejectTitle}
+            </h2>
+            <p className="mt-2 text-sm text-slate-400">{ru.platform.rejectHint}</p>
+            <textarea
+              className={`${archa.input} mt-4 min-h-[96px]`}
+              value={rejectReasonDraft}
+              onChange={(e) => setRejectReasonDraft(e.target.value)}
+              placeholder={ru.platform.rejectPlaceholder}
+            />
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                className="mp-btn mp-btn--secondary mp-btn--block"
+                onClick={() => {
+                  setRejectModalRequestId(null);
+                  setRejectReasonDraft("");
+                }}
+              >
+                {ru.common.cancel}
+              </button>
+              <button
+                type="button"
+                className="mp-btn mp-btn--primary mp-btn--block"
+                disabled={operatorRequestBusyId != null}
+                onClick={() => void handleRejectRequest()}
+              >
+                {ru.common.reject}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {operatorUnlockOpen ? (
         <div className="mp-settings-backdrop">
           <div
@@ -1600,7 +1747,7 @@ export default function PlatformPage() {
                 id="operator-unlock-title"
                 className="text-lg font-semibold text-white"
               >
-                Operator Unlock
+                {ru.platform.operatorUnlock}
               </h2>
               <button
                 type="button"
@@ -1640,7 +1787,7 @@ export default function PlatformPage() {
                 className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg"
                 disabled={operatorUnlockBusy}
               >
-                {operatorUnlockBusy ? "Проверка..." : "Войти в Operator Mode"}
+                {operatorUnlockBusy ? "Проверка…" : ru.platform.operatorUnlockSubmit}
               </button>
             </form>
           </div>

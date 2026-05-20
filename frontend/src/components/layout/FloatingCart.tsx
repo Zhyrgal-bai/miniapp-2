@@ -99,6 +99,7 @@ export default function FloatingCart({
   const bottomInsetRef = useRef(bottomInsetPx);
   bottomInsetRef.current = bottomInsetPx;
   const [pos, setPos] = useState<Pos>(() => loadPos(HEADER_FALLBACK_BOTTOM, bottomInsetPx));
+  const [dragging, setDragging] = useState(false);
   const posRef = useRef<Pos>(pos);
 
   useEffect(() => {
@@ -139,6 +140,7 @@ export default function FloatingCart({
   const finishDrag = useCallback(() => {
     cleanupRef.current?.();
     cleanupRef.current = null;
+    setDragging(false);
     if (dragRef.current && movedRef.current) {
       try {
         localStorage.setItem(
@@ -168,6 +170,7 @@ export default function FloatingCart({
     (clientX: number, clientY: number) => {
       finishDrag();
       movedRef.current = false;
+      setDragging(true);
       dragRef.current = {
         startClientX: clientX,
         startClientY: clientY,
@@ -244,7 +247,7 @@ export default function FloatingCart({
   return (
     <button
       type="button"
-      className="floating-cart cart-float floating-cart--storefront"
+      className={`floating-cart cart-float floating-cart--storefront${dragging ? " floating-cart--dragging" : ""}`}
       style={{
         left: pos.x,
         top: pos.y,

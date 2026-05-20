@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { useCartStore } from "../store/useCartStore";
 import { api } from "../services/api";
@@ -18,8 +18,6 @@ type Props = {
   onBack?: () => void;
 };
 
-const PROMO_APPLY_ERROR = "Неверный или использован промокод";
-
 type NominatimSearchItem = {
   place_id: number;
   display_name: string;
@@ -27,14 +25,37 @@ type NominatimSearchItem = {
   lon: string;
 };
 
+type FieldErrors = {
+  name?: string;
+  phone?: string;
+};
+
 const ADDRESS_SEARCH_DEBOUNCE_MS = 450;
+
+function formatSom(n: number): string {
+  return `${Math.round(n)} сом`;
+}
 
 function orderErrorMessage(err: unknown): string {
   if (axios.isAxiosError(err)) {
-    const data = err.response?.data as { error?: string } | undefined;
+    const data = err.response?.data as
+      | { error?: string; details?: Record<string, string> }
+      | undefined;
+    if (
+      data?.error === "Есть неизвестные поля" ||
+      data?.error === "Некорректные значения"
+    ) {
+      return "Не удалось оформить заказ. Обновите корзину и попробуйте снова.";
+    }
+    if (data?.details && typeof data.details === "object") {
+      const first = Object.values(data.details).find(
+        (v) => typeof v === "string" && v.trim() !== "",
+      );
+      if (first) return first;
+    }
     if (data?.error) return data.error;
   }
-  return "Не удалось оформить заказ. Попробуйте позже.";
+  return t("checkout.errorGeneric");
 }
 
 export default function CheckoutPage({ onBack }: Props) {
@@ -53,7 +74,7 @@ export default function CheckoutPage({ onBack }: Props) {
   >([]);
   const [addressSearchLoading, setAddressSearchLoading] = useState(false);
   const addressSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null
+    null,
   );
   const addressSearchSeqRef = useRef(0);
   const [showMapPicker, setShowMapPicker] = useState(false);
@@ -61,17 +82,18 @@ export default function CheckoutPage({ onBack }: Props) {
   const [promo, setPromo] = useState("");
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  /** Телефон уже был в прошлом заказе — поле ввода не показываем */
   const [phoneFromSavedOrder, setPhoneFromSavedOrder] = useState(false);
   const [promoPreview, setPromoPreview] = useState<{
     newTotal: number;
     discount: number;
   } | null>(null);
   const [promoChecking, setPromoChecking] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
   const [finikRedirectMessage, setFinikRedirectMessage] = useState<
     string | null
   >(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   useEffect(() => {
     if (businessId != null && businessId > 0) {
@@ -79,14 +101,22 @@ export default function CheckoutPage({ onBack }: Props) {
     }
   }, [businessId]);
 
-  const totalPrice = items.reduce(
-    (sum, item) => sum + item.price * (item.quantity ?? 1),
-    0
+  const subtotal = useMemo(
+    () => items.reduce((sum, item) => sum + item.price * (item.quantity ?? 1), 0),
+    [items],
   );
+
+  const discountAmount = useMemo(() => {
+    if (!promoPreview) return 0;
+    return Math.max(0, subtotal - promoPreview.newTotal);
+  }, [promoPreview, subtotal]);
+
+  const totalPrice = promoPreview?.newTotal ?? subtotal;
 
   useEffect(() => {
     setPromoPreview(null);
-  }, [totalPrice]);
+    setPromoError(null);
+  }, [subtotal]);
 
   useEffect(() => {
     return () => {
@@ -108,10 +138,11 @@ export default function CheckoutPage({ onBack }: Props) {
           return raw != null && String(raw).trim() !== "";
         });
         const saved =
-          prev != null ? String(prev.phone ?? prev.customerPhone ?? "").trim() : "";
-        const trimmed = saved != null ? String(saved).trim() : "";
-        if (!cancelled && trimmed !== "") {
-          setPhone(trimmed);
+          prev != null
+            ? String(prev.phone ?? prev.customerPhone ?? "").trim()
+            : "";
+        if (!cancelled && saved !== "") {
+          setPhone(saved);
           setPhoneFromSavedOrder(true);
         }
       } catch {
@@ -127,21 +158,20 @@ export default function CheckoutPage({ onBack }: Props) {
     const code = cleanInput(promo);
     if (!code) {
       setPromoPreview(null);
-      return totalPrice;
+      setPromoError(null);
+      return subtotal;
     }
     const shop = buildCatalogRequestParams().shop;
-    const businessId = shop ? Number(shop) : NaN;
-    if (!Number.isInteger(businessId) || businessId <= 0) {
-      alert(
-        "Откройте мини-приложение со ссылкой ?shop=id_магазина — нужен промокод по магазину"
-      );
+    const promoBusinessId = shop ? Number(shop) : NaN;
+    if (!Number.isInteger(promoBusinessId) || promoBusinessId <= 0) {
+      setPromoError(t("checkout.promoNeedShop"));
       setPromoPreview(null);
       return null;
     }
     try {
       const applyRes = await api.post<{ newTotal?: number; discount?: number }>(
         "/promo/apply",
-        { code, total: totalPrice, businessId },
+        { code, total: subtotal, businessId: promoBusinessId },
       );
       const data = applyRes.data;
       if (
@@ -149,14 +179,15 @@ export default function CheckoutPage({ onBack }: Props) {
         data.discount == null ||
         !Number.isFinite(data.newTotal)
       ) {
-        alert(PROMO_APPLY_ERROR);
+        setPromoError(t("checkout.promoInvalid"));
         setPromoPreview(null);
         return null;
       }
       setPromoPreview({ newTotal: data.newTotal, discount: data.discount });
+      setPromoError(null);
       return data.newTotal;
     } catch {
-      alert(PROMO_APPLY_ERROR);
+      setPromoError(t("checkout.promoInvalid"));
       setPromoPreview(null);
       return null;
     }
@@ -209,8 +240,8 @@ export default function CheckoutPage({ onBack }: Props) {
   const handleAddressChange = useCallback(
     (value: string) => {
       setAddress(value);
-      const t = value.trim();
-      if (t.length < 3) {
+      const trimmed = value.trim();
+      if (trimmed.length < 3) {
         if (addressSearchTimerRef.current) {
           clearTimeout(addressSearchTimerRef.current);
           addressSearchTimerRef.current = null;
@@ -225,10 +256,10 @@ export default function CheckoutPage({ onBack }: Props) {
       }
       addressSearchTimerRef.current = setTimeout(() => {
         addressSearchTimerRef.current = null;
-        void runAddressSearch(t);
+        void runAddressSearch(trimmed);
       }, ADDRESS_SEARCH_DEBOUNCE_MS);
     },
-    [runAddressSearch]
+    [runAddressSearch],
   );
 
   const selectAddress = useCallback((item: NominatimSearchItem) => {
@@ -246,7 +277,7 @@ export default function CheckoutPage({ onBack }: Props) {
 
   const getLocation = useCallback(() => {
     if (!navigator.geolocation) {
-      alert("Геолокация не поддерживается");
+      setCheckoutError(t("checkout.geoUnsupported"));
       return;
     }
     if (addressSearchTimerRef.current) {
@@ -278,29 +309,30 @@ export default function CheckoutPage({ onBack }: Props) {
             const data = (await res.json().catch(() => ({}))) as {
               display_name?: string;
             };
-            if (typeof data.display_name === "string" && data.display_name.trim()) {
+            if (
+              typeof data.display_name === "string" &&
+              data.display_name.trim()
+            ) {
               setAddress(data.display_name.trim().slice(0, 2000));
             }
           } catch (e) {
             console.error(e);
-            alert("Не удалось получить адрес");
+            setCheckoutError(t("checkout.geoAddressFail"));
           } finally {
             setLoadingLocation(false);
           }
         })();
       },
       () => {
-        alert("Разрешите доступ к геолокации");
+        setCheckoutError(t("checkout.geoDenied"));
         setLoadingLocation(false);
       },
-      { enableHighAccuracy: true, timeout: 20_000, maximumAge: 60_000 }
+      { enableHighAccuracy: true, timeout: 20_000, maximumAge: 60_000 },
     );
   }, []);
 
   const handleCheckPromo = async () => {
-    if (!promo.trim()) {
-      return;
-    }
+    if (!promo.trim()) return;
     setPromoChecking(true);
     try {
       await applyPromoCode();
@@ -309,35 +341,33 @@ export default function CheckoutPage({ onBack }: Props) {
     }
   };
 
+  const validateForm = (): boolean => {
+    const next: FieldErrors = {};
+    if (!name.trim()) next.name = t("checkout.nameRequired");
+    if (!phone.trim()) next.phone = t("checkout.phoneRequired");
+    else if (!validateKgPhone(phone.trim())) {
+      next.phone = t("checkout.phoneInvalid");
+      if (phoneFromSavedOrder) setPhoneFromSavedOrder(false);
+    }
+    setFieldErrors(next);
+    return Object.keys(next).length === 0;
+  };
+
   const handleSubmit = async () => {
     if (items.length === 0) return;
-    if (!name.trim()) {
-      alert("Укажите имя");
-      return;
-    }
-    if (!phone.trim()) {
-      alert("Укажите номер телефона");
-      return;
-    }
-    const phoneTrimmed = phone.trim();
-    if (!validateKgPhone(phoneTrimmed)) {
-      alert("Введите правильный номер: +996XXXXXXXXX или 0556XXXXXX");
-      if (phoneFromSavedOrder) {
-        setPhoneFromSavedOrder(false);
-      }
-      return;
-    }
+    if (!validateForm()) return;
 
     const tg = getTelegramUser();
     const uid = getTelegramWebAppUserId();
     const userId = Number.isFinite(uid) ? uid : Number(tg?.id);
     const promoCode = cleanInput(promo);
+    const phoneTrimmed = phone.trim();
 
-    let payTotal = totalPrice;
+    let payTotal = subtotal;
     if (promoCode) {
-      const t = await applyPromoCode();
-      if (t == null) return;
-      payTotal = t;
+      const applied = await applyPromoCode();
+      if (applied == null) return;
+      payTotal = applied;
     } else {
       setPromoPreview(null);
     }
@@ -346,28 +376,16 @@ export default function CheckoutPage({ onBack }: Props) {
     const addressClean = cleanInput(address);
     const commentClean = cleanInput(comment);
     const displayName =
-      nameClean || (tg?.first_name ? cleanInput(tg.first_name) : "") || "Гость";
-
-    const orderData = {
-      name: displayName,
-      phone: phoneTrimmed,
-      address: addressClean,
-      items: items.map((i) => ({
-        name: i.name,
-        size: i.size,
-        quantity: i.quantity,
-      })),
-      total: payTotal,
-    };
+      nameClean ||
+      (tg?.first_name ? cleanInput(tg.first_name) : "") ||
+      "Гость";
 
     setSubmitting(true);
     setCheckoutError(null);
     let redirecting = false;
     try {
       const tenantParams =
-        businessId != null
-          ? { businessId, shop: String(businessId) }
-          : {};
+        businessId != null ? { businessId, shop: String(businessId) } : {};
       const { data } = await api.post<{
         id: number;
         businessId?: number;
@@ -377,9 +395,9 @@ export default function CheckoutPage({ onBack }: Props) {
         ...(Number.isFinite(userId) ? { userId } : {}),
         user: {
           telegramId: Number.isFinite(Number(tg?.id)) ? Number(tg?.id) : 0,
-          name: orderData.name || "Гость",
+          name: displayName,
         },
-        phone: orderData.phone,
+        phone: phoneTrimmed,
         items: items.map((i) => ({
           productId: i.productId,
           name: i.name,
@@ -388,10 +406,10 @@ export default function CheckoutPage({ onBack }: Props) {
           quantity: i.quantity,
           price: i.price,
         })),
-        subtotal: totalPrice,
+        subtotal,
         total: payTotal,
         deliveryType,
-        address: orderData.address,
+        address: addressClean,
         ...(lat != null && lng != null ? { lat, lng } : {}),
         promo: promoCode,
         comment: commentClean,
@@ -412,7 +430,11 @@ export default function CheckoutPage({ onBack }: Props) {
               ? data.businessId
               : null;
         if (resolvedBusinessId != null) {
-          setPendingFinikOrder({ orderId: data.id, businessId: resolvedBusinessId });
+          setPendingFinikOrder({
+            orderId: data.id,
+            businessId: resolvedBusinessId,
+            paymentUrl: payUrl,
+          });
         }
         setFinikRedirectMessage(t("checkout.redirecting"));
         window.setTimeout(() => {
@@ -427,13 +449,12 @@ export default function CheckoutPage({ onBack }: Props) {
           setPromo("");
           setComment("");
           setPromoPreview(null);
+          setFieldErrors({});
         }, 400);
         return;
       }
 
-      setCheckoutError(
-        "Не удалось получить ссылку на оплату. Заказ создан — откройте «Мои заказы»."
-      );
+      setCheckoutError(t("checkout.payLinkMissing"));
     } catch (err) {
       console.error(err);
       setCheckoutError(orderErrorMessage(err));
@@ -448,13 +469,13 @@ export default function CheckoutPage({ onBack }: Props) {
     return (
       <div className="checkout checkout--empty">
         <button type="button" className="checkout-back" onClick={onBack}>
-          ← Корзина
+          {t("checkout.backToCart")}
         </button>
-        <h2>Оформление заказа</h2>
-        <p className="checkout-empty-text">Корзина пуста</p>
+        <h2>{t("checkout.title")}</h2>
+        <p className="checkout-empty-text">{t("checkout.emptyCart")}</p>
         {onBack && (
           <button type="button" className="order-btn" onClick={onBack}>
-            Вернуться в корзину
+            {t("checkout.backToCart")}
           </button>
         )}
       </div>
@@ -471,11 +492,11 @@ export default function CheckoutPage({ onBack }: Props) {
       )}
       {onBack && (
         <button type="button" className="checkout-back" onClick={onBack}>
-          ← Корзина
+          {t("checkout.backToCart")}
         </button>
       )}
 
-      <h2>{t("checkout.title")}</h2>
+      <h2 className="checkout-page-title">{t("checkout.title")}</h2>
 
       {checkoutError != null && (
         <div className="checkout-error-banner" role="alert">
@@ -490,190 +511,283 @@ export default function CheckoutPage({ onBack }: Props) {
         </div>
       )}
 
-      <div className="checkout-form-scroll">
-      <div className="form">
-        <input
-          placeholder="Ваше имя"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        {!phoneFromSavedOrder && (
-          <input
-            placeholder="Введите номер телефона"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            inputMode="tel"
-            autoComplete="tel"
-          />
-        )}
-        <div className="checkout-address-block">
-          <div className="checkout-address-suggest">
-            <input
-              placeholder="Введите адрес"
-              value={address}
-              onChange={(e) => handleAddressChange(e.target.value)}
-              autoComplete="street-address"
-              aria-autocomplete="list"
-              aria-expanded={
-                addressSuggestions.length > 0 || addressSearchLoading
-              }
-            />
-            {addressSearchLoading && (
-              <p
-                className="checkout-address-suggest__loading"
-                role="status"
-                aria-live="polite"
-              >
-                Поиск...
-              </p>
-            )}
-            {addressSuggestions.length > 0 && (
-              <div
-                className="checkout-address-suggest__list"
-                role="listbox"
-                aria-label="Подсказки адреса"
-              >
-                {addressSuggestions.map((item) => (
-                  <button
-                    key={item.place_id}
-                    type="button"
-                    role="option"
-                    className="checkout-address-suggest__item"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      selectAddress(item);
-                    }}
-                  >
-                    {item.display_name}
-                  </button>
-                ))}
-              </div>
-            )}
+      <section className="checkout-summary" aria-label={t("checkout.summary")}>
+        <h3 className="checkout-summary__title">{t("checkout.summary")}</h3>
+        <ul className="checkout-summary__items">
+          {items.map((item) => {
+            const variant = [item.size, item.color]
+              .filter((v) => v && String(v).trim() !== "")
+              .join(" · ");
+            const key = `${item.productId}-${item.size}-${item.color}`;
+            return (
+              <li key={key} className="checkout-summary__row">
+                <div className="checkout-summary__item-main">
+                  <span className="checkout-summary__name">{item.name}</span>
+                  {variant && (
+                    <span className="checkout-summary__variant">{variant}</span>
+                  )}
+                  <span className="checkout-summary__qty">
+                    {item.quantity} {t("checkout.qty")}
+                  </span>
+                </div>
+                <span className="checkout-summary__price">
+                  {formatSom(item.price * item.quantity)}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="checkout-summary__totals">
+          <div className="checkout-summary__line">
+            <span>{t("checkout.subtotal")}</span>
+            <span>{formatSom(subtotal)}</span>
           </div>
-          <div className="checkout-loc-actions">
-            <button
-              type="button"
-              className="checkout-loc-btn"
-              onClick={() => getLocation()}
-              disabled={loadingLocation || submitting}
-            >
-              {loadingLocation ? "Определяем адрес..." : "📍 Определить адрес"}
-            </button>
-            <button
-              type="button"
-              className="checkout-loc-btn checkout-loc-btn--map"
-              onClick={() => setShowMapPicker((v) => !v)}
-              disabled={submitting}
-              aria-expanded={showMapPicker}
-            >
-              {showMapPicker ? "🗺 Скрыть карту" : "🗺 Выбрать на карте"}
-            </button>
+          <div className="checkout-summary__line">
+            <span>
+              {deliveryType === "pickup"
+                ? t("checkout.pickup")
+                : t("checkout.delivery")}
+            </span>
+            <span>{t("checkout.deliveryFree")}</span>
           </div>
-          {showMapPicker && (
-            <div className="checkout-map-wrap">
-              <MapPicker
-                lat={lat}
-                lng={lng}
-                setLat={(v) => setLat(v)}
-                setLng={(v) => setLng(v)}
-                setAddress={(v) => {
-                  setAddress(v);
-                  if (addressSearchTimerRef.current) {
-                    clearTimeout(addressSearchTimerRef.current);
-                    addressSearchTimerRef.current = null;
-                  }
-                  addressSearchSeqRef.current += 1;
-                  setAddressSuggestions([]);
-                  setAddressSearchLoading(false);
-                }}
-              />
-              <p className="checkout-map-hint">
-                Нажмите на карту, чтобы поставить точку и подставить адрес
-              </p>
+          {promoPreview && discountAmount > 0 && (
+            <div className="checkout-summary__line checkout-summary__line--discount">
+              <span>
+                {t("checkout.discount")} ({promoPreview.discount}%)
+              </span>
+              <span>−{formatSom(discountAmount)}</span>
             </div>
           )}
-          {loadingLocation && (
-            <p className="checkout-loc-status" role="status" aria-live="polite">
-              Определяем адрес...
-            </p>
+        </div>
+      </section>
+
+      <div className="checkout-form-scroll">
+        <div className="checkout-form">
+          <div className="checkout-field">
+            <label className="checkout-field__label" htmlFor="checkout-name">
+              {t("checkout.name")}
+            </label>
+            <input
+              id="checkout-name"
+              className={fieldErrors.name ? "checkout-field--error" : ""}
+              placeholder={t("checkout.name")}
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                if (fieldErrors.name) {
+                  setFieldErrors((prev) => ({ ...prev, name: undefined }));
+                }
+              }}
+              autoComplete="name"
+            />
+            {fieldErrors.name && (
+              <p className="checkout-field__error">{fieldErrors.name}</p>
+            )}
+          </div>
+
+          {!phoneFromSavedOrder && (
+            <div className="checkout-field">
+              <label className="checkout-field__label" htmlFor="checkout-phone">
+                {t("checkout.phone")}
+              </label>
+              <input
+                id="checkout-phone"
+                className={fieldErrors.phone ? "checkout-field--error" : ""}
+                placeholder="+996 XXX XXX XXX"
+                value={phone}
+                onChange={(e) => {
+                  setPhone(e.target.value);
+                  if (fieldErrors.phone) {
+                    setFieldErrors((prev) => ({ ...prev, phone: undefined }));
+                  }
+                }}
+                inputMode="tel"
+                autoComplete="tel"
+              />
+              {fieldErrors.phone && (
+                <p className="checkout-field__error">{fieldErrors.phone}</p>
+              )}
+            </div>
           )}
-          {!loadingLocation && lat != null && lng != null && (
-            <p className="checkout-loc-coords" aria-live="polite">
-              Координаты сохранены для заказа ({lat.toFixed(5)}, {lng.toFixed(5)})
+
+          <div className="checkout-field">
+            <label className="checkout-field__label" htmlFor="checkout-address">
+              {t("checkout.address")}
+            </label>
+            <div className="checkout-address-block">
+              <div className="checkout-address-suggest">
+                <input
+                  id="checkout-address"
+                  placeholder={t("checkout.address")}
+                  value={address}
+                  onChange={(e) => handleAddressChange(e.target.value)}
+                  autoComplete="street-address"
+                  aria-autocomplete="list"
+                  aria-expanded={
+                    addressSuggestions.length > 0 || addressSearchLoading
+                  }
+                />
+                {addressSearchLoading && (
+                  <p
+                    className="checkout-address-suggest__loading"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {t("checkout.addressSearch")}
+                  </p>
+                )}
+                {addressSuggestions.length > 0 && (
+                  <div
+                    className="checkout-address-suggest__list"
+                    role="listbox"
+                    aria-label={t("checkout.address")}
+                  >
+                    {addressSuggestions.map((item) => (
+                      <button
+                        key={item.place_id}
+                        type="button"
+                        role="option"
+                        className="checkout-address-suggest__item"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          selectAddress(item);
+                        }}
+                      >
+                        {item.display_name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="checkout-loc-actions">
+                <button
+                  type="button"
+                  className="checkout-loc-btn"
+                  onClick={() => getLocation()}
+                  disabled={loadingLocation || submitting}
+                >
+                  {loadingLocation
+                    ? t("checkout.geoLoading")
+                    : t("checkout.geoBtn")}
+                </button>
+                <button
+                  type="button"
+                  className="checkout-loc-btn checkout-loc-btn--map"
+                  onClick={() => setShowMapPicker((v) => !v)}
+                  disabled={submitting}
+                  aria-expanded={showMapPicker}
+                >
+                  {showMapPicker ? t("checkout.mapHide") : t("checkout.mapShow")}
+                </button>
+              </div>
+              {showMapPicker && (
+                <div className="checkout-map-wrap">
+                  <MapPicker
+                    lat={lat}
+                    lng={lng}
+                    setLat={(v) => setLat(v)}
+                    setLng={(v) => setLng(v)}
+                    setAddress={(v) => {
+                      setAddress(v);
+                      if (addressSearchTimerRef.current) {
+                        clearTimeout(addressSearchTimerRef.current);
+                        addressSearchTimerRef.current = null;
+                      }
+                      addressSearchSeqRef.current += 1;
+                      setAddressSuggestions([]);
+                      setAddressSearchLoading(false);
+                    }}
+                  />
+                  <p className="checkout-map-hint">{t("checkout.mapHint")}</p>
+                </div>
+              )}
+              {!loadingLocation && lat != null && lng != null && (
+                <p className="checkout-loc-coords" aria-live="polite">
+                  {t("checkout.coordsSaved")} ({lat.toFixed(5)}, {lng.toFixed(5)})
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="checkout-field">
+            <label className="checkout-field__label" htmlFor="checkout-delivery">
+              {t("checkout.deliveryType")}
+            </label>
+            <select
+              id="checkout-delivery"
+              value={deliveryType}
+              onChange={(e) => setDeliveryType(e.target.value)}
+            >
+              <option value="delivery">{t("checkout.delivery")}</option>
+              <option value="pickup">{t("checkout.pickup")}</option>
+            </select>
+          </div>
+
+          <div className="checkout-field">
+            <label className="checkout-field__label" htmlFor="checkout-promo">
+              {t("checkout.promoCode")}
+            </label>
+            <div className="checkout-promo-row">
+              <input
+                id="checkout-promo"
+                placeholder={t("checkout.promoCode")}
+                value={promo}
+                onChange={(e) => {
+                  setPromo(e.target.value);
+                  setPromoPreview(null);
+                  setPromoError(null);
+                }}
+              />
+              <button
+                type="button"
+                className="checkout-promo-apply"
+                onClick={handleCheckPromo}
+                disabled={promoChecking || !promo.trim()}
+              >
+                {t("checkout.promoApply")}
+              </button>
+            </div>
+            {promoError && (
+              <p className="checkout-field__error">{promoError}</p>
+            )}
+          </div>
+
+          <div className="checkout-field">
+            <label className="checkout-field__label" htmlFor="checkout-comment">
+              {t("checkout.comment")}
+            </label>
+            <textarea
+              id="checkout-comment"
+              placeholder={t("checkout.comment")}
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              rows={3}
+            />
+          </div>
+
+          <div className="checkout-payment">
+            <p className="checkout-payment__summary" aria-live="polite">
+              {t("checkout.paymentHint")}
             </p>
-          )}
+          </div>
         </div>
-
-        <select
-          value={deliveryType}
-          onChange={(e) => setDeliveryType(e.target.value)}
-        >
-          <option value="delivery">Доставка</option>
-          <option value="pickup">Самовывоз</option>
-        </select>
-
-        <div className="checkout-promo-row">
-          <input
-            placeholder="Промокод"
-            value={promo}
-            onChange={(e) => {
-              setPromo(e.target.value);
-              setPromoPreview(null);
-            }}
-          />
-          <button
-            type="button"
-            className="checkout-promo-apply"
-            onClick={handleCheckPromo}
-            disabled={promoChecking || !promo.trim()}
-          >
-            Применить
-          </button>
-        </div>
-        <textarea
-          placeholder="Комментарий"
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          rows={3}
-        />
-
-        <div className="checkout-payment">
-          <p className="checkout-payment__label">Оплата</p>
-          <p className="checkout-payment__summary" aria-live="polite">
-            {t("checkout.paymentHint")}
-          </p>
-        </div>
-      </div>
       </div>
 
       <div className="checkout-footer checkout-footer--sticky">
-        <div className="total">
-          <span>{t("checkout.total")}</span>
-          <strong>
-            {promoPreview ? promoPreview.newTotal : totalPrice} сом
+        <div className="checkout-footer__total">
+          <span className="checkout-footer__total-label">{t("checkout.total")}</span>
+          <strong className="checkout-footer__total-value">
+            {formatSom(totalPrice)}
           </strong>
         </div>
-        {promoPreview && (
-          <div className="checkout-promo-result">
-            <p className="checkout-promo-result__line">
-              Новая цена: <strong>{promoPreview.newTotal} сом</strong>
-            </p>
-            <p className="checkout-promo-result__line">
-              Скидка: <strong>{promoPreview.discount}%</strong>
-            </p>
-            <p className="checkout-promo-hint">Без скидки: {totalPrice} сом</p>
-          </div>
-        )}
 
         <button
           type="button"
-          className="order-btn order-btn--primary"
+          className="order-btn order-btn--primary order-btn--checkout"
           onClick={handleSubmit}
           disabled={submitting || finikRedirectMessage != null}
         >
-          {submitting
-            ? t("checkout.submitting")
-            : t("checkout.submit")}
+          {submitting ? t("checkout.submitting") : t("checkout.submit")}
         </button>
       </div>
     </div>
