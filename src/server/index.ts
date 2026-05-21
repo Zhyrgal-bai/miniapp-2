@@ -5192,6 +5192,13 @@ void (async () => {
   try {
     await connectDatabase();
     console.log("DB connected ✅");
+    const { backfillBusinessStaffFromLegacy } = await import(
+      "./businessStaffBackfill.js"
+    );
+    const staffHealed = await backfillBusinessStaffFromLegacy();
+    if (staffHealed > 0) {
+      console.log(`[staff] Backfilled ${staffHealed} BusinessStaff row(s)`);
+    }
   } catch (e) {
     logPrismaError("connectDatabase()", e);
     console.error("DB connection failed — exit");

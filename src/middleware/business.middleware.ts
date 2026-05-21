@@ -1,6 +1,8 @@
 import type { NextFunction, Request, Response } from "express";
-import type { Business, BusinessStaff, User } from "@prisma/client";
+import type { Business, User } from "@prisma/client";
+import type { BusinessStaffRecord } from "../server/businessStaffAccess.js";
 import { prisma } from "../server/db.js";
+import { resolveBusinessStaffRecord } from "../server/businessStaffBackfill.js";
 import {
   type SubscriptionGateFields,
   isSubscriptionActive,
@@ -14,7 +16,7 @@ declare global {
       businessId?: number;
       tenantUser?: User | null;
       tenantBusiness?: Business;
-      tenantStaff?: BusinessStaff | null;
+      tenantStaff?: BusinessStaffRecord | null;
     }
   }
 }
@@ -131,11 +133,7 @@ export async function businessMiddleware(
       const staffRow =
         userRow == null
           ? null
-          : await prisma.businessStaff.findUnique({
-              where: {
-                userId_businessId: { userId: userRow.id, businessId: hinted },
-              },
-            });
+          : await resolveBusinessStaffRecord(hinted, userRow.id);
 
       req.businessId = hinted;
       req.tenantBusiness = business;

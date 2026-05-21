@@ -21,6 +21,10 @@ export async function getMerchantRegistrationStatus(
   const user = await prisma.user.findUnique({
     where: { telegramId: tid },
     select: {
+      staffAssignments: {
+        select: { id: true },
+        take: 1,
+      },
       memberships: {
         where: { role: { in: ["OWNER", "ADMIN"] } },
         select: { id: true },
@@ -28,7 +32,10 @@ export async function getMerchantRegistrationStatus(
       },
     },
   });
-  if (user && user.memberships.length > 0) {
+  if (
+    user &&
+    (user.staffAssignments.length > 0 || user.memberships.length > 0)
+  ) {
     return { status: "has_stores" };
   }
 

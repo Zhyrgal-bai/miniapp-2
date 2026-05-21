@@ -35,7 +35,8 @@ export async function findBusinessStaffByTelegramId(
     select: { id: true },
   });
   if (!user) return null;
-  return findBusinessStaff(businessId, user.id);
+  const { resolveBusinessStaffRecord } = await import("./businessStaffBackfill.js");
+  return resolveBusinessStaffRecord(businessId, user.id);
 }
 
 export async function listBusinessStaffForUser(
