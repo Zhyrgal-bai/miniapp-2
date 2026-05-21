@@ -15,7 +15,9 @@
     "db:danger-reset-public": "prisma db execute --file prisma/sql/reset_public_schema.sql && prisma migrate deploy",
     "db:backfill-enable-storefront": "prisma db execute --file prisma/sql/backfill_enable_storefront_active.sql",
     "dev": "tsx src/server/index.ts",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "test:smoke": "vitest run",
+    "test": "vitest run"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -40,6 +42,7 @@
     "postcss": "^8.5.8",
     "tailwindcss": "^4.2.2",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^3.2.4"
   }
 }

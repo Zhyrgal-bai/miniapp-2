@@ -21,7 +21,7 @@ import {
   type MerchantPermissionId,
 } from "./merchantPermissions.js";
 import { createMerchantNotification } from "./merchantNotificationsService.js";
-import { assertActionAllowed } from "./abuseGuardService.js";
+import { checkActionCooldown, touchActionCooldown } from "./abuseGuardService.js";
 import { buildSupportSuggestions } from "./supportSuggestionService.js";
 import { orderDisplayLabel } from "../shared/orderDisplay.js";
 import {
@@ -823,7 +823,7 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
         return res.status(400).json({ error: "Неверная причина" });
       }
 
-      const returnCooldown = await assertActionAllowed({
+      const returnCooldown = await checkActionCooldown({
         businessId,
         userId,
         actionKey: "return_request",
@@ -959,6 +959,7 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
         where: { id: created.id, businessId, userId },
         include: { orderItem: true },
       });
+      await touchActionCooldown({ businessId, userId, actionKey: "return_request" });
       return res.status(201).json(jsonWithBigInt(full));
     } catch (e) {
       console.error("POST /support/returns:", e);
@@ -1422,7 +1423,7 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
         return res.status(400).json({ error: "Нужен orderId" });
       }
 
-      const cooldown = await assertActionAllowed({
+      const cooldown = await checkActionCooldown({
         businessId,
         userId,
         actionKey: "cancel_request",
@@ -1445,6 +1446,7 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
       if (!result.ok) {
         return res.status(result.statusCode).json({ error: result.error });
       }
+      await touchActionCooldown({ businessId, userId, actionKey: "cancel_request" });
       return res.status(201).json(jsonWithBigInt(result.row));
     } catch (e) {
       console.error("POST /support/cancel-requests:", e);
@@ -1494,7 +1496,7 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
         return res.status(400).json({ error: "Нужен orderId" });
       }
 
-      const refundCooldown = await assertActionAllowed({
+      const refundCooldown = await checkActionCooldown({
         businessId,
         userId,
         actionKey: "refund_request",
@@ -1517,6 +1519,7 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
       if (!result.ok) {
         return res.status(result.statusCode).json({ error: result.error });
       }
+      await touchActionCooldown({ businessId, userId, actionKey: "refund_request" });
       return res.status(201).json(jsonWithBigInt(result.row));
     } catch (e) {
       console.error("POST /support/refund-requests:", e);

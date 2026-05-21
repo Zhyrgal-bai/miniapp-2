@@ -101,6 +101,9 @@ export async function syncProductStockFromVariants(input: {
   variants: ProductVariantInput[];
 }): Promise<void> {
   const rows = flattenVariantStockRows(input.variants);
+  const activeKeys = new Set(
+    rows.map((r) => inventoryVariantKey(r.size, r.color))
+  );
   await prisma.$transaction(async (tx) => {
     for (const r of rows) {
       const variantKey = inventoryVariantKey(r.size, r.color);
@@ -136,6 +139,22 @@ export async function syncProductStockFromVariants(input: {
           },
         });
       }
+    }
+
+    const orphans = await tx.productStock.findMany({
+      where: { businessId: input.businessId, productId: input.productId },
+    });
+    for (const row of orphans) {
+      if (activeKeys.has(row.variantKey)) continue;
+      const locked = row.reserved + row.paid + row.shipped + row.returned;
+      if (locked > 0) {
+        await tx.productStock.update({
+          where: { id: row.id },
+          data: { available: 0 },
+        });
+        continue;
+      }
+      await tx.productStock.delete({ where: { id: row.id } });
     }
   });
 }
@@ -417,6 +436,48 @@ export async function restockReturned(
     orderId,
     orderItemId: line.id ?? null,
   });
+}
+
+export async function restoreShippedOrderStock(
+  tx: Tx,
+  businessId: number,
+  orderId: number,
+  lines: OrderLineForStock[]
+): Promise<void> {
+  for (const line of lines) {
+    if (line.productId == null || line.quantity < 1) continue;
+    const qty = Math.round(line.quantity);
+    const variantKey = inventoryVariantKey(line.size, line.color);
+    const row = await tx.productStock.findUnique({
+      where: {
+        businessId_productId_variantKey: {
+          businessId,
+          productId: line.productId,
+          variantKey,
+        },
+      },
+    });
+    if (!row) continue;
+    const fromShipped = Math.min(row.shipped, qty);
+    if (fromShipped > 0) {
+      await tx.productStock.update({
+        where: { id: row.id },
+        data: {
+          shipped: { decrement: fromShipped },
+          available: { increment: fromShipped },
+        },
+      });
+      await logMovement(tx, {
+        businessId,
+        productStockId: row.id,
+        kind: StockMovementKind.RESTORE_PAID,
+        quantity: fromShipped,
+        orderId,
+        orderItemId: line.id ?? null,
+        meta: { bucket: "shipped" },
+      });
+    }
+  }
 }
 
 export async function loadOrderLinesForStock(orderId: number): Promise<OrderLineForStock[]> {

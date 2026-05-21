@@ -79,10 +79,12 @@ import { invalidateStorefrontCache } from "./storefrontCache.js";
 import { buildMerchantAnalytics } from "./merchantAnalyticsService.js";
 import { buildMerchantWorkload } from "./merchantWorkloadService.js";
 import {
-  assertActionAllowed,
+  checkActionCooldown,
+  touchActionCooldown,
   assertNotDuplicateOrder,
   buildFingerprintFromCart,
 } from "./abuseGuardService.js";
+import { releaseStaleUnpaidOrders } from "./staleOrderService.js";
 import {
   extractVariantsFromProductPayload,
   reserveOrderStock,
@@ -4607,6 +4609,8 @@ app.post("/orders", async (req: Request, res: Response) => {
   const orderTotal = totalComputed.orderTotal;
 
   try {
+    void releaseStaleUnpaidOrders({ businessId: tenantBusinessId });
+
     const { order, buyerUser } = await prisma.$transaction(async (tx) => {
       const telegramId = String(body.user.telegramId ?? "").trim();
       if (!telegramId) {
@@ -4620,7 +4624,7 @@ app.post("/orders", async (req: Request, res: Response) => {
         userNameSanitized || null
       );
 
-      const cooldown = await assertActionAllowed({
+      const cooldown = await checkActionCooldown({
         businessId,
         userId: buyerUserInner.id,
         actionKey: "checkout",
@@ -4736,6 +4740,12 @@ app.post("/orders", async (req: Request, res: Response) => {
       });
 
       return { order, buyerUser: buyerUserInner };
+    });
+
+    await touchActionCooldown({
+      businessId: tenantBusinessId,
+      userId: buyerUser.id,
+      actionKey: "checkout",
     });
 
     console.log("ORDER CREATED:", order);

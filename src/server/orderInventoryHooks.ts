@@ -4,12 +4,12 @@ import {
   loadOrderLinesForStock,
   releaseOrderStock,
   restorePaidOrderStock,
+  restoreShippedOrderStock,
   shipOrderStock,
 } from "./inventoryService.js";
 import { syncDeliveryStageForOrderStatus } from "./deliveryService.js";
 import { prisma } from "./db.js";
 
-const PAID_STATUSES = new Set<string>(["CONFIRMED", "SHIPPED", "DELIVERED"]);
 const PRE_PAID = new Set<string>(["NEW", "ACCEPTED", "PAID_PENDING"]);
 
 export async function onOrderStatusChanged(
@@ -34,8 +34,10 @@ export async function onOrderStatusChanged(
     if (to === "CANCELLED") {
       if (PRE_PAID.has(from)) {
         await releaseOrderStock(tx, order.businessId, orderId, lines);
-      } else if (PAID_STATUSES.has(from) && from !== "SHIPPED" && from !== "DELIVERED") {
+      } else if (from === "CONFIRMED") {
         await restorePaidOrderStock(tx, order.businessId, orderId, lines);
+      } else if (from === "SHIPPED") {
+        await restoreShippedOrderStock(tx, order.businessId, orderId, lines);
       }
     }
   });

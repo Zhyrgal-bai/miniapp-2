@@ -9,7 +9,7 @@ const COOLDOWNS_MS: Record<string, number> = {
   return_request: 120_000,
 };
 
-export async function assertActionAllowed(input: {
+export async function checkActionCooldown(input: {
   businessId: number;
   userId: number;
   actionKey: string;
@@ -36,6 +36,15 @@ export async function assertActionAllowed(input: {
       };
     }
   }
+  return { ok: true };
+}
+
+export async function touchActionCooldown(input: {
+  businessId: number;
+  userId: number;
+  actionKey: string;
+}): Promise<void> {
+  const now = new Date();
   await prisma.actionCooldown.upsert({
     where: {
       businessId_userId_actionKey: {
@@ -52,6 +61,17 @@ export async function assertActionAllowed(input: {
     },
     update: { lastAt: now },
   });
+}
+
+/** @deprecated Use checkActionCooldown + touchActionCooldown after success. */
+export async function assertActionAllowed(input: {
+  businessId: number;
+  userId: number;
+  actionKey: string;
+}): Promise<{ ok: true } | { ok: false; error: string; retryAfterSec: number }> {
+  const check = await checkActionCooldown(input);
+  if (!check.ok) return check;
+  await touchActionCooldown(input);
   return { ok: true };
 }
 
