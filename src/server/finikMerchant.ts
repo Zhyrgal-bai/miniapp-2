@@ -218,6 +218,316 @@ export async function createFinikSaasSubscriptionSession(
   }
 }
 
+function finikGetPaymentPath(paymentId: string): string {
+  const template = (
+    process.env.FINIK_API_GET_PAYMENT_PATH || "/payments/{id}"
+  ).trim();
+  const path = template.replace("{id}", encodeURIComponent(paymentId));
+  return path.startsWith("/") ? path : `/${path}`;
+}
+
+function finikUseMock(business: {
+  finikApiKey: string | null;
+  finikSecret: string | null;
+}): boolean {
+  return (
+    process.env.FINIK_USE_MOCK === "1" ||
+    process.env.FINIK_USE_MOCK === "true" ||
+    !business.finikApiKey?.trim() ||
+    !business.finikSecret?.trim()
+  );
+}
+
+const FINIK_SUCCESS_STATUSES = new Set([
+  "success",
+  "paid",
+  "completed",
+  "succeeded",
+]);
+
+const FINIK_FAILED_STATUSES = new Set([
+  "failed",
+  "cancelled",
+  "canceled",
+  "declined",
+  "expired",
+  "error",
+]);
+
+function parseFinikWebhookPayload(body: Record<string, unknown>): {
+  paymentId: string;
+  status: string;
+  amount: number | null;
+  externalId: string | null;
+  orderIdFromBody: number | null;
+} {
+  const paymentIdRaw =
+    body.paymentId ?? body.payment_id ?? body.orderId ?? body.order_id;
+  const statusRaw = body.status ?? body.payment_status ?? body.state;
+  const amountRaw = body.amount ?? body.total ?? body.sum ?? body.payment_amount;
+  const externalRaw = body.external_id ?? body.externalId;
+  const orderIdBodyRaw = body.order_id ?? body.orderId;
+
+  let orderIdFromBody: number | null = null;
+  if (orderIdBodyRaw != null) {
+    const n = Number(orderIdBodyRaw);
+    if (Number.isFinite(n) && n > 0) orderIdFromBody = Math.floor(n);
+  }
+
+  let amount: number | null = null;
+  if (amountRaw != null) {
+    const n = Number(amountRaw);
+    if (Number.isFinite(n)) amount = Math.round(n);
+  }
+
+  return {
+    paymentId:
+      paymentIdRaw != null && String(paymentIdRaw).trim() !== ""
+        ? String(paymentIdRaw).trim()
+        : "",
+    status: String(statusRaw ?? "").toLowerCase(),
+    amount,
+    externalId:
+      externalRaw != null && String(externalRaw).trim() !== ""
+        ? String(externalRaw).trim()
+        : null,
+    orderIdFromBody,
+  };
+}
+
+export function isFinikOrderPaymentMethod(
+  paymentMethod: string | null | undefined
+): boolean {
+  return String(paymentMethod ?? "").trim().toLowerCase() === "finik";
+}
+
+/** Merchant must not manually mark Finik orders as paid — webhook/sync only. */
+export function blocksManualFinikPaymentConfirm(input: {
+  paymentMethod: string | null | undefined;
+  targetStatus: string;
+}): boolean {
+  return (
+    isFinikOrderPaymentMethod(input.paymentMethod) &&
+    String(input.targetStatus).trim().toUpperCase() === "CONFIRMED"
+  );
+}
+
+type FinikOrderRow = {
+  id: number;
+  businessId: number;
+  total: number;
+  status: string;
+  paymentId: string | null;
+  paymentMethod: string | null;
+  buyerUser: { telegramId: string } | null;
+};
+
+const FINIK_PAID_ORDER_STATUSES = new Set([
+  "CONFIRMED",
+  "SHIPPED",
+  "DELIVERED",
+]);
+
+async function applyFinikPaymentSuccess(
+  order: FinikOrderRow,
+  opts?: { expectedAmount?: number | null }
+): Promise<
+  | { ok: true; duplicate: boolean; order: FinikOrderRow }
+  | { ok: false; error: string; statusCode: number }
+> {
+  if (!isFinikOrderPaymentMethod(order.paymentMethod)) {
+    return { ok: false, statusCode: 400, error: "Not a Finik order" };
+  }
+
+  if (
+    opts?.expectedAmount != null &&
+    Number.isFinite(opts.expectedAmount) &&
+    Math.round(opts.expectedAmount) !== order.total
+  ) {
+    return { ok: false, statusCode: 400, error: "Amount mismatch" };
+  }
+
+  const cur = String(order.status ?? "").toUpperCase();
+  if (FINIK_PAID_ORDER_STATUSES.has(cur)) {
+    return { ok: true, duplicate: true, order };
+  }
+  if (cur === "CANCELLED") {
+    return { ok: false, statusCode: 400, error: "Order cancelled" };
+  }
+
+  const updated = await prisma.order.update({
+    where: { id: order.id },
+    data: { status: "CONFIRMED" },
+    include: { buyerUser: true },
+  });
+
+  const { onOrderPaidConfirmed } = await import("./orderInventoryHooks.js");
+  void onOrderPaidConfirmed(order.id);
+
+  void notifyAfterOrderStatusChangeFromApi({
+    id: updated.id,
+    orderNumber: updated.orderNumber,
+    businessId: updated.businessId,
+    status: updated.status,
+    total: updated.total,
+    buyerUser: updated.buyerUser,
+    paymentMethod: updated.paymentMethod,
+  });
+
+  return {
+    ok: true,
+    duplicate: false,
+    order: {
+      id: updated.id,
+      businessId: updated.businessId,
+      total: updated.total,
+      status: updated.status,
+      paymentId: updated.paymentId,
+      paymentMethod: updated.paymentMethod,
+      buyerUser: updated.buyerUser,
+    },
+  };
+}
+
+async function fetchFinikPaymentStatus(
+  business: {
+    finikApiKey: string | null;
+    finikSecret: string | null;
+  },
+  paymentId: string
+): Promise<
+  | { ok: true; status: string; amount: number | null }
+  | { ok: false; error: string }
+> {
+  if (finikUseMock(business)) {
+    return { ok: false, error: "Finik mock: статус только через webhook" };
+  }
+
+  const url = `${finikApiBase()}${finikGetPaymentPath(paymentId)}`;
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${business.finikApiKey!.trim()}`,
+        "X-Api-Secret": business.finikSecret!.trim(),
+      },
+    });
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) {
+      console.error("Finik get payment HTTP", res.status, json);
+      return { ok: false, error: "Finik API: не удалось получить статус платежа" };
+    }
+    const statusRaw = json.status ?? json.payment_status ?? json.state;
+    const amountRaw = json.amount ?? json.total ?? json.sum;
+    let amount: number | null = null;
+    if (amountRaw != null) {
+      const n = Number(amountRaw);
+      if (Number.isFinite(n)) amount = Math.round(n);
+    }
+    return {
+      ok: true,
+      status: String(statusRaw ?? "").toLowerCase(),
+      amount,
+    };
+  } catch (e) {
+    console.error("Finik get payment fetch:", e);
+    return { ok: false, error: "Ошибка сети при запросе статуса Finik" };
+  }
+}
+
+export type SyncFinikOrderPaymentResult =
+  | {
+      ok: true;
+      paymentState: "paid" | "pending" | "failed";
+      duplicate?: boolean;
+      order: unknown;
+    }
+  | { ok: false; statusCode: number; error: string };
+
+/** Merchant fallback: query Finik API — never manual confirm. */
+export async function syncFinikOrderPayment(
+  orderId: number,
+  businessId: number
+): Promise<SyncFinikOrderPaymentResult> {
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, businessId },
+    include: { buyerUser: true },
+  });
+  if (!order) {
+    return { ok: false, statusCode: 404, error: "Заказ не найден" };
+  }
+  if (!isFinikOrderPaymentMethod(order.paymentMethod)) {
+    return { ok: false, statusCode: 400, error: "Заказ не через Finik" };
+  }
+  if (!order.paymentId?.trim()) {
+    return { ok: false, statusCode: 400, error: "Нет paymentId Finik" };
+  }
+
+  const cur = String(order.status ?? "").toUpperCase();
+  if (FINIK_PAID_ORDER_STATUSES.has(cur)) {
+    return {
+      ok: true,
+      paymentState: "paid",
+      duplicate: true,
+      order,
+    };
+  }
+
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { finikApiKey: true, finikSecret: true },
+  });
+  if (!business) {
+    return { ok: false, statusCode: 404, error: "Магазин не найден" };
+  }
+
+  const remote = await fetchFinikPaymentStatus(business, order.paymentId.trim());
+  if (!remote.ok) {
+    return { ok: false, statusCode: 502, error: remote.error };
+  }
+
+  if (FINIK_FAILED_STATUSES.has(remote.status)) {
+    return { ok: true, paymentState: "failed", order };
+  }
+
+  if (!FINIK_SUCCESS_STATUSES.has(remote.status)) {
+    return { ok: true, paymentState: "pending", order };
+  }
+
+  const applied = await applyFinikPaymentSuccess(
+    {
+      id: order.id,
+      businessId: order.businessId,
+      total: order.total,
+      status: order.status,
+      paymentId: order.paymentId,
+      paymentMethod: order.paymentMethod,
+      buyerUser: order.buyerUser,
+    },
+    { expectedAmount: remote.amount ?? order.total }
+  );
+
+  if (!applied.ok) {
+    return {
+      ok: false,
+      statusCode: applied.statusCode,
+      error: applied.error,
+    };
+  }
+
+  const fresh = await prisma.order.findUnique({
+    where: { id: order.id },
+    include: { buyerUser: true },
+  });
+
+  return {
+    ok: true,
+    paymentState: "paid",
+    duplicate: applied.duplicate,
+    order: fresh ?? order,
+  };
+}
+
 /**
  * Проверка подписи вебхука (если Finik шлёт HMAC в заголовке).
  * Настройте имя заголовка через FINIK_WEBHOOK_SIGNATURE_HEADER.
@@ -264,33 +574,25 @@ async function handleFinikWebhookForBusiness(
     }
 
     const body = req.body as Record<string, unknown>;
-    const paymentIdRaw =
-      body.paymentId ?? body.payment_id ?? body.orderId ?? body.order_id;
-    const statusRaw = body.status ?? body.payment_status ?? body.state;
-    const paymentId =
-      paymentIdRaw != null && String(paymentIdRaw).trim() !== ""
-        ? String(paymentIdRaw).trim()
-        : "";
-    const status = String(statusRaw ?? "").toLowerCase();
+    const parsed = parseFinikWebhookPayload(body);
 
-    if (!paymentId) {
+    if (!parsed.paymentId) {
       res.status(400).json({ error: "paymentId required" });
       return;
     }
 
-    const successStatuses = new Set([
-      "success",
-      "paid",
-      "completed",
-      "succeeded",
-    ]);
-    if (!successStatuses.has(status)) {
-      res.json({ ok: true, ignored: true });
+    if (FINIK_FAILED_STATUSES.has(parsed.status)) {
+      res.json({ ok: true, ignored: true, paymentState: "failed" });
+      return;
+    }
+
+    if (!FINIK_SUCCESS_STATUSES.has(parsed.status)) {
+      res.json({ ok: true, ignored: true, paymentState: "pending" });
       return;
     }
 
     const order = await prisma.order.findFirst({
-      where: { paymentId, businessId },
+      where: { paymentId: parsed.paymentId, businessId },
       include: { buyerUser: true },
     });
 
@@ -299,41 +601,41 @@ async function handleFinikWebhookForBusiness(
       return;
     }
 
-    if (String(order.paymentMethod ?? "").toLowerCase() !== "finik") {
-      res.status(400).json({ error: "Not a Finik order" });
-      return;
+    if (parsed.externalId != null) {
+      const expected = `${businessId}:${order.id}`;
+      if (parsed.externalId !== expected) {
+        res.status(400).json({ error: "external_id mismatch" });
+        return;
+      }
     }
 
-    const cur = String(order.status ?? "").toUpperCase();
     if (
-      cur === "CONFIRMED" ||
-      cur === "SHIPPED" ||
-      cur === "DELIVERED"
+      parsed.orderIdFromBody != null &&
+      parsed.orderIdFromBody !== order.id
     ) {
-      res.json({ ok: true, duplicate: true });
-      return;
-    }
-    if (cur === "CANCELLED") {
-      res.status(400).json({ error: "Order cancelled" });
+      res.status(400).json({ error: "order_id mismatch" });
       return;
     }
 
-    const updated = await prisma.order.update({
-      where: { id: order.id },
-      data: { status: "CONFIRMED" },
-      include: { buyerUser: true },
-    });
+    const applied = await applyFinikPaymentSuccess(
+      {
+        id: order.id,
+        businessId: order.businessId,
+        total: order.total,
+        status: order.status,
+        paymentId: order.paymentId,
+        paymentMethod: order.paymentMethod,
+        buyerUser: order.buyerUser,
+      },
+      { expectedAmount: parsed.amount ?? order.total }
+    );
 
-    void notifyAfterOrderStatusChangeFromApi({
-      id: updated.id,
-      businessId: updated.businessId,
-      status: updated.status,
-      total: updated.total,
-      buyerUser: updated.buyerUser,
-      paymentMethod: updated.paymentMethod,
-    });
+    if (!applied.ok) {
+      res.status(applied.statusCode).json({ error: applied.error });
+      return;
+    }
 
-    res.json({ ok: true });
+    res.json({ ok: true, duplicate: applied.duplicate });
   } catch (e) {
     console.error("FINIK WEBHOOK:", businessId, e);
     res.status(500).json({ error: "Webhook error" });

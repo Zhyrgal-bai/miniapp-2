@@ -129,6 +129,11 @@ model Business {
   supportTickets  SupportTicket[]
   supportMessages SupportMessage[]
   returnRequests  ReturnRequest[]
+  cancelRequests  CancelRequest[]
+  refundRequests  RefundRequest[]
+  productStocks   ProductStock[]
+  stockMovements  StockMovement[]
+  actionCooldowns ActionCooldown[]
 
   storefrontEvents StorefrontEvent[]
   merchantNotifications MerchantNotification[]
@@ -239,6 +244,9 @@ model User {
   orders         Order[]         @relation("OrderBuyer")
   supportTickets SupportTicket[]
   returnRequests ReturnRequest[]
+  cancelRequests CancelRequest[]
+  refundRequests RefundRequest[]
+  actionCooldowns ActionCooldown[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -336,6 +344,7 @@ model Product {
   updatedAt DateTime @updatedAt
 
   orderItems OrderItem[]
+  stocks     ProductStock[]
 
   @@index([businessId])
   @@index([categoryId])
@@ -393,6 +402,44 @@ enum ReturnReason {
   OTHER
 }
 
+enum CancelRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum RefundRequestStatus {
+  REQUESTED
+  REVIEWING
+  APPROVED
+  REJECTED
+  REFUNDED
+}
+
+enum DeliveryMode {
+  PICKUP
+  DELIVERY
+}
+
+enum DeliveryStage {
+  PREPARING
+  COURIER_DISPATCHED
+  OUT_FOR_DELIVERY
+  NEARBY
+  DELIVERED
+}
+
+enum StockMovementKind {
+  RESERVE
+  RELEASE
+  COMMIT_PAID
+  RESTORE_PAID
+  SHIP
+  RETURN_RECEIVED
+  RESTOCK
+  ADJUST
+}
+
 /// Customer order — always anchored to Business; line items optionally reference Product snapshots.
 model Order {
   id     Int       @id @default(autoincrement())
@@ -418,6 +465,11 @@ model Order {
   lat Float?
   lng Float?
 
+  deliveryMode DeliveryMode @default(DELIVERY)
+  preparationMinutes Int?
+  estimatedDeliveryAt DateTime?
+  deliveryStage DeliveryStage?
+
   businessId Int
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
@@ -428,6 +480,8 @@ model Order {
   items            OrderItem[]
   supportTickets   SupportTicket[]
   returnRequests   ReturnRequest[]
+  cancelRequests   CancelRequest[]
+  refundRequests   RefundRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -531,6 +585,45 @@ model ReturnRequest {
   comment      String?
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
+
+  @@index([businessId, status])
+  @@index([orderId])
+}
+
+model CancelRequest {
+  id              Int                 @id @default(autoincrement())
+  businessId      Int
+  business        Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orderId         Int
+  order           Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId          Int
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reason          String?
+  comment         String?
+  merchantComment String?
+  status          CancelRequestStatus @default(PENDING)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([businessId, status])
+  @@index([orderId])
+}
+
+model RefundRequest {
+  id              Int                 @id @default(autoincrement())
+  businessId      Int
+  business        Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orderId         Int
+  order           Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId          Int
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reason          String?
+  comment         String?
+  merchantComment String?
+  refundAmount    Int?
+  status          RefundRequestStatus @default(REQUESTED)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
   @@index([businessId, status])
   @@index([orderId])
@@ -674,9 +767,15 @@ model StorefrontEvent {
 /// In-app merchant notification center (per tenant).
 enum MerchantNotificationKind {
   ORDER_NEW
+  ORDER_STATUS
   SUPPORT_MESSAGE
   SUPPORT_TICKET
   PAYMENT_ISSUE
+  DELIVERY_UPDATE
+  REFUND_REQUEST
+  CANCEL_REQUEST
+  RETURN_REQUEST
+  LOW_STOCK
   SUBSCRIPTION_EXPIRING
   WEBHOOK_FAILED
   SYSTEM
@@ -803,4 +902,73 @@ model MerchantReferralSignup {
 
   @@index([referrerBusinessId, createdAt])
   @@index([applicantTelegramId])
+}
+
+/// Per-SKU operational inventory (available / reserved / paid / shipped / returned).
+model ProductStock {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  productId Int
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  size  String @default("")
+  color String @default("")
+  /// Normalized key: `${size}|${color}` lowercased.
+  variantKey String
+
+  available Int @default(0)
+  reserved  Int @default(0)
+  paid      Int @default(0)
+  shipped   Int @default(0)
+  returned  Int @default(0)
+
+  movements StockMovement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, productId, variantKey])
+  @@index([businessId, productId])
+}
+
+model StockMovement {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  productStockId Int
+  productStock   ProductStock @relation(fields: [productStockId], references: [id], onDelete: Cascade)
+
+  orderId     Int?
+  orderItemId Int?
+  kind        StockMovementKind
+  quantity    Int
+  meta        Json? @default("{}")
+
+  createdAt DateTime @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([productStockId])
+  @@index([orderId])
+}
+
+/// Anti-abuse cooldowns (checkout spam, support flood).
+model ActionCooldown {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  userId Int?
+  user   User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  actionKey String
+  lastAt    DateTime @default(now())
+
+  @@unique([businessId, userId, actionKey])
+  @@index([businessId, actionKey])
 }

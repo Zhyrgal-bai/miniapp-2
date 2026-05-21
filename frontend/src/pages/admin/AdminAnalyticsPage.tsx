@@ -257,6 +257,35 @@ export default function AdminAnalyticsPage() {
             </div>
           </div>
 
+          {data.operations ? (
+            <div className="admin-kpi-grid">
+              <div className="admin-kpi-card">
+                <span className="admin-kpi-card__label">Отмены (всего)</span>
+                <span className="admin-kpi-card__value">
+                  {data.operations.cancelledOrders}
+                </span>
+              </div>
+              <div className="admin-kpi-card">
+                <span className="admin-kpi-card__label">Отмены за период</span>
+                <span className="admin-kpi-card__value">
+                  {data.operations.cancelledInRange}
+                </span>
+              </div>
+              <div className="admin-kpi-card">
+                <span className="admin-kpi-card__label">Заявки на refund</span>
+                <span className="admin-kpi-card__value">
+                  {data.operations.refundRequestsInRange}
+                </span>
+              </div>
+              <div className="admin-kpi-card">
+                <span className="admin-kpi-card__label">Мало на складе (SKU)</span>
+                <span className="admin-kpi-card__value">
+                  {data.operations.lowStockSkus}
+                </span>
+              </div>
+            </div>
+          ) : null}
+
           {data.topSku && data.topSku.length > 0 ? (
             <section className="admin-dash-section">
               <h2 className="admin-dash-section__title">{ru.admin.topProducts}</h2>

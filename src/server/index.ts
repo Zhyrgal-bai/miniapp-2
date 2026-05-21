@@ -77,6 +77,20 @@ import { validateImageFile, uploadTenantImage } from "../media/upload.js";
 import { extractCloudinaryPublicIds, safeDeleteCloudinaryAsset } from "../media/delete.js";
 import { invalidateStorefrontCache } from "./storefrontCache.js";
 import { buildMerchantAnalytics } from "./merchantAnalyticsService.js";
+import { buildMerchantWorkload } from "./merchantWorkloadService.js";
+import {
+  assertActionAllowed,
+  assertNotDuplicateOrder,
+  buildFingerprintFromCart,
+} from "./abuseGuardService.js";
+import {
+  extractVariantsFromProductPayload,
+  reserveOrderStock,
+  syncProductStockFromVariants,
+} from "./inventoryService.js";
+import { initializeOrderDelivery } from "./deliveryService.js";
+import { onOrderStatusChanged } from "./orderInventoryHooks.js";
+import { mergeProductAttributesWithVariants } from "./productAttributes.js";
 import { buildMerchantInsights } from "./merchantInsightsService.js";
 import { buildMerchantGrowth } from "./merchantGrowthService.js";
 import { getCoPurchaseRecommendations } from "./recommendationsService.js";
@@ -158,10 +172,12 @@ import {
 } from "./orderNumber.js";
 import { buildMerchantAdminOrdersWebAppUrl } from "./miniAppUrls.js";
 import {
+  blocksManualFinikPaymentConfirm,
   createFinikMerchantSession,
   mountFinikWebhookRoutes,
   mountFinikSettingsRoutes,
   publicApiOrigin,
+  syncFinikOrderPayment,
 } from "./finikMerchant.js";
 import {
   mountSubscriptionFinikPaymentRoutes,
@@ -3620,9 +3636,10 @@ app.post("/products", async (req: Request, res: Response) => {
       description?: unknown;
       categoryId?: unknown;
       attributes?: unknown;
+      variants?: unknown;
     };
 
-    const { name, price, image, images, description, categoryId, attributes } =
+    const { name, price, image, images, description, categoryId, attributes, variants } =
       body;
 
     const rawImages = Array.isArray(images)
@@ -3662,9 +3679,10 @@ app.post("/products", async (req: Request, res: Response) => {
     if (typeof businessType !== "string" || businessType.trim() === "") {
       return res.status(400).json({ error: "Магазин без businessType" });
     }
-    const vAttr = validateProductAttributes(
+    const vAttr = mergeProductAttributesWithVariants(
       businessType as any,
       attributes,
+      variants
     );
     if (!vAttr.ok) {
       return res.status(400).json({ error: vAttr.error, details: vAttr.details });
@@ -3689,6 +3707,15 @@ app.post("/products", async (req: Request, res: Response) => {
         category: true,
       },
     });
+
+    const variantRows = extractVariantsFromProductPayload(vAttr.value, variants);
+    if (variantRows.length > 0) {
+      await syncProductStockFromVariants({
+        businessId: merchant.businessId,
+        productId: product.id,
+        variants: variantRows,
+      });
+    }
 
     res.json(product);
   } catch (e) {
@@ -3733,6 +3760,19 @@ async function performOrderStatusUpdate(
       return { ok: true, body: existing };
     }
     if (
+      blocksManualFinikPaymentConfirm({
+        paymentMethod: existing.paymentMethod,
+        targetStatus: st,
+      })
+    ) {
+      return {
+        ok: false,
+        statusCode: 400,
+        error:
+          "Finik: оплата подтверждается автоматически. Используйте «Проверить статус оплаты».",
+      };
+    }
+    if (
       !isAllowedOrderStatusTransition(cur, st, {
         paymentMethod: existing.paymentMethod,
       })
@@ -3749,6 +3789,7 @@ async function performOrderStatusUpdate(
       data: { status: st },
       include: { buyerUser: true },
     });
+    void onOrderStatusChanged(orderId, cur, st);
     void notifyAfterOrderStatusChangeFromApi({
       id: updated.id,
       orderNumber: updated.orderNumber,
@@ -3870,6 +3911,17 @@ async function handleAdminOrderPatch(req: Request, res: Response) {
     if (hasStatus && data.status !== undefined) {
       const cur = exists.status as OrderStatus;
       if (
+        blocksManualFinikPaymentConfirm({
+          paymentMethod: exists.paymentMethod,
+          targetStatus: data.status,
+        })
+      ) {
+        return res.status(400).json({
+          error:
+            "Finik: оплата подтверждается автоматически. Используйте «Проверить статус оплаты».",
+        });
+      }
+      if (
         cur !== data.status &&
         !isAllowedOrderStatusTransition(cur, data.status, {
           paymentMethod: exists.paymentMethod,
@@ -3910,6 +3962,35 @@ async function handleAdminOrderPatch(req: Request, res: Response) {
 
 app.put("/orders/:id", handleAdminOrderPatch);
 app.patch("/orders/:id", handleAdminOrderPatch);
+
+app.post("/orders/:id/sync-finik-payment", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.ordersManage);
+    if (!merchant) return;
+
+    const orderId = Number(req.params.id);
+    if (!Number.isFinite(orderId)) {
+      return res.status(400).json({ error: "Неверный id" });
+    }
+
+    const result = await syncFinikOrderPayment(orderId, merchant.businessId);
+    if (!result.ok) {
+      return res.status(result.statusCode).json({ error: result.error });
+    }
+
+    return res.json(
+      jsonWithBigInt({
+        ok: true,
+        paymentState: result.paymentState,
+        duplicate: result.duplicate ?? false,
+        order: result.order,
+      })
+    );
+  } catch (e) {
+    console.error("POST /orders/:id/sync-finik-payment:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 app.delete("/orders/clear", async (req: Request, res: Response) => {
   try {
@@ -3969,6 +4050,18 @@ app.post("/analytics", async (req: Request, res: Response) => {
   } catch (e) {
     console.error("ANALYTICS ERROR:", e);
     res.status(500).json({ error: "analytics failed" });
+  }
+});
+
+app.post("/merchant/workload", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.ordersManage);
+    if (!merchant) return;
+    const payload = await buildMerchantWorkload(merchant.businessId);
+    res.json(payload);
+  } catch (e) {
+    console.error("WORKLOAD ERROR:", e);
+    res.status(500).json({ error: "workload failed" });
   }
 });
 
@@ -4527,6 +4620,33 @@ app.post("/orders", async (req: Request, res: Response) => {
         userNameSanitized || null
       );
 
+      const cooldown = await assertActionAllowed({
+        businessId,
+        userId: buyerUserInner.id,
+        actionKey: "checkout",
+      });
+      if (!cooldown.ok) {
+        throw new Error(`COOLDOWN:${cooldown.error}`);
+      }
+
+      const fingerprint = buildFingerprintFromCart(
+        items.map((it) => ({
+          productId: Number(it.productId),
+          size: String(it.size),
+          color: String(it.color),
+          quantity: Number(it.quantity),
+        }))
+      );
+      const dup = await assertNotDuplicateOrder({
+        businessId,
+        buyerUserId: buyerUserInner.id,
+        total: orderTotal,
+        fingerprint,
+      });
+      if (!dup.ok) {
+        throw new Error(`DUPLICATE:${dup.error}`);
+      }
+
       const orderNameDisplay =
         (userNameSanitized && userNameSanitized.trim()) || "Гость";
       const addrFinal =
@@ -4582,6 +4702,39 @@ app.post("/orders", async (req: Request, res: Response) => {
         },
       });
 
+      const stockLines = order.items.map((it) => ({
+        id: it.id,
+        productId: it.productId,
+        size: it.size,
+        color: it.color,
+        quantity: it.quantity,
+      }));
+      const reserved = await reserveOrderStock(
+        tx,
+        businessId,
+        order.id,
+        stockLines
+      );
+      if (!reserved.ok) {
+        throw new Error(`STOCK:${reserved.error}`);
+      }
+
+      const rawDeliveryMode = (body as { deliveryMode?: unknown }).deliveryMode;
+      const deliveryMode =
+        String(rawDeliveryMode ?? "").trim().toUpperCase() === "PICKUP"
+          ? "PICKUP"
+          : "DELIVERY";
+      const rawPrep = (body as { preparationMinutes?: unknown }).preparationMinutes;
+      const preparationMinutes =
+        rawPrep != null && Number.isFinite(Number(rawPrep))
+          ? Number(rawPrep)
+          : null;
+
+      await initializeOrderDelivery(tx, order.id, {
+        deliveryMode,
+        preparationMinutes,
+      });
+
       return { order, buyerUser: buyerUserInner };
     });
 
@@ -4603,6 +4756,11 @@ app.post("/orders", async (req: Request, res: Response) => {
         amount: order.total,
       });
       if (!finik.ok) {
+        await onOrderStatusChanged(order.id, "NEW", "CANCELLED");
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { status: "CANCELLED" },
+        });
         return res.status(502).json({ error: finik.error });
       }
       paymentUrl = finik.paymentUrl;
@@ -4668,6 +4826,15 @@ app.post("/orders", async (req: Request, res: Response) => {
       return res
         .status(400)
         .json({ error: "В корзине товары из разных магазинов" });
+    }
+    if (code.startsWith("STOCK:")) {
+      return res.status(409).json({ error: code.slice("STOCK:".length) });
+    }
+    if (code.startsWith("COOLDOWN:")) {
+      return res.status(429).json({ error: code.slice("COOLDOWN:".length) });
+    }
+    if (code.startsWith("DUPLICATE:")) {
+      return res.status(409).json({ error: code.slice("DUPLICATE:".length) });
     }
     console.error("ORDER ERROR FULL:", error);
     res.status(500).json({ error: "Ошибка при создании заказа" });
@@ -4768,6 +4935,7 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       description?: unknown;
       categoryId?: unknown;
       attributes?: unknown;
+      variants?: unknown;
     };
 
     const id = Number(req.params.id);
@@ -4775,7 +4943,7 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Неверный id" });
     }
 
-    const { name, price, image, images, description, categoryId, attributes } =
+    const { name, price, image, images, description, categoryId, attributes, variants } =
       body;
 
     if (
@@ -4785,7 +4953,8 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       images === undefined &&
       description === undefined &&
       categoryId === undefined &&
-      attributes === undefined
+      attributes === undefined &&
+      variants === undefined
     ) {
       return res.status(400).json({ error: "Нет полей для обновления" });
     }
@@ -4837,7 +5006,13 @@ app.put("/products/:id", async (req: Request, res: Response) => {
     if (description !== undefined) {
       scalar.description = description === null ? null : String(description);
     }
-    if (attributes !== undefined) {
+
+    const exists = await prisma.product.findUnique({ where: { id } });
+    if (!exists || exists.businessId !== merchant.businessId) {
+      return res.status(404).json({ error: "Товар не найден" });
+    }
+
+    if (attributes !== undefined || variants !== undefined) {
       const b2 = await prisma.business.findUnique({
         where: { id: merchant.businessId },
       });
@@ -4845,9 +5020,14 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       if (typeof businessType !== "string" || businessType.trim() === "") {
         return res.status(400).json({ error: "Магазин без businessType" });
       }
-      const vAttr = validateProductAttributes(
+      const baseAttrs =
+        attributes !== undefined
+          ? attributes
+          : (exists?.attributes as unknown) ?? {};
+      const vAttr = mergeProductAttributesWithVariants(
         businessType as any,
-        attributes,
+        baseAttrs,
+        variants
       );
       if (!vAttr.ok) {
         return res
@@ -4857,17 +5037,24 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       scalar.attributes = vAttr.value;
     }
 
-    const exists = await prisma.product.findUnique({ where: { id } });
-    if (!exists || exists.businessId !== merchant.businessId) {
-      return res.status(404).json({ error: "Товар не найден" });
-    }
-
     const product = await prisma.product.update({
       where: { id },
       // Prisma UpdateInput is strict about relation scalars (categoryId) with exactOptionalPropertyTypes.
       data: scalar as any,
       include: { category: true },
     });
+
+    const variantRows = extractVariantsFromProductPayload(
+      scalar.attributes ?? product.attributes,
+      variants
+    );
+    if (variantRows.length > 0) {
+      await syncProductStockFromVariants({
+        businessId: merchant.businessId,
+        productId: product.id,
+        variants: variantRows,
+      });
+    }
 
     res.json(product);
   } catch (e) {

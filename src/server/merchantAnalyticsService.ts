@@ -32,6 +32,13 @@ export type MerchantAnalyticsPayload = {
     resolvedInRange: number;
     openReturns: number;
   };
+  operations: {
+    cancelledOrders: number;
+    cancelledInRange: number;
+    refundRequestsInRange: number;
+    returnRequestsInRange: number;
+    lowStockSkus: number;
+  };
 };
 
 function dayKey(d: Date): string {
@@ -45,7 +52,7 @@ export async function buildMerchantAnalytics(input: {
   const since = new Date(Date.now() - input.rangeDays * 86400000);
   const bid = input.businessId;
 
-  const [orders, ordersInRange, eventsInRange, orderItemsInRange, supportCounts] =
+  const [orders, ordersInRange, eventsInRange, orderItemsInRange, supportCounts, opsCounts] =
     await Promise.all([
       prisma.order.findMany({
         where: { businessId: bid },
@@ -95,6 +102,27 @@ export async function buildMerchantAnalytics(input: {
             businessId: bid,
             status: { in: ["PENDING", "APPROVED"] },
           },
+        }),
+      ]),
+      Promise.all([
+        prisma.order.count({
+          where: { businessId: bid, status: "CANCELLED" },
+        }),
+        prisma.order.count({
+          where: {
+            businessId: bid,
+            status: "CANCELLED",
+            updatedAt: { gte: since },
+          },
+        }),
+        prisma.refundRequest.count({
+          where: { businessId: bid, createdAt: { gte: since } },
+        }),
+        prisma.returnRequest.count({
+          where: { businessId: bid, createdAt: { gte: since } },
+        }),
+        prisma.productStock.count({
+          where: { businessId: bid, available: { lte: 3, gt: 0 } },
         }),
       ]),
     ]);
@@ -207,6 +235,13 @@ export async function buildMerchantAnalytics(input: {
 
   const [openTickets, pendingMerchant, resolvedInRange, openReturns] =
     supportCounts;
+  const [
+    cancelledOrders,
+    cancelledInRange,
+    refundRequestsInRange,
+    returnRequestsInRange,
+    lowStockSkus,
+  ] = opsCounts;
 
   return {
     totalOrders: orders.length,
@@ -236,6 +271,13 @@ export async function buildMerchantAnalytics(input: {
       pendingMerchant,
       resolvedInRange,
       openReturns,
+    },
+    operations: {
+      cancelledOrders,
+      cancelledInRange,
+      refundRequestsInRange,
+      returnRequestsInRange,
+      lowStockSkus,
     },
   };
 }

@@ -4,6 +4,11 @@ import {
   type AdminOrderListItem,
 } from "../../services/admin.service";
 import { orderDisplayLabel } from "@repo-shared/orderDisplay";
+import {
+  finikOrderIsAwaitingPayment,
+  finikPaymentStateView,
+  isFinikPaymentMethod,
+} from "@repo-shared/finikPaymentState";
 
 const FILTER_TABS = [
   "ALL",
@@ -46,6 +51,7 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [busySyncId, setBusySyncId] = useState<number | null>(null);
   const [busyTrackingId, setBusyTrackingId] = useState<number | null>(null);
   const [clearBusy, setClearBusy] = useState<"completed" | "rejected" | "all" | null>(null);
   const [trackingDraft, setTrackingDraft] = useState<Record<number, string>>(
@@ -157,6 +163,31 @@ export default function AdminOrdersPage() {
       );
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function syncFinikPayment(id: number) {
+    setBusySyncId(id);
+    try {
+      const result = await adminService.syncFinikPayment(id);
+      if (result.paymentState === "paid") {
+        await load({ silent: true });
+        window.dispatchEvent(new CustomEvent("miniapp:admin-orders-changed"));
+        alert(
+          result.duplicate
+            ? "Оплата уже была подтверждена автоматически."
+            : "Оплата подтверждена через Finik."
+        );
+      } else if (result.paymentState === "pending") {
+        alert("Оплата ещё не поступила. Попросите клиента завершить оплату или проверьте позже.");
+      } else {
+        alert("Finik сообщил об ошибке или отмене оплаты.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : "Не удалось проверить оплату");
+    } finally {
+      setBusySyncId(null);
     }
   }
 
@@ -277,8 +308,15 @@ export default function AdminOrdersPage() {
             const busyTr = busyTrackingId === order.id;
             const receiptUrl = order.receiptUrl?.trim() ?? "";
             const hasReceipt = receiptUrl.length > 0;
-            const payMethod = (order.paymentMethod ?? "receipt").toLowerCase();
-            const isFinik = payMethod === "finik";
+            const isFinik = isFinikPaymentMethod(order.paymentMethod);
+            const finikPay = isFinik
+              ? finikPaymentStateView({
+                  orderStatus: order.status,
+                  paymentMethod: order.paymentMethod,
+                })
+              : null;
+            const finikAwaiting = isFinik && finikOrderIsAwaitingPayment(order.status);
+            const busySync = busySyncId === order.id;
             const hasCoords =
               order.lat != null &&
               order.lng != null &&
@@ -328,7 +366,19 @@ export default function AdminOrdersPage() {
                   <div>
                     <dt>Оплата</dt>
                     <dd>
-                      {isFinik ? "Finik" : "Чек / перевод"}
+                      {isFinik ? (
+                        <>
+                          Finik
+                          {finikPay ? (
+                            <span className="admin-order-card__finik-pay">
+                              {" · "}
+                              {finikPay.label}
+                            </span>
+                          ) : null}
+                        </>
+                      ) : (
+                        "Чек / перевод"
+                      )}
                     </dd>
                   </div>
                 </dl>
@@ -444,60 +494,82 @@ export default function AdminOrdersPage() {
                   </button>
                 </div>
                 <div className="admin-order-card__actions">
-                  <button
-                    type="button"
-                    className="admin-order-card__btn admin-order-card__btn--accept"
-                    disabled={busy || canon !== "NEW"}
-                    title={canon !== "NEW" ? "Только для статуса NEW" : undefined}
-                    onClick={() => void applyStatus(order.id, "ACCEPTED")}
-                  >
-                    Принять
-                  </button>
-                  <button
-                    type="button"
-                    className="admin-order-card__btn admin-order-card__btn--confirm"
-                    disabled={
-                      busy ||
-                      (!isFinik && canon !== "PAID_PENDING") ||
-                      (isFinik && canon !== "ACCEPTED")
-                    }
-                    title={
-                      isFinik
-                        ? canon !== "ACCEPTED"
-                          ? "Только для Finik после принятия заказа"
-                          : undefined
-                        : canon !== "PAID_PENDING"
+                  {!isFinik ? (
+                    <button
+                      type="button"
+                      className="admin-order-card__btn admin-order-card__btn--accept"
+                      disabled={busy || canon !== "NEW"}
+                      title={canon !== "NEW" ? "Только для статуса NEW" : undefined}
+                      onClick={() => void applyStatus(order.id, "ACCEPTED")}
+                    >
+                      Принять
+                    </button>
+                  ) : null}
+                  {!isFinik ? (
+                    <button
+                      type="button"
+                      className="admin-order-card__btn admin-order-card__btn--confirm"
+                      disabled={busy || canon !== "PAID_PENDING"}
+                      title={
+                        canon !== "PAID_PENDING"
                           ? "После «Я оплатил» у клиента"
                           : undefined
-                    }
-                    onClick={() => void applyStatus(order.id, "CONFIRMED")}
-                  >
-                    {isFinik
-                      ? "💳 Подтвердить оплату (Finik)"
-                      : "✅ Подтвердить оплату"}
-                  </button>
-                  <button
-                    type="button"
-                    className="admin-order-card__btn admin-order-card__btn--reject"
-                    disabled={busy || canon !== "PAID_PENDING"}
-                    title={
-                      canon !== "PAID_PENDING"
-                        ? "Только для ожидания проверки оплаты"
-                        : undefined
-                    }
-                    onClick={() => {
-                      if (
-                        !window.confirm(
-                          "Отклонить оплату и отменить заказ?"
-                        )
-                      ) {
-                        return;
                       }
-                      void applyStatus(order.id, "CANCELLED");
-                    }}
-                  >
-                    ❌ Отклонить оплату
-                  </button>
+                      onClick={() => void applyStatus(order.id, "CONFIRMED")}
+                    >
+                      ✅ Подтвердить оплату
+                    </button>
+                  ) : null}
+                  {isFinik && finikAwaiting ? (
+                    <button
+                      type="button"
+                      className="admin-order-card__btn admin-order-card__btn--confirm"
+                      disabled={busy || busySync}
+                      title="Запросить статус у Finik (не ручное подтверждение)"
+                      onClick={() => void syncFinikPayment(order.id)}
+                    >
+                      {busySync ? "Проверка…" : "🔄 Проверить статус оплаты"}
+                    </button>
+                  ) : null}
+                  {!isFinik ? (
+                    <button
+                      type="button"
+                      className="admin-order-card__btn admin-order-card__btn--reject"
+                      disabled={busy || canon !== "PAID_PENDING"}
+                      title={
+                        canon !== "PAID_PENDING"
+                          ? "Только для ожидания проверки оплаты"
+                          : undefined
+                      }
+                      onClick={() => {
+                        if (
+                          !window.confirm(
+                            "Отклонить оплату и отменить заказ?"
+                          )
+                        ) {
+                          return;
+                        }
+                        void applyStatus(order.id, "CANCELLED");
+                      }}
+                    >
+                      ❌ Отклонить оплату
+                    </button>
+                  ) : null}
+                  {isFinik && finikAwaiting ? (
+                    <button
+                      type="button"
+                      className="admin-order-card__btn admin-order-card__btn--reject"
+                      disabled={busy}
+                      onClick={() => {
+                        if (!window.confirm("Отменить неоплаченный заказ?")) {
+                          return;
+                        }
+                        void applyStatus(order.id, "CANCELLED");
+                      }}
+                    >
+                      Отменить заказ
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className="admin-order-card__btn admin-order-card__btn--ship"

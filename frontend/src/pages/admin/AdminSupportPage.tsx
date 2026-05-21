@@ -9,12 +9,17 @@ import {
   TICKET_STATUS_RU,
   TICKET_TYPE_RU,
 } from "../../i18n/statusMaps";
+import {
+  cancelStatusLabelRu,
+  refundStatusLabelRu,
+} from "@repo-shared/orderRequestLabels";
+import { RequestTimeline } from "../../components/support/RequestTimeline";
 import { PersonAvatar } from "../../components/support/PersonAvatar";
 import { SupportChatMessages } from "../../components/support/SupportChatMessages";
 import type { SupportMessageRow } from "../../services/supportCustomerApi";
 import "../../components/support/supportUi.css";
 
-type Tab = "tickets" | "returns";
+type Tab = "tickets" | "cancellations" | "refunds" | "returns";
 
 type InboxTicket = {
   id: number;
@@ -77,13 +82,18 @@ export default function AdminSupportPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [tickets, setTickets] = useState<InboxTicket[]>([]);
+  const [cancellations, setCancellations] = useState<unknown[]>([]);
+  const [refunds, setRefunds] = useState<unknown[]>([]);
   const [returns, setReturns] = useState<unknown[]>([]);
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
+  const [selectedCancelId, setSelectedCancelId] = useState<number | null>(null);
+  const [selectedRefundId, setSelectedRefundId] = useState<number | null>(null);
   const [selectedReturnId, setSelectedReturnId] = useState<number | null>(null);
   const [ticketDetail, setTicketDetail] = useState<TicketDetail | null>(null);
   const [replyText, setReplyText] = useState("");
   const [suggestions, setSuggestions] = useState<SupportSuggestion[]>([]);
   const [internalNote, setInternalNote] = useState("");
+  const [merchantComment, setMerchantComment] = useState("");
   const [busy, setBusy] = useState(false);
 
   const loadTickets = useCallback(async () => {
@@ -94,6 +104,16 @@ export default function AdminSupportPage() {
     setTickets(parsed);
   }, []);
 
+  const loadCancellations = useCallback(async () => {
+    const data = await adminService.listCancelRequests();
+    setCancellations(data);
+  }, []);
+
+  const loadRefunds = useCallback(async () => {
+    const data = await adminService.listRefundRequests();
+    setRefunds(data);
+  }, []);
+
   const loadReturns = useCallback(async () => {
     const data = await adminService.listReturnRequests();
     setReturns(data);
@@ -102,7 +122,12 @@ export default function AdminSupportPage() {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      await Promise.all([loadTickets(), loadReturns()]);
+      await Promise.all([
+        loadTickets(),
+        loadCancellations(),
+        loadRefunds(),
+        loadReturns(),
+      ]);
       setError(null);
     } catch (e) {
       console.error(e);
@@ -110,7 +135,7 @@ export default function AdminSupportPage() {
     } finally {
       setLoading(false);
     }
-  }, [loadTickets, loadReturns]);
+  }, [loadTickets, loadCancellations, loadRefunds, loadReturns]);
 
   useEffect(() => {
     void loadAll();
@@ -119,7 +144,9 @@ export default function AdminSupportPage() {
   useEffect(() => {
     const raw = sessionStorage.getItem(SF_ADMIN_SUPPORT_TAB_KEY);
     if (raw === "returns") setTab("returns");
-    if (raw === "returns" || raw === "tickets") {
+    if (raw === "cancellations") setTab("cancellations");
+    if (raw === "refunds") setTab("refunds");
+    if (raw === "returns" || raw === "tickets" || raw === "cancellations" || raw === "refunds") {
       sessionStorage.removeItem(SF_ADMIN_SUPPORT_TAB_KEY);
     }
   }, []);
@@ -156,6 +183,26 @@ export default function AdminSupportPage() {
       cancelled = true;
     };
   }, [selectedTicketId]);
+
+  const selectedCancel = useMemo(() => {
+    if (selectedCancelId == null) return null;
+    for (const r of cancellations) {
+      if (r && typeof r === "object" && (r as { id?: unknown }).id === selectedCancelId) {
+        return r as Record<string, unknown>;
+      }
+    }
+    return null;
+  }, [cancellations, selectedCancelId]);
+
+  const selectedRefund = useMemo(() => {
+    if (selectedRefundId == null) return null;
+    for (const r of refunds) {
+      if (r && typeof r === "object" && (r as { id?: unknown }).id === selectedRefundId) {
+        return r as Record<string, unknown>;
+      }
+    }
+    return null;
+  }, [refunds, selectedRefundId]);
 
   const selectedReturn = useMemo(() => {
     if (selectedReturnId == null) return null;
@@ -208,6 +255,56 @@ export default function AdminSupportPage() {
     }
   }
 
+  useEffect(() => {
+    if (selectedCancel) {
+      const c = pickString(selectedCancel.merchantComment);
+      setMerchantComment(c ?? "");
+    } else if (selectedRefund) {
+      const c = pickString(selectedRefund.merchantComment);
+      setMerchantComment(c ?? "");
+    } else {
+      setMerchantComment("");
+    }
+  }, [selectedCancel, selectedRefund]);
+
+  async function patchCancel(
+    id: number,
+    patch: { status: string; merchantComment?: string | null }
+  ) {
+    setBusy(true);
+    try {
+      await adminService.patchCancelRequest(id, patch);
+      await loadCancellations();
+      await loadTickets();
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : "Ошибка");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function patchRefund(
+    id: number,
+    patch: {
+      status: string;
+      merchantComment?: string | null;
+      refundAmount?: number | null;
+    }
+  ) {
+    setBusy(true);
+    try {
+      await adminService.patchRefundRequest(id, patch);
+      await loadRefunds();
+      await loadTickets();
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : "Ошибка");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function patchReturn(
     id: number,
     patch: { status: string; refundAmount?: number | null }
@@ -253,10 +350,24 @@ export default function AdminSupportPage() {
         </button>
         <button
           type="button"
+          className={`admin-order-card__btn${tab === "cancellations" ? " admin-order-card__btn--accept" : ""}`}
+          onClick={() => setTab("cancellations")}
+        >
+          Отмены
+        </button>
+        <button
+          type="button"
+          className={`admin-order-card__btn${tab === "refunds" ? " admin-order-card__btn--accept" : ""}`}
+          onClick={() => setTab("refunds")}
+        >
+          Возврат денег
+        </button>
+        <button
+          type="button"
           className={`admin-order-card__btn${tab === "returns" ? " admin-order-card__btn--accept" : ""}`}
           onClick={() => setTab("returns")}
         >
-          Возвраты
+          Возврат товара
         </button>
         <button
           type="button"
@@ -435,6 +546,256 @@ export default function AdminSupportPage() {
                 </details>
               </>
             ) : null}
+          </div>
+        </div>
+      )}
+
+      {!loading && tab === "cancellations" && (
+        <div className="admin-support-grid">
+          <div className="sf-inbox admin-support-list">
+            {cancellations.length === 0 && (
+              <p className="admin-dash-page__muted" style={{ padding: 16 }}>
+                Нет заявок на отмену
+              </p>
+            )}
+            {cancellations.map((row) => {
+              if (!row || typeof row !== "object") return null;
+              const id = (row as { id?: unknown }).id;
+              if (typeof id !== "number") return null;
+              const active = selectedCancelId === id;
+              const order = (row as { order?: { orderNumber?: string | null; id?: number } }).order;
+              const orderLbl = order
+                ? orderDisplayLabel(order as { id: number; orderNumber?: string | null })
+                : "Заказ";
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  className={`sf-inbox__item admin-support-list__item${active ? " admin-support-list__item--active sf-inbox__item--active" : ""}`}
+                  onClick={() => setSelectedCancelId(id)}
+                >
+                  <PersonAvatar name={orderLbl} size="md" />
+                  <div className="sf-inbox__body">
+                    <div className="sf-inbox__top">
+                      <span className="sf-inbox__name">{orderLbl}</span>
+                    </div>
+                    <div className="sf-inbox__meta">
+                      {cancelStatusLabelRu(pickString((row as { status?: unknown }).status))}
+                    </div>
+                    <div className="sf-inbox__preview">
+                      {pickString((row as { comment?: unknown }).comment) ?? "—"}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="admin-support-detail">
+            {!selectedCancel && (
+              <p className="admin-dash-page__muted">Выберите заявку</p>
+            )}
+            {selectedCancel && (
+              <>
+                <h2 className="admin-support-detail__title">Отмена заказа</h2>
+                <p>
+                  Статус:{" "}
+                  <strong>{cancelStatusLabelRu(pickString(selectedCancel.status))}</strong>
+                </p>
+                {pickString(selectedCancel.comment) ? (
+                  <p>Комментарий покупателя: {pickString(selectedCancel.comment)}</p>
+                ) : null}
+                <RequestTimeline kind="cancel" status={pickString(selectedCancel.status) ?? "PENDING"} />
+                <label className="admin-field-label" htmlFor="cancel-merchant-comment">
+                  Комментарий магазина
+                </label>
+                <textarea
+                  id="cancel-merchant-comment"
+                  className="admin-input"
+                  rows={2}
+                  value={merchantComment}
+                  disabled={busy}
+                  onChange={(e) => setMerchantComment(e.target.value)}
+                />
+                {pickString(selectedCancel.status) === "PENDING" && (
+                  <div className="admin-form-row" style={{ flexWrap: "wrap", gap: 8 }}>
+                    <button
+                      type="button"
+                      className="admin-order-card__btn admin-order-card__btn--confirm"
+                      disabled={busy}
+                      onClick={() =>
+                        void patchCancel(selectedCancelId!, {
+                          status: "APPROVED",
+                          merchantComment: merchantComment.trim() || null,
+                        })
+                      }
+                    >
+                      Одобрить отмену
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-order-card__btn admin-order-card__btn--reject"
+                      disabled={busy}
+                      onClick={() =>
+                        void patchCancel(selectedCancelId!, {
+                          status: "REJECTED",
+                          merchantComment: merchantComment.trim() || null,
+                        })
+                      }
+                    >
+                      Отклонить
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!loading && tab === "refunds" && (
+        <div className="admin-support-grid">
+          <div className="sf-inbox admin-support-list">
+            {refunds.length === 0 && (
+              <p className="admin-dash-page__muted" style={{ padding: 16 }}>
+                Нет заявок на возврат денег
+              </p>
+            )}
+            {refunds.map((row) => {
+              if (!row || typeof row !== "object") return null;
+              const id = (row as { id?: unknown }).id;
+              if (typeof id !== "number") return null;
+              const active = selectedRefundId === id;
+              const order = (row as { order?: { orderNumber?: string | null; id?: number } }).order;
+              const orderLbl = order
+                ? orderDisplayLabel(order as { id: number; orderNumber?: string | null })
+                : "Заказ";
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  className={`sf-inbox__item admin-support-list__item${active ? " admin-support-list__item--active sf-inbox__item--active" : ""}`}
+                  onClick={() => setSelectedRefundId(id)}
+                >
+                  <PersonAvatar name={orderLbl} size="md" />
+                  <div className="sf-inbox__body">
+                    <div className="sf-inbox__top">
+                      <span className="sf-inbox__name">{orderLbl}</span>
+                    </div>
+                    <div className="sf-inbox__meta">
+                      {refundStatusLabelRu(pickString((row as { status?: unknown }).status))}
+                    </div>
+                    <div className="sf-inbox__preview">
+                      {pickString((row as { comment?: unknown }).comment) ?? "—"}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="admin-support-detail">
+            {!selectedRefund && (
+              <p className="admin-dash-page__muted">Выберите заявку</p>
+            )}
+            {selectedRefund && (
+              <>
+                <h2 className="admin-support-detail__title">Возврат денег</h2>
+                <p>
+                  Статус:{" "}
+                  <strong>{refundStatusLabelRu(pickString(selectedRefund.status))}</strong>
+                </p>
+                {pickString(selectedRefund.comment) ? (
+                  <p>Комментарий покупателя: {pickString(selectedRefund.comment)}</p>
+                ) : null}
+                <RequestTimeline kind="refund" status={pickString(selectedRefund.status) ?? "REQUESTED"} />
+                <label className="admin-field-label" htmlFor="refund-merchant-comment">
+                  Комментарий магазина
+                </label>
+                <textarea
+                  id="refund-merchant-comment"
+                  className="admin-input"
+                  rows={2}
+                  value={merchantComment}
+                  disabled={busy}
+                  onChange={(e) => setMerchantComment(e.target.value)}
+                />
+                <div className="admin-form-row" style={{ flexWrap: "wrap", gap: 8 }}>
+                  {pickString(selectedRefund.status) === "REQUESTED" && (
+                    <button
+                      type="button"
+                      className="admin-order-card__btn admin-order-card__btn--ship"
+                      disabled={busy}
+                      onClick={() =>
+                        void patchRefund(selectedRefundId!, {
+                          status: "REVIEWING",
+                          merchantComment: merchantComment.trim() || null,
+                        })
+                      }
+                    >
+                      Взять в проверку
+                    </button>
+                  )}
+                  {["REQUESTED", "REVIEWING"].includes(pickString(selectedRefund.status) ?? "") && (
+                    <>
+                      <button
+                        type="button"
+                        className="admin-order-card__btn admin-order-card__btn--confirm"
+                        disabled={busy}
+                        onClick={() =>
+                          void patchRefund(selectedRefundId!, {
+                            status: "APPROVED",
+                            merchantComment: merchantComment.trim() || null,
+                          })
+                        }
+                      >
+                        Одобрить
+                      </button>
+                      <button
+                        type="button"
+                        className="admin-order-card__btn admin-order-card__btn--reject"
+                        disabled={busy}
+                        onClick={() =>
+                          void patchRefund(selectedRefundId!, {
+                            status: "REJECTED",
+                            merchantComment: merchantComment.trim() || null,
+                          })
+                        }
+                      >
+                        Отклонить
+                      </button>
+                    </>
+                  )}
+                  {pickString(selectedRefund.status) === "APPROVED" && (
+                    <button
+                      type="button"
+                      className="admin-order-card__btn admin-order-card__btn--confirm"
+                      disabled={busy}
+                      onClick={() => {
+                        const orderTotal = (selectedRefund.order as { total?: number } | undefined)?.total;
+                        const raw = window.prompt(
+                          "Сумма возврата (сом, целое число)",
+                          String(orderTotal ?? "")
+                        );
+                        if (raw == null) return;
+                        const n = Number(raw.trim());
+                        if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
+                          alert("Нужно целое число ≥ 0");
+                          return;
+                        }
+                        void patchRefund(selectedRefundId!, {
+                          status: "REFUNDED",
+                          refundAmount: n,
+                          merchantComment: merchantComment.trim() || null,
+                        });
+                      }}
+                    >
+                      Деньги возвращены
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

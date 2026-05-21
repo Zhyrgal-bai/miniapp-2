@@ -167,6 +167,13 @@ export type AdminAnalytics = {
     resolvedInRange: number;
     openReturns: number;
   };
+  operations?: {
+    cancelledOrders: number;
+    cancelledInRange: number;
+    refundRequestsInRange: number;
+    returnRequestsInRange: number;
+    lowStockSkus: number;
+  };
 };
 
 export type MerchantInsight = {
@@ -473,6 +480,36 @@ export const adminService = {
     }
   },
 
+  /** Запросить статус Finik у провайдера (не ручное подтверждение). */
+  async syncFinikPayment(id: number): Promise<{
+    paymentState: "paid" | "pending" | "failed";
+    duplicate?: boolean;
+    order?: unknown;
+  }> {
+    const userId = requireAdminUserId();
+    const url = `${API_BASE_URL}/orders/${id}/sync-finik-payment`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: withTenantHeaders({ "Content-Type": "application/json" }, url),
+      body: JSON.stringify({ userId }),
+    });
+    if (!res.ok) throw new Error(await readFetchError(res));
+    const j = (await res.json()) as {
+      paymentState?: unknown;
+      duplicate?: unknown;
+      order?: unknown;
+    };
+    const ps = j.paymentState;
+    if (ps !== "paid" && ps !== "pending" && ps !== "failed") {
+      throw new Error("Некорректный ответ проверки оплаты");
+    }
+    return {
+      paymentState: ps,
+      duplicate: j.duplicate === true,
+      order: j.order,
+    };
+  },
+
   /** Статус доставки / комментарий (только tracking, без смены status). */
   async updateOrderTracking(id: number, tracking: string): Promise<unknown> {
     const userId = requireAdminUserId();
@@ -647,6 +684,52 @@ export const adminService = {
     patch: { status: string; refundAmount?: number | null }
   ): Promise<unknown> {
     return adminPatch<unknown>(`/merchant/support/returns/${id}`, patch as Record<string, unknown>);
+  },
+
+  async listCancelRequests(): Promise<unknown[]> {
+    const data = await adminGet<unknown[]>("/merchant/support/cancel-requests");
+    return Array.isArray(data) ? data : [];
+  },
+
+  async patchCancelRequest(
+    id: number,
+    patch: { status: string; merchantComment?: string | null }
+  ): Promise<unknown> {
+    return adminPatch<unknown>(
+      `/merchant/support/cancel-requests/${id}`,
+      patch as Record<string, unknown>
+    );
+  },
+
+  async listRefundRequests(): Promise<unknown[]> {
+    const data = await adminGet<unknown[]>("/merchant/support/refund-requests");
+    return Array.isArray(data) ? data : [];
+  },
+
+  async patchRefundRequest(
+    id: number,
+    patch: {
+      status: string;
+      merchantComment?: string | null;
+      refundAmount?: number | null;
+    }
+  ): Promise<unknown> {
+    return adminPatch<unknown>(
+      `/merchant/support/refund-requests/${id}`,
+      patch as Record<string, unknown>
+    );
+  },
+
+  async getMerchantWorkload(): Promise<{
+    unreadNotifications: number;
+    pendingSupport: number;
+    pendingCancelRequests: number;
+    pendingRefundRequests: number;
+    pendingReturnRequests: number;
+    ordersAwaitingAction: number;
+    priorityScore: number;
+  }> {
+    return adminPost("/merchant/workload", {});
   },
 
   async updateMembershipRole(input: {

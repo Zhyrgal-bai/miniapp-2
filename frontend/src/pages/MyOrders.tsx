@@ -6,26 +6,45 @@ import { useStorefrontPayload } from "../components/storefront/runtime/Storefron
 import { getWebAppUserId } from "../utils/telegramUserId";
 import type { MyOrderRow } from "../types/myOrder";
 import { orderDisplayLabel } from "@repo-shared/orderDisplay";
-import { orderSupportPhase } from "@repo-shared/supportPhase";
+import {
+  orderCommercePhase,
+  commercePhaseLabelRu,
+  type CustomerOrderAction,
+} from "@repo-shared/orderCommerce";
+import { finikPaymentStateView, isFinikPaymentMethod } from "@repo-shared/finikPaymentState";
 import { returnReasonLabelRu } from "@repo-shared/supportLabels";
+import {
+  cancelStatusLabelRu,
+  refundStatusLabelRu,
+  returnStatusCustomerRu,
+} from "@repo-shared/orderRequestLabels";
 import {
   SF_ORDERS_INTENT_KEY,
   type OrdersListIntent,
 } from "../utils/accountMenuStorage";
 import {
+  createCancelRequest,
+  createRefundRequest,
   createReturnRequest,
   createSupportTicket,
   ensureGeneralSupportSession,
+  fetchCancelRequestsForOrder,
+  fetchRefundRequestsForOrder,
   fetchReturnRequestsForOrder,
   postSupportTicketMessage,
+  supportTicketTypeForAction,
   uploadSupportPhoto,
+  type CancelRequestRow,
+  type RefundRequestRow,
   type ReturnReason,
+  type ReturnRequestRow,
   type SupportTicketRow,
-  type SupportTicketType,
 } from "../services/supportCustomerApi";
 import { OrderTimeline } from "../components/support/OrderTimeline";
+import { DeliveryTimeline } from "../components/support/DeliveryTimeline";
 import { SupportChatMessages } from "../components/support/SupportChatMessages";
-import { RETURN_STATUS_RU, mapStatus } from "../i18n/statusMaps";
+import { OrderCustomerActions } from "../components/support/OrderCustomerActions";
+import { RequestTimeline } from "../components/support/RequestTimeline";
 import "../components/support/supportUi.css";
 import "./MyOrders.css";
 
@@ -67,7 +86,7 @@ function formatOrderDate(iso: string | undefined): string | null {
 }
 
 function isFinikOrder(order: MyOrderRow): boolean {
-  return String(order.paymentMethod ?? "").toLowerCase() === "finik";
+  return isFinikPaymentMethod(order.paymentMethod);
 }
 
 function OrderReceiptBlock({
@@ -95,12 +114,19 @@ function OrderReceiptBlock({
     ) {
       return null;
     }
+    const payView = finikPaymentStateView({
+      orderStatus: order.status,
+      paymentMethod: order.paymentMethod,
+      polling: true,
+    });
     return (
       <div className="my-orders__finik-wait" aria-live="polite">
-        <p className="my-orders__finik-wait-lead">Проверяем оплату...</p>
+        <p className="my-orders__finik-wait-lead">
+          {payView?.label ?? "Проверяем оплату…"}
+        </p>
         <p className="my-orders__finik-wait-sub">
-          После оплаты через Finik статус обновится автоматически (около минуты).
-          Список заказов обновляется каждые 5 с.
+          {payView?.hint ??
+            "После оплаты через Finik статус обновится автоматически."}
         </p>
       </div>
     );
@@ -267,6 +293,8 @@ type Screen =
   | { kind: "list" }
   | { kind: "order"; order: MyOrderRow }
   | { kind: "chat"; order: MyOrderRow }
+  | { kind: "cancel"; order: MyOrderRow }
+  | { kind: "refund"; order: MyOrderRow }
   | { kind: "return"; order: MyOrderRow };
 
 function OrderSupportChat({
@@ -345,12 +373,15 @@ export default function MyOrders({
   const [error, setError] = useState<string | null>(null);
   const [screen, setScreen] = useState<Screen>({ kind: "list" });
   const [sessionTicket, setSessionTicket] = useState<SupportTicketRow | null>(null);
-  const [returnsForOrder, setReturnsForOrder] = useState<
-    Array<{ id: number; status: string; reason: string }>
-  >([]);
+  const [returnsForOrder, setReturnsForOrder] = useState<ReturnRequestRow[]>([]);
+  const [cancelsForOrder, setCancelsForOrder] = useState<CancelRequestRow[]>([]);
+  const [refundsForOrder, setRefundsForOrder] = useState<RefundRequestRow[]>([]);
   const [ticketDraft, setTicketDraft] = useState("");
   const [supportBusy, setSupportBusy] = useState(false);
   const [chatLoading, setChatLoading] = useState(false);
+  const [cancelComment, setCancelComment] = useState("");
+  const [refundComment, setRefundComment] = useState("");
+  const [refundReason, setRefundReason] = useState("");
 
   const [returnReason, setReturnReason] = useState<ReturnReason>("OTHER");
   const [returnItemId, setReturnItemId] = useState<number | "">("");
@@ -445,14 +476,14 @@ export default function MyOrders({
         return;
       }
       try {
-        const ret = await fetchReturnRequestsForOrder(userId, shopIdString, orderId);
-        setReturnsForOrder(
-          ret.map((r) => ({
-            id: r.id,
-            status: r.status,
-            reason: r.reason,
-          }))
-        );
+        const [ret, can, ref] = await Promise.all([
+          fetchReturnRequestsForOrder(userId, shopIdString, orderId),
+          fetchCancelRequestsForOrder(userId, shopIdString, orderId),
+          fetchRefundRequestsForOrder(userId, shopIdString, orderId),
+        ]);
+        setReturnsForOrder(ret);
+        setCancelsForOrder(can);
+        setRefundsForOrder(ref);
       } catch (e) {
         console.error(e);
       }
@@ -485,7 +516,7 @@ export default function MyOrders({
   );
 
   useEffect(() => {
-    if (screen.kind !== "order" && screen.kind !== "chat") return;
+    if (screen.kind === "list") return;
     void refreshOrderContext(screen.order.id);
   }, [screen, refreshOrderContext]);
 
@@ -494,7 +525,31 @@ export default function MyOrders({
     void loadSupportSession(screen.order.id);
   }, [screen, loadSupportSession]);
 
-  async function openScenario(order: MyOrderRow, type: SupportTicketType) {
+  async function handleCustomerAction(order: MyOrderRow, action: CustomerOrderAction) {
+    if (action.kind === "cancel") {
+      setCancelComment("");
+      setScreen({ kind: "cancel", order });
+      return;
+    }
+    if (action.kind === "refund") {
+      setRefundComment("");
+      setRefundReason("");
+      setScreen({ kind: "refund", order });
+      return;
+    }
+    if (action.kind === "return") {
+      setReturnItemId("");
+      setReturnReason("OTHER");
+      setReturnPhotos([]);
+      setScreen({ kind: "return", order });
+      return;
+    }
+    const ticketType = supportTicketTypeForAction(action.kind);
+    if (ticketType == null) return;
+    await openScenario(order, ticketType);
+  }
+
+  async function openScenario(order: MyOrderRow, type: NonNullable<ReturnType<typeof supportTicketTypeForAction>>) {
     if (
       !Number.isFinite(userId) ||
       userId <= 0 ||
@@ -594,6 +649,64 @@ export default function MyOrders({
     input.click();
   }
 
+  async function submitCancel(order: MyOrderRow) {
+    if (
+      !Number.isFinite(userId) ||
+      userId <= 0 ||
+      shopIdString == null ||
+      !/^\d+$/.test(shopIdString)
+    ) {
+      return;
+    }
+    setSupportBusy(true);
+    try {
+      await createCancelRequest(userId, shopIdString, {
+        orderId: order.id,
+        comment: cancelComment.trim() || undefined,
+      });
+      alert("Заявка на отмену отправлена");
+      setCancelComment("");
+      await refreshOrderContext(order.id);
+      await loadSupportSession(order.id);
+      await load();
+      setScreen({ kind: "order", order });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Ошибка");
+    } finally {
+      setSupportBusy(false);
+    }
+  }
+
+  async function submitRefund(order: MyOrderRow) {
+    if (
+      !Number.isFinite(userId) ||
+      userId <= 0 ||
+      shopIdString == null ||
+      !/^\d+$/.test(shopIdString)
+    ) {
+      return;
+    }
+    setSupportBusy(true);
+    try {
+      await createRefundRequest(userId, shopIdString, {
+        orderId: order.id,
+        reason: refundReason.trim() || undefined,
+        comment: refundComment.trim() || undefined,
+      });
+      alert("Заявка на возврат денег отправлена");
+      setRefundComment("");
+      setRefundReason("");
+      await refreshOrderContext(order.id);
+      await loadSupportSession(order.id);
+      await load();
+      setScreen({ kind: "order", order });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Ошибка");
+    } finally {
+      setSupportBusy(false);
+    }
+  }
+
   async function submitReturn(order: MyOrderRow) {
     if (
       !Number.isFinite(userId) ||
@@ -617,7 +730,7 @@ export default function MyOrders({
       setReturnComment("");
       await refreshOrderContext(order.id);
       await loadSupportSession(order.id);
-      setScreen({ kind: "chat", order });
+      setScreen({ kind: "order", order });
     } catch (e) {
       alert(e instanceof Error ? e.message : "Ошибка");
     } finally {
@@ -626,9 +739,13 @@ export default function MyOrders({
   }
 
   const renderOrderDetail = (order: MyOrderRow) => {
-    const phase = orderSupportPhase(order.status);
+    const phase = orderCommercePhase(order.status);
     const statusVis = orderStatusVisual(order.status);
     const dateLabel = formatOrderDate(order.createdAt);
+    const pendingCancel = cancelsForOrder.find((c) => c.status === "PENDING");
+    const pendingRefund = refundsForOrder.find((r) =>
+      ["REQUESTED", "REVIEWING", "APPROVED"].includes(String(r.status).toUpperCase())
+    );
 
     return (
       <div className="my-orders my-orders--detail">
@@ -644,9 +761,23 @@ export default function MyOrders({
           {dateLabel ? (
             <p className="my-orders__subtitle">{dateLabel}</p>
           ) : null}
+          <p className="my-orders__muted">{commercePhaseLabelRu(phase)}</p>
         </header>
 
         <OrderTimeline status={order.status} />
+
+        {(order.deliveryStage != null ||
+          order.deliveryMode != null ||
+          ["CONFIRMED", "SHIPPED", "DELIVERED"].includes(
+            String(order.status).toUpperCase()
+          )) && (
+          <DeliveryTimeline
+            deliveryMode={order.deliveryMode}
+            deliveryStage={order.deliveryStage}
+            orderStatus={order.status}
+            estimatedDeliveryAt={order.estimatedDeliveryAt}
+          />
+        )}
 
         <div className="my-orders__status-row" aria-label="Текущий статус">
           <span className="my-orders__status-icon" aria-hidden>
@@ -676,109 +807,70 @@ export default function MyOrders({
         <OrderPaymentBlock order={order} settings={settings} />
         <OrderReceiptBlock order={order} userId={userId} onUploaded={load} />
 
+        {cancelsForOrder.length > 0 && (
+          <section className="my-orders__section">
+            <h2 className="my-orders__section-title">Отмена заказа</h2>
+            {cancelsForOrder.map((c) => (
+              <div key={c.id} className="sf-request-card">
+                <p className="sf-request-card__title">Заявка #{c.id}</p>
+                <p className="sf-request-card__status">
+                  {cancelStatusLabelRu(c.status)}
+                </p>
+                <RequestTimeline kind="cancel" status={c.status} />
+                {c.merchantComment?.trim() ? (
+                  <p className="sf-request-card__comment">
+                    Ответ магазина: {c.merchantComment}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </section>
+        )}
+
+        {refundsForOrder.length > 0 && (
+          <section className="my-orders__section">
+            <h2 className="my-orders__section-title">Возврат денег</h2>
+            {refundsForOrder.map((r) => (
+              <div key={r.id} className="sf-request-card">
+                <p className="sf-request-card__title">Заявка #{r.id}</p>
+                <p className="sf-request-card__status">
+                  {refundStatusLabelRu(r.status)}
+                </p>
+                <RequestTimeline kind="refund" status={r.status} />
+                {r.merchantComment?.trim() ? (
+                  <p className="sf-request-card__comment">
+                    Ответ магазина: {r.merchantComment}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </section>
+        )}
+
+        {returnsForOrder.length > 0 && (
+          <section className="my-orders__section">
+            <h2 className="my-orders__section-title">Возврат товара</h2>
+            {returnsForOrder.map((r) => (
+              <div key={r.id} className="sf-request-card">
+                <p className="sf-request-card__title">
+                  {returnReasonLabelRu(r.reason)}
+                </p>
+                <p className="sf-request-card__status">
+                  {returnStatusCustomerRu(r.status)}
+                </p>
+                <RequestTimeline kind="return" status={r.status} />
+              </div>
+            ))}
+          </section>
+        )}
+
         <section className="my-orders__section">
           <h2 className="my-orders__section-title">Чем помочь?</h2>
-          <div className="my-orders__scenario-grid">
-            {phase === "PROCESSING" && (
-              <>
-                <button
-                  type="button"
-                  className="my-orders__scenario-btn"
-                  disabled={supportBusy}
-                  onClick={() => void openScenario(order, "CANCEL_REQUEST")}
-                >
-                  Отменить заказ
-                </button>
-                <button
-                  type="button"
-                  className="my-orders__scenario-btn"
-                  disabled={supportBusy}
-                  onClick={() => void openScenario(order, "ADDRESS_CHANGE")}
-                >
-                  Изменить адрес
-                </button>
-                <button
-                  type="button"
-                  className="my-orders__scenario-btn"
-                  disabled={supportBusy}
-                  onClick={() => void openScenario(order, "GENERAL")}
-                >
-                  Связаться с магазином
-                </button>
-              </>
-            )}
-            {phase === "SHIPPING" && (
-              <>
-                <button
-                  type="button"
-                  className="my-orders__scenario-btn"
-                  disabled={supportBusy}
-                  onClick={() => void openScenario(order, "TRACKING")}
-                >
-                  Где посылка?
-                </button>
-                <button
-                  type="button"
-                  className="my-orders__scenario-btn"
-                  disabled={supportBusy}
-                  onClick={() => void openScenario(order, "DELIVERY")}
-                >
-                  Вопрос по доставке
-                </button>
-                <button
-                  type="button"
-                  className="my-orders__scenario-btn"
-                  disabled={supportBusy}
-                  onClick={() => void openScenario(order, "GENERAL")}
-                >
-                  Связаться с магазином
-                </button>
-              </>
-            )}
-            {phase === "DELIVERED" && (
-              <>
-                <button
-                  type="button"
-                  className="my-orders__scenario-btn"
-                  disabled={supportBusy}
-                  onClick={() => {
-                    setReturnItemId("");
-                    setReturnReason("OTHER");
-                    setReturnPhotos([]);
-                    setScreen({ kind: "return", order });
-                  }}
-                >
-                  Возврат товара
-                </button>
-                <button
-                  type="button"
-                  className="my-orders__scenario-btn"
-                  disabled={supportBusy}
-                  onClick={() => void openScenario(order, "EXCHANGE")}
-                >
-                  Обмен
-                </button>
-                <button
-                  type="button"
-                  className="my-orders__scenario-btn"
-                  disabled={supportBusy}
-                  onClick={() => void openScenario(order, "QUALITY")}
-                >
-                  Проблема с товаром
-                </button>
-              </>
-            )}
-            {order.status.toUpperCase() === "CANCELLED" && (
-              <button
-                type="button"
-                className="my-orders__scenario-btn"
-                disabled={supportBusy}
-                onClick={() => void openScenario(order, "GENERAL")}
-              >
-                Задать вопрос
-              </button>
-            )}
-          </div>
+          <OrderCustomerActions
+            orderStatus={order.status}
+            busy={supportBusy || !!pendingCancel || !!pendingRefund}
+            onAction={(action) => void handleCustomerAction(order, action)}
+          />
           <button
             type="button"
             className="my-orders__open-chat"
@@ -788,20 +880,6 @@ export default function MyOrders({
             💬 Открыть чат
           </button>
         </section>
-
-        {returnsForOrder.length > 0 && (
-          <section className="my-orders__section">
-            <h2 className="my-orders__section-title">Возвраты</h2>
-            <ul className="my-orders__returns-list">
-              {returnsForOrder.map((r) => (
-                <li key={r.id}>
-                  {returnReasonLabelRu(r.reason)} —{" "}
-                  {mapStatus(r.status, RETURN_STATUS_RU)}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
       </div>
     );
   };
@@ -834,6 +912,95 @@ export default function MyOrders({
           onSend={() => void sendTicketMessage()}
           onAddPhoto={() => void pickSupportPhoto(screen.order.id)}
         />
+      </div>
+    );
+  }
+
+  if (screen.kind === "cancel") {
+    const order = screen.order;
+    return (
+      <div className="my-orders my-orders--detail">
+        <button
+          type="button"
+          className="my-orders__back"
+          onClick={() => setScreen({ kind: "order", order })}
+        >
+          ← Назад
+        </button>
+        <h1 className="my-orders__title">Отмена · заказ {orderDisplayLabel(order)}</h1>
+        <p className="my-orders__muted">
+          Доступно до оплаты. Магазин рассмотрит заявку — это не возврат денег.
+        </p>
+        <label className="my-orders__field">
+          <span>Комментарий (необязательно)</span>
+          <textarea
+            className="my-orders__ticket-input"
+            rows={3}
+            value={cancelComment}
+            disabled={supportBusy}
+            onChange={(e) => setCancelComment(e.target.value)}
+          />
+        </label>
+        <div className="my-orders__scenario-grid">
+          <button
+            type="button"
+            className="my-orders__scenario-btn"
+            disabled={supportBusy}
+            onClick={() => void submitCancel(order)}
+          >
+            Отправить заявку на отмену
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (screen.kind === "refund") {
+    const order = screen.order;
+    return (
+      <div className="my-orders my-orders--detail">
+        <button
+          type="button"
+          className="my-orders__back"
+          onClick={() => setScreen({ kind: "order", order })}
+        >
+          ← Назад
+        </button>
+        <h1 className="my-orders__title">Возврат денег · заказ {orderDisplayLabel(order)}</h1>
+        <p className="my-orders__muted">
+          Доступно после оплаты и до доставки. Магазин проверит заявку вручную.
+        </p>
+        <label className="my-orders__field">
+          <span>Причина (необязательно)</span>
+          <input
+            className="my-orders__select"
+            type="text"
+            value={refundReason}
+            disabled={supportBusy}
+            onChange={(e) => setRefundReason(e.target.value)}
+            placeholder="Например: передумал"
+          />
+        </label>
+        <label className="my-orders__field">
+          <span>Комментарий</span>
+          <textarea
+            className="my-orders__ticket-input"
+            rows={3}
+            value={refundComment}
+            disabled={supportBusy}
+            onChange={(e) => setRefundComment(e.target.value)}
+          />
+        </label>
+        <div className="my-orders__scenario-grid">
+          <button
+            type="button"
+            className="my-orders__scenario-btn"
+            disabled={supportBusy}
+            onClick={() => void submitRefund(order)}
+          >
+            Отправить заявку
+          </button>
+        </div>
       </div>
     );
   }
@@ -923,6 +1090,13 @@ export default function MyOrders({
     );
   }
 
+  const activeOrders = orders.filter(
+    (o) => String(o.status).trim().toUpperCase() !== "CANCELLED"
+  );
+  const cancelledOrders = orders.filter(
+    (o) => String(o.status).trim().toUpperCase() === "CANCELLED"
+  );
+
   return (
     <div className="my-orders">
       <header className="my-orders__head">
@@ -961,7 +1135,7 @@ export default function MyOrders({
         </p>
       )}
 
-      {!loading && !error && orders.length === 0 && (
+      {!loading && !error && activeOrders.length === 0 && cancelledOrders.length === 0 && (
         <div className="my-orders__empty" role="status">
           <p className="my-orders__empty-title">
             {readTxt("emptyOrdersTitle", "У вас пока нет заказов 😔")}
@@ -973,7 +1147,7 @@ export default function MyOrders({
       )}
 
       <div className="my-orders__list">
-        {orders.map((order) => {
+        {activeOrders.map((order) => {
           const statusVis = orderStatusVisual(order.status);
           const dateLabel = formatOrderDate(order.createdAt);
           return (
@@ -1024,6 +1198,45 @@ export default function MyOrders({
           );
         })}
       </div>
+
+      {cancelledOrders.length > 0 ? (
+        <section className="my-orders__section">
+          <h2 className="my-orders__section-title">Отменённые</h2>
+          <div className="my-orders__list">
+            {cancelledOrders.map((order) => {
+              const statusVis = orderStatusVisual(order.status);
+              const dateLabel = formatOrderDate(order.createdAt);
+              return (
+                <article key={order.id} className="my-orders__card my-orders__card--cancelled">
+                  <div className="my-orders__card-head">
+                    <h3 className="my-orders__card-title">
+                      Заказ {orderDisplayLabel(order)}
+                    </h3>
+                    {dateLabel ? (
+                      <time className="my-orders__date" dateTime={order.createdAt}>
+                        {dateLabel}
+                      </time>
+                    ) : null}
+                  </div>
+                  <div className="my-orders__status-row" aria-label="Статус заказа">
+                    <span className="my-orders__status-icon" aria-hidden>
+                      {statusVis.icon}
+                    </span>
+                    <span className="my-orders__status-label">{statusVis.label}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="my-orders__open-order"
+                    onClick={() => setScreen({ kind: "order", order })}
+                  >
+                    Подробнее
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }

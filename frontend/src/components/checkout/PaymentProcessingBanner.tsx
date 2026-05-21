@@ -10,12 +10,7 @@ import { openTelegramExternalLink } from "../../utils/telegramWebAppBootstrap";
 import { t } from "../../i18n";
 import "./PaymentProcessingBanner.css";
 
-const PAID_STATUSES = new Set([
-  "CONFIRMED",
-  "SHIPPED",
-  "DELIVERED",
-  "ACCEPTED",
-]);
+const PAID_STATUSES = new Set(["CONFIRMED", "SHIPPED", "DELIVERED"]);
 const POLL_MS = 2000;
 const TIMEOUT_MS = 8 * 60 * 1000;
 

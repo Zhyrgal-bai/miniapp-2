@@ -8,13 +8,21 @@ import { getTelegramUser } from "../utils/telegram";
 import { telegramDisplayName } from "../utils/telegramUserMark";
 import type { MyOrderRow } from "../types/myOrder";
 import { orderDisplayLabel } from "@repo-shared/orderDisplay";
-import { orderSupportPhase, type SupportPhase } from "@repo-shared/supportPhase";
+import {
+  customerOrderActions,
+  commercePhaseLabelRu,
+  orderCommercePhase,
+  type CustomerOrderAction,
+} from "@repo-shared/orderCommerce";
 import { returnReasonLabelRu } from "@repo-shared/supportLabels";
 import {
+  createCancelRequest,
+  createRefundRequest,
   createReturnRequest,
   createSupportTicket,
   ensureGeneralSupportSession,
   postSupportTicketMessage,
+  supportTicketTypeForAction,
   uploadSupportPhoto,
   type ReturnReason,
   type SupportTicketRow,
@@ -25,75 +33,20 @@ import { PersonAvatar } from "../components/support/PersonAvatar";
 import "./SupportHubPage.css";
 import "../components/support/supportUi.css";
 
-type HubScreen = { kind: "chat" } | { kind: "return"; order: MyOrderRow };
-
-type QuickChip =
-  | { key: string; label: string; kind: "ticket"; ticketType: SupportTicketType }
-  | { key: string; label: string; kind: "return" }
-  | { key: string; label: string; kind: "draft"; text: string };
-
-function phaseLabelRu(phase: SupportPhase): string {
-  switch (phase) {
-    case "PROCESSING":
-      return "В обработке";
-    case "SHIPPING":
-      return "В пути";
-    case "DELIVERED":
-      return "Доставлен";
-    case "CANCELLED":
-      return "Отменён";
-    default:
-      return phase;
-  }
-}
-
-function quickChipsForOrder(order: MyOrderRow): QuickChip[] {
-  const phase = orderSupportPhase(order.status);
-  const label = orderDisplayLabel(order);
-  switch (phase) {
-    case "PROCESSING":
-      return [
-        { key: "cancel", label: "Отменить заказ", kind: "ticket", ticketType: "CANCEL_REQUEST" },
-        { key: "addr", label: "Изменить адрес", kind: "ticket", ticketType: "ADDRESS_CHANGE" },
-        { key: "pay", label: "Проблема с оплатой", kind: "draft", text: "Проблема с оплатой заказа" },
-        { key: "shop", label: "Связаться с магазином", kind: "ticket", ticketType: "GENERAL" },
-      ];
-    case "SHIPPING":
-      return [
-        { key: "tr", label: "Где посылка?", kind: "ticket", ticketType: "TRACKING" },
-        { key: "del", label: "Вопрос по доставке", kind: "ticket", ticketType: "DELIVERY" },
-        { key: "shop", label: "Связаться с магазином", kind: "ticket", ticketType: "GENERAL" },
-      ];
-    case "DELIVERED":
-      return [
-        { key: "retf", label: "Возврат товара", kind: "return" },
-        { key: "ex", label: "Обмен", kind: "ticket", ticketType: "EXCHANGE" },
-        { key: "q", label: "Проблема с товаром", kind: "ticket", ticketType: "QUALITY" },
-      ];
-    case "CANCELLED":
-      return [
-        {
-          key: "ask",
-          label: "Вопрос по отмене",
-          kind: "draft",
-          text: `Вопрос по отменённому заказу ${label}`,
-        },
-      ];
-    default:
-      return [
-        { key: "shop", label: "Связаться с магазином", kind: "ticket", ticketType: "GENERAL" },
-      ];
-  }
-}
+type HubScreen =
+  | { kind: "chat" }
+  | { kind: "return"; order: MyOrderRow }
+  | { kind: "cancel"; order: MyOrderRow }
+  | { kind: "refund"; order: MyOrderRow };
 
 function OrderContextCard({ order }: { order: MyOrderRow }) {
-  const phase = orderSupportPhase(order.status);
+  const phase = orderCommercePhase(order.status);
   const items = order.items ?? [];
   const thumbs = items.slice(0, 4);
   const n = items.reduce((s, it) => s + it.quantity, 0);
   return (
     <div className="sf-support-order-card" role="group" aria-label="Заказ">
-      <div className="sf-support-order-card__status">{phaseLabelRu(phase)}</div>
+      <div className="sf-support-order-card__status">{commercePhaseLabelRu(phase)}</div>
       <div className="sf-support-order-card__row">
         <span className="sf-support-order-card__price">{order.total} сом</span>
         <span className="sf-support-order-card__count">
@@ -147,6 +100,9 @@ export default function SupportHubPage({
   const [returnItemId, setReturnItemId] = useState<number | "">("");
   const [returnComment, setReturnComment] = useState("");
   const [returnPhotos, setReturnPhotos] = useState<string[]>([]);
+  const [cancelComment, setCancelComment] = useState("");
+  const [refundComment, setRefundComment] = useState("");
+  const [refundReason, setRefundReason] = useState("");
 
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -175,11 +131,15 @@ export default function SupportHubPage({
     }
     try {
       const data = await fetchMyOrders(userId, shopIdString);
+      const active = data.filter(
+        (o) => String(o.status).trim().toUpperCase() !== "CANCELLED"
+      );
       setOrders(data);
       setError(null);
       setSelectedId((prev) => {
-        if (prev != null && data.some((o) => o.id === prev)) return prev;
-        return data[0]?.id ?? null;
+        const pool = active.length > 0 ? active : data;
+        if (prev != null && pool.some((o) => o.id === prev)) return prev;
+        return pool[0]?.id ?? null;
       });
     } catch (e) {
       console.error(e);
@@ -341,20 +301,75 @@ export default function SupportHubPage({
     }
   }
 
-  function onChip(c: QuickChip) {
-    if (c.kind === "return") {
-      if (!selectedOrder) return;
+  async function handleCustomerAction(action: CustomerOrderAction) {
+    if (!selectedOrder) return;
+    if (action.kind === "cancel") {
+      setCancelComment("");
+      setScreen({ kind: "cancel", order: selectedOrder });
+      return;
+    }
+    if (action.kind === "refund") {
+      setRefundComment("");
+      setRefundReason("");
+      setScreen({ kind: "refund", order: selectedOrder });
+      return;
+    }
+    if (action.kind === "return") {
       setReturnItemId("");
       setReturnReason("OTHER");
       setReturnPhotos([]);
       setScreen({ kind: "return", order: selectedOrder });
       return;
     }
-    if (c.kind === "draft") {
-      setTicketDraft(c.text);
-      return;
+    const ticketType = supportTicketTypeForAction(action.kind);
+    if (ticketType == null) return;
+    await sendTopic(ticketType);
+  }
+
+  async function submitCancel(order: MyOrderRow) {
+    if (!canUseApi) return;
+    setBusy(true);
+    try {
+      await createCancelRequest(userId, shopIdString!, {
+        orderId: order.id,
+        comment: cancelComment.trim() || undefined,
+      });
+      alert("Заявка на отмену отправлена");
+      setCancelComment("");
+      setScreen({ kind: "chat" });
+      await refreshSession(order.id);
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Ошибка");
+    } finally {
+      setBusy(false);
     }
-    void sendTopic(c.ticketType);
+  }
+
+  async function submitRefund(order: MyOrderRow) {
+    if (!canUseApi) return;
+    setBusy(true);
+    try {
+      await createRefundRequest(userId, shopIdString!, {
+        orderId: order.id,
+        reason: refundReason.trim() || undefined,
+        comment: refundComment.trim() || undefined,
+      });
+      alert("Заявка на возврат денег отправлена");
+      setRefundComment("");
+      setRefundReason("");
+      setScreen({ kind: "chat" });
+      await refreshSession(order.id);
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Ошибка");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onChip(c: CustomerOrderAction) {
+    void handleCustomerAction(c);
   }
 
   const returnReasonOptions: { value: ReturnReason; label: string }[] = [
@@ -364,6 +379,93 @@ export default function SupportHubPage({
     { value: "QUALITY", label: returnReasonLabelRu("QUALITY") },
     { value: "OTHER", label: returnReasonLabelRu("OTHER") },
   ];
+
+  if (screen.kind === "cancel") {
+    const order = screen.order;
+    return (
+      <div className="sf-support-hub sf-support-hub--return">
+        <button
+          type="button"
+          className="sf-support-temu__back"
+          onClick={() => setScreen({ kind: "chat" })}
+        >
+          ← Назад
+        </button>
+        <h1 className="sf-support-hub__title">Отмена заказа</h1>
+        <p className="sf-support-hub__sub">Заказ {orderDisplayLabel(order)}</p>
+        <p className="sf-support-hub__muted">
+          Доступно до оплаты. Магазин рассмотрит заявку вручную.
+        </p>
+        <label className="sf-support-hub__field">
+          <span>Комментарий</span>
+          <textarea
+            className="sf-support-hub__textarea"
+            rows={3}
+            value={cancelComment}
+            disabled={busy}
+            onChange={(e) => setCancelComment(e.target.value)}
+          />
+        </label>
+        <div className="sf-support-hub__actions">
+          <button
+            type="button"
+            className="sf-support-hub__action sf-support-hub__action--primary"
+            disabled={busy}
+            onClick={() => void submitCancel(order)}
+          >
+            Отправить заявку
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (screen.kind === "refund") {
+    const order = screen.order;
+    return (
+      <div className="sf-support-hub sf-support-hub--return">
+        <button
+          type="button"
+          className="sf-support-temu__back"
+          onClick={() => setScreen({ kind: "chat" })}
+        >
+          ← Назад
+        </button>
+        <h1 className="sf-support-hub__title">Возврат денег</h1>
+        <p className="sf-support-hub__sub">Заказ {orderDisplayLabel(order)}</p>
+        <label className="sf-support-hub__field">
+          <span>Причина</span>
+          <input
+            className="sf-support-hub__select"
+            type="text"
+            value={refundReason}
+            disabled={busy}
+            onChange={(e) => setRefundReason(e.target.value)}
+          />
+        </label>
+        <label className="sf-support-hub__field">
+          <span>Комментарий</span>
+          <textarea
+            className="sf-support-hub__textarea"
+            rows={3}
+            value={refundComment}
+            disabled={busy}
+            onChange={(e) => setRefundComment(e.target.value)}
+          />
+        </label>
+        <div className="sf-support-hub__actions">
+          <button
+            type="button"
+            className="sf-support-hub__action sf-support-hub__action--primary"
+            disabled={busy}
+            onClick={() => void submitRefund(order)}
+          >
+            Отправить заявку
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (screen.kind === "return") {
     const order = screen.order;
@@ -556,7 +658,7 @@ export default function SupportHubPage({
         <>
           <div className="sf-support-temu__chips-wrap">
             <div className="sf-support-temu__chips-row">
-              {quickChipsForOrder(selectedOrder).map((c) => (
+              {customerOrderActions(orderCommercePhase(selectedOrder.status)).map((c) => (
                 <button
                   key={c.key}
                   type="button"
@@ -642,7 +744,7 @@ export default function SupportHubPage({
                     {orderDisplayLabel(o)}
                   </span>
                   <span className="sf-support-sheet__item-meta">
-                    {o.total} сом · {phaseLabelRu(orderSupportPhase(o.status))}
+                    {o.total} сом · {commercePhaseLabelRu(orderCommercePhase(o.status))}
                   </span>
                 </button>
               </li>

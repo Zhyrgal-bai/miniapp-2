@@ -162,3 +162,86 @@ export async function createReturnRequest(
   });
   return res.data;
 }
+
+export type CancelRequestRow = {
+  id: number;
+  status: string;
+  reason?: string | null;
+  comment?: string | null;
+  merchantComment?: string | null;
+};
+
+export type RefundRequestRow = {
+  id: number;
+  status: string;
+  reason?: string | null;
+  comment?: string | null;
+  merchantComment?: string | null;
+  refundAmount?: number | null;
+};
+
+export async function fetchCancelRequestsForOrder(
+  userId: number,
+  shop: string,
+  orderId: number
+): Promise<CancelRequestRow[]> {
+  const res = await api.get<CancelRequestRow[]>("/support/cancel-requests", {
+    params: { ...tenantParams(userId, shop), orderId },
+  });
+  return Array.isArray(res.data) ? res.data : [];
+}
+
+export async function createCancelRequest(
+  userId: number,
+  shop: string,
+  body: { orderId: number; reason?: string; comment?: string }
+): Promise<CancelRequestRow> {
+  const res = await api.post<CancelRequestRow>("/support/cancel-requests", body, {
+    params: tenantParams(userId, shop),
+  });
+  return res.data;
+}
+
+export async function fetchRefundRequestsForOrder(
+  userId: number,
+  shop: string,
+  orderId: number
+): Promise<RefundRequestRow[]> {
+  const res = await api.get<RefundRequestRow[]>("/support/refund-requests", {
+    params: { ...tenantParams(userId, shop), orderId },
+  });
+  return Array.isArray(res.data) ? res.data : [];
+}
+
+export async function createRefundRequest(
+  userId: number,
+  shop: string,
+  body: { orderId: number; reason?: string; comment?: string }
+): Promise<RefundRequestRow> {
+  const res = await api.post<RefundRequestRow>("/support/refund-requests", body, {
+    params: tenantParams(userId, shop),
+  });
+  return res.data;
+}
+
+/** Map customer action → support ticket type for chat-only actions. */
+export function supportTicketTypeForAction(
+  kind: string
+): SupportTicketType | null {
+  switch (kind) {
+    case "address":
+      return "ADDRESS_CHANGE";
+    case "tracking":
+      return "TRACKING";
+    case "delivery":
+      return "DELIVERY";
+    case "quality":
+      return "QUALITY";
+    case "exchange":
+      return "EXCHANGE";
+    case "chat":
+      return "GENERAL";
+    default:
+      return null;
+  }
+}

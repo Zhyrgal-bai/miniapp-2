@@ -21,12 +21,21 @@ import {
   type MerchantPermissionId,
 } from "./merchantPermissions.js";
 import { createMerchantNotification } from "./merchantNotificationsService.js";
+import { assertActionAllowed } from "./abuseGuardService.js";
 import { buildSupportSuggestions } from "./supportSuggestionService.js";
 import { orderDisplayLabel } from "../shared/orderDisplay.js";
 import {
   returnReasonLabelRu,
   ticketTypeLabelRu,
 } from "../shared/supportLabels.js";
+import {
+  createCancelRequestForOrder,
+  createRefundRequestForOrder,
+  isCancelStatus,
+  isRefundStatus,
+  patchCancelRequestMerchant,
+  patchRefundRequestMerchant,
+} from "./supportOrderActions.js";
 
 type Deps = {
   upload: multer.Multer;
@@ -814,6 +823,15 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
         return res.status(400).json({ error: "Неверная причина" });
       }
 
+      const returnCooldown = await assertActionAllowed({
+        businessId,
+        userId,
+        actionKey: "return_request",
+      });
+      if (!returnCooldown.ok) {
+        return res.status(429).json({ error: returnCooldown.error });
+      }
+
       const order = await assertCustomerOrder(orderId, businessId, userId);
       if (!order) {
         return res.status(404).json({ error: NOT_FOUND });
@@ -1349,9 +1367,344 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
             orderItem: true,
           },
         });
+
+        if (statusRaw === "RETURNED" || statusRaw === "REFUNDED") {
+          const { receiveReturnStock, restockReturned, loadOrderLinesForStock } =
+            await import("./inventoryService.js");
+          const lines = await loadOrderLinesForStock(existing.orderId);
+          const line =
+            existing.orderItemId != null
+              ? lines.find((l) => l.id === existing.orderItemId) ?? lines[0]
+              : lines[0];
+          if (line) {
+            await prisma.$transaction(async (tx) => {
+              if (statusRaw === "RETURNED") {
+                await receiveReturnStock(
+                  tx,
+                  merchant.businessId,
+                  existing.orderId,
+                  line
+                );
+              }
+              if (statusRaw === "REFUNDED") {
+                await restockReturned(
+                  tx,
+                  merchant.businessId,
+                  existing.orderId,
+                  line
+                );
+              }
+            });
+          }
+        }
+
         return res.json(jsonWithBigInt(updated));
       } catch (e) {
         console.error("PATCH /merchant/support/returns/:id:", e);
+        res.status(500).json({ error: "Ошибка" });
+      }
+    }
+  );
+  app.post("/support/cancel-requests", async (req: Request, res: Response) => {
+    try {
+      const userId = await customerUserId(req, res);
+      if (userId == null) return;
+      const businessId = await resolveCatalogBusinessId(req, res);
+      if (!businessId) return;
+
+      const body = req.body as {
+        orderId?: unknown;
+        reason?: unknown;
+        comment?: unknown;
+      };
+      const orderId = parseOrderId(body.orderId);
+      if (orderId == null) {
+        return res.status(400).json({ error: "Нужен orderId" });
+      }
+
+      const cooldown = await assertActionAllowed({
+        businessId,
+        userId,
+        actionKey: "cancel_request",
+      });
+      if (!cooldown.ok) {
+        return res.status(429).json({ error: cooldown.error });
+      }
+
+      const cancelPayload: {
+        businessId: number;
+        orderId: number;
+        userId: number;
+        reason?: string;
+        comment?: string;
+      } = { businessId, orderId, userId };
+      if (typeof body.reason === "string") cancelPayload.reason = body.reason;
+      if (typeof body.comment === "string") cancelPayload.comment = body.comment;
+
+      const result = await createCancelRequestForOrder(cancelPayload);
+      if (!result.ok) {
+        return res.status(result.statusCode).json({ error: result.error });
+      }
+      return res.status(201).json(jsonWithBigInt(result.row));
+    } catch (e) {
+      console.error("POST /support/cancel-requests:", e);
+      res.status(500).json({ error: "Ошибка" });
+    }
+  });
+
+  app.get("/support/cancel-requests", async (req: Request, res: Response) => {
+    try {
+      const userId = await customerUserId(req, res);
+      if (userId == null) return;
+      const businessId = await resolveCatalogBusinessId(req, res);
+      if (!businessId) return;
+
+      const orderId = parseOrderId(
+        Array.isArray(req.query.orderId) ? req.query.orderId[0] : req.query.orderId
+      );
+      if (orderId == null) {
+        return res.status(400).json({ error: "Нужен orderId" });
+      }
+
+      const rows = await prisma.cancelRequest.findMany({
+        where: { businessId, orderId, userId },
+        orderBy: { id: "desc" },
+      });
+      return res.json(jsonWithBigInt(rows));
+    } catch (e) {
+      console.error("GET /support/cancel-requests:", e);
+      res.status(500).json({ error: "Ошибка" });
+    }
+  });
+
+  app.post("/support/refund-requests", async (req: Request, res: Response) => {
+    try {
+      const userId = await customerUserId(req, res);
+      if (userId == null) return;
+      const businessId = await resolveCatalogBusinessId(req, res);
+      if (!businessId) return;
+
+      const body = req.body as {
+        orderId?: unknown;
+        reason?: unknown;
+        comment?: unknown;
+      };
+      const orderId = parseOrderId(body.orderId);
+      if (orderId == null) {
+        return res.status(400).json({ error: "Нужен orderId" });
+      }
+
+      const refundCooldown = await assertActionAllowed({
+        businessId,
+        userId,
+        actionKey: "refund_request",
+      });
+      if (!refundCooldown.ok) {
+        return res.status(429).json({ error: refundCooldown.error });
+      }
+
+      const refundPayload: {
+        businessId: number;
+        orderId: number;
+        userId: number;
+        reason?: string;
+        comment?: string;
+      } = { businessId, orderId, userId };
+      if (typeof body.reason === "string") refundPayload.reason = body.reason;
+      if (typeof body.comment === "string") refundPayload.comment = body.comment;
+
+      const result = await createRefundRequestForOrder(refundPayload);
+      if (!result.ok) {
+        return res.status(result.statusCode).json({ error: result.error });
+      }
+      return res.status(201).json(jsonWithBigInt(result.row));
+    } catch (e) {
+      console.error("POST /support/refund-requests:", e);
+      res.status(500).json({ error: "Ошибка" });
+    }
+  });
+
+  app.get("/support/refund-requests", async (req: Request, res: Response) => {
+    try {
+      const userId = await customerUserId(req, res);
+      if (userId == null) return;
+      const businessId = await resolveCatalogBusinessId(req, res);
+      if (!businessId) return;
+
+      const orderId = parseOrderId(
+        Array.isArray(req.query.orderId) ? req.query.orderId[0] : req.query.orderId
+      );
+      if (orderId == null) {
+        return res.status(400).json({ error: "Нужен orderId" });
+      }
+
+      const rows = await prisma.refundRequest.findMany({
+        where: { businessId, orderId, userId },
+        orderBy: { id: "desc" },
+      });
+      return res.json(jsonWithBigInt(rows));
+    } catch (e) {
+      console.error("GET /support/refund-requests:", e);
+      res.status(500).json({ error: "Ошибка" });
+    }
+  });
+
+  app.get("/merchant/support/cancel-requests", async (req: Request, res: Response) => {
+    try {
+      const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.supportManage);
+      if (!merchant) return;
+
+      const rows = await prisma.cancelRequest.findMany({
+        where: { businessId: merchant.businessId },
+        orderBy: { id: "desc" },
+        take: 200,
+        include: {
+          user: { select: { id: true, name: true } },
+          order: { select: { id: true, orderNumber: true, status: true, total: true, name: true } },
+        },
+      });
+      return res.json(jsonWithBigInt(rows));
+    } catch (e) {
+      console.error("GET /merchant/support/cancel-requests:", e);
+      res.status(500).json({ error: "Ошибка" });
+    }
+  });
+
+  app.patch(
+    "/merchant/support/cancel-requests/:cancelId",
+    async (req: Request, res: Response) => {
+      try {
+        const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.supportManage);
+        if (!merchant) return;
+
+        const cancelId = parseTicketIdParam(req.params.cancelId);
+        if (cancelId == null) {
+          return res.status(400).json({ error: "Неверная заявка" });
+        }
+
+        const body = req.body as { status?: unknown; merchantComment?: unknown };
+        const statusRaw =
+          typeof body.status === "string" ? body.status.trim() : "";
+        if (!isCancelStatus(statusRaw)) {
+          return res.status(400).json({ error: "Нужен допустимый status" });
+        }
+
+        const merchantComment =
+          typeof body.merchantComment === "string"
+            ? body.merchantComment
+            : body.merchantComment === null
+              ? null
+              : undefined;
+
+        const cancelPatch: {
+          businessId: number;
+          cancelId: number;
+          status: typeof statusRaw;
+          merchantComment?: string | null;
+        } = {
+          businessId: merchant.businessId,
+          cancelId,
+          status: statusRaw,
+        };
+        if (merchantComment !== undefined) {
+          cancelPatch.merchantComment = merchantComment;
+        }
+
+        const result = await patchCancelRequestMerchant(cancelPatch);
+        if (!result.ok) {
+          return res.status(result.statusCode).json({ error: result.error });
+        }
+        return res.json(jsonWithBigInt(result.row));
+      } catch (e) {
+        console.error("PATCH /merchant/support/cancel-requests/:id:", e);
+        res.status(500).json({ error: "Ошибка" });
+      }
+    }
+  );
+
+  app.get("/merchant/support/refund-requests", async (req: Request, res: Response) => {
+    try {
+      const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.supportManage);
+      if (!merchant) return;
+
+      const rows = await prisma.refundRequest.findMany({
+        where: { businessId: merchant.businessId },
+        orderBy: { id: "desc" },
+        take: 200,
+        include: {
+          user: { select: { id: true, name: true } },
+          order: { select: { id: true, orderNumber: true, status: true, total: true, name: true } },
+        },
+      });
+      return res.json(jsonWithBigInt(rows));
+    } catch (e) {
+      console.error("GET /merchant/support/refund-requests:", e);
+      res.status(500).json({ error: "Ошибка" });
+    }
+  });
+
+  app.patch(
+    "/merchant/support/refund-requests/:refundId",
+    async (req: Request, res: Response) => {
+      try {
+        const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.supportManage);
+        if (!merchant) return;
+
+        const refundId = parseTicketIdParam(req.params.refundId);
+        if (refundId == null) {
+          return res.status(400).json({ error: "Неверная заявка" });
+        }
+
+        const body = req.body as {
+          status?: unknown;
+          merchantComment?: unknown;
+          refundAmount?: unknown;
+        };
+        const statusRaw =
+          typeof body.status === "string" ? body.status.trim() : "";
+        if (!isRefundStatus(statusRaw)) {
+          return res.status(400).json({ error: "Нужен допустимый status" });
+        }
+
+        let refundAmount: number | null | undefined = undefined;
+        if (Object.prototype.hasOwnProperty.call(body, "refundAmount")) {
+          const r = body.refundAmount;
+          if (r === null || r === undefined || r === "") refundAmount = null;
+          else refundAmount = Number(r);
+        }
+
+        const merchantComment =
+          typeof body.merchantComment === "string"
+            ? body.merchantComment
+            : body.merchantComment === null
+              ? null
+              : undefined;
+
+        const refundPatch: {
+          businessId: number;
+          refundId: number;
+          status: typeof statusRaw;
+          merchantComment?: string | null;
+          refundAmount?: number | null;
+        } = {
+          businessId: merchant.businessId,
+          refundId,
+          status: statusRaw,
+        };
+        if (merchantComment !== undefined) {
+          refundPatch.merchantComment = merchantComment;
+        }
+        if (refundAmount !== undefined) {
+          refundPatch.refundAmount = refundAmount;
+        }
+
+        const result = await patchRefundRequestMerchant(refundPatch);
+        if (!result.ok) {
+          return res.status(result.statusCode).json({ error: result.error });
+        }
+        return res.json(jsonWithBigInt(result.row));
+      } catch (e) {
+        console.error("PATCH /merchant/support/refund-requests/:id:", e);
         res.status(500).json({ error: "Ошибка" });
       }
     }

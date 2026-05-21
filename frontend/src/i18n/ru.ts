@@ -57,9 +57,12 @@ export const ru = {
     redirecting: "Переход к оплате…",
     paymentProcessing: "Проверяем оплату…",
     paymentSuccess: "Оплата прошла успешно!",
-    paymentFailed: "Оплата не завершена",
+    paymentFailed: "Оплата не завершена или время истекло",
     paymentRetry: "Повторить оплату",
     paymentViewOrders: "Мои заказы",
+    paymentAwaiting: "Ожидаем оплату",
+    paymentPaid: "Оплачено",
+    paymentExpired: "Время оплаты истекло",
     paymentHint:
       "Оплата через Finik. После оформления откроется страница оплаты — вернитесь в приложение.",
     total: "Итого",

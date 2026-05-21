@@ -21,7 +21,7 @@ export function isValidOrderStatus(s: string): s is OrderStatus {
   return VALID_STATUSES.includes(s as OrderStatus);
 }
 
-/** Контекст для исключений (например Finik: ACCEPTED → CONFIRMED без чека). */
+/** Контекст для исключений при смене статуса через HTTP. */
 export type OrderStatusTransitionContext = {
   paymentMethod?: string | null;
 };
@@ -40,13 +40,9 @@ const STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 export function isAllowedOrderStatusTransition(
   from: OrderStatus,
   to: OrderStatus,
-  ctx?: OrderStatusTransitionContext
+  _ctx?: OrderStatusTransitionContext
 ): boolean {
   if (from === to) return true;
-  const pm = String(ctx?.paymentMethod ?? "").toLowerCase();
-  if (from === "ACCEPTED" && to === "CONFIRMED" && pm === "finik") {
-    return true;
-  }
   const next = STATUS_TRANSITIONS[from];
   return next != null && next.includes(to);
 }
