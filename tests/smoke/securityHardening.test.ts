@@ -127,6 +127,20 @@ describe("my-businesses auth gate", () => {
       routeRequiresVerifiedTelegram(mockReq("GET", "/api/my-businesses")),
     ).toBe(true);
   });
+
+  it("GET /api/me requires verified telegram", () => {
+    expect(routeRequiresVerifiedTelegram(mockReq("GET", "/api/me"))).toBe(
+      true,
+    );
+  });
+
+  it("GET /api/storefront/by-slug stays public", () => {
+    expect(
+      routeRequiresVerifiedTelegram(
+        mockReq("GET", "/api/storefront/by-slug/demo"),
+      ),
+    ).toBe(false);
+  });
 });
 
 describe("checkout pricing (unit)", () => {

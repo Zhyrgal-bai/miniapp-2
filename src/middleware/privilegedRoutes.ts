@@ -45,7 +45,8 @@ export function routeRequiresVerifiedTelegram(req: Request): boolean {
   if (path.startsWith("/api/") && !path.startsWith("/api/storefront/")) {
     if (path.startsWith("/api/business/") && method === "GET") return false;
     if (path.startsWith("/api/telemetry/")) return false;
-    return method !== "GET" || path.includes("/staff");
+    // All tenant /api routes (including GET /api/me) need verified initData.
+    return true;
   }
 
   if (path.startsWith("/integrations/")) return true;

@@ -42,13 +42,28 @@ export async function resolveBusinessStaffRecord(
     perms.length > 0;
   if (!isLegacyStaff) return null;
 
-  return {
-    id: 0,
-    businessId,
-    userId,
-    role: membershipRoleToStaffRole(membership.role, perms),
-    permissions: perms,
-  };
+  const staffRole = membershipRoleToStaffRole(membership.role, perms);
+  const healed = await prisma.businessStaff.upsert({
+    where: { userId_businessId: { userId, businessId } },
+    create: {
+      businessId,
+      userId,
+      role: staffRole,
+      permissions: perms,
+    },
+    update: {
+      role: staffRole,
+      permissions: perms,
+    },
+    select: {
+      id: true,
+      businessId: true,
+      userId: true,
+      role: true,
+      permissions: true,
+    },
+  });
+  return healed;
 }
 
 /**
@@ -107,12 +122,17 @@ export async function backfillBusinessStaffFromLegacy(): Promise<number> {
     const request = await prisma.registrationRequest.findFirst({
       where: {
         status: RegistrationStatus.APPROVED,
-        name: business.name,
+        name: { equals: business.name, mode: "insensitive" },
       },
       orderBy: { id: "desc" },
       select: { telegramId: true },
     });
-    if (!request) continue;
+    if (!request) {
+      logVerbose(
+        `[staff] No APPROVED registration match for business ${business.id} (${business.name})`,
+      );
+      continue;
+    }
 
     const owner = await prisma.user.findUnique({
       where: { telegramId: request.telegramId },

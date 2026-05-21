@@ -54,14 +54,23 @@ export const useAdminGateStore = create<AdminGateState>((set) => ({
 
     set({ status: "loading" });
     try {
+      let initData = "";
+      for (let attempt = 0; attempt < 20; attempt++) {
+        initData = telegramWebAppInitDataHeader()["x-telegram-init-data"];
+        if (initData.trim().length > 20) break;
+        await new Promise((r) => setTimeout(r, 150));
+      }
+
       const qs = new URLSearchParams({
         userId: String(userId),
         shop: String(businessId),
       });
-  const res = await fetch(`${API_BASE_URL}/api/me?${qs.toString()}`, {
-    method: "GET",
-    headers: telegramWebAppInitDataHeader(),
-  });
+      const res = await fetch(`${API_BASE_URL}/api/me?${qs.toString()}`, {
+        method: "GET",
+        headers: {
+          "x-telegram-init-data": initData,
+        },
+      });
       const j = (await res.json().catch(() => ({}))) as {
         role?: string;
         permissions?: string[];
