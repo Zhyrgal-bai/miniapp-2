@@ -9,6 +9,7 @@ import AdminUsersPage from "./AdminUsersPage";
 import AdminDesignPage from "./AdminDesignPage";
 import AdminSupportPage from "./AdminSupportPage";
 import AdminErrorBoundary from "./AdminErrorBoundary";
+import TelegramSessionGate from "../../components/ui/TelegramSessionGate";
 import {
   adminPathFromHash,
   adminNavKeyFromPath,
@@ -169,14 +170,16 @@ export default function AdminApp({ onExit }: AdminAppProps) {
   }, [path, merchantRole, gateStatus, merchantPermissions]);
 
   return (
-    <AdminLayout
-      onExit={onExit}
-      path={path}
-      showOwnerNav={merchantRole === "OWNER"}
-      merchantPermissions={merchantPermissions}
-      merchantRole={merchantRole}
-    >
-      <AdminErrorBoundary>{page}</AdminErrorBoundary>
-    </AdminLayout>
+    <TelegramSessionGate>
+      <AdminLayout
+        onExit={onExit}
+        path={path}
+        showOwnerNav={merchantRole === "OWNER"}
+        merchantPermissions={merchantPermissions}
+        merchantRole={merchantRole}
+      >
+        <AdminErrorBoundary>{page}</AdminErrorBoundary>
+      </AdminLayout>
+    </TelegramSessionGate>
   );
 }

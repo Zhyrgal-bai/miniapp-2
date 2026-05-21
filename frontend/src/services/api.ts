@@ -1,6 +1,7 @@
 import axios, { AxiosHeaders } from "axios";
 import { getBusinessIdNumber } from "../utils/storeParams";
 import { telegramWebAppInitDataHeader } from "../utils/telegramInitDataHeader";
+import { waitForTelegramInitData } from "../utils/waitForTelegramInitData";
 
 function normalizeBaseUrl(url: string): string {
   return url.replace(/\/$/, "");
@@ -206,7 +207,7 @@ export function withTenantHeaders(
   return out;
 }
 
-api.interceptors.request.use((config) => {
+api.interceptors.request.use(async (config) => {
   const url = typeof config.url === "string" ? config.url : "";
   const base =
     typeof config.baseURL === "string" && config.baseURL.trim() !== ""
@@ -241,8 +242,11 @@ api.interceptors.request.use((config) => {
   }
 
   const bid = String(businessId);
+  await waitForTelegramInitData({ maxAttempts: 12, delayMs: 100 });
+  const initData = telegramWebAppInitDataHeader()["x-telegram-init-data"];
   if (existing instanceof AxiosHeaders) {
     existing.set(TENANT_HEADER, bid);
+    existing.set("x-telegram-init-data", initData);
     config.headers = existing;
     return config;
   }
@@ -251,10 +255,7 @@ api.interceptors.request.use((config) => {
     (existing as Record<string, string> | undefined) ?? {},
   );
   h.set(TENANT_HEADER, bid);
-  const initHdr = telegramWebAppInitDataHeader();
-  if (initHdr["x-telegram-init-data"]) {
-    h.set("x-telegram-init-data", initHdr["x-telegram-init-data"]);
-  }
+  h.set("x-telegram-init-data", initData);
   config.headers = h;
   return config;
 });

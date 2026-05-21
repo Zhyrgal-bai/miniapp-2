@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { showErrorToast } from "../../store/toast.store";
+import { formatAdminApiError } from "../../utils/adminApiError";
 import { adminService, type AdminStaffRow } from "../../services/admin.service";
 import { useShop } from "../../context/ShopContext";
 import {
@@ -83,8 +84,7 @@ export default function AdminUsersPage() {
       }
       setPermDraft(draft);
     } catch (e) {
-      const msg =
-        e instanceof Error ? e.message : "Не удалось загрузить команду";
+      const msg = formatAdminApiError(e);
       setError(msg);
       setRows([]);
     } finally {
@@ -108,7 +108,7 @@ export default function AdminUsersPage() {
       });
       setInvitePreview(preview);
     } catch (e) {
-      setInviteError(e instanceof Error ? e.message : "Не удалось найти пользователя");
+      setInviteError(formatAdminApiError(e));
     } finally {
       setInviteBusy(false);
     }
@@ -129,7 +129,7 @@ export default function AdminUsersPage() {
       setInvitePreview(null);
       await reload();
     } catch (e) {
-      setInviteError(e instanceof Error ? e.message : "Ошибка приглашения");
+      setInviteError(formatAdminApiError(e));
     } finally {
       setInviteBusy(false);
     }
@@ -144,7 +144,7 @@ export default function AdminUsersPage() {
         await adminService.removeStaffMember({ targetUserId, businessId });
         await reload();
       } catch (e) {
-        showErrorToast(e instanceof Error ? e.message : "Ошибка");
+        showErrorToast(formatAdminApiError(e));
       } finally {
         setBusyUserId(null);
       }
@@ -160,7 +160,7 @@ export default function AdminUsersPage() {
         await adminService.updateStaffRole({ targetUserId, businessId, role });
         await reload();
       } catch (e) {
-        showErrorToast(e instanceof Error ? e.message : "Ошибка");
+        showErrorToast(formatAdminApiError(e));
       } finally {
         setBusyUserId(null);
       }
@@ -190,7 +190,7 @@ export default function AdminUsersPage() {
         });
         await reload();
       } catch (e) {
-        showErrorToast(e instanceof Error ? e.message : "Ошибка");
+        showErrorToast(formatAdminApiError(e));
       } finally {
         setPermBusyUserId(null);
       }

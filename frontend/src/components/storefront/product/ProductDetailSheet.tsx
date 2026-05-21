@@ -15,7 +15,14 @@ import {
   useVerticalProductSelection,
   formatSizeLabel,
 } from "../../../commerce/useVerticalProductSelection";
-import { formatVariantSummary } from "@repo-shared/businessCommerce";
+import { formatOrderLineSummary } from "@repo-shared/businessCommerce";
+import { useStorefrontPayload } from "../runtime/StorefrontPayloadContext";
+import { VerticalOrderOptionsFields } from "../../../commerce/VerticalOrderOptionsFields";
+import {
+  cartLineIdentityKey,
+  storageColorForCart,
+} from "../../../commerce/cartLineIdentity";
+import type { SchemaObject } from "../../admin/DynamicFieldRenderer";
 import { recordRecentlyViewed } from "../discovery/recentlyViewed";
 import { useBodyScrollLock } from "../../../utils/bodyScrollLock";
 import "./ProductDetailSheet.css";
@@ -88,7 +95,18 @@ export function ProductDetailSheet({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const selection = useVerticalProductSelection(display, businessType);
+  const { payload } = useStorefrontPayload();
+  const resolvedBusinessType =
+    businessType ?? display.businessType ?? payload?.businessType ?? null;
+  const orderOptionsSchema = (payload?.orderOptionsSchema ?? {}) as SchemaObject;
+
+  const [orderOptions, setOrderOptions] = useState<Record<string, unknown>>({});
+
+  useEffect(() => {
+    setOrderOptions({});
+  }, [product.id]);
+
+  const selection = useVerticalProductSelection(display, resolvedBusinessType);
   const {
     selectedSize,
     selectedColor,
@@ -116,10 +134,11 @@ export function ProductDetailSheet({
     return [];
   }, [display, showColorPicker]);
 
-  const variantSummary = formatVariantSummary({
-    businessType: businessType ?? display.businessType,
+  const variantSummary = formatOrderLineSummary({
+    businessType: resolvedBusinessType,
     size: selectedSize,
     color: showColorPicker ? lineColor : null,
+    options: orderOptions,
     attributes: display.attributes ?? null,
   });
 
@@ -141,28 +160,32 @@ export function ProductDetailSheet({
   const removeItem = useCartStore((s) => s.removeItem);
   const items = useCartStore((s) => s.items);
 
+  const storageColor = storageColorForCart(resolvedBusinessType, lineColor);
+
   const cartItem = useMemo(() => {
-    if (!selectedSize || lineColor === null) return null;
-    return (
-      items.find(
-        (i) =>
-          i.productId === display.id &&
-          i.color === lineColor &&
-          i.size === selectedSize
-      ) ?? null
-    );
-  }, [items, display.id, selectedSize, lineColor]);
+    if (!selectedSize) return null;
+    const probe = {
+      productId: display.id!,
+      size: selectedSize,
+      color: storageColor,
+      options: orderOptions,
+    };
+    const key = cartLineIdentityKey(probe);
+    return items.find((i) => cartLineIdentityKey(i) === key) ?? null;
+  }, [items, display.id, selectedSize, storageColor, orderOptions]);
 
   const quantity = cartItem?.quantity ?? 0;
 
   const discountPct = getDiscountPercent(display);
   const displayPrice = getEffectivePrice(display);
 
-  const canAddToCart = canSelect && (!showColorPicker || lineColor !== null);
+  const canAddToCart =
+    canSelect && (!showColorPicker || lineColor !== null);
 
   const upsertQuantity = useCallback(
     (nextQuantity: number) => {
-      if (!selectedSize || outOfStock || lineColor === null) return;
+      if (!selectedSize || outOfStock) return;
+      if (showColorPicker && lineColor === null) return;
       if (selectedStock <= 0) return;
       if (cartItem) removeItem(cartItem);
       if (nextQuantity <= 0) return;
@@ -173,13 +196,15 @@ export function ProductDetailSheet({
         price: displayPrice,
         image: getPrimaryImage(display),
         size: selectedSize,
-        color: lineColor,
+        color: storageColor,
+        options: { ...orderOptions },
         quantity: capped,
       });
     },
     [
       selectedSize,
       outOfStock,
+      showColorPicker,
       lineColor,
       selectedStock,
       cartItem,
@@ -187,6 +212,8 @@ export function ProductDetailSheet({
       addItem,
       display,
       displayPrice,
+      storageColor,
+      orderOptions,
     ]
   );
 
@@ -371,7 +398,7 @@ export function ProductDetailSheet({
                 </>
               ) : null}
               <p className="sf-pds-section-label">{primaryLabel}</p>
-              <div className="sf-pds-sizes">
+              <div className="sf-pds-tiers">
                 {sizes.map((s) => (
                   <button
                     key={s.size}
@@ -380,11 +407,17 @@ export function ProductDetailSheet({
                     className={selectedSize === s.size ? "active" : ""}
                     onClick={() => setSelectedSize(s.size)}
                   >
-                    {formatSizeLabel(businessType ?? display.businessType, s.size)}
+                    {formatSizeLabel(resolvedBusinessType, s.size)}
                     {s.stock > 0 ? ` · ${s.stock}` : ""}
                   </button>
                 ))}
               </div>
+              <VerticalOrderOptionsFields
+                businessType={resolvedBusinessType}
+                schema={orderOptionsSchema}
+                value={orderOptions}
+                onChange={setOrderOptions}
+              />
             </>
           ) : null}
 

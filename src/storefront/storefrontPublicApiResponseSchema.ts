@@ -98,6 +98,7 @@ export const StorefrontPublicApiResponseSchema = z
     storeName: z.string().max(200).optional(),
     categories: z.array(CategoryTreeNodeSchema).optional(),
     featuredProducts: z.array(FeaturedProductWireSchema).optional(),
+    orderOptionsSchema: z.record(z.string(), z.unknown()).optional(),
   })
   .passthrough();
 

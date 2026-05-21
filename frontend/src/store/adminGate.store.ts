@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { getWebAppUserId } from "../utils/telegramUserId";
-import { telegramWebAppInitDataHeader } from "../utils/telegramInitDataHeader";
+import { waitForTelegramInitData } from "../utils/waitForTelegramInitData";
 import { API_BASE_URL } from "../services/api";
 
 type AdminGateStatus = "idle" | "loading" | "ready";
@@ -54,12 +54,7 @@ export const useAdminGateStore = create<AdminGateState>((set) => ({
 
     set({ status: "loading" });
     try {
-      let initData = "";
-      for (let attempt = 0; attempt < 20; attempt++) {
-        initData = telegramWebAppInitDataHeader()["x-telegram-init-data"];
-        if (initData.trim().length > 20) break;
-        await new Promise((r) => setTimeout(r, 150));
-      }
+      const initData = await waitForTelegramInitData();
 
       const qs = new URLSearchParams({
         userId: String(userId),

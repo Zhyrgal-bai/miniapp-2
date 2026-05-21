@@ -6,6 +6,8 @@ import {
   setCachedStorefrontPayload,
 } from "./storefrontCache.js";
 import { safeParseStorefrontPublicApiResponse } from "../storefront/storefrontPublicApiResponseSchema.js";
+import { templateForBusinessType } from "../templates/index.js";
+import type { BusinessType } from "@prisma/client";
 
 /** Public GET /api/storefront payload (shared by numeric id and slug routes). */
 export async function sendStorefrontPublicPayload(
@@ -88,6 +90,12 @@ export async function sendStorefrontPublicPayload(
     const slugVal = (b as any).slug;
     (payload as any).storefrontSlug =
       typeof slugVal === "string" && slugVal.trim() !== "" ? String(slugVal).trim() : null;
+
+    const bt = String((b as any).businessType ?? "").trim() as BusinessType;
+    if (bt) {
+      const tpl = templateForBusinessType(bt);
+      (payload as any).orderOptionsSchema = tpl.orderOptionsSchema ?? {};
+    }
 
     const enabledTypes = new Set(payload.sections.map((s) => s.type));
     if (enabledTypes.has("categories")) {

@@ -2142,3 +2142,40 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   font-size: 14px;
 }
+
+.telegram-session-gate {
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px 16px;
+  text-align: center;
+}
+
+.telegram-session-gate__title {
+  margin: 0;
+  font-size: 18px;
+}
+
+.telegram-session-gate__text {
+  margin: 0;
+  max-width: 320px;
+  color: #94a3b8;
+  line-height: 1.45;
+}
+
+.telegram-session-gate__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.admin-empty-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}

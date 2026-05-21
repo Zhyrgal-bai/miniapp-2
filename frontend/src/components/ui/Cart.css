@@ -196,3 +196,9 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+.cart-variant-label {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: color-mix(in srgb, var(--sf-color-text) 72%, transparent);
+}

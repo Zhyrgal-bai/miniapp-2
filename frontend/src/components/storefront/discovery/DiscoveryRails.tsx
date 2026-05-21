@@ -84,6 +84,7 @@ export function DiscoveryRails(props: Props): React.ReactElement | null {
                   textConfig={props.textConfig}
                   kit={props.kit}
                   businessId={props.businessId}
+                  businessType={props.businessType}
                 />
               </div>
             ))}

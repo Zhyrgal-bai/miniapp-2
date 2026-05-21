@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { showErrorToast } from "../../store/toast.store";
+import { formatAdminApiError } from "../../utils/adminApiError";
 import { adminService } from "../../services/admin.service";
 import type { Category, Product } from "../../types";
 import { getPrimaryImage, getTotalStockSum } from "../../utils/product";
@@ -27,7 +28,7 @@ export default function AdminProductManagePage() {
       setCategories(tree);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Ошибка загрузки");
+      setError(formatAdminApiError(e));
       setProducts([]);
     } finally {
       setLoading(false);
@@ -76,7 +77,7 @@ export default function AdminProductManagePage() {
       await adminService.deleteProduct(p.id);
       await load();
     } catch (e) {
-      showErrorToast(e instanceof Error ? e.message : "Не удалось удалить");
+      showErrorToast(formatAdminApiError(e));
     }
   }
 

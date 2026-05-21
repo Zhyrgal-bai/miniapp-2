@@ -4,6 +4,7 @@ import { showErrorToast, showSuccessToast } from "../store/toast.store";
 import { apiAbsoluteUrl } from "../services/api";
 import { useShop } from "../context/ShopContext";
 import { useStorefrontPayload } from "../components/storefront/runtime/StorefrontPayloadContext";
+import { formatOrderLineSummary } from "@repo-shared/businessCommerce";
 import { getWebAppUserId } from "../utils/telegramUserId";
 import type { MyOrderRow } from "../types/myOrder";
 import { orderDisplayLabel } from "@repo-shared/orderDisplay";
@@ -394,6 +395,7 @@ export default function MyOrders({
 
   const { shopIdString, businessId } = useShop();
   const { payload } = useStorefrontPayload();
+  const businessType = payload?.businessType ?? null;
   const userId = getWebAppUserId();
 
   const txt = payload?.storefrontTextConfig ?? {};
@@ -799,7 +801,17 @@ export default function MyOrders({
           <ul className="my-orders__items">
             {order.items.map((it) => (
               <li key={it.id}>
-                {it.name} · {it.color} / {it.size} × {it.quantity}
+                {it.name}
+                {(() => {
+                  const line = formatOrderLineSummary({
+                    businessType,
+                    size: it.size,
+                    color: it.color,
+                    options: it.options,
+                  });
+                  return line ? ` · ${line}` : "";
+                })()}{" "}
+                × {it.quantity}
               </li>
             ))}
           </ul>
@@ -1200,7 +1212,17 @@ export default function MyOrders({
                 <ul className="my-orders__items">
                   {order.items.map((it) => (
                     <li key={it.id}>
-                      {it.name} · {it.color} / {it.size} × {it.quantity}
+                      {it.name}
+                {(() => {
+                  const line = formatOrderLineSummary({
+                    businessType,
+                    size: it.size,
+                    color: it.color,
+                    options: it.options,
+                  });
+                  return line ? ` · ${line}` : "";
+                })()}{" "}
+                × {it.quantity}
                     </li>
                   ))}
                 </ul>

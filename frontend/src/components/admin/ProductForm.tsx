@@ -1,16 +1,11 @@
 import { showSuccessToast } from "../../store/toast.store";
 import { useEffect, useMemo, useState } from "react";
-import axios from "axios";
 import { useAdminStore } from "../../store/admin.store";
 import { adminService } from "../../services/admin.service";
 import { PRODUCT_SIZES } from "../../constants/productCatalog";
 import type { Category, Product, Variant } from "../../types";
 import { categoryRoots } from "../../utils/categoryTree";
-import {
-  DynamicFieldRenderer,
-  type SchemaObject as DynamicSchemaObject,
-} from "./DynamicFieldRenderer";
-import { verticalProfileFor } from "@repo-shared/businessCommerce";
+import { DynamicFieldRenderer } from "./DynamicFieldRenderer";
 import { TierStockEditor } from "./TierStockEditor";
 import {
   defaultTierRows,
@@ -22,6 +17,10 @@ import {
   isValidHexColor,
   lookupVariantHexByName,
 } from "../../utils/variantColor";
+import { useResolvedBusinessType } from "./useResolvedBusinessType";
+import { AdminCategoryFields } from "./AdminCategoryFields";
+import { resolveProductCategoryId } from "../../utils/resolveProductCategoryId";
+import { formatAdminApiError } from "../../utils/adminApiError";
 const SIZE_OPTIONS = PRODUCT_SIZES;
 type SizeOption = (typeof SIZE_OPTIONS)[number];
 
@@ -98,9 +97,14 @@ const ProductForm = () => {
   const [isPopular, setIsPopular] = useState(false);
   const [isSale, setIsSale] = useState(false);
   const [discountPercent, setDiscountPercent] = useState<number | "">("");
-  const [productSchema, setProductSchema] = useState<DynamicSchemaObject>({});
   const [attributes, setAttributes] = useState<Record<string, unknown>>({});
-  const [merchantBusinessType, setMerchantBusinessType] = useState("");
+  const {
+    businessType: merchantBusinessType,
+    productSchema,
+    showClothingVariants,
+    showTierStock,
+    resolved: businessTypeReady,
+  } = useResolvedBusinessType();
   const [variantDrafts, setVariantDrafts] = useState<VariantDraft[]>([
     createVariantDraft(),
   ]);
@@ -108,20 +112,11 @@ const ProductForm = () => {
 
   const [tierRows, setTierRows] = useState<TierStockRow[]>([]);
 
-  const variantEditor = verticalProfileFor(merchantBusinessType).variantEditor;
-  const showClothingVariants = variantEditor === "clothing_matrix";
-  const showTierStock =
-    variantEditor === "tier_stock" || variantEditor === "bouquet_tiers";
-
   const rootCategories = useMemo(() => categoryRoots(categories), [categories]);
 
   useEffect(() => {
     void (async () => {
       try {
-        const schema = await adminService.getMerchantSchemas();
-        setMerchantBusinessType(schema.businessType);
-        setTierRows(defaultTierRows(schema.businessType));
-        setProductSchema(schema.productSchema as unknown as DynamicSchemaObject);
         const tree = await adminService.getCategories();
         setCategories(tree);
         const roots = categoryRoots(tree);
@@ -134,6 +129,11 @@ const ProductForm = () => {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!merchantBusinessType) return;
+    setTierRows(defaultTierRows(merchantBusinessType));
+  }, [merchantBusinessType]);
 
   useEffect(() => {
     if (categories.length === 0 || mainCategoryId === "") return;
@@ -287,8 +287,17 @@ const ProductForm = () => {
         ? (tierRowsToVariants(tierRows) as unknown as Variant[])
         : ([] as Variant[]);
 
-    if (!subCategoryId) {
-      setFormError("Выберите подкатегорию.");
+    const categoryId = resolveProductCategoryId(
+      mainCategoryId,
+      subCategoryId,
+      rootCategories,
+    );
+    if (categoryId == null) {
+      setFormError(
+        rootCategories.length === 0
+          ? "Сначала создайте категорию."
+          : "Выберите категорию или подкатегорию.",
+      );
       return;
     }
 
@@ -297,7 +306,7 @@ const ProductForm = () => {
       price: priceNum,
       image: imageUrls[0] ?? "",
       images: imageUrls,
-      categoryId: Number(subCategoryId),
+      categoryId,
       isNew,
       isPopular,
       isSale,
@@ -323,15 +332,7 @@ const ProductForm = () => {
       showSuccessToast("Товар добавлен");
     } catch (err) {
       console.error(err);
-      if (axios.isAxiosError(err) && err.response?.status === 403) {
-        setFormError("Нет прав");
-        return;
-      }
-      if (err instanceof Error && err.message.includes("Telegram")) {
-        setFormError(err.message);
-        return;
-      }
-      setFormError("Не удалось сохранить товар. Проверьте сеть и попробуйте снова.");
+      setFormError(formatAdminApiError(err));
     }
   };
 
@@ -437,51 +438,15 @@ const ProductForm = () => {
         )}
       </div>
 
-      <div className="admin-form-section">
-        <label className="admin-field-label" htmlFor="pf-main-category">
-          Категория
-        </label>
-        <select
-          id="pf-main-category"
-          className="admin-select"
-          value={mainCategoryId}
-          onChange={(e) => {
-            const nextMainId = Number(e.target.value);
-            setMainCategoryId(nextMainId);
-            const nextMain = rootCategories.find((c) => c.id === nextMainId);
-            setSubCategoryId(nextMain?.children?.[0]?.id ?? "");
-          }}
-        >
-          {rootCategories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="admin-form-section">
-        <label className="admin-field-label" htmlFor="pf-sub-category">
-          Подкатегория
-        </label>
-        <select
-          id="pf-sub-category"
-          className="admin-select"
-          value={subCategoryId}
-          onChange={(e) => {
-            const v = e.target.value;
-            setSubCategoryId(v === "" ? "" : Number(v));
-          }}
-        >
-          <option value="">Выберите подкатегорию</option>
-          {(rootCategories.find((c) => c.id === mainCategoryId)?.children ?? []).map(
-            (c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            )
-          )}
-        </select>
-      </div>
+      <AdminCategoryFields
+        categories={categories}
+        mainCategoryId={mainCategoryId}
+        subCategoryId={subCategoryId}
+        onMainChange={setMainCategoryId}
+        onSubChange={setSubCategoryId}
+        mainSelectId="pf-main-category"
+        subSelectId="pf-sub-category"
+      />
       <div className="admin-form-section">
         <span className="admin-field-label">Фильтры</span>
         <div className="admin-sizes">
@@ -520,7 +485,7 @@ const ProductForm = () => {
         onChange={setAttributes}
       />
 
-      {showClothingVariants && (
+      {showClothingVariants && businessTypeReady && (
         <>
           <div className="admin-form-divider" />
 
@@ -652,7 +617,7 @@ const ProductForm = () => {
         </>
       )}
 
-      {showTierStock && merchantBusinessType ? (
+      {showTierStock && businessTypeReady ? (
         <TierStockEditor
           businessType={merchantBusinessType}
           rows={tierRows}

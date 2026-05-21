@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { adminService } from "../../services/admin.service";
 import { showErrorToast } from "../../store/toast.store";
+import { formatAdminApiError } from "../../utils/adminApiError";
 import type { Category } from "../../types";
 import { categoryRoots } from "../../utils/categoryTree";
 
@@ -41,7 +42,7 @@ export default function AdminCategoriesPage() {
       setName("");
       await load();
     } catch (e) {
-      showErrorToast(e instanceof Error ? e.message : "Не удалось создать категорию");
+      showErrorToast(formatAdminApiError(e));
     }
   };
 
@@ -50,7 +51,7 @@ export default function AdminCategoriesPage() {
       await adminService.deleteCategory(id);
       await load();
     } catch (e) {
-      showErrorToast(e instanceof Error ? e.message : "Не удалось удалить категорию");
+      showErrorToast(formatAdminApiError(e));
     }
   };
 
@@ -104,7 +105,16 @@ export default function AdminCategoriesPage() {
       {loading && <p className="admin-dash-page__muted">Загрузка…</p>}
       {error && <div className="admin-form-error">{error}</div>}
 
-      {!loading && (
+      {!loading && rootCategories.length === 0 && (
+        <div className="admin-dash-card admin-empty-categories">
+          <p className="admin-form-hint">
+            Категорий пока нет. Создайте main-категорию (например «Букеты») или
+            подкатегорию для существующей.
+          </p>
+        </div>
+      )}
+
+      {!loading && rootCategories.length > 0 && (
         <div className="admin-dash-card">
           {rootCategories.map((main) => (
             <div key={main.id} className="admin-cat-tree">

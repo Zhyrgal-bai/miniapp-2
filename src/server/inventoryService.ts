@@ -7,6 +7,7 @@ import {
   parseProductVariants,
   type ProductVariantInput,
 } from "../shared/inventory.js";
+import { formatInventorySkuLabel } from "../shared/businessCommerce.js";
 import { prisma } from "./db.js";
 import { createMerchantNotification } from "./merchantNotificationsService.js";
 
@@ -482,17 +483,29 @@ export async function loadOrderLinesForStock(orderId: number): Promise<OrderLine
 }
 
 export async function maybeNotifyLowStock(businessId: number, productId: number): Promise<void> {
-  const rows = await prisma.productStock.findMany({
-    where: { businessId, productId },
-    select: { available: true, size: true, color: true },
-  });
+  const [rows, business] = await Promise.all([
+    prisma.productStock.findMany({
+      where: { businessId, productId },
+      select: { available: true, size: true, color: true },
+    }),
+    prisma.business.findUnique({
+      where: { id: businessId },
+      select: { businessType: true },
+    }),
+  ]);
+  const businessType = String(business?.businessType ?? "");
   for (const r of rows) {
     if (!isLowStock(r.available)) continue;
+    const label = formatInventorySkuLabel({
+      businessType,
+      size: r.size,
+      color: r.color,
+    });
     void createMerchantNotification({
       businessId,
       kind: "LOW_STOCK",
       title: "Мало на складе",
-      body: `${r.size} / ${r.color}: осталось ${r.available}`,
+      body: `${label}: осталось ${r.available}`,
       href: "#/admin/products",
     });
   }

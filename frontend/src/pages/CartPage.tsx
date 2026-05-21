@@ -9,6 +9,8 @@ import { api } from "../services/api";
 import type { Product } from "../types";
 import { getMaxOrderQty } from "../commerce/quantityPolicy";
 import { isOutOfStock } from "../utils/product";
+import { formatOrderLineSummary } from "@repo-shared/businessCommerce";
+import { cartLineIdentityKey } from "../commerce/cartLineIdentity";
 
 type Props = {
   onGoToCheckout: () => void;
@@ -47,6 +49,7 @@ export default function CartPage({ onGoToCheckout }: Props) {
     };
   }, [businessId]);
 
+  const businessType = payload?.businessType ?? null;
   const txt = payload?.storefrontTextConfig ?? {};
   const readTxt = (k: string, fb: string) => {
     const v = (txt as Record<string, unknown>)[k];
@@ -136,9 +139,16 @@ export default function CartPage({ onGoToCheckout }: Props) {
       {items.length > 0 && (
         <>
           <div className="cart-list">
-            {items.map((item) => (
+            {items.map((item) => {
+              const variantLabel = formatOrderLineSummary({
+                businessType,
+                size: item.size,
+                color: item.color,
+                options: item.options,
+              });
+              return (
               <div
-                key={`${item.productId}-${item.color}-${item.size}`}
+                key={cartLineIdentityKey(item)}
                 className="cart-item"
               >
                 {item.image ? (
@@ -150,6 +160,9 @@ export default function CartPage({ onGoToCheckout }: Props) {
                 <div className="cart-content">
                   <div className="cart-top">
                     <h3>{item.name}</h3>
+                    {variantLabel ? (
+                      <p className="cart-variant-label">{variantLabel}</p>
+                    ) : null}
                     <span className="price">
                       {item.price} сом
                     </span>
@@ -176,7 +189,8 @@ export default function CartPage({ onGoToCheckout }: Props) {
                   </div>
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
 
           <div className="cart-footer">

@@ -4533,6 +4533,7 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
       const priced = await priceCheckoutLines(
         tx,
         tenantBusinessId,
+        businessType,
         itemsValidated.map((it) => ({
           productId: it.productId,
           size: it.size,

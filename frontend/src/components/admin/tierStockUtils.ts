@@ -1,4 +1,4 @@
-import { verticalProfileFor } from "@repo-shared/businessCommerce";
+import { labelPrimaryOption, verticalProfileFor } from "@repo-shared/businessCommerce";
 
 export type TierStockRow = {
   key: string;
@@ -11,16 +11,7 @@ export function defaultTierRows(businessType: string): TierStockRow[] {
   const profile = verticalProfileFor(businessType);
   return profile.defaultPrimaryValues.map((key) => ({
     key,
-    label:
-      profile.businessType === "flowers"
-        ? key === "21"
-          ? "21 роза"
-          : key === "51"
-            ? "51 роза"
-            : key === "101"
-              ? "101 роза"
-              : `${key} шт`
-        : key,
+    label: labelPrimaryOption(businessType, key) || key,
     stock: "",
     enabled: false,
   }));

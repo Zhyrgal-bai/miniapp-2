@@ -16,6 +16,9 @@ import { trackCheckoutStart } from "../services/storefrontAnalytics";
 import type { Product } from "../types";
 import { getMaxOrderQty } from "../commerce/quantityPolicy";
 import { isOutOfStock } from "../utils/product";
+import { useStorefrontPayload } from "../components/storefront/runtime/StorefrontPayloadContext";
+import { formatOrderLineSummary } from "@repo-shared/businessCommerce";
+import { cartLineIdentityKey } from "../commerce/cartLineIdentity";
 
 type Props = {
   onBack?: () => void;
@@ -66,6 +69,8 @@ function orderErrorMessage(err: unknown): string {
 
 export default function CheckoutPage({ onBack }: Props) {
   const { businessId } = useShop();
+  const { payload } = useStorefrontPayload();
+  const businessType = payload?.businessType ?? null;
   const items = useCartStore((state) => state.items);
   const clearCart = useCartStore((state) => state.clearCart);
 
@@ -458,6 +463,7 @@ export default function CheckoutPage({ onBack }: Props) {
           color: i.color,
           quantity: i.quantity,
           price: i.price,
+          options: i.options ?? {},
         })),
         subtotal,
         total: payTotal,
@@ -598,10 +604,13 @@ export default function CheckoutPage({ onBack }: Props) {
         <h3 className="checkout-summary__title">{t("checkout.summary")}</h3>
         <ul className="checkout-summary__items">
           {items.map((item) => {
-            const variant = [item.size, item.color]
-              .filter((v) => v && String(v).trim() !== "")
-              .join(" · ");
-            const key = `${item.productId}-${item.size}-${item.color}`;
+            const variant = formatOrderLineSummary({
+              businessType,
+              size: item.size,
+              color: item.color,
+              options: item.options,
+            });
+            const key = cartLineIdentityKey(item);
             return (
               <li key={key} className="checkout-summary__row">
                 <div className="checkout-summary__item-main">

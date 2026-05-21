@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { inventoryVariantKey } from "../shared/inventory.js";
+import { formatOrderLineSummary } from "../shared/businessCommerce.js";
 import { logCheckoutReject, logInventoryReserveFailed } from "./structuredLog.js";
 
 type Tx = Prisma.TransactionClient;
@@ -36,6 +37,7 @@ function effectiveUnitPrice(product: {
 export async function priceCheckoutLines(
   tx: Tx,
   businessId: number,
+  businessType: string,
   lines: CheckoutLineInput[],
 ): Promise<
   | { ok: true; lines: PricedCheckoutLine[]; subtotal: number }
@@ -95,7 +97,15 @@ export async function priceCheckoutLines(
       return {
         ok: false,
         statusCode: 409,
-        error: `Недостаточно на складе: ${product.name} (${size}${color ? ` / ${color}` : ""})`,
+        error: `Недостаточно на складе: ${product.name} (${formatOrderLineSummary({
+          businessType,
+          size,
+          color,
+          options:
+            line.options != null && typeof line.options === "object"
+              ? (line.options as Record<string, unknown>)
+              : null,
+        })})`,
       };
     }
 

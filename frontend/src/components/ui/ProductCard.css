@@ -416,13 +416,15 @@
     0 0 0 3px color-mix(in srgb, var(--sf-color-text) 35%, transparent);
 }
 
-.sizes {
+.sizes,
+.product-tiers {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
-.sizes button {
+.sizes button,
+.product-tiers button {
   padding: 4px 8px;
   border-radius: var(--sf-radius-sm, 8px);
   border: 1px solid color-mix(in srgb, var(--sf-color-border) 68%, transparent);
@@ -433,18 +435,21 @@
   cursor: pointer;
 }
 
-.sizes button:hover:not(:disabled) {
+.sizes button:hover:not(:disabled),
+.product-tiers button:hover:not(:disabled) {
   background: color-mix(in srgb, var(--sf-color-primary) 15%, transparent);
   border-color: color-mix(in srgb, var(--sf-color-primary) 28%, transparent);
 }
 
-.sizes button.active {
+.sizes button.active,
+.product-tiers button.active {
   background: color-mix(in srgb, var(--sf-color-primary) 22%, transparent);
   border-color: color-mix(in srgb, var(--sf-color-primary) 40%, transparent);
   color: var(--sf-color-primary);
 }
 
-.sizes button:disabled {
+.sizes button:disabled,
+.product-tiers button:disabled {
   opacity: 0.35;
   cursor: not-allowed;
 }

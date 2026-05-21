@@ -1,12 +1,14 @@
 import { create } from "zustand";
+import {
+  cartLineIdentityKey,
+  cartLinesEqual,
+  type CartLineStorage,
+} from "../commerce/cartLineIdentity";
 
-type CartItem = {
-  productId: number;
+export type CartItem = CartLineStorage & {
   name: string;
   price: number;
   image?: string;
-  size: string;
-  color: string;
   quantity: number;
 };
 
@@ -22,6 +24,8 @@ type CartStore = {
 
   getTotal: () => number;
 };
+
+export { cartLineIdentityKey, cartLinesEqual };
 
 export const useCartStore = create<CartStore>((set, get) => ({
   tenantShopId: null,
@@ -39,11 +43,9 @@ export const useCartStore = create<CartStore>((set, get) => ({
 
   addItem: (item) =>
     set((state) => {
+      const key = cartLineIdentityKey(item);
       const idx = state.items.findIndex(
-        (i) =>
-          i.productId === item.productId &&
-          i.size === item.size &&
-          i.color === item.color,
+        (i) => cartLineIdentityKey(i) === key,
       );
       if (idx >= 0) {
         const next = [...state.items];
@@ -55,14 +57,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
 
   removeItem: (item) =>
     set((state) => ({
-      items: state.items.filter(
-        (i) =>
-          !(
-            i.productId === item.productId &&
-            i.size === item.size &&
-            i.color === item.color
-          )
-      ),
+      items: state.items.filter((i) => !cartLinesEqual(i, item)),
     })),
 
   clearCart: () => set({ items: [] }),

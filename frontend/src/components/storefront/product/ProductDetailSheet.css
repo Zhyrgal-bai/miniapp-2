@@ -170,14 +170,25 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--sf-color-primary) 35%, transparent);
 }
 
-.sf-pds-sizes {
+.sf-order-options {
+  margin-top: 12px;
+}
+
+.sf-order-options .admin-field-label {
+  font-size: 12px;
+  color: color-mix(in srgb, var(--sf-color-text) 70%, transparent);
+}
+
+.sf-pds-sizes,
+.sf-pds-tiers {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 16px;
 }
 
-.sf-pds-sizes button {
+.sf-pds-sizes button,
+.sf-pds-tiers button {
   min-height: 40px;
   padding: 0 14px;
   border-radius: var(--sf-button-radius, 12px);
@@ -190,12 +201,14 @@
   cursor: pointer;
 }
 
-.sf-pds-sizes button:disabled {
+.sf-pds-sizes button:disabled,
+.sf-pds-tiers button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
 
-.sf-pds-sizes button.active {
+.sf-pds-sizes button.active,
+.sf-pds-tiers button.active {
   border-color: color-mix(in srgb, var(--sf-color-primary) 55%, transparent);
   background: color-mix(in srgb, var(--sf-color-primary) 14%, transparent);
 }

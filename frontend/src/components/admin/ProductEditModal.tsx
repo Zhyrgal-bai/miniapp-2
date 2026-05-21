@@ -7,7 +7,6 @@ import { getNormalizedVariants } from "../../utils/product";
 import { getProductImages } from "../../utils/product";
 import { categoryRoots } from "../../utils/categoryTree";
 import type { Category, Product, Variant } from "../../types";
-import { verticalProfileFor } from "@repo-shared/businessCommerce";
 import {
   TierStockEditor,
 } from "./TierStockEditor";
@@ -17,10 +16,11 @@ import {
   variantsToTierRows,
   type TierStockRow,
 } from "./tierStockUtils";
-import {
-  DynamicFieldRenderer,
-  type SchemaObject as DynamicSchemaObject,
-} from "./DynamicFieldRenderer";
+import { DynamicFieldRenderer } from "./DynamicFieldRenderer";
+import { useResolvedBusinessType } from "./useResolvedBusinessType";
+import { AdminCategoryFields } from "./AdminCategoryFields";
+import { resolveProductCategoryId } from "../../utils/resolveProductCategoryId";
+import { formatAdminApiError } from "../../utils/adminApiError";
 import {
   expandShortHex,
   isValidHexColor,
@@ -151,14 +151,14 @@ export default function ProductEditModal({
     createEmptyVariant(),
   ]);
   const [tierRows, setTierRows] = useState<TierStockRow[]>([]);
-  const [merchantBusinessType, setMerchantBusinessType] = useState("");
-  const [productSchema, setProductSchema] = useState<DynamicSchemaObject>({});
+  const {
+    businessType: merchantBusinessType,
+    productSchema,
+    showClothingVariants,
+    showTierStock,
+    resolved: businessTypeReady,
+  } = useResolvedBusinessType();
   const [attributes, setAttributes] = useState<Record<string, unknown>>({});
-
-  const variantEditor = verticalProfileFor(merchantBusinessType).variantEditor;
-  const showClothingVariants = variantEditor === "clothing_matrix";
-  const showTierStock =
-    variantEditor === "tier_stock" || variantEditor === "bouquet_tiers";
 
   const rootCategories = useMemo(() => categoryRoots(categories), [categories]);
 
@@ -191,14 +191,8 @@ export default function ProductEditModal({
     if (!open) return;
     void (async () => {
       try {
-        const [tree, schemas] = await Promise.all([
-          adminService.getCategories(),
-          adminService.getMerchantSchemas(),
-        ]);
+        const tree = await adminService.getCategories();
         setCategories(tree);
-        setMerchantBusinessType(schemas.businessType);
-        setTierRows(defaultTierRows(schemas.businessType));
-        setProductSchema(schemas.productSchema as unknown as DynamicSchemaObject);
         const roots = categoryRoots(tree);
         setMainCategoryId((prev) => (prev === "" ? (roots[0]?.id ?? "") : prev));
         setSubCategoryId((prev) =>
@@ -209,6 +203,13 @@ export default function ProductEditModal({
       }
     })();
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !merchantBusinessType) return;
+    if (productId == null) {
+      setTierRows(defaultTierRows(merchantBusinessType));
+    }
+  }, [open, merchantBusinessType, productId]);
 
   useEffect(() => {
     if (!open || categories.length === 0 || mainCategoryId === "") return;
@@ -358,8 +359,17 @@ export default function ProductEditModal({
       setSaveError("Нужно хотя бы одно фото.");
       return;
     }
-    if (!subCategoryId) {
-      setSaveError("Выберите подкатегорию.");
+    const categoryId = resolveProductCategoryId(
+      mainCategoryId,
+      subCategoryId,
+      rootCategories,
+    );
+    if (categoryId == null) {
+      setSaveError(
+        rootCategories.length === 0
+          ? "Сначала создайте категорию."
+          : "Выберите категорию или подкатегорию.",
+      );
       return;
     }
 
@@ -417,7 +427,7 @@ export default function ProductEditModal({
       const basePatch = {
         name: name.trim(),
         price: Math.round(priceNum),
-        categoryId: Number(subCategoryId),
+        categoryId,
         isNew,
         isPopular,
         isSale,
@@ -446,7 +456,7 @@ export default function ProductEditModal({
       onSaved();
       onClose();
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : "Не удалось сохранить");
+      setSaveError(formatAdminApiError(e));
     } finally {
       setSaving(false);
     }
@@ -546,51 +556,15 @@ export default function ProductEditModal({
                   />
                 </div>
               </div>
-              <div className="admin-form-section">
-                <label className="admin-field-label" htmlFor="em-main-cat">
-                  Категория
-                </label>
-                <select
-                  id="em-main-cat"
-                  className="admin-select"
-                  value={mainCategoryId}
-                  onChange={(e) => {
-                    const nextMainId = Number(e.target.value);
-                    setMainCategoryId(nextMainId);
-                    const nextMain = rootCategories.find((c) => c.id === nextMainId);
-                    setSubCategoryId(nextMain?.children?.[0]?.id ?? "");
-                  }}
-                >
-                  {rootCategories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="admin-form-section">
-                <label className="admin-field-label" htmlFor="em-sub-cat">
-                  Подкатегория
-                </label>
-                <select
-                  id="em-sub-cat"
-                  className="admin-select"
-                  value={subCategoryId}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setSubCategoryId(v === "" ? "" : Number(v));
-                  }}
-                >
-                  <option value="">Выберите подкатегорию</option>
-                  {(rootCategories.find((c) => c.id === mainCategoryId)?.children ?? []).map(
-                    (c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    )
-                  )}
-                </select>
-              </div>
+              <AdminCategoryFields
+                categories={categories}
+                mainCategoryId={mainCategoryId}
+                subCategoryId={subCategoryId}
+                onMainChange={setMainCategoryId}
+                onSubChange={setSubCategoryId}
+                mainSelectId="em-main-cat"
+                subSelectId="em-sub-cat"
+              />
               <div className="admin-form-section">
                 <span className="admin-field-label">Фильтры</span>
                 <div className="admin-sizes">
@@ -683,7 +657,7 @@ export default function ProductEditModal({
                 onChange={setAttributes}
               />
 
-              {showTierStock && merchantBusinessType ? (
+              {showTierStock && businessTypeReady ? (
                 <TierStockEditor
                   businessType={merchantBusinessType}
                   rows={tierRows}
@@ -691,7 +665,7 @@ export default function ProductEditModal({
                 />
               ) : null}
 
-              {showClothingVariants && (
+              {showClothingVariants && businessTypeReady && (
                 <>
                   <p className="admin-form-hint">
                     Варианты: цвет (палитра + название) и остатки

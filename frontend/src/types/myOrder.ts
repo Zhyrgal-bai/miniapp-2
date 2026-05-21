@@ -29,5 +29,6 @@ export type MyOrderRow = {
     color: string;
     quantity: number;
     price: number;
+    options?: Record<string, unknown>;
   }[];
 };

@@ -15,6 +15,10 @@ import { useTheme } from "../../context/ThemeContext";
 import { computeBadges } from "../storefront/commerce/badgeEngine";
 import { profileForBusinessType } from "../storefront/commerce/businessBehaviorProfiles";
 import { verticalUsesColorAxis, labelPrimaryOption } from "@repo-shared/businessCommerce";
+import {
+  cartLineIdentityKey,
+  storageColorForCart,
+} from "../../commerce/cartLineIdentity";
 import { computeCtaModel } from "../storefront/commerce/ctaEngine";
 import { recordRecentlyViewed } from "../storefront/discovery/recentlyViewed";
 import {
@@ -131,7 +135,8 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   const [currentIndex, setCurrentIndex] = useState(0);
   const touchStartX = useRef<number | null>(null);
 
-  const showColorPicker = verticalUsesColorAxis(businessType);
+  const resolvedBusinessType = businessType ?? product.businessType ?? null;
+  const showColorPicker = verticalUsesColorAxis(resolvedBusinessType);
 
   const hasCustomColors = Boolean(
     showColorPicker &&
@@ -242,17 +247,17 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
     return null;
   }, [product.variants, product.sizes]);
 
+  const storageColor = storageColorForCart(resolvedBusinessType, lineColor);
+
   const cartItem = useMemo(() => {
-    if (!selectedSize || lineColor === null) return null;
-    return (
-      items.find(
-        (i) =>
-          i.productId === product.id &&
-          i.color === lineColor &&
-          i.size === selectedSize
-      ) ?? null
-    );
-  }, [items, product.id, selectedSize, lineColor]);
+    if (!selectedSize) return null;
+    const key = cartLineIdentityKey({
+      productId: product.id!,
+      size: selectedSize,
+      color: storageColor,
+    });
+    return items.find((i) => cartLineIdentityKey(i) === key) ?? null;
+  }, [items, product.id, selectedSize, storageColor]);
 
   const quantity = cartItem?.quantity ?? 0;
 
@@ -273,7 +278,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
       price: displayPrice,
       image: getPrimaryImage(product),
       size: selectedSize,
-      color: lineColor,
+      color: storageColor,
       quantity: capped,
     });
     if (businessId && product.id) {
@@ -565,7 +570,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
                 ))}
               </div>
             )}
-            <div className="sizes">
+            <div className="product-tiers">
               {sizes.map((s) => (
                 <button
                   key={s.size}
@@ -574,7 +579,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
                   className={selectedSize === s.size ? "active" : ""}
                   onClick={() => setSelectedSize(s.size)}
                 >
-                  {labelPrimaryOption(businessType, s.size)}
+                  {labelPrimaryOption(resolvedBusinessType, s.size)}
                   {s.stock > 0 ? ` (${s.stock})` : ""}
                 </button>
               ))}

@@ -69,6 +69,7 @@ export type ResolvedStorefrontPayload = {
   storefrontStyleConfig?: Record<string, unknown>;
   categories?: Category[];
   featuredProducts?: Product[];
+  orderOptionsSchema?: Record<string, unknown>;
 };
 
 export function StorefrontRenderer(props: {
