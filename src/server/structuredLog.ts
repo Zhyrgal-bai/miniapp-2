@@ -4,6 +4,15 @@ type LogFields = Record<string, unknown> & {
   correlationId?: string;
 };
 
+/** Shared JSON log emitter (used by checkout step debug). */
+export function emitStructuredLog(
+  level: LogLevel,
+  event: string,
+  fields: LogFields,
+): void {
+  emit(level, event, fields);
+}
+
 function emit(level: LogLevel, event: string, fields: LogFields): void {
   const line = JSON.stringify({
     ts: new Date().toISOString(),

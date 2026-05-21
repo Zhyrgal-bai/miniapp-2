@@ -94,6 +94,12 @@ import {
 } from "./inventoryService.js";
 import { priceCheckoutLines } from "./checkoutPricing.js";
 import {
+  logCheckoutStep,
+  runCheckoutStep,
+  surfaceCheckoutError,
+} from "./checkoutErrorSurface.js";
+import { probeCheckoutSchema } from "./checkoutSchemaProbe.js";
+import {
   logCommerceEvent,
   logCheckoutReject,
   logInventoryReserveFailed,
@@ -372,6 +378,7 @@ app.get("/ready", async (_req: Request, res: Response) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
     const env = validateEnvironment();
+    const checkoutSchema = await probeCheckoutSchema(prisma);
     res.json({
       ok: true,
       db: true,
@@ -383,6 +390,10 @@ app.get("/ready", async (_req: Request, res: Response) => {
           : null,
       envOk: env.ok,
       envWarningCount: env.warnings.length,
+      checkoutSchemaOk: checkoutSchema.ok,
+      ...(checkoutSchema.missing.length > 0
+        ? { checkoutSchemaMissing: checkoutSchema.missing }
+        : {}),
     });
   } catch (e) {
     console.error("GET /ready:", e);
@@ -4501,6 +4512,15 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
 
   const promoRaw = String(body.promo ?? body.promoCode ?? "").trim();
   const corrId = req.correlationId;
+
+  logCheckoutStep({
+    step: "validated",
+    phase: "ok",
+    businessId: tenantBusinessId,
+    ...(corrId ? { correlationId: corrId } : {}),
+    detail: `items=${itemsValidated.length} type=${businessType}`,
+  });
+
   logCommerceEvent({
     phase: "checkout_start",
     businessId: tenantBusinessId,
@@ -4529,52 +4549,81 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
   try {
     void releaseStaleUnpaidOrders({ businessId: tenantBusinessId });
 
+    const checkoutCtx = {
+      ...(corrId ? { correlationId: corrId } : {}),
+    };
+
     const checkoutResult = await prisma.$transaction(async (tx) => {
-      const priced = await priceCheckoutLines(
-        tx,
+      const priced = await runCheckoutStep(
+        "pricing",
         tenantBusinessId,
-        businessType,
-        itemsValidated.map((it) => ({
-          productId: it.productId,
-          size: it.size,
-          color: it.color,
-          quantity: it.quantity,
-          options: it.optionsValidated,
-        })),
+        async () => {
+          const result = await priceCheckoutLines(
+            tx,
+            tenantBusinessId,
+            businessType,
+            itemsValidated.map((it) => ({
+              productId: it.productId,
+              size: it.size,
+              color: it.color,
+              quantity: it.quantity,
+              options: it.optionsValidated,
+            })),
+          );
+          if (!result.ok) {
+            throw new Error(`PRICE:${result.statusCode}:${result.error}`);
+          }
+          return result;
+        },
+        checkoutCtx,
       );
-      if (!priced.ok) {
-        throw new Error(`PRICE:${priced.statusCode}:${priced.error}`);
-      }
 
       let orderTotal = priced.subtotal;
       if (promoRaw) {
-        try {
-          const applied = await tryApplyPromoDb(
-            tx as unknown as typeof prisma,
-            tenantBusinessId,
-            promoRaw,
-            priced.subtotal,
-          );
-          orderTotal = applied.newTotal;
-        } catch (pe) {
-          throw new Error(`PROMO:${promoApplyErrorMessage(pe)}`);
-        }
+        await runCheckoutStep("promo", tenantBusinessId, async () => {
+          try {
+            const applied = await tryApplyPromoDb(
+              tx as unknown as typeof prisma,
+              tenantBusinessId,
+              promoRaw,
+              priced.subtotal,
+            );
+            orderTotal = applied.newTotal;
+          } catch (pe) {
+            throw new Error(`PROMO:${promoApplyErrorMessage(pe)}`);
+          }
+        }, checkoutCtx);
       }
 
       const telegramId = verifiedTg;
       const businessId = tenantBusinessId;
-      const buyerUserInner = await upsertBuyerUser(
-        tx,
+      const buyerUserInner = await runCheckoutStep(
+        "customer",
         businessId,
-        telegramId,
-        userNameSanitized || null,
+        () =>
+          upsertBuyerUser(
+            tx,
+            businessId,
+            telegramId,
+            userNameSanitized || null,
+          ),
+        checkoutCtx,
       );
 
-      const cooldown = await checkActionCooldown({
+      const cooldown = await runCheckoutStep(
+        "cooldown",
         businessId,
-        userId: buyerUserInner.id,
-        actionKey: "checkout",
-      });
+        () =>
+          checkActionCooldown(
+            {
+              businessId,
+              userId: buyerUserInner.id,
+              actionKey: "checkout",
+            },
+            tx,
+          ),
+        checkoutCtx,
+      );
       if (!cooldown.ok) {
         throw new Error(`COOLDOWN:${cooldown.error}`);
       }
@@ -4587,12 +4636,21 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
           quantity: Number(it.quantity),
         })),
       );
-      const dup = await assertNotDuplicateOrder({
+      const dup = await runCheckoutStep(
+        "duplicate_check",
         businessId,
-        buyerUserId: buyerUserInner.id,
-        total: orderTotal,
-        fingerprint,
-      });
+        () =>
+          assertNotDuplicateOrder(
+            {
+              businessId,
+              buyerUserId: buyerUserInner.id,
+              total: orderTotal,
+              fingerprint,
+            },
+            tx,
+          ),
+        checkoutCtx,
+      );
       if (!dup.ok) {
         throw new Error(`DUPLICATE:${dup.error}`);
       }
@@ -4602,47 +4660,58 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
       const addrFinal =
         orderAddress && orderAddress.trim() !== "" ? orderAddress : "—";
 
-      const orderNumber = await allocateHumanOrderNumber(tx, businessId);
+      const orderNumber = await runCheckoutStep(
+        "order_number",
+        businessId,
+        () => allocateHumanOrderNumber(tx, businessId),
+        checkoutCtx,
+      );
 
-      const order = await tx.order.create({
-        data: {
-          businessId,
-          buyerUserId: buyerUserInner.id,
-          orderNumber,
-          name: orderNameDisplay,
-          phone: customerPhoneValue,
-          address: addrFinal,
-          total: orderTotal,
-          status: "NEW",
-          lat: orderLat,
-          lng: orderLng,
-          paymentMethod,
-          paymentId: paymentMethod === "finik" ? null : paymentId,
-          items: {
-            create: priced.lines.map((line) => {
-              const validated = itemsValidated.find(
-                (it) =>
-                  it.productId === line.productId &&
-                  it.size === line.size &&
-                  it.color === line.color,
-              );
-              return {
-                businessId,
-                productId: line.productId,
-                name: line.name,
-                size: line.size,
-                color: line.color,
-                options: validated?.optionsValidated ?? {},
-                quantity: line.quantity,
-                price: line.unitPrice,
-              };
-            }) as any,
-          },
-        },
-        include: {
-          items: true,
-        },
-      });
+      const order = await runCheckoutStep(
+        "order_created",
+        businessId,
+        () =>
+          tx.order.create({
+            data: {
+              businessId,
+              buyerUserId: buyerUserInner.id,
+              orderNumber,
+              name: orderNameDisplay,
+              phone: customerPhoneValue,
+              address: addrFinal,
+              total: orderTotal,
+              status: "NEW",
+              lat: orderLat,
+              lng: orderLng,
+              paymentMethod,
+              paymentId: paymentMethod === "finik" ? null : paymentId,
+              items: {
+                create: priced.lines.map((line) => {
+                  const validated = itemsValidated.find(
+                    (it) =>
+                      it.productId === line.productId &&
+                      it.size === line.size &&
+                      it.color === line.color,
+                  );
+                  return {
+                    businessId,
+                    productId: line.productId,
+                    name: line.name,
+                    size: line.size,
+                    color: line.color,
+                    options: validated?.optionsValidated ?? {},
+                    quantity: line.quantity,
+                    price: line.unitPrice,
+                  };
+                }) as any,
+              },
+            },
+            include: {
+              items: true,
+            },
+          }),
+        checkoutCtx,
+      );
 
       const stockLines = order.items.map((it) => ({
         id: it.id,
@@ -4651,15 +4720,24 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
         color: it.color,
         quantity: it.quantity,
       }));
-      const reserved = await reserveOrderStock(
-        tx,
+      const reserved = await runCheckoutStep(
+        "stock_reserved",
         businessId,
-        order.id,
-        stockLines,
+        async () => {
+          const result = await reserveOrderStock(
+            tx,
+            businessId,
+            order.id,
+            stockLines,
+          );
+          if (!result.ok) {
+            throw new Error(`STOCK:${result.error}`);
+          }
+          return result;
+        },
+        { ...checkoutCtx, orderId: order.id },
       );
-      if (!reserved.ok) {
-        throw new Error(`STOCK:${reserved.error}`);
-      }
+      void reserved;
 
       const rawDeliveryMode = (body as { deliveryMode?: unknown }).deliveryMode;
       const deliveryMode =
@@ -4672,10 +4750,16 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
           ? Number(rawPrep)
           : null;
 
-      await initializeOrderDelivery(tx, order.id, {
-        deliveryMode,
-        preparationMinutes,
-      });
+      await runCheckoutStep(
+        "delivery_init",
+        businessId,
+        () =>
+          initializeOrderDelivery(tx, order.id, {
+            deliveryMode,
+            preparationMinutes,
+          }),
+        { ...checkoutCtx, orderId: order.id },
+      );
 
       return { order, buyerUser: buyerUserInner, pricedCheckout: priced };
     });
@@ -4725,7 +4809,13 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
       });
       return res.status(409).json({ error: msg.slice(6) });
     }
-    throw e;
+    const surfaced = surfaceCheckoutError(e, "POST /orders transaction");
+    logCheckoutReject({
+      businessId: tenantBusinessId,
+      reason: surfaced.error,
+      ...(corrId ? { correlationId: corrId } : {}),
+    });
+    return res.status(surfaced.statusCode).json({ error: surfaced.error });
   }
 
   try {
@@ -4748,10 +4838,16 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
       if (!business) {
         return res.status(500).json({ error: "Магазин не найден" });
       }
-      const finik = await createFinikMerchantSession(business, {
-        orderId: order.id,
-        amount: order.total,
-      });
+      const finik = await runCheckoutStep(
+        "payment_session",
+        tenantBusinessId,
+        () =>
+          createFinikMerchantSession(business, {
+            orderId: order.id,
+            amount: order.total,
+          }),
+        { ...(corrId ? { correlationId: corrId } : {}), orderId: order.id },
+      );
       if (!finik.ok) {
         await onOrderStatusChanged(order.id, "NEW", "CANCELLED");
         await prisma.order.update({
@@ -4841,12 +4937,14 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
       return res.status(409).json({ error: code.slice("DUPLICATE:".length) });
     }
     console.error("ORDER ERROR FULL:", error);
-    res.status(500).json({ error: "Ошибка при создании заказа" });
+    const surfaced = surfaceCheckoutError(error, "POST /orders post-create");
+    res.status(surfaced.statusCode).json({ error: surfaced.error });
   }
   } catch (e) {
     console.error("ORDERS POST ROUTE ERROR:", e);
+    const surfaced = surfaceCheckoutError(e, "POST /orders outer");
     if (!res.headersSent) {
-      res.status(500).json({ error: "Server error" });
+      res.status(surfaced.statusCode).json({ error: surfaced.error });
     }
   }
 });

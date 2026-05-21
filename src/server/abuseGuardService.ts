@@ -1,5 +1,7 @@
 import { prisma } from "./db.js";
 
+type DbLike = Pick<typeof prisma, "actionCooldown" | "order">;
+
 const COOLDOWNS_MS: Record<string, number> = {
   checkout: 30_000,
   support_ticket: 60_000,
@@ -9,14 +11,17 @@ const COOLDOWNS_MS: Record<string, number> = {
   return_request: 120_000,
 };
 
-export async function checkActionCooldown(input: {
-  businessId: number;
-  userId: number;
-  actionKey: string;
-}): Promise<{ ok: true } | { ok: false; error: string; retryAfterSec: number }> {
+export async function checkActionCooldown(
+  input: {
+    businessId: number;
+    userId: number;
+    actionKey: string;
+  },
+  db: DbLike = prisma,
+): Promise<{ ok: true } | { ok: false; error: string; retryAfterSec: number }> {
   const windowMs = COOLDOWNS_MS[input.actionKey] ?? 30_000;
   const now = new Date();
-  const row = await prisma.actionCooldown.findUnique({
+  const row = await db.actionCooldown.findUnique({
     where: {
       businessId_userId_actionKey: {
         businessId: input.businessId,
@@ -75,15 +80,18 @@ export async function assertActionAllowed(input: {
   return { ok: true };
 }
 
-export async function assertNotDuplicateOrder(input: {
-  businessId: number;
-  buyerUserId: number;
-  total: number;
-  fingerprint: string;
-  windowMinutes?: number;
-}): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function assertNotDuplicateOrder(
+  input: {
+    businessId: number;
+    buyerUserId: number;
+    total: number;
+    fingerprint: string;
+    windowMinutes?: number;
+  },
+  db: DbLike = prisma,
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const since = new Date(Date.now() - (input.windowMinutes ?? 5) * 60_000);
-  const recent = await prisma.order.findMany({
+  const recent = await db.order.findMany({
     where: {
       businessId: input.businessId,
       buyerUserId: input.buyerUserId,
