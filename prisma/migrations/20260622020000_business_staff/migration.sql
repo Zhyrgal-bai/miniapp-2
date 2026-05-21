@@ -33,6 +33,9 @@ CREATE TABLE "StaffInvite" (
     CONSTRAINT "StaffInvite_pkey" PRIMARY KEY ("id")
 );
 
+-- Unique index required before INSERT … ON CONFLICT
+CREATE UNIQUE INDEX "BusinessStaff_userId_businessId_key" ON "BusinessStaff"("userId", "businessId");
+
 -- Migrate existing OWNER/ADMIN memberships into BusinessStaff
 INSERT INTO "BusinessStaff" ("businessId", "userId", "role", "permissions", "createdAt", "updatedAt")
 SELECT
@@ -50,7 +53,6 @@ ON CONFLICT ("userId", "businessId") DO NOTHING;
 UPDATE "Membership" SET "role" = 'CLIENT' WHERE "role" IN ('OWNER', 'ADMIN');
 
 -- CreateIndex
-CREATE UNIQUE INDEX "BusinessStaff_userId_businessId_key" ON "BusinessStaff"("userId", "businessId");
 CREATE INDEX "BusinessStaff_businessId_idx" ON "BusinessStaff"("businessId");
 CREATE INDEX "BusinessStaff_userId_idx" ON "BusinessStaff"("userId");
 

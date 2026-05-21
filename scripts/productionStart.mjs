@@ -68,6 +68,18 @@ if (
     "npx prisma migrate resolve --rolled-back 20260508143000_storefront_table_reusable_blocks",
   );
   run("npx prisma migrate deploy");
+} else if (
+  (deployAttempt.status ?? 1) !== 0 &&
+  deployOut.includes("P3009") &&
+  deployOut.includes("20260622020000_business_staff")
+) {
+  console.warn(
+    "[start] Detected failed migration 20260622020000_business_staff; attempting auto-resolve then redeploy.",
+  );
+  run(
+    "npx prisma migrate resolve --rolled-back 20260622020000_business_staff",
+  );
+  run("npx prisma migrate deploy");
 } else {
   const code = deployAttempt.status ?? 1;
   if (code !== 0) process.exit(code);

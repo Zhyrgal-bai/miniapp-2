@@ -56,12 +56,16 @@ export function validateEnvironment(): EnvValidationResult {
       errors.push("TELEGRAM_WEBHOOK_SECRET is required in production");
     }
     if (!process.env.OPERATOR_PASSWORD_HASH?.trim()) {
-      errors.push("OPERATOR_PASSWORD_HASH is required in production");
+      warnings.push(
+        "OPERATOR_PASSWORD_HASH not set — platform operator unlock disabled",
+      );
     }
-    const finikHeader = process.env.FINIK_WEBHOOK_SIGNATURE_HEADER?.trim();
-    if (!finikHeader) {
-      errors.push(
-        "FINIK_WEBHOOK_SIGNATURE_HEADER is required in production",
+    const finikHeader =
+      process.env.FINIK_WEBHOOK_SIGNATURE_HEADER?.trim() ||
+      "x-finik-signature";
+    if (!process.env.FINIK_WEBHOOK_SIGNATURE_HEADER?.trim()) {
+      warnings.push(
+        `FINIK_WEBHOOK_SIGNATURE_HEADER not set — defaulting to ${finikHeader}`,
       );
     }
     if (process.env.TELEGRAM_INIT_DEBUG === "1") {

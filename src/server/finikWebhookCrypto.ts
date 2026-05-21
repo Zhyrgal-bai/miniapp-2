@@ -36,7 +36,7 @@ export function verifyFinikWebhookSignature(
   rawBody: string,
 ): boolean {
   const headerName = (
-    process.env.FINIK_WEBHOOK_SIGNATURE_HEADER || ""
+    process.env.FINIK_WEBHOOK_SIGNATURE_HEADER || "x-finik-signature"
   ).trim().toLowerCase();
   const isProd = process.env.NODE_ENV === "production";
 
