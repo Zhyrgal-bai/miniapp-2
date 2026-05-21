@@ -85,6 +85,7 @@ type AdminLayoutProps = {
   showOwnerNav?: boolean;
   /** Права с GET /api/me (для фильтра пунктов меню). */
   merchantPermissions: string[] | null;
+  merchantRole?: string | null;
 };
 
 export default function AdminLayout({
@@ -93,6 +94,7 @@ export default function AdminLayout({
   children,
   showOwnerNav = false,
   merchantPermissions,
+  merchantRole = null,
 }: AdminLayoutProps) {
   const active = adminNavKeyFromPath(path);
 
@@ -100,9 +102,13 @@ export default function AdminLayout({
     () =>
       navAll.filter((item) => {
         if (item.ownerOnly && !showOwnerNav) return false;
-        return hasMerchantPermission(merchantPermissions, item.permission);
+        return hasMerchantPermission(
+          merchantPermissions,
+          item.permission,
+          merchantRole,
+        );
       }),
-    [showOwnerNav, merchantPermissions],
+    [showOwnerNav, merchantPermissions, merchantRole],
   );
 
   return (

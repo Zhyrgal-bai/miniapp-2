@@ -1,4 +1,4 @@
-import { MembershipRole, SubscriptionStatus } from "@prisma/client";
+import { BusinessStaffRole, SubscriptionStatus } from "@prisma/client";
 import { prisma } from "./db.js";
 import { hasValidPaidOrTrialWindow } from "./subscriptionAccess.js";
 
@@ -8,14 +8,12 @@ export type MerchantBusinessCard = {
   name: string;
   isActive: boolean;
   isBlocked: boolean;
-  role: MembershipRole;
+  role: BusinessStaffRole;
   subscriptionStatus: SubscriptionStatus;
   billingPlan: string | null;
   trialEndsAt: string | null;
   subscriptionEndsAt: string | null;
-  /** Календарных дней до окончания текущего окна (подписка или триал); null если без срока / истёк. */
   daysLeft: number | null;
-  /** active | blocked | pay_required | paused — для текстовых бэйджей. */
   accessState: "active" | "blocked" | "pay_required" | "paused";
 };
 
@@ -69,7 +67,7 @@ function summarizeAccess(
   return { daysLeft, accessState: "active" };
 }
 
-/** Магазины, которыми владеет пользователь Telegram (OWNER/ADMIN после SaaS). */
+/** Магазины, где пользователь — staff (не покупатель). */
 export async function listMerchantOwnedBusinesses(
   telegramId: string
 ): Promise<MerchantBusinessCard[]> {
@@ -81,11 +79,8 @@ export async function listMerchantOwnedBusinesses(
     return [];
   }
 
-  const memberships = await prisma.membership.findMany({
-    where: {
-      userId: identity.id,
-      role: { in: [MembershipRole.OWNER, MembershipRole.ADMIN] },
-    },
+  const staffRows = await prisma.businessStaff.findMany({
+    where: { userId: identity.id },
     include: { business: true },
     orderBy: { businessId: "asc" },
   });
@@ -93,7 +88,7 @@ export async function listMerchantOwnedBusinesses(
   const now = new Date();
   const out: MerchantBusinessCard[] = [];
 
-  for (const m of memberships) {
+  for (const m of staffRows) {
     const b = m.business;
     const summary = summarizeAccess(b, now);
     out.push({
@@ -103,11 +98,10 @@ export async function listMerchantOwnedBusinesses(
       isBlocked: b.isBlocked,
       role: m.role,
       subscriptionStatus: b.subscriptionStatus,
-      billingPlan: b.billingPlan != null ? String(b.billingPlan) : null,
+      billingPlan: b.billingPlan ?? null,
       trialEndsAt: b.trialEndsAt?.toISOString() ?? null,
       subscriptionEndsAt: b.subscriptionEndsAt?.toISOString() ?? null,
-      daysLeft: summary.daysLeft,
-      accessState: summary.accessState,
+      ...summary,
     });
   }
 

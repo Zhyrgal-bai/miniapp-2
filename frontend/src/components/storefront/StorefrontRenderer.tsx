@@ -460,6 +460,7 @@ export function StorefrontRenderer(props: {
         <ProductDetailSheet
           product={sheetProduct}
           businessId={props.payload.businessId}
+          businessType={props.payload.businessType ?? undefined}
           featuredProducts={featuredAll}
           catalogProducts={catalog ?? []}
           onClose={() => setSheetProduct(null)}

@@ -1,3 +1,4 @@
+import { showErrorToast } from "../../store/toast.store";
 import { useEffect } from "react";
 import axios from "axios";
 import { useAdminStore } from "../../store/admin.store";
@@ -42,9 +43,9 @@ const ProductList = () => {
                   await deleteProduct(p.id!);
                 } catch (e) {
                   if (axios.isAxiosError(e) && e.response?.status === 403) {
-                    alert("Нет прав");
+                    showErrorToast("Нет прав");
                   } else {
-                    alert("Не удалось удалить товар");
+                    showErrorToast("Не удалось удалить товар");
                   }
                 }
               }}

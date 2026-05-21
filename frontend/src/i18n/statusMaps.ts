@@ -48,7 +48,16 @@ export const RETURN_STATUS_RU: Record<string, string> = {
 export const MEMBERSHIP_ROLE_RU: Record<string, string> = {
   OWNER: "Владелец",
   ADMIN: "Администратор",
+  MANAGER: "Менеджер",
+  SUPPORT: "Поддержка",
   CLIENT: "Клиент",
+};
+
+export const STAFF_ROLE_RU: Record<string, string> = {
+  OWNER: "Владелец",
+  ADMIN: "Администратор",
+  MANAGER: "Менеджер",
+  SUPPORT: "Поддержка",
 };
 
 export const SUBSCRIPTION_STATUS_RU: Record<string, string> = {

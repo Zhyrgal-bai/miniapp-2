@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { adminService, type SupportSuggestion } from "../../services/admin.service";
+import { showErrorToast } from "../../store/toast.store";
 import { SF_ADMIN_SUPPORT_TAB_KEY } from "../../utils/accountMenuStorage";
 import { formatTimeAgoRu } from "../../utils/formatTimeAgo";
 import { orderDisplayLabel } from "@repo-shared/orderDisplay";
@@ -231,7 +232,7 @@ export default function AdminSupportPage() {
       await loadTickets();
     } catch (e) {
       console.error(e);
-      alert(e instanceof Error ? e.message : "Ошибка отправки");
+      showErrorToast(e instanceof Error ? e.message : "Ошибка отправки");
     } finally {
       setBusy(false);
     }
@@ -249,7 +250,7 @@ export default function AdminSupportPage() {
       await loadTickets();
     } catch (e) {
       console.error(e);
-      alert(e instanceof Error ? e.message : "Ошибка сохранения");
+      showErrorToast(e instanceof Error ? e.message : "Ошибка сохранения");
     } finally {
       setBusy(false);
     }
@@ -278,7 +279,7 @@ export default function AdminSupportPage() {
       await loadTickets();
     } catch (e) {
       console.error(e);
-      alert(e instanceof Error ? e.message : "Ошибка");
+      showErrorToast(e instanceof Error ? e.message : "Ошибка");
     } finally {
       setBusy(false);
     }
@@ -299,7 +300,7 @@ export default function AdminSupportPage() {
       await loadTickets();
     } catch (e) {
       console.error(e);
-      alert(e instanceof Error ? e.message : "Ошибка");
+      showErrorToast(e instanceof Error ? e.message : "Ошибка");
     } finally {
       setBusy(false);
     }
@@ -315,7 +316,7 @@ export default function AdminSupportPage() {
       await loadReturns();
     } catch (e) {
       console.error(e);
-      alert(e instanceof Error ? e.message : "Ошибка");
+      showErrorToast(e instanceof Error ? e.message : "Ошибка");
     } finally {
       setBusy(false);
     }
@@ -780,7 +781,7 @@ export default function AdminSupportPage() {
                         if (raw == null) return;
                         const n = Number(raw.trim());
                         if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
-                          alert("Нужно целое число ≥ 0");
+                          showErrorToast("Нужно целое число ≥ 0");
                           return;
                         }
                         void patchRefund(selectedRefundId!, {
@@ -922,7 +923,7 @@ export default function AdminSupportPage() {
                             if (raw == null) return;
                             const n = Number(raw.trim());
                             if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
-                              alert("Нужно целое число ≥ 0");
+                              showErrorToast("Нужно целое число ≥ 0");
                               return;
                             }
                             void patchReturn(selectedReturnId!, {

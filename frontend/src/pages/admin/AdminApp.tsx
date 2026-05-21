@@ -16,9 +16,13 @@ import {
   type AdminNavKey,
 } from "./adminHashRoute";
 import { useAdminGateStore } from "../../store/adminGate.store";
-import { MERCHANT_PERM } from "../../permissions/merchantPermissions";
+import {
+  MERCHANT_PERM,
+  hasMerchantPermission,
+  type MerchantPermissionId,
+} from "../../permissions/merchantPermissions";
 
-const NAV_REQUIRES: Partial<Record<AdminNavKey, string>> = {
+const NAV_REQUIRES: Partial<Record<AdminNavKey, MerchantPermissionId>> = {
   orders: MERCHANT_PERM.ordersManage,
   design: MERCHANT_PERM.designEdit,
   products: MERCHANT_PERM.catalogEdit,
@@ -27,6 +31,29 @@ const NAV_REQUIRES: Partial<Record<AdminNavKey, string>> = {
   analytics: MERCHANT_PERM.analyticsView,
   support: MERCHANT_PERM.supportManage,
 };
+
+const ROUTE_ORDER: { key: AdminNavKey; hash: string }[] = [
+  { key: "orders", hash: "#/admin/orders" },
+  { key: "support", hash: "#/admin/support" },
+  { key: "design", hash: "#/admin/design" },
+  { key: "products", hash: "#/admin/products" },
+  { key: "categories", hash: "#/admin/categories" },
+  { key: "analytics", hash: "#/admin/analytics" },
+];
+
+function firstAllowedAdminHash(
+  merchantRole: string | null,
+  merchantPermissions: string[] | null,
+): string {
+  if (merchantRole === "OWNER") return "#/admin/orders";
+  for (const route of ROUTE_ORDER) {
+    const req = NAV_REQUIRES[route.key];
+    if (hasMerchantPermission(merchantPermissions, req, merchantRole)) {
+      return route.hash;
+    }
+  }
+  return "#/admin/support";
+}
 
 type AdminAppProps = {
   onExit: () => void;
@@ -41,22 +68,29 @@ export default function AdminApp({ onExit }: AdminAppProps) {
   const path = useSyncExternalStore(
     subscribeAdminHash,
     adminPathFromHash,
-    () => "/admin/orders"
+    () => "/admin/orders",
   );
 
   useEffect(() => {
+    if (gateStatus !== "ready" || !serverIsAdmin) return;
     const h = window.location.hash.replace(/^#/, "");
     if (!h || h === "/" || !h.includes("admin")) {
-      window.location.hash = "#/admin/orders";
+      window.location.hash = firstAllowedAdminHash(
+        merchantRole,
+        merchantPermissions,
+      );
     }
-  }, []);
+  }, [gateStatus, serverIsAdmin, merchantRole, merchantPermissions]);
 
   useEffect(() => {
     if (!path.includes("/admin/users")) return;
     if (gateStatus !== "ready") return;
     if (merchantRole === "OWNER") return;
-    window.location.hash = "#/admin/orders";
-  }, [path, gateStatus, merchantRole]);
+    window.location.hash = firstAllowedAdminHash(
+      merchantRole,
+      merchantPermissions,
+    );
+  }, [path, gateStatus, merchantRole, merchantPermissions]);
 
   useEffect(() => {
     if (!path.includes("/admin/settings")) return;
@@ -68,20 +102,48 @@ export default function AdminApp({ onExit }: AdminAppProps) {
     const key = adminNavKeyFromPath(path);
     if (key === "users") return;
     const req = NAV_REQUIRES[key];
-    const perms = merchantPermissions ?? [];
-    if (req && !perms.includes(req)) {
-      window.location.hash = "#/admin/orders";
+    if (
+      req &&
+      !hasMerchantPermission(merchantPermissions, req, merchantRole)
+    ) {
+      window.location.hash = firstAllowedAdminHash(
+        merchantRole,
+        merchantPermissions,
+      );
     }
-  }, [path, gateStatus, serverIsAdmin, merchantPermissions]);
+  }, [path, gateStatus, serverIsAdmin, merchantPermissions, merchantRole]);
 
   const page = useMemo(() => {
+    if (gateStatus !== "ready") {
+      return (
+        <div className="admin-page admin-users-gate" key="gate-loading">
+          <p className="muted">Загрузка доступа…</p>
+        </div>
+      );
+    }
+
+    const key = adminNavKeyFromPath(path);
+    if (key !== "users") {
+      const req = NAV_REQUIRES[key];
+      if (
+        req &&
+        !hasMerchantPermission(merchantPermissions, req, merchantRole)
+      ) {
+        return (
+          <div className="admin-page admin-users-gate" key="denied">
+            <p className="muted">Нет доступа к этому разделу</p>
+          </div>
+        );
+      }
+    }
+
     if (path.includes("/admin/users")) {
       if (merchantRole === "OWNER") {
         return <AdminUsersPage key="users" />;
       }
       return (
         <div className="admin-page admin-users-gate" key="users-gate">
-          <p className="muted">Загрузка доступа…</p>
+          <p className="muted">Нет доступа</p>
         </div>
       );
     }
@@ -104,7 +166,7 @@ export default function AdminApp({ onExit }: AdminAppProps) {
       return <AdminSupportPage key="support" />;
     }
     return <AdminOrdersPage key="orders" />;
-  }, [path, merchantRole]);
+  }, [path, merchantRole, gateStatus, merchantPermissions]);
 
   return (
     <AdminLayout
@@ -112,6 +174,7 @@ export default function AdminApp({ onExit }: AdminAppProps) {
       path={path}
       showOwnerNav={merchantRole === "OWNER"}
       merchantPermissions={merchantPermissions}
+      merchantRole={merchantRole}
     >
       <AdminErrorBoundary>{page}</AdminErrorBoundary>
     </AdminLayout>

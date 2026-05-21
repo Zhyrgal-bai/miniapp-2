@@ -1,4 +1,5 @@
 import { apiAbsoluteUrl } from "./api";
+import { telegramWebAppInitDataHeader } from "../utils/telegramInitDataHeader";
 
 /** Контракт с `GET /my-businesses` (синхрон с `merchantDashboard.ts` на сервере). */
 export type MerchantBusinessCardDTO = {
@@ -15,14 +16,15 @@ export type MerchantBusinessCardDTO = {
   accessState: "active" | "blocked" | "pay_required" | "paused";
 };
 
-export async function fetchMerchantBusinesses(params: {
-  telegramId: number;
-}): Promise<MerchantBusinessCardDTO[]> {
-  const id = encodeURIComponent(String(params.telegramId));
-  const res = await fetch(
-    apiAbsoluteUrl(`/my-businesses?telegramId=${id}`),
-    { method: "GET", credentials: "omit" },
-  );
+export async function fetchMerchantBusinesses(): Promise<MerchantBusinessCardDTO[]> {
+  const initHdr = telegramWebAppInitDataHeader();
+  const res = await fetch(apiAbsoluteUrl("/my-businesses"), {
+    method: "GET",
+    credentials: "omit",
+    headers: {
+      ...initHdr,
+    },
+  });
   if (!res.ok) {
     const j = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(j.error ?? `HTTP ${res.status}`);

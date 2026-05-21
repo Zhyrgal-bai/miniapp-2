@@ -21,6 +21,7 @@ import {
 } from "./businessBotToken.js";
 import { isEncryptedTokenFormat } from "./botTokenCrypto.js";
 import { isPlatformOperator } from "./adminAuth.js";
+import { createOwnerStaffRow } from "./businessStaffAccess.js";
 import { mapRowsWithWebhook } from "./platformMyBusinesses.js";
 
 function buildApproveUserNotifyMessage(merchantBotUsername: string | null): string {
@@ -184,12 +185,9 @@ async function provisionMerchantStoreInTx(
     },
   });
 
-  await tx.membership.create({
-    data: {
-      userId: ownerUser.id,
-      businessId: business.id,
-      role: MembershipRole.OWNER,
-    },
+  await createOwnerStaffRow(tx, {
+    businessId: business.id,
+    userId: ownerUser.id,
   });
 
   return business.id;
@@ -675,11 +673,11 @@ export async function purgeBusinessCompletelyForOwner(
     return { ok: false, statusCode: 403, message: "Пользователь не найден" };
   }
 
-  const owns = await prisma.membership.findFirst({
+  const owns = await prisma.businessStaff.findFirst({
     where: {
       businessId,
       userId: user.id,
-      role: MembershipRole.OWNER,
+      role: "OWNER",
     },
     select: { id: true },
   });

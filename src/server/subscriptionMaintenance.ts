@@ -1,4 +1,4 @@
-import { MembershipRole, SubscriptionStatus } from "@prisma/client";
+import { BusinessStaffRole, SubscriptionStatus } from "@prisma/client";
 import { plainBotTokenFromStored } from "./businessBotToken.js";
 import { prisma } from "./db.js";
 import { hasValidPaidOrTrialWindow } from "./subscriptionAccess.js";
@@ -65,8 +65,8 @@ function daysLeftUntil(end: Date | null, now: Date): number | null {
 async function findBusinessOwnerTelegramId(
   businessId: number,
 ): Promise<string | null> {
-  const owner = await prisma.membership.findFirst({
-    where: { businessId, role: MembershipRole.OWNER },
+  const owner = await prisma.businessStaff.findFirst({
+    where: { businessId, role: BusinessStaffRole.OWNER },
     include: { user: true },
     orderBy: { id: "asc" },
   });

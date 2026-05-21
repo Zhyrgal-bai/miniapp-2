@@ -2,18 +2,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import type { Product, ProductColor, Size } from "../../../types";
+import type { Product, ProductColor } from "../../../types";
 import { api } from "../../../services/api";
 import { useCartStore } from "../../../store/useCartStore";
 import {
   getDiscountPercent,
   getEffectivePrice,
-  getNormalizedVariants,
   getPrimaryImage,
-  isOutOfStock,
 } from "../../../utils/product";
-import { getMaxOrderQty } from "../../../commerce/quantityPolicy";
 import { getVariantCssBackground } from "../../../utils/variantColor";
+import {
+  useVerticalProductSelection,
+  formatSizeLabel,
+} from "../../../commerce/useVerticalProductSelection";
+import { formatVariantSummary } from "@repo-shared/businessCommerce";
 import { recordRecentlyViewed } from "../discovery/recentlyViewed";
 import { useBodyScrollLock } from "../../../utils/bodyScrollLock";
 import "./ProductDetailSheet.css";
@@ -21,6 +23,7 @@ import "./ProductDetailSheet.css";
 export type ProductDetailSheetProps = {
   product: Product;
   businessId: number;
+  businessType?: string;
   featuredProducts: Product[];
   catalogProducts: Product[];
   onClose: () => void;
@@ -40,6 +43,7 @@ function mergeProductsUnique(a: Product[], b: Product[]): Product[] {
 export function ProductDetailSheet({
   product,
   businessId,
+  businessType,
   featuredProducts,
   catalogProducts,
   onClose,
@@ -84,12 +88,24 @@ export function ProductDetailSheet({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const hasCustomColors = Boolean(
-    (display.colors && display.colors.length > 0) ||
-      (display.variants && display.variants.length > 0)
-  );
+  const selection = useVerticalProductSelection(display, businessType);
+  const {
+    selectedSize,
+    selectedColor,
+    setSelectedSize,
+    setSelectedColor,
+    lineColor,
+    sizes,
+    hasCustomColors,
+    outOfStock,
+    selectedStock,
+    canSelect,
+    primaryLabel,
+    showColorPicker,
+  } = selection;
 
   const colors: ProductColor[] = useMemo(() => {
+    if (!showColorPicker) return [];
     if (display.colors && display.colors.length > 0) return display.colors;
     if (display.variants && display.variants.length > 0) {
       return display.variants.map((v) => ({
@@ -97,51 +113,15 @@ export function ProductDetailSheet({
         hex: getVariantCssBackground(v),
       }));
     }
-    return [{ name: "default", hex: "var(--sf-color-muted)" }];
-  }, [display]);
+    return [];
+  }, [display, showColorPicker]);
 
-  const [selectedColor, setSelectedColor] = useState<string | null>(null);
-  const [selectedSize, setSelectedSize] = useState<string | null>(null);
-
-  useEffect(() => {
-    setSelectedSize(null);
-    setSelectedColor(null);
-  }, [display.id]);
-
-  useEffect(() => {
-    const v = display.variants;
-    if (!v?.length) return;
-    setSelectedColor((prev) => {
-      if (prev && v.some((x) => x.color === prev)) return prev;
-      return v[0]!.color;
-    });
-  }, [display.id, display.variants]);
-
-  const sizes = useMemo<Size[]>(() => {
-    if (display.sizes && display.sizes.length > 0) return display.sizes;
-    if (display.variants && display.variants.length > 0) {
-      const v = selectedColor
-        ? display.variants.find((x) => x.color === selectedColor)
-        : display.variants[0];
-      if (v?.sizes?.length) return v.sizes;
-      return [];
-    }
-    const v0 = getNormalizedVariants(display)[0];
-    if (v0?.sizes?.length) return v0.sizes;
-    return [{ size: "M", stock: 10 }];
-  }, [display, selectedColor]);
-
-  const lineColor = useMemo(() => {
-    if (hasCustomColors) {
-      return (
-        selectedColor ??
-        display.variants?.[0]?.color ??
-        getNormalizedVariants(display)[0]?.color ??
-        null
-      );
-    }
-    return getNormalizedVariants(display)[0]?.color ?? "default";
-  }, [hasCustomColors, selectedColor, display]);
+  const variantSummary = formatVariantSummary({
+    businessType: businessType ?? display.businessType,
+    size: selectedSize,
+    color: showColorPicker ? lineColor : null,
+    attributes: display.attributes ?? null,
+  });
 
   const images = useMemo(
     () =>
@@ -156,12 +136,6 @@ export function ProductDetailSheet({
       images.length === 0 ? 0 : Math.min(i, images.length - 1)
     );
   }, [images.length]);
-
-  const outOfStock = isOutOfStock(display);
-  const selectedStock = useMemo(() => {
-    if (!selectedSize || lineColor === null) return 0;
-    return getMaxOrderQty(display, selectedSize, lineColor);
-  }, [selectedSize, lineColor, display]);
 
   const addItem = useCartStore((s) => s.addItem);
   const removeItem = useCartStore((s) => s.removeItem);
@@ -184,11 +158,7 @@ export function ProductDetailSheet({
   const discountPct = getDiscountPercent(display);
   const displayPrice = getEffectivePrice(display);
 
-  const canAddToCart =
-    !outOfStock &&
-    selectedSize !== null &&
-    selectedStock > 0 &&
-    (!hasCustomColors || lineColor !== null);
+  const canAddToCart = canSelect && (!showColorPicker || lineColor !== null);
 
   const upsertQuantity = useCallback(
     (nextQuantity: number) => {
@@ -373,13 +343,17 @@ export function ProductDetailSheet({
             <p className="sf-pds-desc">{display.description.trim()}</p>
           ) : null}
 
+          {variantSummary ? (
+            <p className="sf-pds-desc sf-pds-variant-summary">{variantSummary}</p>
+          ) : null}
+
           {outOfStock ? (
             <p className="sf-pds-desc" role="status">
               Нет в наличии
             </p>
-          ) : (
+          ) : sizes.length > 0 ? (
             <>
-              {hasCustomColors ? (
+              {showColorPicker && hasCustomColors ? (
                 <>
                   <p className="sf-pds-section-label">Цвет</p>
                   <div className="sf-pds-colors">
@@ -396,7 +370,7 @@ export function ProductDetailSheet({
                   </div>
                 </>
               ) : null}
-              <p className="sf-pds-section-label">Размер</p>
+              <p className="sf-pds-section-label">{primaryLabel}</p>
               <div className="sf-pds-sizes">
                 {sizes.map((s) => (
                   <button
@@ -406,13 +380,13 @@ export function ProductDetailSheet({
                     className={selectedSize === s.size ? "active" : ""}
                     onClick={() => setSelectedSize(s.size)}
                   >
-                    {s.size}
+                    {formatSizeLabel(businessType ?? display.businessType, s.size)}
                     {s.stock > 0 ? ` · ${s.stock}` : ""}
                   </button>
                 ))}
               </div>
             </>
-          )}
+          ) : null}
 
           {related.length > 0 ? (
             <div className="sf-pds-related">
@@ -445,7 +419,7 @@ export function ProductDetailSheet({
                 disabled={!canAddToCart}
                 onClick={handleAdd}
               >
-                В корзину
+                {outOfStock ? "Нет в наличии" : "В корзину"}
               </button>
             ) : (
               <div className="sf-pds-qty">

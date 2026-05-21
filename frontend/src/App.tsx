@@ -18,9 +18,10 @@ import { getTelegramWebApp } from "./utils/telegram";
 import { ensureTelegramMobileUx } from "./utils/telegramWebAppBootstrap";
 import { resetBodyScrollLock } from "./utils/bodyScrollLock";
 import {
-  readPendingFinikOrder,
   clearPendingFinikOrder,
 } from "./utils/pendingFinikOrder";
+import { FINIK_PAYMENT_PAID_EVENT } from "./utils/finikPaymentEvents";
+import { useTelegramBackButton } from "./hooks/useTelegramBackButton";
 import {
   mergeTenantIntoLocation,
   parseStoreSlugFromPath,
@@ -36,6 +37,7 @@ import {
 } from "./utils/accountMenuStorage";
 import SideMenu from "./components/layout/SideMenu";
 import PaymentProcessingBanner from "./components/checkout/PaymentProcessingBanner";
+import ToastHost from "./components/ui/ToastHost";
 import FloatingCart from "./components/layout/FloatingCart";
 import { StickyCartBar } from "./components/storefront/cart/StickyCartBar";
 import "./components/storefront/cart/stickyCart.css";
@@ -103,11 +105,13 @@ export default function App() {
       if (document.visibilityState === "visible") {
         resetBodyScrollLock();
         ensureTelegramMobileUx();
+        void refreshAdminGate(businessId ?? undefined);
+        window.dispatchEvent(new CustomEvent("sf:paymentPollTick"));
       }
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
-  }, []);
+  }, [businessId, refreshAdminGate]);
 
   const tenantNav = useMemo(() => {
     if (!shopIdString) {
@@ -382,77 +386,17 @@ export default function App() {
     };
   }, [page, businessId]);
 
-  /** После оплаты Finik: опрос заказа до CONFIRMED+, затем переход на главную. */
+  /** После оплаты Finik: очистка pending и переход на главную. */
   useEffect(() => {
-    const uid = getWebAppUserId();
-    if (!Number.isFinite(uid) || uid <= 0 || businessId == null) {
-      return;
-    }
-    const initial = readPendingFinikOrder();
-    if (initial == null) return;
-    if (initial.businessId !== businessId) {
+    const onPaid = () => {
       clearPendingFinikOrder();
-      return;
-    }
-    const MAX_MS = 30 * 60 * 1000;
-    const POLL_MS = 3000;
-    const paid = new Set(["CONFIRMED", "SHIPPED", "DELIVERED"]);
-    let cancelled = false;
-    const shop = String(businessId);
-    let intervalId = 0;
-
-    const stop = () => {
-      if (intervalId !== 0) {
-        window.clearInterval(intervalId);
-        intervalId = 0;
-      }
+      useCartStore.getState().clearCart();
+      commitPage("home");
     };
-
-    const tick = async () => {
-      if (cancelled) return;
-      const pend = readPendingFinikOrder();
-      if (pend == null) {
-        stop();
-        return;
-      }
-      if (pend.businessId !== businessId) {
-        clearPendingFinikOrder();
-        stop();
-        return;
-      }
-      if (Date.now() - pend.startedAt > MAX_MS) {
-        clearPendingFinikOrder();
-        stop();
-        return;
-      }
-      try {
-        const rows = await fetchMyOrders(uid, shop);
-        if (cancelled) return;
-        const row = rows.find((o) => o.id === pend.orderId);
-        if (row == null) return;
-        const st = String(row.status ?? "").toUpperCase();
-        if (paid.has(st)) {
-          clearPendingFinikOrder();
-          stop();
-          commitPage("home");
-          return;
-        }
-        if (st === "CANCELLED") {
-          clearPendingFinikOrder();
-          stop();
-        }
-      } catch {
-        /* сеть — следующий тик */
-      }
-    };
-
-    void tick();
-    intervalId = window.setInterval(() => void tick(), POLL_MS);
-    return () => {
-      cancelled = true;
-      stop();
-    };
-  }, [businessId, commitPage]);
+    window.addEventListener(FINIK_PAYMENT_PAID_EVENT, onPaid as EventListener);
+    return () =>
+      window.removeEventListener(FINIK_PAYMENT_PAID_EVENT, onPaid as EventListener);
+  }, [commitPage]);
 
   useEffect(() => {
     const onPop = () => {
@@ -494,6 +438,27 @@ export default function App() {
     commitPage(target);
     setIsMenuOpen(false);
   };
+
+  const handleTelegramBack = useCallback(() => {
+    if (page === "admin" || adminByHash) {
+      window.location.hash = "";
+      commitPage("home");
+      return;
+    }
+    if (page === "checkout") {
+      commitPage("cart");
+      return;
+    }
+    if (page === "cart") {
+      commitPage("home");
+      return;
+    }
+    if (page !== "home") {
+      commitPage("home");
+    }
+  }, [page, adminByHash, commitPage]);
+
+  useTelegramBackButton(page !== "home", handleTelegramBack);
 
   const handleFloatingCartClick = () => {
     if (page !== "cart") {
@@ -726,6 +691,7 @@ export default function App() {
         onOpenCart={handleFloatingCartClick}
         onCheckout={handleCheckoutQuick}
       />
+      <ToastHost />
     </div>
   );
   return (

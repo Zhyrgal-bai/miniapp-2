@@ -14,6 +14,7 @@ import "../ui/ProductCard.css";
 import { useTheme } from "../../context/ThemeContext";
 import { computeBadges } from "../storefront/commerce/badgeEngine";
 import { profileForBusinessType } from "../storefront/commerce/businessBehaviorProfiles";
+import { verticalUsesColorAxis, labelPrimaryOption } from "@repo-shared/businessCommerce";
 import { computeCtaModel } from "../storefront/commerce/ctaEngine";
 import { recordRecentlyViewed } from "../storefront/discovery/recentlyViewed";
 import {
@@ -130,9 +131,12 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   const [currentIndex, setCurrentIndex] = useState(0);
   const touchStartX = useRef<number | null>(null);
 
+  const showColorPicker = verticalUsesColorAxis(businessType);
+
   const hasCustomColors = Boolean(
-    (product.colors && product.colors.length > 0) ||
-      (product.variants && product.variants.length > 0)
+    showColorPicker &&
+      ((product.colors && product.colors.length > 0) ||
+        (product.variants && product.variants.length > 0)),
   );
 
   const colors: ProductColor[] = useMemo(() => {
@@ -165,7 +169,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
     if (v0?.sizes?.length) {
       return v0.sizes;
     }
-    return [{ size: "M", stock: 10 }];
+    return [];
   }, [product, selectedColor]);
 
   const outOfStock = isOutOfStock(product);
@@ -570,7 +574,8 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
                   className={selectedSize === s.size ? "active" : ""}
                   onClick={() => setSelectedSize(s.size)}
                 >
-                  {s.size} ({s.stock})
+                  {labelPrimaryOption(businessType, s.size)}
+                  {s.stock > 0 ? ` (${s.stock})` : ""}
                 </button>
               ))}
             </div>

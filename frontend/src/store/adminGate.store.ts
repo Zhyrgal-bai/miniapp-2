@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { getWebAppUserId } from "../utils/telegramUserId";
+import { telegramWebAppInitDataHeader } from "../utils/telegramInitDataHeader";
 import { API_BASE_URL } from "../services/api";
 
 type AdminGateStatus = "idle" | "loading" | "ready";
@@ -57,16 +58,20 @@ export const useAdminGateStore = create<AdminGateState>((set) => ({
         userId: String(userId),
         shop: String(businessId),
       });
-      const res = await fetch(`${API_BASE_URL}/api/me?${qs.toString()}`, {
-        method: "GET",
-      });
+  const res = await fetch(`${API_BASE_URL}/api/me?${qs.toString()}`, {
+    method: "GET",
+    headers: telegramWebAppInitDataHeader(),
+  });
       const j = (await res.json().catch(() => ({}))) as {
         role?: string;
         permissions?: string[];
       };
       const admin =
         res.ok &&
-        (j.role === "OWNER" || j.role === "ADMIN");
+        (j.role === "OWNER" ||
+          j.role === "ADMIN" ||
+          j.role === "MANAGER" ||
+          j.role === "SUPPORT");
       const r =
         res.ok && typeof j.role === "string" ? j.role : null;
       const perms =

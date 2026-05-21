@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchMyOrders } from "../services/myOrdersApi";
+import { showErrorToast, showSuccessToast } from "../store/toast.store";
 import { apiAbsoluteUrl } from "../services/api";
 import { useShop } from "../context/ShopContext";
 import { useStorefrontPayload } from "../components/storefront/runtime/StorefrontPayloadContext";
@@ -165,7 +166,7 @@ function OrderReceiptBlock({
 
   const handleUpload = async () => {
     if (!file) {
-      alert("Загрузите чек");
+      showErrorToast("Загрузите чек");
       return;
     }
     setLoading(true);
@@ -183,15 +184,15 @@ function OrderReceiptBlock({
           typeof data.error === "string" && data.error
             ? data.error
             : "Ошибка загрузки";
-        alert(msg);
+        showErrorToast(msg);
         return;
       }
-      alert("Чек отправлен ✅");
+      showSuccessToast("Чек отправлен");
       setFile(null);
       setInputKey((k) => k + 1);
       await onUploaded();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Ошибка загрузки");
+      showErrorToast(e instanceof Error ? e.message : "Ошибка загрузки");
     } finally {
       setLoading(false);
     }
@@ -245,14 +246,14 @@ function OrderPaymentBlock({
   const copyPhone = async () => {
     const target = phone || optima || card || otherBank;
     if (!target) {
-      alert("Реквизиты пока не заполнены");
+      showErrorToast("Реквизиты пока не заполнены");
       return;
     }
     try {
       await navigator.clipboard.writeText(target);
-      alert("Реквизиты скопированы");
+      showSuccessToast("Реквизиты скопированы");
     } catch {
-      alert(target);
+      showErrorToast(target);
     }
   };
 
@@ -263,7 +264,7 @@ function OrderPaymentBlock({
         <img
           className="my-orders__pay-qr-img my-orders__pay-qr-img--lg"
           src={qr}
-          alt={`QR оплаты заказа #${order.id}`}
+          alt={`QR оплаты заказа ${orderDisplayLabel(order)}`}
           width={250}
           height={250}
         />
@@ -567,7 +568,7 @@ export default function MyOrders({
       setSessionTicket(t);
       setScreen({ kind: "chat", order });
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Не удалось отправить");
+      showErrorToast(e instanceof Error ? e.message : "Не удалось отправить");
     } finally {
       setSupportBusy(false);
     }
@@ -597,7 +598,7 @@ export default function MyOrders({
       setSessionTicket(t);
       setTicketDraft("");
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Ошибка");
+      showErrorToast(e instanceof Error ? e.message : "Ошибка");
     } finally {
       setSupportBusy(false);
     }
@@ -640,7 +641,7 @@ export default function MyOrders({
             setSessionTicket(t);
           }
         } catch (e) {
-          alert(e instanceof Error ? e.message : "Загрузка не удалась");
+          showErrorToast(e instanceof Error ? e.message : "Загрузка не удалась");
         } finally {
           setSupportBusy(false);
         }
@@ -664,14 +665,14 @@ export default function MyOrders({
         orderId: order.id,
         comment: cancelComment.trim() || undefined,
       });
-      alert("Заявка на отмену отправлена");
+      showSuccessToast("Заявка на отмену отправлена");
       setCancelComment("");
       await refreshOrderContext(order.id);
       await loadSupportSession(order.id);
       await load();
       setScreen({ kind: "order", order });
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Ошибка");
+      showErrorToast(e instanceof Error ? e.message : "Ошибка");
     } finally {
       setSupportBusy(false);
     }
@@ -693,7 +694,7 @@ export default function MyOrders({
         reason: refundReason.trim() || undefined,
         comment: refundComment.trim() || undefined,
       });
-      alert("Заявка на возврат денег отправлена");
+      showSuccessToast("Заявка на возврат денег отправлена");
       setRefundComment("");
       setRefundReason("");
       await refreshOrderContext(order.id);
@@ -701,7 +702,7 @@ export default function MyOrders({
       await load();
       setScreen({ kind: "order", order });
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Ошибка");
+      showErrorToast(e instanceof Error ? e.message : "Ошибка");
     } finally {
       setSupportBusy(false);
     }
@@ -725,14 +726,14 @@ export default function MyOrders({
         comment: returnComment.trim() || undefined,
         photos: returnPhotos,
       });
-      alert("Заявка отправлена");
+      showSuccessToast("Заявка отправлена");
       setReturnPhotos([]);
       setReturnComment("");
       await refreshOrderContext(order.id);
       await loadSupportSession(order.id);
       setScreen({ kind: "order", order });
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Ошибка");
+      showErrorToast(e instanceof Error ? e.message : "Ошибка");
     } finally {
       setSupportBusy(false);
     }
@@ -1130,9 +1131,19 @@ export default function MyOrders({
 
       {loading && <p className="my-orders__muted">Загрузка...</p>}
       {error && (
-        <p className="my-orders__error" role="alert">
-          {error}
-        </p>
+        <div className="my-orders__error" role="alert">
+          <p>{error}</p>
+          <button
+            type="button"
+            className="my-orders__retry-btn"
+            onClick={() => {
+              setLoading(true);
+              void load();
+            }}
+          >
+            Повторить
+          </button>
+        </div>
       )}
 
       {!loading && !error && activeOrders.length === 0 && cancelledOrders.length === 0 && (

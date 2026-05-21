@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { Telegraf } from "telegraf";
-import { MembershipRole } from "@prisma/client";
+import { BusinessStaffRole, MembershipRole } from "@prisma/client";
 import type { Context } from "telegraf";
 import type { OrderStatus } from "../server/orderStatus.js";
 import { prisma } from "../server/db.js";
@@ -363,7 +363,7 @@ export async function sendAcceptedPaymentPromptForOrderFromApi(order: {
 }
 
 type TenantTelegrafCtx = Context & {
-  tenantRole?: MembershipRole | null;
+  tenantRole?: BusinessStaffRole | null;
   businessId?: number;
 };
 
@@ -372,9 +372,14 @@ type BotHandlerRole =
   | { type: "dynamic"; businessId: number };
 
 function isMerchantBotRole(
-  roles: MembershipRole | null | undefined,
+  roles: BusinessStaffRole | null | undefined,
 ): boolean {
-  return roles === MembershipRole.OWNER || roles === MembershipRole.ADMIN;
+  return (
+    roles === BusinessStaffRole.OWNER ||
+    roles === BusinessStaffRole.ADMIN ||
+    roles === BusinessStaffRole.MANAGER ||
+    roles === BusinessStaffRole.SUPPORT
+  );
 }
 
 function attachEnvTenantRoleMiddleware(
@@ -396,17 +401,14 @@ function attachEnvTenantRoleMiddleware(
     const userRow = await prisma.user.findUnique({
       where: { telegramId: String(fromId) },
     });
-    const ms =
+    const staff =
       userRow == null
         ? null
-        : await prisma.membership.findFirst({
-            where: {
-              userId: userRow.id,
-              role: { in: [MembershipRole.OWNER, MembershipRole.ADMIN] },
-            },
+        : await prisma.businessStaff.findFirst({
+            where: { userId: userRow.id },
             orderBy: { businessId: "asc" },
           });
-    c.tenantRole = ms?.role ?? null;
+    c.tenantRole = staff?.role ?? null;
     await next();
   });
 }

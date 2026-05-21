@@ -26,6 +26,14 @@ enum MembershipRole {
   CLIENT
 }
 
+/// Роль сотрудника магазина (отдельно от покупателей).
+enum BusinessStaffRole {
+  OWNER
+  ADMIN
+  MANAGER
+  SUPPORT
+}
+
 /// Optional: explicit plan for Stripe/billing integrations.
 enum BillingPlan {
   FREE
@@ -112,6 +120,8 @@ model Business {
   reusableBlocks StorefrontReusableBlock[]
 
   memberships Membership[]
+  staff       BusinessStaff[]
+  staffInvites StaffInvite[]
   products    Product[]
   orders      Order[]
   categories  Category[]
@@ -237,10 +247,19 @@ model User {
   telegramId String @unique
   name       String?
 
+  /// Telegram @username без @ (для отображения и поиска staff).
+  telegramUsername String?
+
+  /// URL аватара (Telegram profile photo или CDN).
+  photoUrl String?
+
   /// После первого выданного trial новые магазины этого аккаунта без trial до оплаты.
   hasUsedTrial Boolean @default(false)
 
   memberships    Membership[]
+  staffAssignments BusinessStaff[]
+  staffInvited   BusinessStaff[] @relation("StaffInvitedBy")
+  staffInvitesSent StaffInvite[] @relation("StaffInviteSentBy")
   orders         Order[]         @relation("OrderBuyer")
   supportTickets SupportTicket[]
   returnRequests ReturnRequest[]
@@ -271,6 +290,56 @@ model Membership {
 
   @@unique([userId, businessId])
   @@index([businessId])
+}
+
+/// Сотрудники магазина — отдельно от покупателей (Membership CLIENT).
+model BusinessStaff {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role BusinessStaffRole
+
+  /// Гранулярные права (OWNER игнорирует; пустой список = дефолты роли).
+  permissions String[] @default([])
+
+  invitedByUserId Int?
+  invitedBy       User? @relation("StaffInvitedBy", fields: [invitedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, businessId])
+  @@index([businessId])
+  @@index([userId])
+}
+
+/// Ожидающее приглашение в команду (если пользователь ещё не писал боту).
+model StaffInvite {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  /// @username без @
+  telegramUsername String
+
+  role BusinessStaffRole @default(ADMIN)
+
+  status String @default("PENDING")
+
+  invitedByUserId Int?
+  invitedBy       User? @relation("StaffInviteSentBy", fields: [invitedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  expiresAt DateTime?
+
+  @@index([businessId, status])
+  @@index([telegramUsername])
 }
 
 /// Storefront + payment display settings per tenant (1:1 with Business).

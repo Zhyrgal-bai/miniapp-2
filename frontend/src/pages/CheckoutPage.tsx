@@ -13,6 +13,9 @@ import { setPendingFinikOrder } from "../utils/pendingFinikOrder";
 import { openTelegramExternalLink } from "../utils/telegramWebAppBootstrap";
 import { t } from "../i18n";
 import { trackCheckoutStart } from "../services/storefrontAnalytics";
+import type { Product } from "../types";
+import { getMaxOrderQty } from "../commerce/quantityPolicy";
+import { isOutOfStock } from "../utils/product";
 
 type Props = {
   onBack?: () => void;
@@ -38,6 +41,9 @@ function formatSom(n: number): string {
 
 function orderErrorMessage(err: unknown): string {
   if (axios.isAxiosError(err)) {
+    if (!err.response || err.code === "ERR_NETWORK" || err.code === "ECONNABORTED") {
+      return t("common.networkError");
+    }
     const data = err.response?.data as
       | { error?: string; details?: Record<string, string> }
       | undefined;
@@ -93,7 +99,50 @@ export default function CheckoutPage({ onBack }: Props) {
     string | null
   >(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const submitRef = useRef<() => void>(() => {});
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [catalogById, setCatalogById] = useState<Map<number, Product>>(
+    () => new Map(),
+  );
+
+  useEffect(() => {
+    if (businessId == null || !Number.isInteger(businessId) || businessId <= 0) {
+      setCatalogById(new Map());
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await api.get<Product[]>("/products");
+        if (cancelled) return;
+        const m = new Map<number, Product>();
+        for (const p of res.data ?? []) {
+          if (typeof p.id === "number") m.set(p.id, p);
+        }
+        setCatalogById(m);
+      } catch {
+        if (!cancelled) setCatalogById(new Map());
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId]);
+
+  const cartStockIssue = useMemo(() => {
+    for (const item of items) {
+      const p = catalogById.get(item.productId);
+      if (!p) continue;
+      if (isOutOfStock(p)) {
+        return "Некоторые товары закончились. Вернитесь в корзину и обновите состав.";
+      }
+      const max = getMaxOrderQty(p, item.size, item.color);
+      if (max <= 0 || (item.quantity ?? 1) > max) {
+        return "Недостаточно товара на складе. Обновите корзину.";
+      }
+    }
+    return null;
+  }, [items, catalogById]);
 
   useEffect(() => {
     if (businessId != null && businessId > 0) {
@@ -355,6 +404,10 @@ export default function CheckoutPage({ onBack }: Props) {
 
   const handleSubmit = async () => {
     if (items.length === 0) return;
+    if (cartStockIssue) {
+      setCheckoutError(cartStockIssue);
+      return;
+    }
     if (!validateForm()) return;
 
     const tg = getTelegramUser();
@@ -439,17 +492,8 @@ export default function CheckoutPage({ onBack }: Props) {
         setFinikRedirectMessage(t("checkout.redirecting"));
         window.setTimeout(() => {
           openTelegramExternalLink(payUrl);
-          clearCart();
-          setName("");
-          setPhone("");
-          setPhoneFromSavedOrder(false);
-          setAddress("");
-          setLat(null);
-          setLng(null);
-          setPromo("");
-          setComment("");
-          setPromoPreview(null);
-          setFieldErrors({});
+          setFinikRedirectMessage(null);
+          setSubmitting(false);
         }, 400);
         return;
       }
@@ -464,6 +508,42 @@ export default function CheckoutPage({ onBack }: Props) {
       }
     }
   };
+
+  submitRef.current = () => {
+    void handleSubmit();
+  };
+
+  useEffect(() => {
+    const onPaid = () => {
+      clearCart();
+      setName("");
+      setPhone("");
+      setPhoneFromSavedOrder(false);
+      setAddress("");
+      setLat(null);
+      setLng(null);
+      setPromo("");
+      setComment("");
+      setPromoPreview(null);
+      setFieldErrors({});
+      setFinikRedirectMessage(null);
+      setSubmitting(false);
+    };
+    window.addEventListener("sf:finikPaymentPaid", onPaid as EventListener);
+    return () =>
+      window.removeEventListener("sf:finikPaymentPaid", onPaid as EventListener);
+  }, [clearCart]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        setFinikRedirectMessage(null);
+        setSubmitting(false);
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
 
   if (items.length === 0) {
     return (
@@ -504,7 +584,10 @@ export default function CheckoutPage({ onBack }: Props) {
           <button
             type="button"
             className="checkout-error-banner__retry"
-            onClick={() => setCheckoutError(null)}
+            onClick={() => {
+              setCheckoutError(null);
+              submitRef.current();
+            }}
           >
             {t("common.retry")}
           </button>
@@ -785,7 +868,7 @@ export default function CheckoutPage({ onBack }: Props) {
           type="button"
           className="order-btn order-btn--primary order-btn--checkout"
           onClick={handleSubmit}
-          disabled={submitting || finikRedirectMessage != null}
+          disabled={submitting || finikRedirectMessage != null || Boolean(cartStockIssue)}
         >
           {submitting ? t("checkout.submitting") : t("checkout.submit")}
         </button>

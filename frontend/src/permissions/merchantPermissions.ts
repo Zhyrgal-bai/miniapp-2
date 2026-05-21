@@ -23,7 +23,9 @@ export const ALL_MERCHANT_PERMISSION_IDS: MerchantPermissionId[] = [
 export function hasMerchantPermission(
   effective: string[] | null | undefined,
   required: MerchantPermissionId | undefined,
+  merchantRole?: string | null,
 ): boolean {
   if (required == null) return true;
+  if (merchantRole === "OWNER" || merchantRole === "ADMIN") return true;
   return Boolean(effective?.includes(required));
 }

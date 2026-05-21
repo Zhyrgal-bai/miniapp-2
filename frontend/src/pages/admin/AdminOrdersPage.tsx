@@ -5,10 +5,11 @@ import {
 } from "../../services/admin.service";
 import { orderDisplayLabel } from "@repo-shared/orderDisplay";
 import {
-  finikOrderIsAwaitingPayment,
   finikPaymentStateView,
+  finikOrderIsAwaitingPayment,
   isFinikPaymentMethod,
 } from "@repo-shared/finikPaymentState";
+import { showErrorToast, showSuccessToast } from "../../store/toast.store";
 
 const FILTER_TABS = [
   "ALL",
@@ -158,8 +159,8 @@ export default function AdminOrdersPage() {
       window.dispatchEvent(new CustomEvent("miniapp:admin-orders-changed"));
     } catch (e) {
       console.error(e);
-      alert(
-        e instanceof Error ? e.message : "Ошибка при обновлении"
+      showErrorToast(
+        e instanceof Error ? e.message : "Ошибка при обновлении",
       );
     } finally {
       setBusyId(null);
@@ -173,19 +174,21 @@ export default function AdminOrdersPage() {
       if (result.paymentState === "paid") {
         await load({ silent: true });
         window.dispatchEvent(new CustomEvent("miniapp:admin-orders-changed"));
-        alert(
+        showSuccessToast(
           result.duplicate
             ? "Оплата уже была подтверждена автоматически."
-            : "Оплата подтверждена через Finik."
+            : "Оплата подтверждена через Finik.",
         );
       } else if (result.paymentState === "pending") {
-        alert("Оплата ещё не поступила. Попросите клиента завершить оплату или проверьте позже.");
+        showErrorToast(
+          "Оплата ещё не поступила. Попросите клиента завершить оплату или проверьте позже.",
+        );
       } else {
-        alert("Finik сообщил об ошибке или отмене оплаты.");
+        showErrorToast("Finik сообщил об ошибке или отмене оплаты.");
       }
     } catch (e) {
       console.error(e);
-      alert(e instanceof Error ? e.message : "Не удалось проверить оплату");
+      showErrorToast(e instanceof Error ? e.message : "Не удалось проверить оплату");
     } finally {
       setBusySyncId(null);
     }
@@ -201,8 +204,8 @@ export default function AdminOrdersPage() {
       window.dispatchEvent(new CustomEvent("miniapp:admin-orders-changed"));
     } catch (e) {
       console.error(e);
-      alert(
-        e instanceof Error ? e.message : "Не удалось сохранить комментарий"
+      showErrorToast(
+        e instanceof Error ? e.message : "Не удалось сохранить комментарий",
       );
     } finally {
       setBusyTrackingId(null);
@@ -217,10 +220,10 @@ export default function AdminOrdersPage() {
       const deleted = await adminService.clearOrders(type);
       await load();
       window.dispatchEvent(new CustomEvent("miniapp:admin-orders-changed"));
-      alert(`Удалено заказов: ${deleted}`);
+      showSuccessToast(`Удалено заказов: ${deleted}`);
     } catch (e) {
       console.error(e);
-      alert(e instanceof Error ? e.message : "Не удалось очистить заказы");
+      showErrorToast(e instanceof Error ? e.message : "Не удалось очистить заказы");
     } finally {
       setClearBusy(null);
     }
@@ -418,9 +421,9 @@ export default function AdminOrdersPage() {
                           const text = `${String(order.lat)},${String(order.lng)}`;
                           try {
                             await navigator.clipboard.writeText(text);
-                            alert("Скопировано");
+                            showSuccessToast("Скопировано");
                           } catch {
-                            alert(text);
+                            showErrorToast(text);
                           }
                         }}
                       >

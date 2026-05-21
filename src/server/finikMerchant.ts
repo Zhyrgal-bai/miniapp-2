@@ -1,8 +1,15 @@
 import type { Express, Request, Response } from "express";
-import { MembershipRole } from "@prisma/client";
+import { BusinessStaffRole } from "@prisma/client";
+import { webhooksLimiter } from "../middleware/apiRateLimits.js";
 import { prisma } from "./db.js";
-import { adminUserIdFromRequest } from "./adminAuth.js";
+import { verifiedTelegramIdFromRequest } from "../middleware/verifiedTelegramAuth.js";
 import { notifyAfterOrderStatusChangeFromApi } from "./orderTelegramNotify.js";
+import { logWebhookReject, logPaymentFailure, logWebhookProcessed, logCommerceEvent } from "./structuredLog.js";
+import {
+  verifyFinikWebhookSignature,
+  isFinikWebhookReplay,
+} from "./finikWebhookCrypto.js";
+import { correlationIdFromRequest } from "../middleware/correlationId.js";
 
 /** Base URL для REST Finik (укажите реальный домен вашего аккаунта разработчика). */
 function finikApiBase(): string {
@@ -362,7 +369,7 @@ async function applyFinikPaymentSuccess(
   });
 
   const { onOrderPaidConfirmed } = await import("./orderInventoryHooks.js");
-  void onOrderPaidConfirmed(order.id);
+  await onOrderPaidConfirmed(order.id);
 
   void notifyAfterOrderStatusChangeFromApi({
     id: updated.id,
@@ -529,25 +536,9 @@ export async function syncFinikOrderPayment(
 }
 
 /**
- * Проверка подписи вебхука (если Finik шлёт HMAC в заголовке).
- * Настройте имя заголовка через FINIK_WEBHOOK_SIGNATURE_HEADER.
+ * @deprecated Import from finikWebhookCrypto.js — re-export for tests.
  */
-export function verifyFinikWebhookSignature(
-  businessSecret: string | null,
-  req: Request,
-  rawBody: string
-): boolean {
-  const headerName = (
-    process.env.FINIK_WEBHOOK_SIGNATURE_HEADER || ""
-  ).trim().toLowerCase();
-  if (!headerName || !businessSecret?.trim()) return true;
-
-  const sig = req.headers[headerName];
-  const got = Array.isArray(sig) ? sig[0] : sig;
-  if (typeof got !== "string" || !got) return false;
-
-  return got === businessSecret.trim() || got === `sha256=${businessSecret.trim()}`;
-}
+export { verifyFinikWebhookSignature } from "./finikWebhookCrypto.js";
 
 async function handleFinikWebhookForBusiness(
   businessId: number,
@@ -564,11 +555,38 @@ async function handleFinikWebhookForBusiness(
     }
 
     const rawBody =
-      typeof req.body === "object" && req.body !== null
-        ? JSON.stringify(req.body)
-        : String(req.body ?? "");
+      typeof req.rawBody === "string" && req.rawBody !== ""
+        ? req.rawBody
+        : typeof req.body === "object" && req.body !== null
+          ? JSON.stringify(req.body)
+          : String(req.body ?? "");
+
+    const corrId = correlationIdFromRequest(req);
+
+    const sigHeader = (process.env.FINIK_WEBHOOK_SIGNATURE_HEADER || "").trim();
+    if (process.env.NODE_ENV === "production" && !sigHeader) {
+      logWebhookReject({
+        provider: "finik",
+        businessId,
+        reason: "signature_header_not_configured",
+        ...(corrId ? { correlationId: corrId } : {}),
+      });
+      res.status(503).json({ error: "Webhook signature not configured" });
+      return;
+    }
 
     if (!verifyFinikWebhookSignature(business.finikSecret, req, rawBody)) {
+      logWebhookReject({
+        provider: "finik",
+        businessId,
+        reason: "invalid_signature",
+        paymentId: String(
+          (req.body as Record<string, unknown>)?.paymentId ??
+            (req.body as Record<string, unknown>)?.payment_id ??
+            "",
+        ),
+        ...(corrId ? { correlationId: corrId } : {}),
+      });
       res.status(403).json({ error: "Invalid signature" });
       return;
     }
@@ -581,7 +599,61 @@ async function handleFinikWebhookForBusiness(
       return;
     }
 
+    if (
+      isFinikWebhookReplay(businessId, parsed.paymentId, parsed.status)
+    ) {
+      logWebhookProcessed({
+        provider: "finik",
+        businessId,
+        paymentId: parsed.paymentId,
+        outcome: "replay",
+        ...(corrId ? { correlationId: corrId } : {}),
+      });
+      res.json({ ok: true, duplicate: true, replay: true });
+      return;
+    }
+
+    logCommerceEvent({
+      phase: "payment_webhook",
+      businessId,
+      paymentId: parsed.paymentId,
+      ...(corrId ? { correlationId: corrId } : {}),
+    });
+
     if (FINIK_FAILED_STATUSES.has(parsed.status)) {
+      const order = await prisma.order.findFirst({
+        where: { paymentId: parsed.paymentId, businessId },
+        select: { id: true, status: true },
+      });
+      if (order) {
+        const cur = String(order.status ?? "").toUpperCase();
+        if (cur === "NEW" || cur === "ACCEPTED" || cur === "PAID_PENDING") {
+          const { loadOrderLinesForStock, releaseOrderStock } =
+            await import("./inventoryService.js");
+          const lines = await loadOrderLinesForStock(order.id);
+          await prisma.$transaction(async (tx) => {
+            await releaseOrderStock(tx, businessId, order.id, lines);
+            await tx.order.update({
+              where: { id: order.id },
+              data: { status: "CANCELLED" },
+            });
+          });
+          logPaymentFailure({
+            businessId,
+            orderId: order.id,
+            paymentId: parsed.paymentId,
+            reason: "finik_webhook_failed",
+            finikStatus: parsed.status,
+          });
+        }
+      }
+      logWebhookProcessed({
+        provider: "finik",
+        businessId,
+        paymentId: parsed.paymentId,
+        ...(order ? { orderId: order.id } : {}),
+        outcome: "failed",
+      });
       res.json({ ok: true, ignored: true, paymentState: "failed" });
       return;
     }
@@ -631,9 +703,25 @@ async function handleFinikWebhookForBusiness(
     );
 
     if (!applied.ok) {
+      if (applied.error === "Amount mismatch") {
+        logPaymentFailure({
+          businessId,
+          orderId: order.id,
+          paymentId: parsed.paymentId,
+          reason: "amount_mismatch",
+        });
+      }
       res.status(applied.statusCode).json({ error: applied.error });
       return;
     }
+
+    logWebhookProcessed({
+      provider: "finik",
+      businessId,
+      orderId: order.id,
+      paymentId: parsed.paymentId,
+      outcome: applied.duplicate ? "duplicate" : "success",
+    });
 
     res.json({ ok: true, duplicate: applied.duplicate });
   } catch (e) {
@@ -650,6 +738,7 @@ async function handleFinikWebhookForBusiness(
 export function mountFinikWebhookRoutes(app: Express): void {
   app.post(
     "/finik/webhook/:businessId",
+    webhooksLimiter,
     async (req: Request, res: Response) => {
       const businessId = Number(req.params.businessId);
       if (!Number.isInteger(businessId) || businessId <= 0) {
@@ -660,7 +749,7 @@ export function mountFinikWebhookRoutes(app: Express): void {
     }
   );
 
-  app.post("/finik/webhook", async (req: Request, res: Response) => {
+  app.post("/finik/webhook", webhooksLimiter, async (req: Request, res: Response) => {
     try {
       const body = req.body as Record<string, unknown>;
       const paymentIdRaw =
@@ -716,22 +805,18 @@ export function mountFinikSettingsRoutes(app: Express): void {
         return;
       }
 
-      const telegramId = adminUserIdFromRequest(req);
-      const telegramStr =
-        telegramId !== undefined &&
-        telegramId !== null &&
-        String(telegramId).trim() !== ""
-          ? String(telegramId).trim()
-          : "";
+      const telegramStr = verifiedTelegramIdFromRequest(req);
       if (!telegramStr) {
-        res.status(400).json({ error: "Нужен userId (Telegram) в теле или query" });
+        res.status(401).json({
+          error: "Требуется авторизация Telegram Mini App (x-telegram-init-data)",
+        });
         return;
       }
 
-      const allowed = await prisma.membership.findFirst({
+      const allowed = await prisma.businessStaff.findFirst({
         where: {
           businessId,
-          role: { in: [MembershipRole.OWNER, MembershipRole.ADMIN] },
+          role: { in: [BusinessStaffRole.OWNER, BusinessStaffRole.ADMIN] },
           user: { telegramId: telegramStr },
         },
       });
@@ -762,22 +847,18 @@ export function mountFinikSettingsRoutes(app: Express): void {
         return;
       }
 
-      const telegramId = adminUserIdFromRequest(req);
-      const telegramStr =
-        telegramId !== undefined &&
-        telegramId !== null &&
-        String(telegramId).trim() !== ""
-          ? String(telegramId).trim()
-          : "";
+      const telegramStr = verifiedTelegramIdFromRequest(req);
       if (!telegramStr) {
-        res.status(400).json({ error: "Нужен userId (Telegram) в теле или query" });
+        res.status(401).json({
+          error: "Требуется авторизация Telegram Mini App (x-telegram-init-data)",
+        });
         return;
       }
 
-      const allowed = await prisma.membership.findFirst({
+      const allowed = await prisma.businessStaff.findFirst({
         where: {
           businessId,
-          role: { in: [MembershipRole.OWNER, MembershipRole.ADMIN] },
+          role: { in: [BusinessStaffRole.OWNER, BusinessStaffRole.ADMIN] },
           user: { telegramId: telegramStr },
         },
       });

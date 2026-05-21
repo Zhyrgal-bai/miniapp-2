@@ -132,10 +132,9 @@ async function listMemberBusinessesSafe(
 
   const rows = await prisma.business.findMany({
     where: {
-      memberships: {
+      staff: {
         some: {
           userId: user.id,
-          role: { in: [MembershipRole.OWNER, MembershipRole.ADMIN] },
         },
       },
     },

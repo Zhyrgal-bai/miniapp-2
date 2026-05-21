@@ -3,6 +3,11 @@ import {
   clearPendingFinikOrder,
   readPendingFinikOrder,
 } from "../../utils/pendingFinikOrder";
+import {
+  dispatchFinikPaymentPaid,
+  FINIK_PAYMENT_POLL_MS,
+  FINIK_PAYMENT_TIMEOUT_MS,
+} from "../../utils/finikPaymentEvents";
 import { fetchMyOrders } from "../../services/myOrdersApi";
 import { getTelegramWebAppUserId } from "../../utils/telegram";
 import { buildCatalogRequestParams } from "../../utils/storeParams";
@@ -11,8 +16,6 @@ import { t } from "../../i18n";
 import "./PaymentProcessingBanner.css";
 
 const PAID_STATUSES = new Set(["CONFIRMED", "SHIPPED", "DELIVERED"]);
-const POLL_MS = 2000;
-const TIMEOUT_MS = 8 * 60 * 1000;
 
 type BannerState = "checking" | "success" | "failed" | "hidden";
 
@@ -28,6 +31,7 @@ export default function PaymentProcessingBanner({
 }: Props) {
   const [state, setState] = useState<BannerState>("hidden");
   const pollRef = useRef<number | null>(null);
+  const tickRef = useRef<(() => Promise<void>) | null>(null);
 
   const stopPoll = useCallback(() => {
     if (pollRef.current != null) {
@@ -49,8 +53,9 @@ export default function PaymentProcessingBanner({
         return;
       }
 
-      if (Date.now() - pend.startedAt > TIMEOUT_MS) {
+      if (Date.now() - pend.startedAt > FINIK_PAYMENT_TIMEOUT_MS) {
         setState("failed");
+        stopPoll();
         return;
       }
 
@@ -69,6 +74,10 @@ export default function PaymentProcessingBanner({
           setState("success");
           clearPendingFinikOrder();
           stopPoll();
+          dispatchFinikPaymentPaid({
+            orderId: pend.orderId,
+            businessId: pend.businessId,
+          });
         } else if (st === "CANCELLED") {
           setState("failed");
           stopPoll();
@@ -78,15 +87,31 @@ export default function PaymentProcessingBanner({
       }
     };
 
+    tickRef.current = tick;
     void tick();
-    pollRef.current = window.setInterval(() => void tick(), POLL_MS);
-    return () => stopPoll();
+    pollRef.current = window.setInterval(() => void tick(), FINIK_PAYMENT_POLL_MS);
+
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        void tickRef.current?.();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    const onPollTick = () => void tickRef.current?.();
+    window.addEventListener("sf:paymentPollTick", onPollTick);
+
+    return () => {
+      stopPoll();
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("sf:paymentPollTick", onPollTick);
+    };
   }, [businessId, stopPoll]);
 
   const handleRetry = () => {
     const pend = readPendingFinikOrder();
     if (pend?.paymentUrl) {
       openTelegramExternalLink(pend.paymentUrl);
+      setState("checking");
       return;
     }
     onViewOrders?.();
@@ -95,6 +120,11 @@ export default function PaymentProcessingBanner({
   const handleDismissSuccess = () => {
     setState("hidden");
     onViewOrders?.();
+  };
+
+  const handleDismissFailed = () => {
+    clearPendingFinikOrder();
+    setState("hidden");
   };
 
   if (state === "hidden") return null;
@@ -138,6 +168,13 @@ export default function PaymentProcessingBanner({
             onClick={handleRetry}
           >
             {t("checkout.paymentRetry")}
+          </button>
+          <button
+            type="button"
+            className="payment-processing-banner__action payment-processing-banner__action--ghost"
+            onClick={handleDismissFailed}
+          >
+            {t("common.cancel")}
           </button>
         </>
       )}

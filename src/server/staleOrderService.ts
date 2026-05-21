@@ -4,6 +4,7 @@ import {
   releaseOrderStock,
 } from "./inventoryService.js";
 import { prisma } from "./db.js";
+import { logStaleOrderReleased } from "./structuredLog.js";
 
 const UNPAID_STATUSES: OrderStatus[] = ["NEW", "ACCEPTED", "PAID_PENDING"];
 
@@ -35,6 +36,13 @@ export async function releaseStaleUnpaidOrders(input?: {
       });
     });
     released += 1;
+  }
+  if (released > 0) {
+    logStaleOrderReleased({
+      count: released,
+      maxAgeMs,
+      ...(input?.businessId != null ? { businessId: input.businessId } : {}),
+    });
   }
   return released;
 }

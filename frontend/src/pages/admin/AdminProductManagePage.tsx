@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { showErrorToast } from "../../store/toast.store";
 import { adminService } from "../../services/admin.service";
 import type { Category, Product } from "../../types";
 import { getPrimaryImage, getTotalStockSum } from "../../utils/product";
@@ -75,7 +76,7 @@ export default function AdminProductManagePage() {
       await adminService.deleteProduct(p.id);
       await load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Не удалось удалить");
+      showErrorToast(e instanceof Error ? e.message : "Не удалось удалить");
     }
   }
 

@@ -15,7 +15,7 @@ services:
     buildCommand: npm install && npm run build
     # Миграции и запуск: scripts/productionStart.mjs (migrate deploy + node dist/server/index.js)
     startCommand: npm start
-    healthCheckPath: /health
+    healthCheckPath: /ready
     envVars:
       - key: NODE_VERSION
         value: "22"
@@ -40,9 +40,9 @@ services:
       # Multi-bot Mini App: перебор токенов магазинов в БД для проверки initData (по умолчанию вкл. в коде; =0 откл.)
       - key: WEBAPP_VALIDATE_INITDATA_SCAN_STORE_BOTS
         value: "1"
-      # Подробные логи проверки initData (первые 10 символов токена на попытку); на проде при спаме отключите.
-      - key: TELEGRAM_INIT_DEBUG
-        value: "1"
+      # Verbose initData logs — enable only while debugging auth (never in production).
+      # - key: TELEGRAM_INIT_DEBUG
+      #   value: "1"
       - key: TELEGRAM_WEBHOOK_SECRET
         sync: false
       - key: BOT_TOKEN_SECRET_KEY

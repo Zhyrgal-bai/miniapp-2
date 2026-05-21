@@ -1,4 +1,4 @@
-import { MembershipRole, PrismaClient } from "@prisma/client";
+import { BusinessStaffRole, PrismaClient } from "@prisma/client";
 import { encryptedBotTokenRow } from "../src/server/businessBotToken.js";
 
 const prisma = new PrismaClient();
@@ -42,15 +42,15 @@ async function main() {
     },
   });
 
-  await prisma.membership.upsert({
+  await prisma.businessStaff.upsert({
     where: {
       userId_businessId: { userId: usr.id, businessId: biz.id },
     },
-    update: {},
+    update: { role: BusinessStaffRole.OWNER },
     create: {
       userId: usr.id,
       businessId: biz.id,
-      role: MembershipRole.ADMIN,
+      role: BusinessStaffRole.OWNER,
     },
   });
 

@@ -2,6 +2,7 @@ import { api, API_BASE_URL, apiAbsoluteUrl } from "./api";
 import type { Category, Product } from "../types";
 import { getWebAppUserId } from "../utils/telegramUserId";
 import { withTenantHeaders } from "./api";
+import { telegramWebAppInitDataHeader } from "../utils/telegramInitDataHeader";
 
 /** Относительный путь или уже полный `https://...` (не дублируем API_BASE_URL). */
 function resolveAdminUrl(path: string): string {
@@ -36,6 +37,16 @@ async function readFetchError(res: Response): Promise<string> {
   }
 }
 
+function adminInitHeaders(url: string): HeadersInit {
+  return withTenantHeaders(
+    {
+      "Content-Type": "application/json",
+      ...telegramWebAppInitDataHeader(),
+    },
+    url,
+  );
+}
+
 async function adminPost<T>(
   path: string,
   body: Record<string, unknown> = {}
@@ -44,7 +55,7 @@ async function adminPost<T>(
   const url = resolveAdminUrl(path);
   const res = await fetch(url, {
     method: "POST",
-    headers: withTenantHeaders({ "Content-Type": "application/json" }, url),
+    headers: adminInitHeaders(url),
     body: JSON.stringify({ ...body, userId }),
   });
   if (!res.ok) throw new Error(await readFetchError(res));
@@ -57,7 +68,7 @@ async function adminGet<T>(path: string): Promise<T> {
   url.searchParams.set("userId", String(userId));
   const res = await fetch(url.toString(), {
     method: "GET",
-    headers: withTenantHeaders(undefined, url.toString()),
+    headers: withTenantHeaders(telegramWebAppInitDataHeader(), url.toString()),
   });
   if (!res.ok) throw new Error(await readFetchError(res));
   return res.json() as Promise<T>;
@@ -68,7 +79,7 @@ async function adminPatch<T>(path: string, body: Record<string, unknown>): Promi
   const url = resolveAdminUrl(path);
   const res = await fetch(url, {
     method: "PATCH",
-    headers: withTenantHeaders({ "Content-Type": "application/json" }, url),
+    headers: adminInitHeaders(url),
     body: JSON.stringify({ ...body, userId }),
   });
   if (!res.ok) throw new Error(await readFetchError(res));
@@ -82,7 +93,7 @@ async function adminDelete(path: string): Promise<void> {
   const url = `${resolved}${sep}userId=${encodeURIComponent(String(userId))}`;
   const res = await fetch(url, {
     method: "DELETE",
-    headers: withTenantHeaders({ "Content-Type": "application/json" }, url),
+    headers: adminInitHeaders(url),
     body: JSON.stringify({ userId }),
   });
   if (!res.ok) throw new Error(await readFetchError(res));
@@ -94,13 +105,18 @@ export type AdminPaymentDetail = {
   value: string;
 };
 
-export type AdminMembershipRow = {
+export type AdminStaffRow = {
+  staffId: number;
   userId: number;
   role: string;
-  telegramId: string;
-  name: string | null;
+  name: string;
+  username: string | null;
+  photoUrl: string | null;
   permissions?: string[];
 };
+
+/** @deprecated Use AdminStaffRow */
+export type AdminMembershipRow = AdminStaffRow;
 
 export type AdminPromoRecord = {
   code: string;
@@ -314,7 +330,6 @@ export const adminService = {
         images,
         image: images[0] ?? data.image,
       });
-      console.log("CREATED:", res.data);
       return res.data;
     } catch (e: unknown) {
       if (e instanceof Error) {
@@ -469,7 +484,6 @@ export const adminService = {
       headers: withTenantHeaders({ "Content-Type": "application/json" }, url),
       body: JSON.stringify({ status, userId }),
     });
-    console.log("PUT /orders/:id (status)", res.status);
     if (!res.ok) throw new Error(await readFetchError(res));
     const text = await res.text();
     if (!text.trim()) return null;
@@ -519,7 +533,6 @@ export const adminService = {
       headers: withTenantHeaders({ "Content-Type": "application/json" }, url),
       body: JSON.stringify({ tracking, userId }),
     });
-    console.log("PUT /orders/:id (tracking)", res.status);
     if (!res.ok) throw new Error(await readFetchError(res));
     const text = await res.text();
     if (!text.trim()) return null;
@@ -630,11 +643,9 @@ export const adminService = {
     await adminDelete(apiAbsoluteUrl(`/categories/${id}`));
   },
 
-  async getMembershipRows(
-    businessId: number,
-  ): Promise<AdminMembershipRow[]> {
+  async getStaffRows(businessId: number): Promise<AdminStaffRow[]> {
     const userId = requireAdminUserId();
-    const url = new URL(resolveAdminUrl("/api/memberships"));
+    const url = new URL(resolveAdminUrl("/api/staff"));
     url.searchParams.set("userId", String(userId));
     url.searchParams.set("shop", String(businessId));
     const res = await fetch(url.toString(), {
@@ -643,7 +654,160 @@ export const adminService = {
     });
     if (!res.ok) throw new Error(await readFetchError(res));
     const data = (await res.json().catch(() => [])) as unknown;
-    return Array.isArray(data) ? (data as AdminMembershipRow[]) : [];
+    return Array.isArray(data) ? (data as AdminStaffRow[]) : [];
+  },
+
+  async getMembershipRows(
+    businessId: number,
+  ): Promise<AdminStaffRow[]> {
+    return this.getStaffRows(businessId);
+  },
+
+  async previewStaffInvite(input: {
+    businessId: number;
+    username: string;
+  }): Promise<{
+    name: string;
+    username: string;
+    photoUrl: string | null;
+    alreadyStaff: boolean;
+  }> {
+    const telegramUserId = requireAdminUserId();
+    const url = new URL(resolveAdminUrl("/api/staff/preview"));
+    url.searchParams.set("userId", String(telegramUserId));
+    url.searchParams.set("shop", String(input.businessId));
+    const res = await fetch(url.toString(), {
+      method: "POST",
+      headers: {
+        ...withTenantHeaders(
+          { "Content-Type": "application/json", "x-telegram-id": String(telegramUserId) },
+          url.toString(),
+          { businessId: input.businessId },
+        ),
+      },
+      body: JSON.stringify({ username: input.username }),
+    });
+    if (!res.ok) throw new Error(await readFetchError(res));
+    return res.json() as Promise<{
+      name: string;
+      username: string;
+      photoUrl: string | null;
+      alreadyStaff: boolean;
+    }>;
+  },
+
+  async inviteStaffMember(input: {
+    businessId: number;
+    username: string;
+    role: "ADMIN" | "MANAGER" | "SUPPORT";
+  }): Promise<AdminStaffRow> {
+    const telegramUserId = requireAdminUserId();
+    const url = new URL(resolveAdminUrl("/api/staff/invite"));
+    url.searchParams.set("userId", String(telegramUserId));
+    url.searchParams.set("shop", String(input.businessId));
+    const res = await fetch(url.toString(), {
+      method: "POST",
+      headers: {
+        ...withTenantHeaders(
+          { "Content-Type": "application/json", "x-telegram-id": String(telegramUserId) },
+          url.toString(),
+          { businessId: input.businessId },
+        ),
+      },
+      body: JSON.stringify({ username: input.username, role: input.role }),
+    });
+    if (!res.ok) throw new Error(await readFetchError(res));
+    return res.json() as Promise<AdminStaffRow>;
+  },
+
+  async updateStaffRole(input: {
+    targetUserId: number;
+    businessId: number;
+    role: "ADMIN" | "MANAGER" | "SUPPORT";
+  }): Promise<void> {
+    const telegramUserId = requireAdminUserId();
+    const url = new URL(resolveAdminUrl("/api/staff/update-role"));
+    url.searchParams.set("userId", String(telegramUserId));
+    url.searchParams.set("shop", String(input.businessId));
+    const res = await fetch(url.toString(), {
+      method: "POST",
+      headers: {
+        ...withTenantHeaders(
+          { "Content-Type": "application/json", "x-telegram-id": String(telegramUserId) },
+          url.toString(),
+          { businessId: input.businessId },
+        ),
+      },
+      body: JSON.stringify({ userId: input.targetUserId, role: input.role }),
+    });
+    if (!res.ok) throw new Error(await readFetchError(res));
+  },
+
+  async updateStaffPermissions(input: {
+    targetUserId: number;
+    businessId: number;
+    permissions: string[];
+  }): Promise<void> {
+    const telegramUserId = requireAdminUserId();
+    const url = new URL(resolveAdminUrl("/api/staff/update-permissions"));
+    url.searchParams.set("userId", String(telegramUserId));
+    url.searchParams.set("shop", String(input.businessId));
+    const res = await fetch(url.toString(), {
+      method: "POST",
+      headers: {
+        ...withTenantHeaders(
+          { "Content-Type": "application/json", "x-telegram-id": String(telegramUserId) },
+          url.toString(),
+          { businessId: input.businessId },
+        ),
+      },
+      body: JSON.stringify({
+        userId: input.targetUserId,
+        permissions: input.permissions,
+      }),
+    });
+    if (!res.ok) throw new Error(await readFetchError(res));
+  },
+
+  async removeStaffMember(input: {
+    targetUserId: number;
+    businessId: number;
+  }): Promise<void> {
+    const telegramUserId = requireAdminUserId();
+    const url = new URL(resolveAdminUrl("/api/staff/remove"));
+    url.searchParams.set("userId", String(telegramUserId));
+    url.searchParams.set("shop", String(input.businessId));
+    const res = await fetch(url.toString(), {
+      method: "POST",
+      headers: {
+        ...withTenantHeaders(
+          { "Content-Type": "application/json", "x-telegram-id": String(telegramUserId) },
+          url.toString(),
+          { businessId: input.businessId },
+        ),
+      },
+      body: JSON.stringify({ userId: input.targetUserId }),
+    });
+    if (!res.ok) throw new Error(await readFetchError(res));
+  },
+
+  async updateMembershipRole(input: {
+    targetUserId: number;
+    businessId: number;
+    role: "ADMIN" | "CLIENT";
+  }): Promise<void> {
+    if (input.role === "CLIENT") {
+      await this.removeStaffMember({
+        targetUserId: input.targetUserId,
+        businessId: input.businessId,
+      });
+      return;
+    }
+    await this.updateStaffRole({
+      targetUserId: input.targetUserId,
+      businessId: input.businessId,
+      role: input.role,
+    });
   },
 
   async listSupportTickets(status?: string): Promise<unknown[]> {
@@ -732,68 +896,12 @@ export const adminService = {
     return adminPost("/merchant/workload", {});
   },
 
-  async updateMembershipRole(input: {
-    targetUserId: number;
-    businessId: number;
-    role: "ADMIN" | "CLIENT";
-  }): Promise<void> {
-    const telegramUserId = requireAdminUserId();
-    const url = new URL(
-      resolveAdminUrl("/api/memberships/update-role"),
-    );
-    url.searchParams.set("userId", String(telegramUserId));
-    url.searchParams.set("shop", String(input.businessId));
-    const res = await fetch(url.toString(), {
-      method: "POST",
-      headers: {
-        ...withTenantHeaders(
-          {
-            "Content-Type": "application/json",
-            "x-telegram-id": String(telegramUserId),
-          },
-          url.toString(),
-          { businessId: input.businessId },
-        ),
-      },
-      body: JSON.stringify({
-        userId: input.targetUserId,
-        businessId: input.businessId,
-        role: input.role,
-      }),
-    });
-    if (!res.ok) throw new Error(await readFetchError(res));
-  },
-
   async updateMembershipPermissions(input: {
     targetUserId: number;
     businessId: number;
     permissions: string[];
   }): Promise<void> {
-    const telegramUserId = requireAdminUserId();
-    const url = new URL(
-      resolveAdminUrl("/api/memberships/update-permissions"),
-    );
-    url.searchParams.set("userId", String(telegramUserId));
-    url.searchParams.set("shop", String(input.businessId));
-    const res = await fetch(url.toString(), {
-      method: "POST",
-      headers: {
-        ...withTenantHeaders(
-          {
-            "Content-Type": "application/json",
-            "x-telegram-id": String(telegramUserId),
-          },
-          url.toString(),
-          { businessId: input.businessId },
-        ),
-      },
-      body: JSON.stringify({
-        userId: input.targetUserId,
-        businessId: input.businessId,
-        permissions: input.permissions,
-      }),
-    });
-    if (!res.ok) throw new Error(await readFetchError(res));
+    return this.updateStaffPermissions(input);
   },
 
   async getNotifications(limit = 20): Promise<MerchantNotificationsPayload> {

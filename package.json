@@ -16,8 +16,10 @@
     "db:backfill-enable-storefront": "prisma db execute --file prisma/sql/backfill_enable_storefront_active.sql",
     "dev": "tsx src/server/index.ts",
     "seed": "tsx prisma/seed.ts",
-    "test:smoke": "vitest run",
-    "test": "vitest run"
+    "test:smoke": "vitest run tests/smoke",
+    "test:integration": "vitest run tests/integration",
+    "test": "vitest run",
+    "predeploy": "node scripts/predeploy-check.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

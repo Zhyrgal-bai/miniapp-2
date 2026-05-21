@@ -3,9 +3,20 @@ import { useBodyScrollLock } from "../../utils/bodyScrollLock";
 import { ru } from "../../i18n/ru";
 import { adminService } from "../../services/admin.service";
 import { PRODUCT_SIZES } from "../../constants/productCatalog";
-import type { Category, Product, Variant } from "../../types";
+import { getNormalizedVariants } from "../../utils/product";
 import { getProductImages } from "../../utils/product";
 import { categoryRoots } from "../../utils/categoryTree";
+import type { Category, Product, Variant } from "../../types";
+import { verticalProfileFor } from "@repo-shared/businessCommerce";
+import {
+  TierStockEditor,
+} from "./TierStockEditor";
+import {
+  defaultTierRows,
+  tierRowsToVariants,
+  variantsToTierRows,
+  type TierStockRow,
+} from "./tierStockUtils";
 import {
   DynamicFieldRenderer,
   type SchemaObject as DynamicSchemaObject,
@@ -61,7 +72,7 @@ function createEmptyVariant(): VariantDraft {
 }
 
 function productToDrafts(p: Product): VariantDraft[] {
-  const vv = p.variants && p.variants.length > 0 ? p.variants : [];
+  const vv = getNormalizedVariants(p);
   if (vv.length === 0) {
     return [createEmptyVariant()];
   }
@@ -139,11 +150,15 @@ export default function ProductEditModal({
   const [variantDrafts, setVariantDrafts] = useState<VariantDraft[]>([
     createEmptyVariant(),
   ]);
+  const [tierRows, setTierRows] = useState<TierStockRow[]>([]);
   const [merchantBusinessType, setMerchantBusinessType] = useState("");
   const [productSchema, setProductSchema] = useState<DynamicSchemaObject>({});
   const [attributes, setAttributes] = useState<Record<string, unknown>>({});
 
-  const showClothingVariants = merchantBusinessType === "clothing";
+  const variantEditor = verticalProfileFor(merchantBusinessType).variantEditor;
+  const showClothingVariants = variantEditor === "clothing_matrix";
+  const showTierStock =
+    variantEditor === "tier_stock" || variantEditor === "bouquet_tiers";
 
   const rootCategories = useMemo(() => categoryRoots(categories), [categories]);
 
@@ -167,8 +182,10 @@ export default function ProductEditModal({
     setImages([...imgs]);
     setMainIdx(0);
     setVariantDrafts(productToDrafts(p));
+    const bt = String(p.businessType ?? merchantBusinessType ?? "clothing");
+    setTierRows(variantsToTierRows(bt, getNormalizedVariants(p)));
     setAttributes(normalizeProductAttributes(p.attributes));
-  }, []);
+  }, [merchantBusinessType]);
 
   useEffect(() => {
     if (!open) return;
@@ -180,6 +197,7 @@ export default function ProductEditModal({
         ]);
         setCategories(tree);
         setMerchantBusinessType(schemas.businessType);
+        setTierRows(defaultTierRows(schemas.businessType));
         setProductSchema(schemas.productSchema as unknown as DynamicSchemaObject);
         const roots = categoryRoots(tree);
         setMainCategoryId((prev) => (prev === "" ? (roots[0]?.id ?? "") : prev));
@@ -369,6 +387,21 @@ export default function ProductEditModal({
       }
     }
 
+    if (showTierStock) {
+      const enabled = tierRows.filter((r) => r.enabled);
+      if (enabled.length === 0) {
+        setSaveError("Выберите хотя бы один вариант и укажите остаток.");
+        return;
+      }
+      for (const row of enabled) {
+        const n = typeof row.stock === "number" ? row.stock : Number(row.stock);
+        if (!Number.isFinite(n) || n <= 0) {
+          setSaveError(`Для «${row.label}» укажите количество больше нуля.`);
+          return;
+        }
+      }
+    }
+
     const ordered =
       images.length === 0
         ? []
@@ -397,6 +430,12 @@ export default function ProductEditModal({
         await adminService.updateProduct(productId, {
           ...basePatch,
           variants: buildVariantsForApi(variantDrafts) as Product["variants"],
+        });
+      } else if (showTierStock) {
+        await adminService.updateProduct(productId, {
+          ...basePatch,
+          variants: tierRowsToVariants(tierRows) as unknown as Product["variants"],
+          attributes,
         });
       } else {
         await adminService.updateProduct(productId, {
@@ -638,13 +677,19 @@ export default function ProductEditModal({
 
               <div className="admin-form-divider" />
 
-              {!showClothingVariants && (
-                <DynamicFieldRenderer
-                  schema={productSchema}
-                  value={attributes}
-                  onChange={setAttributes}
+              <DynamicFieldRenderer
+                schema={productSchema}
+                value={attributes}
+                onChange={setAttributes}
+              />
+
+              {showTierStock && merchantBusinessType ? (
+                <TierStockEditor
+                  businessType={merchantBusinessType}
+                  rows={tierRows}
+                  onChange={setTierRows}
                 />
-              )}
+              ) : null}
 
               {showClothingVariants && (
                 <>

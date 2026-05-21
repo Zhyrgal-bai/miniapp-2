@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { verifiedTelegramIdFromRequest } from "../middleware/verifiedTelegramAuth.js";
 
 function splitIds(raw: string | undefined): string[] {
   const out: string[] = [];
@@ -34,8 +35,11 @@ function queryUserId(req: Request): string | undefined {
   return s === "" ? undefined : s;
 }
 
-/** userId из JSON-тела или из query (на случай DELETE/прокси без тела). */
+/** Platform operator id — verified initData only in production. */
 export function adminUserIdFromRequest(req: Request): unknown {
+  const verified = verifiedTelegramIdFromRequest(req);
+  if (verified) return verified;
+  if (process.env.NODE_ENV === "production") return undefined;
   const fromBody = req.body?.userId;
   if (fromBody !== undefined && fromBody !== null && String(fromBody).trim() !== "") {
     return fromBody;
@@ -61,7 +65,7 @@ export function isPlatformOperator(userId: unknown): boolean {
   return isAdmin(userId);
 }
 
-/** Все admin endpoint: `userId` в теле или в query. */
+/** Все admin endpoint: verified operator id. */
 export function denyIfNotAdmin(req: Request, res: Response): boolean {
   if (!isAdmin(adminUserIdFromRequest(req))) {
     res.status(403).json({ message: "Нет прав" });
@@ -70,9 +74,9 @@ export function denyIfNotAdmin(req: Request, res: Response): boolean {
   return true;
 }
 
-/** GET и др.: `?userId=` */
+/** GET и др.: verified operator id. */
 export function denyIfNotAdminQuery(req: Request, res: Response): boolean {
-  const userId = queryUserId(req);
+  const userId = adminUserIdFromRequest(req);
   if (!isAdmin(userId)) {
     res.status(403).json({ message: "Нет прав" });
     return false;

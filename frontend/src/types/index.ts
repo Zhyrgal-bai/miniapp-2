@@ -56,4 +56,9 @@ export interface Product {
 
   /** Легаси с API: варианты по цвету с размерами. */
   variants?: Variant[];
+
+  /** Нормализованный остаток с API (sum available). */
+  totalAvailable?: number;
+
+  businessType?: string;
 }

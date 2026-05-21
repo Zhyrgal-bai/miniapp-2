@@ -26,9 +26,8 @@ export const clothingTemplate: BusinessTemplateConfig = {
     { key: "accessories", name: "Аксессуары" },
   ],
   productSchema: {
-    size: { type: "select", label: "Размер", required: true, values: ["S", "M", "L", "XL"] },
-    color: { type: "text", label: "Цвет", required: true, maxLen: 40 },
     brand: { type: "text", label: "Бренд", required: false, maxLen: 60 },
+    material: { type: "text", label: "Материал", required: false, maxLen: 80 },
     gender: {
       type: "select",
       label: "Пол",

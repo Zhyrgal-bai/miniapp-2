@@ -1,3 +1,4 @@
+import { showSuccessToast } from "../../store/toast.store";
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useAdminStore } from "../../store/admin.store";
@@ -9,6 +10,13 @@ import {
   DynamicFieldRenderer,
   type SchemaObject as DynamicSchemaObject,
 } from "./DynamicFieldRenderer";
+import { verticalProfileFor } from "@repo-shared/businessCommerce";
+import { TierStockEditor } from "./TierStockEditor";
+import {
+  defaultTierRows,
+  tierRowsToVariants,
+  type TierStockRow,
+} from "./tierStockUtils";
 import {
   expandShortHex,
   isValidHexColor,
@@ -98,7 +106,12 @@ const ProductForm = () => {
   ]);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const showClothingVariants = merchantBusinessType === "clothing";
+  const [tierRows, setTierRows] = useState<TierStockRow[]>([]);
+
+  const variantEditor = verticalProfileFor(merchantBusinessType).variantEditor;
+  const showClothingVariants = variantEditor === "clothing_matrix";
+  const showTierStock =
+    variantEditor === "tier_stock" || variantEditor === "bouquet_tiers";
 
   const rootCategories = useMemo(() => categoryRoots(categories), [categories]);
 
@@ -107,6 +120,7 @@ const ProductForm = () => {
       try {
         const schema = await adminService.getMerchantSchemas();
         setMerchantBusinessType(schema.businessType);
+        setTierRows(defaultTierRows(schema.businessType));
         setProductSchema(schema.productSchema as unknown as DynamicSchemaObject);
         const tree = await adminService.getCategories();
         setCategories(tree);
@@ -252,9 +266,26 @@ const ProductForm = () => {
       }
     }
 
+    if (showTierStock) {
+      const enabled = tierRows.filter((r) => r.enabled);
+      if (enabled.length === 0) {
+        setFormError("Выберите хотя бы один вариант и укажите остаток.");
+        return;
+      }
+      for (const row of enabled) {
+        const n = typeof row.stock === "number" ? row.stock : Number(row.stock);
+        if (!Number.isFinite(n) || n <= 0) {
+          setFormError(`Для «${row.label}» укажите количество больше нуля.`);
+          return;
+        }
+      }
+    }
+
     const variants = showClothingVariants
       ? buildVariantsForApi(variantDrafts)
-      : ([] as Variant[]);
+      : showTierStock
+        ? (tierRowsToVariants(tierRows) as unknown as Variant[])
+        : ([] as Variant[]);
 
     if (!subCategoryId) {
       setFormError("Выберите подкатегорию.");
@@ -289,7 +320,7 @@ const ProductForm = () => {
       setIsSale(false);
       setVariantDrafts([createVariantDraft()]);
       setAttributes({});
-      alert("Товар добавлен ✅");
+      showSuccessToast("Товар добавлен");
     } catch (err) {
       console.error(err);
       if (axios.isAxiosError(err) && err.response?.status === 403) {
@@ -620,6 +651,14 @@ const ProductForm = () => {
           </button>
         </>
       )}
+
+      {showTierStock && merchantBusinessType ? (
+        <TierStockEditor
+          businessType={merchantBusinessType}
+          rows={tierRows}
+          onChange={setTierRows}
+        />
+      ) : null}
 
       <button type="submit" className="admin-submit-btn">
         Добавить товар

@@ -297,12 +297,10 @@ export default function PlatformPage() {
     setInfoBanner(null);
     try {
       let telegramId = NaN;
-      let lastInitLen = 0;
       for (let attempt = 0; attempt < 50; attempt++) {
         const tg = getTelegramWebApp();
         const initSigned =
           typeof tg?.initData === "string" ? tg.initData.trim() : "";
-        lastInitLen = initSigned.length;
         telegramId = resolveMerchantTelegramUserId(tg);
         if (
           initSigned.length > 20 &&
@@ -311,11 +309,6 @@ export default function PlatformPage() {
         ) {
           break;
         }
-        console.log("[PlatformPage] awaiting initData/user", {
-          telegramId,
-          attempt,
-          initDataLen: lastInitLen,
-        });
         await new Promise((r) => setTimeout(r, 120));
       }
 

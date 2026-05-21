@@ -20,27 +20,6 @@ export type OrderLineForStock = {
   quantity: number;
 };
 
-async function stockFromProductAttributes(
-  tx: Tx,
-  productId: number,
-  size: string,
-  color: string
-): Promise<number> {
-  const product = await tx.product.findUnique({
-    where: { id: productId },
-    select: { attributes: true },
-  });
-  if (!product?.attributes || typeof product.attributes !== "object") return 0;
-  const variants = parseProductVariants(
-    (product.attributes as Record<string, unknown>).variants
-  );
-  const key = inventoryVariantKey(size, color);
-  for (const v of flattenVariantStockRows(variants)) {
-    if (inventoryVariantKey(v.size, v.color) === key) return v.stock;
-  }
-  return 0;
-}
-
 async function ensureStockRow(
   tx: Tx,
   businessId: number,
@@ -55,7 +34,6 @@ async function ensureStockRow(
     },
   });
   if (!row) {
-    const boot = await stockFromProductAttributes(tx, productId, size, color);
     row = await tx.productStock.create({
       data: {
         businessId,
@@ -63,7 +41,7 @@ async function ensureStockRow(
         size: String(size ?? "").trim(),
         color: String(color ?? "").trim(),
         variantKey,
-        available: boot,
+        available: 0,
       },
     });
   }
@@ -183,6 +161,15 @@ export async function reserveOrderStock(
       },
     });
     if (updated.count !== 1) {
+      const { logInventoryReserveFailed } = await import("./structuredLog.js");
+      logInventoryReserveFailed({
+        businessId,
+        orderId,
+        productId: line.productId ?? undefined,
+        size: line.size,
+        color: line.color,
+        error: `available insufficient for qty ${qty}`,
+      });
       return {
         ok: false,
         error: `Недостаточно на складе: ${line.size} / ${line.color}`,
@@ -509,6 +496,28 @@ export async function maybeNotifyLowStock(businessId: number, productId: number)
       href: "#/admin/products",
     });
   }
+}
+
+export async function loadStockRowsByProductIds(
+  businessId: number,
+  productIds: number[],
+): Promise<Map<number, Array<{ size: string; color: string; available: number }>>> {
+  const map = new Map<number, Array<{ size: string; color: string; available: number }>>();
+  if (productIds.length === 0) return map;
+  const rows = await prisma.productStock.findMany({
+    where: { businessId, productId: { in: productIds } },
+    select: { productId: true, size: true, color: true, available: true },
+  });
+  for (const r of rows) {
+    const list = map.get(r.productId) ?? [];
+    list.push({
+      size: r.size,
+      color: r.color,
+      available: r.available,
+    });
+    map.set(r.productId, list);
+  }
+  return map;
 }
 
 export function extractVariantsFromProductPayload(

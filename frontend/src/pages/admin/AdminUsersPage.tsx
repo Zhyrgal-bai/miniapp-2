@@ -1,21 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  adminService,
-  type AdminMembershipRow,
-} from "../../services/admin.service";
+import { showErrorToast } from "../../store/toast.store";
+import { adminService, type AdminStaffRow } from "../../services/admin.service";
 import { useShop } from "../../context/ShopContext";
 import {
   ALL_MERCHANT_PERMISSION_IDS,
   MERCHANT_PERM,
   type MerchantPermissionId,
 } from "../../permissions/merchantPermissions";
-import { mapStatus, MEMBERSHIP_ROLE_RU } from "../../i18n/statusMaps";
+import { mapStatus, STAFF_ROLE_RU } from "../../i18n/statusMaps";
+import { PersonAvatar } from "../../components/support/PersonAvatar";
+
+type InviteRole = "ADMIN" | "MANAGER" | "SUPPORT";
 
 function roleBadgeClass(role: string): string {
   const u = role.toUpperCase();
   if (u === "OWNER") return "admin-role-badge admin-role-badge--owner";
   if (u === "ADMIN") return "admin-role-badge admin-role-badge--admin";
-  return "admin-role-badge admin-role-badge--client";
+  if (u === "MANAGER") return "admin-role-badge admin-role-badge--manager";
+  if (u === "SUPPORT") return "admin-role-badge admin-role-badge--support";
+  return "admin-role-badge";
 }
 
 const PERM_LABELS: { id: MerchantPermissionId; label: string }[] = [
@@ -27,6 +30,12 @@ const PERM_LABELS: { id: MerchantPermissionId; label: string }[] = [
   { id: MERCHANT_PERM.settingsManage, label: "Оплата и промокоды" },
 ];
 
+const INVITE_ROLES: { id: InviteRole; label: string }[] = [
+  { id: "ADMIN", label: "Администратор" },
+  { id: "MANAGER", label: "Менеджер" },
+  { id: "SUPPORT", label: "Поддержка" },
+];
+
 function effectiveAdminPermissions(stored: string[] | undefined): MerchantPermissionId[] {
   const list = stored ?? [];
   if (list.length === 0) return [...ALL_MERCHANT_PERMISSION_IDS];
@@ -35,12 +44,23 @@ function effectiveAdminPermissions(stored: string[] | undefined): MerchantPermis
 
 export default function AdminUsersPage() {
   const { businessId } = useShop();
-  const [rows, setRows] = useState<AdminMembershipRow[]>([]);
+  const [rows, setRows] = useState<AdminStaffRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyUserId, setBusyUserId] = useState<number | null>(null);
   const [permBusyUserId, setPermBusyUserId] = useState<number | null>(null);
   const [permDraft, setPermDraft] = useState<Record<number, MerchantPermissionId[]>>({});
+
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteUsername, setInviteUsername] = useState("");
+  const [inviteRole, setInviteRole] = useState<InviteRole>("ADMIN");
+  const [invitePreview, setInvitePreview] = useState<{
+    name: string;
+    username: string;
+    alreadyStaff: boolean;
+  } | null>(null);
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
 
   const canLoad =
     typeof businessId === "number" &&
@@ -52,18 +72,19 @@ export default function AdminUsersPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await adminService.getMembershipRows(businessId);
+      const data = await adminService.getStaffRows(businessId);
       setRows(data);
       const draft: Record<number, MerchantPermissionId[]> = {};
       for (const r of data) {
-        if (String(r.role).toUpperCase() === "ADMIN") {
+        const rl = String(r.role).toUpperCase();
+        if (rl === "ADMIN" || rl === "MANAGER") {
           draft[r.userId] = effectiveAdminPermissions(r.permissions);
         }
       }
       setPermDraft(draft);
     } catch (e) {
       const msg =
-        e instanceof Error ? e.message : "Не удалось загрузить пользователей";
+        e instanceof Error ? e.message : "Не удалось загрузить команду";
       setError(msg);
       setRows([]);
     } finally {
@@ -75,19 +96,55 @@ export default function AdminUsersPage() {
     void reload();
   }, [reload]);
 
-  const onPromote = useCallback(
+  const onPreviewInvite = useCallback(async () => {
+    if (!canLoad || businessId == null) return;
+    setInviteBusy(true);
+    setInviteError(null);
+    setInvitePreview(null);
+    try {
+      const preview = await adminService.previewStaffInvite({
+        businessId,
+        username: inviteUsername,
+      });
+      setInvitePreview(preview);
+    } catch (e) {
+      setInviteError(e instanceof Error ? e.message : "Не удалось найти пользователя");
+    } finally {
+      setInviteBusy(false);
+    }
+  }, [businessId, canLoad, inviteUsername]);
+
+  const onConfirmInvite = useCallback(async () => {
+    if (!canLoad || businessId == null || invitePreview?.alreadyStaff) return;
+    setInviteBusy(true);
+    setInviteError(null);
+    try {
+      await adminService.inviteStaffMember({
+        businessId,
+        username: inviteUsername,
+        role: inviteRole,
+      });
+      setInviteOpen(false);
+      setInviteUsername("");
+      setInvitePreview(null);
+      await reload();
+    } catch (e) {
+      setInviteError(e instanceof Error ? e.message : "Ошибка приглашения");
+    } finally {
+      setInviteBusy(false);
+    }
+  }, [businessId, canLoad, invitePreview, inviteRole, inviteUsername, reload]);
+
+  const onRemove = useCallback(
     async (targetUserId: number) => {
       if (!canLoad || businessId == null) return;
+      if (!window.confirm("Удалить сотрудника из команды?")) return;
       setBusyUserId(targetUserId);
       try {
-        await adminService.updateMembershipRole({
-          targetUserId,
-          businessId,
-          role: "ADMIN",
-        });
+        await adminService.removeStaffMember({ targetUserId, businessId });
         await reload();
       } catch (e) {
-        alert(e instanceof Error ? e.message : "Ошибка");
+        showErrorToast(e instanceof Error ? e.message : "Ошибка");
       } finally {
         setBusyUserId(null);
       }
@@ -95,19 +152,15 @@ export default function AdminUsersPage() {
     [businessId, canLoad, reload],
   );
 
-  const onDemote = useCallback(
-    async (targetUserId: number) => {
+  const onRoleChange = useCallback(
+    async (targetUserId: number, role: InviteRole) => {
       if (!canLoad || businessId == null) return;
       setBusyUserId(targetUserId);
       try {
-        await adminService.updateMembershipRole({
-          targetUserId,
-          businessId,
-          role: "CLIENT",
-        });
+        await adminService.updateStaffRole({ targetUserId, businessId, role });
         await reload();
       } catch (e) {
-        alert(e instanceof Error ? e.message : "Ошибка");
+        showErrorToast(e instanceof Error ? e.message : "Ошибка");
       } finally {
         setBusyUserId(null);
       }
@@ -130,14 +183,14 @@ export default function AdminUsersPage() {
       setPermBusyUserId(targetUserId);
       try {
         const next = permDraft[targetUserId] ?? [];
-        await adminService.updateMembershipPermissions({
+        await adminService.updateStaffPermissions({
           targetUserId,
           businessId,
           permissions: next,
         });
         await reload();
       } catch (e) {
-        alert(e instanceof Error ? e.message : "Ошибка");
+        showErrorToast(e instanceof Error ? e.message : "Ошибка");
       } finally {
         setPermBusyUserId(null);
       }
@@ -145,9 +198,7 @@ export default function AdminUsersPage() {
     [businessId, canLoad, permDraft, reload],
   );
 
-  const title = useMemo(() => {
-    return "Участники магазина";
-  }, []);
+  const title = useMemo(() => "Команда магазина", []);
 
   if (!canLoad) {
     return (
@@ -164,12 +215,106 @@ export default function AdminUsersPage() {
   return (
     <section>
       <div className="admin-dash-page__head">
-        <h2 className="admin-dash-page__title">{title}</h2>
-        <p className="admin-dash-page__subtitle">
-          Назначайте или снимайте администраторов. Владельца изменить нельзя. Для
-          администраторов можно ограничить доступ к разделам.
-        </p>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div>
+            <h2 className="admin-dash-page__title">{title}</h2>
+            <p className="admin-dash-page__subtitle">
+              Только сотрудники магазина. Покупатели здесь не отображаются.
+              Аудитория и активность — в разделе «Операции».
+            </p>
+          </div>
+          <button
+            type="button"
+            className="admin-members-actions__btn admin-members-actions__btn--promote"
+            onClick={() => {
+              setInviteOpen(true);
+              setInviteError(null);
+              setInvitePreview(null);
+            }}
+          >
+            Добавить администратора
+          </button>
+        </div>
       </div>
+
+      {inviteOpen ? (
+        <div className="admin-dash-card" style={{ marginBottom: 16 }}>
+          <h3 style={{ margin: "0 0 12px", fontSize: 17 }}>Приглашение в команду</h3>
+          <label style={{ display: "block", marginBottom: 8, fontSize: 14 }}>
+            Telegram @username
+            <input
+              type="text"
+              className="admin-input"
+              placeholder="@username"
+              value={inviteUsername}
+              onChange={(e) => setInviteUsername(e.target.value)}
+              style={{ display: "block", width: "100%", marginTop: 6 }}
+            />
+          </label>
+          <label style={{ display: "block", marginBottom: 12, fontSize: 14 }}>
+            Роль
+            <select
+              value={inviteRole}
+              onChange={(e) => setInviteRole(e.target.value as InviteRole)}
+              style={{ display: "block", width: "100%", marginTop: 6 }}
+            >
+              {INVITE_ROLES.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              className="admin-members-actions__btn"
+              disabled={inviteBusy || inviteUsername.trim() === ""}
+              onClick={() => void onPreviewInvite()}
+            >
+              {inviteBusy ? "…" : "Найти"}
+            </button>
+            {invitePreview && !invitePreview.alreadyStaff ? (
+              <button
+                type="button"
+                className="admin-members-actions__btn admin-members-actions__btn--promote"
+                disabled={inviteBusy}
+                onClick={() => void onConfirmInvite()}
+              >
+                Подтвердить
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="admin-members-actions__btn admin-members-actions__btn--demote"
+              onClick={() => setInviteOpen(false)}
+            >
+              Отмена
+            </button>
+          </div>
+          {invitePreview ? (
+            <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 10 }}>
+              <PersonAvatar name={invitePreview.name} size="md" />
+              <div>
+                <p style={{ margin: 0, fontWeight: 600 }}>{invitePreview.name}</p>
+                <p className="admin-dash-page__muted" style={{ margin: "4px 0 0" }}>
+                  {invitePreview.username}
+                </p>
+                {invitePreview.alreadyStaff ? (
+                  <p style={{ margin: "6px 0 0", color: "var(--sf-color-warning, #c90)" }}>
+                    Уже в команде
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+          {inviteError ? (
+            <p className="admin-dash-page__alert" style={{ marginTop: 12 }} role="alert">
+              {inviteError}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {loading && (
         <p className="admin-dash-page__muted" role="status">
@@ -189,21 +334,29 @@ export default function AdminUsersPage() {
             const busy = busyUserId === r.userId;
             const permBusy = permBusyUserId === r.userId;
             const draft = permDraft[r.userId] ?? effectiveAdminPermissions(r.permissions);
+            const canEditPerms = rl === "ADMIN" || rl === "MANAGER";
             return (
-              <div key={`${r.userId}-${businessId}`} className="admin-members-row">
+              <div key={`${r.staffId}-${businessId}`} className="admin-members-row">
                 <div className="admin-members-row__main">
-                  <p className="admin-members-row__name">
-                    {r.name?.trim() ? r.name.trim() : "Участник команды"}
-                  </p>
-                  <p className="admin-members-row__meta">
-                    {mapStatus(rl, MEMBERSHIP_ROLE_RU)}
-                  </p>
-                  <p style={{ margin: "10px 0 0" }}>
-                    <span className={roleBadgeClass(rl)}>
-                      {mapStatus(rl, MEMBERSHIP_ROLE_RU)}
-                    </span>
-                  </p>
-                  {rl === "ADMIN" ? (
+                  <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                    <PersonAvatar
+                      name={r.name}
+                      photoUrl={r.photoUrl}
+                      size="lg"
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p className="admin-members-row__name">{r.name}</p>
+                      {r.username ? (
+                        <p className="admin-members-row__meta">{r.username}</p>
+                      ) : null}
+                      <p style={{ margin: "10px 0 0" }}>
+                        <span className={roleBadgeClass(rl)}>
+                          {mapStatus(rl, STAFF_ROLE_RU)}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                  {canEditPerms ? (
                     <div style={{ marginTop: 12 }}>
                       <p className="admin-dash-page__muted" style={{ marginBottom: 8 }}>
                         Доступ к разделам
@@ -249,25 +402,32 @@ export default function AdminUsersPage() {
                   ) : null}
                 </div>
                 <div className="admin-members-actions">
-                  {rl === "OWNER" ? null : rl === "CLIENT" ? (
-                    <button
-                      type="button"
-                      className="admin-members-actions__btn admin-members-actions__btn--promote"
-                      disabled={busy}
-                      onClick={() => void onPromote(r.userId)}
-                    >
-                      {busy ? "…" : "Сделать админом"}
-                    </button>
-                  ) : rl === "ADMIN" ? (
-                    <button
-                      type="button"
-                      className="admin-members-actions__btn admin-members-actions__btn--demote"
-                      disabled={busy}
-                      onClick={() => void onDemote(r.userId)}
-                    >
-                      {busy ? "…" : "Убрать админа"}
-                    </button>
-                  ) : null}
+                  {rl === "OWNER" ? null : (
+                    <>
+                      <select
+                        value={rl === "ADMIN" || rl === "MANAGER" || rl === "SUPPORT" ? rl : "ADMIN"}
+                        disabled={busy}
+                        onChange={(e) =>
+                          void onRoleChange(r.userId, e.target.value as InviteRole)
+                        }
+                        style={{ marginBottom: 8, maxWidth: "100%" }}
+                      >
+                        {INVITE_ROLES.map((opt) => (
+                          <option key={opt.id} value={opt.id}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="admin-members-actions__btn admin-members-actions__btn--demote"
+                        disabled={busy}
+                        onClick={() => void onRemove(r.userId)}
+                      >
+                        {busy ? "…" : "Удалить"}
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             );

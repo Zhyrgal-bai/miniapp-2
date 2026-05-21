@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useStorefrontPayload } from "../components/storefront/runtime/StorefrontPayloadContext";
 import { useBodyScrollLock } from "../utils/bodyScrollLock";
 import { fetchMyOrders } from "../services/myOrdersApi";
 import { useShop } from "../context/ShopContext";
-import { useStorefrontPayload } from "../components/storefront/runtime/StorefrontPayloadContext";
+import { showErrorToast, showSuccessToast } from "../store/toast.store";
 import { getWebAppUserId } from "../utils/telegramUserId";
 import { getTelegramUser } from "../utils/telegram";
 import { telegramDisplayName } from "../utils/telegramUserMark";
@@ -215,7 +216,7 @@ export default function SupportHubPage({
       });
       setSessionTicket(t);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Не удалось отправить");
+      showErrorToast(e instanceof Error ? e.message : "Не удалось отправить");
     } finally {
       setBusy(false);
     }
@@ -236,7 +237,7 @@ export default function SupportHubPage({
       setSessionTicket(t);
       setTicketDraft("");
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Ошибка");
+      showErrorToast(e instanceof Error ? e.message : "Ошибка");
     } finally {
       setBusy(false);
     }
@@ -268,7 +269,7 @@ export default function SupportHubPage({
           );
           setSessionTicket(t);
         } catch (e) {
-          alert(e instanceof Error ? e.message : "Загрузка не удалась");
+          showErrorToast(e instanceof Error ? e.message : "Загрузка не удалась");
         } finally {
           setBusy(false);
         }
@@ -288,14 +289,14 @@ export default function SupportHubPage({
         comment: returnComment.trim() || undefined,
         photos: returnPhotos,
       });
-      alert("Заявка отправлена");
+      showSuccessToast("Заявка отправлена");
       setReturnPhotos([]);
       setReturnComment("");
       setScreen({ kind: "chat" });
       await refreshSession(order.id);
       await load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Ошибка");
+      showErrorToast(e instanceof Error ? e.message : "Ошибка");
     } finally {
       setBusy(false);
     }
@@ -334,13 +335,13 @@ export default function SupportHubPage({
         orderId: order.id,
         comment: cancelComment.trim() || undefined,
       });
-      alert("Заявка на отмену отправлена");
+      showSuccessToast("Заявка на отмену отправлена");
       setCancelComment("");
       setScreen({ kind: "chat" });
       await refreshSession(order.id);
       await load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Ошибка");
+      showErrorToast(e instanceof Error ? e.message : "Ошибка");
     } finally {
       setBusy(false);
     }
@@ -355,14 +356,14 @@ export default function SupportHubPage({
         reason: refundReason.trim() || undefined,
         comment: refundComment.trim() || undefined,
       });
-      alert("Заявка на возврат денег отправлена");
+      showSuccessToast("Заявка на возврат денег отправлена");
       setRefundComment("");
       setRefundReason("");
       setScreen({ kind: "chat" });
       await refreshSession(order.id);
       await load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Ошибка");
+      showErrorToast(e instanceof Error ? e.message : "Ошибка");
     } finally {
       setBusy(false);
     }
@@ -550,7 +551,7 @@ export default function SupportHubPage({
                     );
                     setReturnPhotos((p) => [...p, url].slice(0, 8));
                   } catch (e) {
-                    alert(e instanceof Error ? e.message : "Ошибка");
+                    showErrorToast(e instanceof Error ? e.message : "Ошибка");
                   } finally {
                     setBusy(false);
                   }
@@ -609,9 +610,16 @@ export default function SupportHubPage({
           <p className="sf-support-hub__muted">{readTxt("loading", "Загрузка…")}</p>
         )}
         {error && (
-          <p className="sf-support-hub__error" role="alert">
-            {error}
-          </p>
+          <div className="sf-support-hub__error-wrap" role="showErrorToast">
+            <p className="sf-support-hub__error">{error}</p>
+            <button
+              type="button"
+              className="sf-support-hub__retry"
+              onClick={() => void load()}
+            >
+              {readTxt("retry", "Повторить")}
+            </button>
+          </div>
         )}
 
         {!loading && !error && orders.length === 0 && (

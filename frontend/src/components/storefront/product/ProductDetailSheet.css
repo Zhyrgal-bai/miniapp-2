@@ -213,7 +213,8 @@
 
 .sf-pds-sticky-cta {
   flex-shrink: 0;
-  padding: 10px var(--sf-mobile-pad, 14px) 8px;
+  padding: 10px var(--sf-mobile-pad, 14px)
+    max(8px, env(safe-area-inset-bottom, 0px));
   border-top: 1px solid color-mix(in srgb, var(--sf-color-border) 38%, transparent);
   background: color-mix(in srgb, var(--sf-color-card) 92%, transparent);
   backdrop-filter: blur(10px);

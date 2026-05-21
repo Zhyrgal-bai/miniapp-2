@@ -2,6 +2,11 @@ import { useMemo, useSyncExternalStore } from "react";
 import { useBodyScrollLock } from "../../utils/bodyScrollLock";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAdminPanelVisible } from "@/utils/admin";
+import { useAdminGateStore } from "../../store/adminGate.store";
+import {
+  MERCHANT_PERM,
+  hasMerchantPermission,
+} from "../../permissions/merchantPermissions";
 import { getTelegramUser } from "../../utils/telegram";
 import {
   telegramDisplayInitial,
@@ -73,18 +78,20 @@ const ADMIN_LINKS: {
   hash: string;
   icon: string;
   label: string;
+  permission?: string;
 }[] = [
-  { section: "orders", hash: "#/admin/orders", icon: "🗂️", label: "Заказы" },
+  { section: "orders", hash: "#/admin/orders", icon: "🗂️", label: "Заказы", permission: MERCHANT_PERM.ordersManage },
   {
     section: "support",
     hash: "#/admin/support",
     icon: "💬",
     label: "Поддержка",
+    permission: MERCHANT_PERM.supportManage,
   },
-  { section: "design", hash: "#/admin/design", icon: "🎨", label: "Оформление" },
-  { section: "products", hash: "#/admin/products", icon: "🏷️", label: "Товары" },
-  { section: "categories", hash: "#/admin/categories", icon: "🗂", label: "Категории" },
-  { section: "analytics", hash: "#/admin/analytics", icon: "📊", label: "Аналитика" },
+  { section: "design", hash: "#/admin/design", icon: "🎨", label: "Оформление", permission: MERCHANT_PERM.designEdit },
+  { section: "products", hash: "#/admin/products", icon: "🏷️", label: "Товары", permission: MERCHANT_PERM.catalogEdit },
+  { section: "categories", hash: "#/admin/categories", icon: "🗂", label: "Категории", permission: MERCHANT_PERM.catalogEdit },
+  { section: "analytics", hash: "#/admin/analytics", icon: "📊", label: "Аналитика", permission: MERCHANT_PERM.analyticsView },
 ];
 
 export default function SideMenu({
@@ -103,6 +110,19 @@ export default function SideMenu({
   const hash = useSyncExternalStore(subscribeHash, readHash, () => "");
   const user = useMemo(() => getTelegramUser(), []);
   const admin = useAdminPanelVisible();
+  const merchantPermissions = useAdminGateStore((s) => s.merchantPermissions);
+  const merchantRole = useAdminGateStore((s) => s.merchantRole);
+  const adminLinks = useMemo(
+    () =>
+      ADMIN_LINKS.filter((link) =>
+        hasMerchantPermission(
+          merchantPermissions,
+          link.permission as typeof MERCHANT_PERM.ordersManage | undefined,
+          merchantRole,
+        ),
+      ),
+    [merchantPermissions, merchantRole],
+  );
   const adminActive = activeAdminSection(hash);
   const { payload } = useStorefrontPayload();
   const { theme } = useTheme();
@@ -253,7 +273,7 @@ export default function SideMenu({
                 {admin && (
                   <>
                     <div className="app-drawer__divider" aria-hidden />
-                    {ADMIN_LINKS.map(({ section, icon, label }) => {
+                    {adminLinks.map(({ section, icon, label }) => {
                       const isActive =
                         currentPage === "admin" && adminActive === section;
                       return (

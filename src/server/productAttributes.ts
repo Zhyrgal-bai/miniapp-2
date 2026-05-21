@@ -1,5 +1,6 @@
 import type { ProductVariantInput } from "../shared/inventory.js";
 import { parseProductVariants } from "../shared/inventory.js";
+import { normalizeVariantsForSave } from "../shared/productDto.js";
 import type { BusinessType } from "@prisma/client";
 import { validateProductAttributes } from "./templateValidation.js";
 
@@ -10,7 +11,10 @@ export function mergeProductAttributesWithVariants(
   attributes: unknown,
   variants?: unknown
 ): { ok: true; value: Record<string, unknown> } | { ok: false; error: string; details?: Record<string, string> } {
-  const variantList = variants != null ? parseProductVariants(variants) : [];
+  const variantList =
+    variants != null
+      ? normalizeVariantsForSave(parseProductVariants(variants))
+      : [];
   const base =
     attributes != null && typeof attributes === "object" && !Array.isArray(attributes)
       ? { ...(attributes as Record<string, unknown>) }

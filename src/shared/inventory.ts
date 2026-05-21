@@ -35,7 +35,32 @@ export function totalOnHand(b: StockBuckets): number {
 /** Parse variants array from product attributes or API body. */
 export function parseProductVariants(raw: unknown): ProductVariantInput[] {
   if (!Array.isArray(raw)) return [];
-  return raw.filter((v) => v != null && typeof v === "object") as ProductVariantInput[];
+  const out: ProductVariantInput[] = [];
+  for (const row of raw) {
+    if (row == null || typeof row !== "object") continue;
+    const r = row as Record<string, unknown>;
+    let color = "";
+    const c = r.color;
+    if (typeof c === "string") color = c.trim();
+    else if (c != null && typeof c === "object" && !Array.isArray(c)) {
+      const co = c as Record<string, unknown>;
+      color =
+        typeof co.name === "string"
+          ? co.name.trim()
+          : typeof co.color === "string"
+            ? co.color.trim()
+            : "";
+    }
+    const sizes = Array.isArray(r.sizes) ? r.sizes : [];
+    out.push({
+      color,
+      sizes: sizes.filter((s) => s != null && typeof s === "object") as Array<{
+        size?: string;
+        stock?: number;
+      }>,
+    });
+  }
+  return out;
 }
 
 export function flattenVariantStockRows(

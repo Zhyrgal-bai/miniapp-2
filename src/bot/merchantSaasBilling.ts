@@ -1,6 +1,6 @@
 import type { Telegraf } from "telegraf";
 import type { Context } from "telegraf";
-import { MembershipRole } from "@prisma/client";
+import { BusinessStaffRole } from "@prisma/client";
 import {
   SAAS_SUBSCRIPTION_PRICE_20_D,
   SAAS_SUBSCRIPTION_PRICE_30_D,
@@ -8,12 +8,14 @@ import {
 } from "../server/saasBillingService.js";
 
 type TenantTelegrafCtx = Context & {
-  tenantRole?: MembershipRole | null;
+  tenantRole?: BusinessStaffRole | null;
   businessId?: number;
 };
 
-function isMerchantTenantRole(role: MembershipRole | null | undefined): boolean {
-  return role === MembershipRole.OWNER || role === MembershipRole.ADMIN;
+function isMerchantTenantRole(role: BusinessStaffRole | null | undefined): boolean {
+  return (
+    role === BusinessStaffRole.OWNER || role === BusinessStaffRole.ADMIN
+  );
 }
 
 const PAY_REPLY =

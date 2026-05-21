@@ -4,7 +4,7 @@ Use before every production deploy and before beta exit.
 
 ## Pre-deploy
 
-- [ ] `npm run check` passes locally
+- [ ] `npm run predeploy` passes (check + smoke + prisma validate)
 - [ ] All new migrations committed under `prisma/migrations/`
 - [ ] `.env` secrets documented in `.env.example` (no secrets in git)
 - [ ] `VITE_API_URL` on Vercel points to Render API URL
@@ -22,7 +22,8 @@ Use before every production deploy and before beta exit.
 - [ ] Deploy triggered → build succeeds
 - [ ] `npx prisma migrate deploy` runs in start script (automatic via `productionStart.mjs`)
 - [ ] `GET https://<api>/health` → `{ ok: true }`
-- [ ] `GET https://<api>/ready` → `{ ok: true, db: true }`
+- [ ] `GET https://<api>/ready` → `{ ok: true, db: true, envOk: true }`
+- [ ] Render health check uses `/ready` (DB + env sanity)
 
 ## Vercel (frontend)
 
@@ -46,8 +47,14 @@ Use before every production deploy and before beta exit.
 - [ ] Render logs — no repeated 5xx
 - [ ] No `FATAL` env validation errors on boot
 - [ ] Webhook OK on platform dashboard
+- [ ] Review `GET /api/platform/admin/ops-summary` (operator unlocked)
 - [ ] Review `GET /api/platform/admin/funnel/summary` for events ingesting
+- [ ] Search logs for JSON events: `payment_failure`, `webhook_reject`, `inventory_mismatch`
 - [ ] Review feedback if any submitted
+
+## Backup & recovery
+
+See **`docs/guides/backup-recovery.md`** — confirm Render Postgres backups enabled before first production traffic.
 
 ## Rollback
 

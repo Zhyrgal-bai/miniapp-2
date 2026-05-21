@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useCartStore } from "../store/useCartStore";
 import { useLocation } from "react-router-dom";
 import { mergeTenantIntoLocation, readShopIdString } from "../utils/storeParams";
@@ -8,6 +8,7 @@ import { useShop } from "../context/ShopContext";
 import { api } from "../services/api";
 import type { Product } from "../types";
 import { getMaxOrderQty } from "../commerce/quantityPolicy";
+import { isOutOfStock } from "../utils/product";
 
 type Props = {
   onGoToCheckout: () => void;
@@ -76,6 +77,24 @@ export default function CartPage({ onGoToCheckout }: Props) {
     if (!p) return item.quantity ?? 1;
     return getMaxOrderQty(p, item.size, item.color);
   };
+
+  const stockIssue = useMemo(() => {
+    for (const item of items) {
+      const p = catalogById.get(item.productId);
+      if (!p) continue;
+      if (isOutOfStock(p)) {
+        return "Некоторые товары закончились. Удалите их из корзины.";
+      }
+      const max = getMaxOrderQty(p, item.size, item.color);
+      if (max <= 0) {
+        return "Некоторые позиции недоступны. Обновите корзину.";
+      }
+      if ((item.quantity ?? 1) > max) {
+        return "Количество превышает остаток на складе.";
+      }
+    }
+    return null;
+  }, [items, catalogById]);
 
   const handleIncrement = (item: (typeof items)[number]) => {
     const max = maxQtyForLine(item);
@@ -161,6 +180,11 @@ export default function CartPage({ onGoToCheckout }: Props) {
           </div>
 
           <div className="cart-footer">
+            {stockIssue ? (
+              <p className="cart-stock-warning" role="alert">
+                {stockIssue}
+              </p>
+            ) : null}
             <div className="total">
               <span>Итого</span>
               <strong>{totalPrice} сом</strong>
@@ -170,8 +194,11 @@ export default function CartPage({ onGoToCheckout }: Props) {
               type="button"
               className="checkout-btn"
               onClick={onGoToCheckout}
+              disabled={Boolean(stockIssue)}
             >
-              {readTxt("checkoutLabel", "Оформить").toUpperCase()}
+              {stockIssue
+                ? "Нет в наличии"
+                : readTxt("checkoutLabel", "Оформить").toUpperCase()}
             </button>
           </div>
         </>

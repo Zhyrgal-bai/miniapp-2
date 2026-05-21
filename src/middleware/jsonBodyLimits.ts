@@ -31,5 +31,14 @@ export function jsonBodyLimits(
     typeof req.path === "string" && req.path !== ""
       ? req.path
       : new URL(req.url, "http://localhost").pathname;
+
+  if (
+    (p === "/finik/webhook" || p.startsWith("/finik/webhook/")) &&
+    typeof req.rawBody === "string"
+  ) {
+    next();
+    return;
+  }
+
   (wantsLargeJsonBody(p) ? jsonLargeLimit : jsonSmallLimit)(req, res, next);
 }

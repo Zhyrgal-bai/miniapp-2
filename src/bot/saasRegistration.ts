@@ -3,11 +3,11 @@ import { session } from "telegraf";
 import type { Telegraf } from "telegraf";
 import {
   BillingPlan,
-  MembershipRole,
   Prisma,
   RegistrationStatus,
   SubscriptionStatus,
 } from "@prisma/client";
+import { createOwnerStaffRow } from "../server/businessStaffAccess.js";
 import {
   encryptedBotTokenRow,
   hashBotTokenSha256Hex,
@@ -154,9 +154,9 @@ async function replyAfterRegistrationExit(ctx: Context): Promise<void> {
   const telegramIdStr = telegramIdString(ctx);
   if (telegramIdStr === "") return;
 
-  let memberships: MerchantMembershipRow[];
+  let memberships: MerchantStaffRow[];
   try {
-    memberships = await findMerchantMembershipsForTelegram(telegramIdStr);
+    memberships = await findMerchantStaffForTelegram(telegramIdStr);
   } catch (dbErr: unknown) {
     logStartHandlerError(dbErr, "replyAfterRegistrationExit: memberships");
     await ctx.reply(
@@ -377,8 +377,8 @@ async function replyRejectedApplicationStatus(
   });
 }
 
-/** Магазины, где пользователь — OWNER или ADMIN. */
-async function findMerchantMembershipsForTelegram(telegramId: string) {
+/** Магазины, где пользователь — staff. */
+async function findMerchantStaffForTelegram(telegramId: string) {
   const identity = await prisma.user.findUnique({
     where: { telegramId },
     select: { id: true },
@@ -386,24 +386,21 @@ async function findMerchantMembershipsForTelegram(telegramId: string) {
   if (!identity) {
     return [];
   }
-  return prisma.membership.findMany({
-    where: {
-      userId: identity.id,
-      role: { in: [MembershipRole.OWNER, MembershipRole.ADMIN] },
-    },
+  return prisma.businessStaff.findMany({
+    where: { userId: identity.id },
     include: { business: true },
     orderBy: [{ businessId: "asc" }, { id: "asc" }],
   });
 }
 
-type MerchantMembershipRow = Awaited<
-  ReturnType<typeof findMerchantMembershipsForTelegram>
+type MerchantStaffRow = Awaited<
+  ReturnType<typeof findMerchantStaffForTelegram>
 >[number];
 
 /** Список витрин + Mini App-кнопки + заявка на ещё один магазин. */
 async function replyMerchantStoreDashboard(
   ctx: Context,
-  rows: MerchantMembershipRow[],
+  rows: MerchantStaffRow[],
 ): Promise<void> {
   if (rows.length === 0) return;
 
@@ -587,12 +584,9 @@ async function provisionMerchantStoreInTx(
     },
   });
 
-  await tx.membership.create({
-    data: {
-      userId: ownerUser.id,
-      businessId: business.id,
-      role: MembershipRole.OWNER,
-    },
+  await createOwnerStaffRow(tx, {
+    businessId: business.id,
+    userId: ownerUser.id,
   });
 
   return business.id;
@@ -1003,11 +997,11 @@ export async function handleRegistrationStartCommand(
       return true;
     }
 
-    let memberships: MerchantMembershipRow[];
+    let memberships: MerchantStaffRow[];
     try {
-      memberships = await findMerchantMembershipsForTelegram(telegramIdStr);
+      memberships = await findMerchantStaffForTelegram(telegramIdStr);
     } catch (dbErr: unknown) {
-      logStartHandlerError(dbErr, "/start DB: findMerchantMemberships failed");
+      logStartHandlerError(dbErr, "/start DB: findMerchantStaff failed");
       await ctx.reply(
         "Сервис сейчас перегружен. Попробуйте через минуту."
       );

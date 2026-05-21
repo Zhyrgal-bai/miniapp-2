@@ -299,7 +299,7 @@ export async function patchCancelRequestMerchant(opts: {
       existing.userId
     );
     const { onOrderCancelled } = await import("./orderInventoryHooks.js");
-    void onOrderCancelled(existing.orderId, existing.order.status);
+    await onOrderCancelled(existing.orderId, existing.order.status);
   }
 
   const msg =
@@ -388,7 +388,7 @@ export async function patchRefundRequestMerchant(opts: {
       existing.userId
     );
     const { onOrderCancelled } = await import("./orderInventoryHooks.js");
-    void onOrderCancelled(existing.orderId, existing.order.status);
+    await onOrderCancelled(existing.orderId, existing.order.status);
   }
 
   const statusMsg: Partial<Record<RefundRequestStatus, string>> = {

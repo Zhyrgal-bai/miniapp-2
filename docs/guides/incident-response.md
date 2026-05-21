@@ -19,7 +19,8 @@
 ## 2. First 15 minutes (any S0/S1)
 
 1. **Confirm** — check `/health`, `/ready`, Render status  
-2. **Communicate** — note in operator channel: severity, symptoms, time  
+2. **Ops snapshot** — `GET /api/platform/admin/ops-summary` (alerts, stale unpaid orders)  
+3. **Communicate** — note in operator channel: severity, symptoms, time  
 3. **Mitigate** — rollback deploy OR disable feature flag OR scale service  
 4. **Assign** — one incident commander (founder or engineering)  
 

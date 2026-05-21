@@ -1656,6 +1656,16 @@
   color: #bfdbfe;
 }
 
+.admin-role-badge--manager {
+  background: rgba(16, 185, 129, 0.22);
+  color: #6ee7b7;
+}
+
+.admin-role-badge--support {
+  background: rgba(168, 85, 247, 0.22);
+  color: #d8b4fe;
+}
+
 .admin-role-badge--client {
   background: rgba(148, 163, 184, 0.2);
   color: #cbd5e1;

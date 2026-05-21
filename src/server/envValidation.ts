@@ -12,12 +12,28 @@ function isProduction(): boolean {
   return process.env.NODE_ENV === "production";
 }
 
+function hasHttpsUrl(name: string): boolean {
+  const v = process.env[name]?.trim();
+  if (!v) return false;
+  return v.startsWith("https://");
+}
+
 export function validateEnvironment(): EnvValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
   if (!process.env.DATABASE_URL?.trim()) {
     errors.push("DATABASE_URL is required");
+  } else if (isProduction()) {
+    const db = process.env.DATABASE_URL.trim();
+    if (
+      /render\.com|neon\.tech|supabase\.co|amazonaws\.com/i.test(db) &&
+      !/sslmode=require/i.test(db)
+    ) {
+      warnings.push(
+        "DATABASE_URL may need sslmode=require for cloud PostgreSQL",
+      );
+    }
   }
 
   const hasBot =
@@ -40,19 +56,27 @@ export function validateEnvironment(): EnvValidationResult {
       errors.push("TELEGRAM_WEBHOOK_SECRET is required in production");
     }
     if (!process.env.OPERATOR_PASSWORD_HASH?.trim()) {
-      warnings.push(
-        "OPERATOR_PASSWORD_HASH not set — operator unlock disabled",
-      );
+      errors.push("OPERATOR_PASSWORD_HASH is required in production");
     }
     const finikHeader = process.env.FINIK_WEBHOOK_SIGNATURE_HEADER?.trim();
     if (!finikHeader) {
-      warnings.push(
-        "FINIK_WEBHOOK_SIGNATURE_HEADER not set — Finik webhook signatures skipped",
+      errors.push(
+        "FINIK_WEBHOOK_SIGNATURE_HEADER is required in production",
       );
     }
     if (process.env.TELEGRAM_INIT_DEBUG === "1") {
+      errors.push(
+        "TELEGRAM_INIT_DEBUG=1 must not be enabled in production",
+      );
+    }
+    if (!hasHttpsUrl("API_URL") && !process.env.RENDER_EXTERNAL_URL?.trim()) {
       warnings.push(
-        "TELEGRAM_INIT_DEBUG=1 enabled in production — disable after auth debugging",
+        "API_URL or RENDER_EXTERNAL_URL should be set for webhooks and public links",
+      );
+    }
+    if (!hasHttpsUrl("FRONT_URL") && !hasHttpsUrl("MINI_APP_URL")) {
+      warnings.push(
+        "FRONT_URL or MINI_APP_URL (https) required for Telegram Web App buttons",
       );
     }
   }

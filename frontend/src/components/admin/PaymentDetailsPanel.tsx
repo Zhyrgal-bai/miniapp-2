@@ -1,3 +1,4 @@
+import { showErrorToast } from "../../store/toast.store";
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import {
@@ -114,9 +115,9 @@ export default function PaymentDetailsPanel() {
       await load();
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.status === 403) {
-        alert("Нет прав");
+        showErrorToast("Нет прав");
       } else {
-        alert("Не удалось удалить");
+        showErrorToast("Не удалось удалить");
       }
     }
   };

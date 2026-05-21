@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import type { RateLimitRequestHandler } from "express-rate-limit";
 import type multer from "multer";
 import {
   Prisma,
@@ -49,6 +50,7 @@ type Deps = {
     res: Response,
     requiredPermission?: MerchantPermissionId | MerchantPermissionId[],
   ) => Promise<{ businessId: number } | null>;
+  supportLimiter?: RateLimitRequestHandler;
 };
 
 function jsonWithBigInt<T>(data: T): unknown {
@@ -370,7 +372,13 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
     telegramIdFromRequest,
     resolveCatalogBusinessId,
     requireMerchantStaff,
+    supportLimiter,
   } = deps;
+
+  if (supportLimiter) {
+    app.use("/support", supportLimiter);
+    app.use("/merchant/support", supportLimiter);
+  }
 
   async function customerUserId(
     req: Request,
@@ -1388,11 +1396,17 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
                 );
               }
               if (statusRaw === "REFUNDED") {
+                await receiveReturnStock(
+                  tx,
+                  merchant.businessId,
+                  existing.orderId,
+                  line,
+                );
                 await restockReturned(
                   tx,
                   merchant.businessId,
                   existing.orderId,
-                  line
+                  line,
                 );
               }
             });

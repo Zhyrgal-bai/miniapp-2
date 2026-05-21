@@ -1,5 +1,6 @@
 import axios, { AxiosHeaders } from "axios";
 import { getBusinessIdNumber } from "../utils/storeParams";
+import { telegramWebAppInitDataHeader } from "../utils/telegramInitDataHeader";
 
 function normalizeBaseUrl(url: string): string {
   return url.replace(/\/$/, "");
@@ -70,7 +71,23 @@ export function apiAbsoluteUrl(path: string): string {
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 30_000) || 30_000,
 });
+
+api.interceptors.response.use(
+  (res) => res,
+  (error) => {
+    if (
+      axios.isAxiosError(error) &&
+      (!error.response ||
+        error.code === "ERR_NETWORK" ||
+        error.code === "ECONNABORTED")
+    ) {
+      error.message = "Ошибка сети. Проверьте подключение и попробуйте снова.";
+    }
+    return Promise.reject(error);
+  },
+);
 
 export const TENANT_HEADER = "x-business-id";
 
@@ -234,6 +251,10 @@ api.interceptors.request.use((config) => {
     (existing as Record<string, string> | undefined) ?? {},
   );
   h.set(TENANT_HEADER, bid);
+  const initHdr = telegramWebAppInitDataHeader();
+  if (initHdr["x-telegram-init-data"]) {
+    h.set("x-telegram-init-data", initHdr["x-telegram-init-data"]);
+  }
   config.headers = h;
   return config;
 });

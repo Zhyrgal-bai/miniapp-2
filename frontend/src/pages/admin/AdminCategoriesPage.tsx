@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { adminService } from "../../services/admin.service";
+import { showErrorToast } from "../../store/toast.store";
 import type { Category } from "../../types";
 import { categoryRoots } from "../../utils/categoryTree";
 
@@ -40,7 +41,7 @@ export default function AdminCategoriesPage() {
       setName("");
       await load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Не удалось создать категорию");
+      showErrorToast(e instanceof Error ? e.message : "Не удалось создать категорию");
     }
   };
 
@@ -49,7 +50,7 @@ export default function AdminCategoriesPage() {
       await adminService.deleteCategory(id);
       await load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Не удалось удалить категорию");
+      showErrorToast(e instanceof Error ? e.message : "Не удалось удалить категорию");
     }
   };
 

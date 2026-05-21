@@ -1,11 +1,12 @@
 import type { NextFunction, Request, Response } from "express";
-import type { Business, Membership, User } from "@prisma/client";
+import type { Business, BusinessStaff, User } from "@prisma/client";
 import { prisma } from "../server/db.js";
 import {
   type SubscriptionGateFields,
   isSubscriptionActive,
   isStorefrontClosedForCustomers,
 } from "../server/subscriptionAccess.js";
+import { verifiedTelegramIdFromRequest } from "./verifiedTelegramAuth.js";
 
 declare global {
   namespace Express {
@@ -13,7 +14,7 @@ declare global {
       businessId?: number;
       tenantUser?: User | null;
       tenantBusiness?: Business;
-      tenantMembership?: Membership | null;
+      tenantStaff?: BusinessStaff | null;
     }
   }
 }
@@ -44,18 +45,7 @@ function parseTenantHintInt(raw: unknown): number | undefined {
 }
 
 export function telegramFromRequest(req: Request): string | null {
-  const h = trimmedHeader(req, "x-telegram-id");
-  if (h) return h;
-  const body = req.body as { userId?: unknown } | undefined;
-  const fromBody =
-    typeof body?.userId === "string" || typeof body?.userId === "number"
-      ? String(body.userId).trim()
-      : "";
-  if (fromBody) return fromBody;
-  const q = req.query.userId;
-  const qs = typeof q === "string" ? q : Array.isArray(q) ? String(q[0]) : "";
-  const t = qs.trim();
-  return t === "" ? null : t;
+  return verifiedTelegramIdFromRequest(req);
 }
 
 /** `?businessId` → `?shop` → `x-business-id` → JSON `businessId` / `shop`. */
@@ -138,10 +128,10 @@ export async function businessMiddleware(
 
       const userRow = await prisma.user.findUnique({ where: { telegramId } });
 
-      const membershipRow =
+      const staffRow =
         userRow == null
           ? null
-          : await prisma.membership.findUnique({
+          : await prisma.businessStaff.findUnique({
               where: {
                 userId_businessId: { userId: userRow.id, businessId: hinted },
               },
@@ -150,7 +140,7 @@ export async function businessMiddleware(
       req.businessId = hinted;
       req.tenantBusiness = business;
       req.tenantUser = userRow;
-      req.tenantMembership = membershipRow;
+      req.tenantStaff = staffRow;
       next();
       return;
     }
@@ -162,33 +152,42 @@ export async function businessMiddleware(
       return;
     }
 
-    const memberships = await prisma.membership.findMany({
+    const staffRows = await prisma.businessStaff.findMany({
       where: { userId: userRow.id },
       include: { business: true },
       orderBy: { businessId: "asc" },
     });
 
-    if (memberships.length === 0) {
+    const businessIds = new Set<number>(staffRows.map((s) => s.businessId));
+
+    if (businessIds.size === 0) {
       res.status(401).json({ error: "Unauthorized" });
       return;
     }
-    if (memberships.length > 1) {
+    if (businessIds.size > 1) {
       res.status(400).json({
         error: "Ambiguous tenant: send x-business-id header or shop query",
       });
       return;
     }
 
-    const only = memberships[0]!;
-    if (isStorefrontClosedForCustomers(only.business)) {
+    const businessId = [...businessIds][0]!;
+    const staff =
+      staffRows.find((s) => s.businessId === businessId) ?? null;
+    const business = staff?.business ?? null;
+    if (!business) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    if (isStorefrontClosedForCustomers(business)) {
       res.status(403).json({ error: "Store unavailable" });
       return;
     }
 
-    req.businessId = only.businessId;
-    req.tenantBusiness = only.business;
+    req.businessId = businessId;
+    req.tenantBusiness = business;
     req.tenantUser = userRow;
-    req.tenantMembership = only;
+    req.tenantStaff = staff;
     next();
   } catch (e) {
     console.error("businessMiddleware:", e);

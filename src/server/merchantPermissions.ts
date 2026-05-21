@@ -1,4 +1,4 @@
-import { MembershipRole } from "@prisma/client";
+import { BusinessStaffRole, MembershipRole } from "@prisma/client";
 
 export const MERCHANT_PERM = {
   analyticsView: "analytics.view",
@@ -21,25 +21,51 @@ export const ALL_MERCHANT_PERMISSION_IDS: MerchantPermissionId[] = [
   MERCHANT_PERM.supportManage,
 ];
 
-export function effectiveMerchantPermissions(
-  role: MembershipRole,
-  stored: string[]
+const MANAGER_DEFAULT: MerchantPermissionId[] = [
+  MERCHANT_PERM.analyticsView,
+  MERCHANT_PERM.ordersManage,
+  MERCHANT_PERM.catalogEdit,
+  MERCHANT_PERM.designEdit,
+];
+
+const SUPPORT_DEFAULT: MerchantPermissionId[] = [MERCHANT_PERM.supportManage];
+
+export function defaultPermissionsForStaffRole(
+  role: BusinessStaffRole,
 ): MerchantPermissionId[] {
-  if (role === MembershipRole.OWNER) return [...ALL_MERCHANT_PERMISSION_IDS];
-  if (role === MembershipRole.ADMIN) {
-    const list = Array.isArray(stored) ? stored : [];
-    if (list.length === 0) return [...ALL_MERCHANT_PERMISSION_IDS];
+  switch (role) {
+    case BusinessStaffRole.OWNER:
+    case BusinessStaffRole.ADMIN:
+      return [...ALL_MERCHANT_PERMISSION_IDS];
+    case BusinessStaffRole.MANAGER:
+      return [...MANAGER_DEFAULT];
+    case BusinessStaffRole.SUPPORT:
+      return [...SUPPORT_DEFAULT];
+    default:
+      return [];
+  }
+}
+
+export function effectiveMerchantPermissions(
+  role: BusinessStaffRole,
+  stored: string[],
+): MerchantPermissionId[] {
+  if (role === BusinessStaffRole.OWNER) {
+    return [...ALL_MERCHANT_PERMISSION_IDS];
+  }
+  const list = Array.isArray(stored) ? stored : [];
+  if (list.length > 0) {
     const allowed = new Set<string>(ALL_MERCHANT_PERMISSION_IDS);
     return list.filter((p): p is MerchantPermissionId =>
-      allowed.has(p)
+      allowed.has(p),
     ) as MerchantPermissionId[];
   }
-  return [];
+  return defaultPermissionsForStaffRole(role);
 }
 
 export function merchantHasPermission(
   effective: MerchantPermissionId[],
-  required: MerchantPermissionId | MerchantPermissionId[]
+  required: MerchantPermissionId | MerchantPermissionId[],
 ): boolean {
   const req = Array.isArray(required) ? required : [required];
   return req.some((p) => effective.includes(p));
