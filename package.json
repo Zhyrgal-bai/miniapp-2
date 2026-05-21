@@ -4,7 +4,7 @@
   "main": "dist/server/index.js",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   },
   "scripts": {
     "check": "prisma validate && prisma generate && tsc --noEmit && npm install --prefix frontend && npm run check --prefix frontend",

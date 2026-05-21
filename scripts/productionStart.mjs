@@ -5,6 +5,26 @@
 import { spawnSync } from "node:child_process";
 import process from "node:process";
 
+/** Strip forbidden debug/auth bypass flags before server boot (Render dashboard leftovers). */
+function sanitizeProductionEnv() {
+  if (process.env.NODE_ENV !== "production") return;
+
+  const forbidden = [
+    ["TELEGRAM_INIT_DEBUG", "1"],
+    ["SKIP_TELEGRAM_WEBAPP_AUTH", "1"],
+  ];
+  for (const [key, val] of forbidden) {
+    if (process.env[key] === val) {
+      console.warn(
+        `[start] ${key}=${val} is forbidden in production — ignoring (remove from Render Environment).`,
+      );
+      delete process.env[key];
+    }
+  }
+}
+
+sanitizeProductionEnv();
+
 function run(cmd) {
   const r = spawnSync(cmd, {
     shell: true,
