@@ -33,6 +33,7 @@ import {
 import { StorefrontFeed } from "./StorefrontFeed";
 import { StorefrontIdentityBand } from "./StorefrontIdentityBand";
 import { trackStoreView } from "../../services/storefrontAnalytics";
+import { enrichProductsFromCatalog } from "../../utils/enrichProductsFromCatalog";
 
 type StorefrontKitId = "minimal" | "luxury" | "fashion" | "neon" | "default";
 
@@ -124,8 +125,12 @@ export function StorefrontRenderer(props: {
   );
 
   const featuredAll = useMemo(
-    () => props.payload.featuredProducts ?? [],
-    [props.payload.featuredProducts],
+    () =>
+      enrichProductsFromCatalog(
+        props.payload.featuredProducts ?? [],
+        catalog,
+      ),
+    [props.payload.featuredProducts, catalog],
   );
   const featuredFiltered = useMemo(
     () => filterByCategory(featuredAll),

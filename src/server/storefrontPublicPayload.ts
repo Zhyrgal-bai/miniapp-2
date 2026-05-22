@@ -15,6 +15,8 @@ import {
   API_ERR_STORE_UNAVAILABLE,
   API_ERR_STOREFRONT_INVALID,
 } from "../shared/apiClientMessages.js";
+import { toPublicProduct } from "../shared/productDto.js";
+import { loadStockRowsByProductIds } from "./inventoryService.js";
 
 /** Public GET /api/storefront payload (shared by numeric id and slug routes). */
 export async function sendStorefrontPublicPayload(
@@ -141,18 +143,9 @@ export async function sendStorefrontPublicPayload(
         where: { businessId },
         orderBy: { id: "desc" },
         take,
-        select: {
-          id: true,
-          name: true,
-          price: true,
-          image: true,
-          images: true,
-          description: true,
-          categoryId: true,
-          createdAt: true,
-        },
       });
       const ids = products.map((p) => p.id);
+      const stockMap = await loadStockRowsByProductIds(businessId, ids);
       const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       const soldRows =
         ids.length > 0
@@ -171,11 +164,17 @@ export async function sendStorefrontPublicPayload(
         const pid = r.productId;
         if (typeof pid === "number") soldById.set(pid, Number(r._sum.quantity ?? 0) || 0);
       }
-      (payload as any).featuredProducts = products.map((p) => ({
-        ...p,
-        sold30d: soldById.get(p.id) ?? 0,
-        sold: soldById.get(p.id) ?? 0,
-      }));
+      (payload as any).featuredProducts = products.map((p) => {
+        const publicProduct = toPublicProduct(p, {
+          businessType: bt,
+          stockRows: stockMap.get(p.id) ?? [],
+        });
+        return {
+          ...publicProduct,
+          sold30d: soldById.get(p.id) ?? 0,
+          sold: soldById.get(p.id) ?? 0,
+        };
+      });
     }
 
     const payloadOk = safeParseStorefrontPublicApiResponse(payload);
