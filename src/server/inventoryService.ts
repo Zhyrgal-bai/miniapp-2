@@ -1,6 +1,10 @@
 import type { Prisma } from "@prisma/client";
 import { StockMovementKind } from "@prisma/client";
 import {
+  hasPrismaJsonKeys,
+  recordToPrismaJson,
+} from "./checkoutOrderWrite.js";
+import {
   flattenVariantStockRows,
   inventoryVariantKey,
   isLowStock,
@@ -61,6 +65,17 @@ async function logMovement(
     meta?: Record<string, unknown>;
   }
 ): Promise<void> {
+  const metaRaw = input.meta ?? {};
+  const metaRecord =
+    typeof metaRaw === "object" && metaRaw !== null && !Array.isArray(metaRaw)
+      ? (metaRaw as Record<string, unknown>)
+      : {};
+  const metaJson = recordToPrismaJson(metaRecord);
+  const qty = Math.round(Number(input.quantity));
+  if (!Number.isInteger(qty) || qty < 1) {
+    throw new Error("INVALID_STOCK_QTY");
+  }
+
   await tx.stockMovement.create({
     data: {
       businessId: input.businessId,
@@ -68,8 +83,8 @@ async function logMovement(
       orderId: input.orderId ?? null,
       orderItemId: input.orderItemId ?? null,
       kind: input.kind,
-      quantity: input.quantity,
-      meta: (input.meta ?? {}) as Prisma.InputJsonValue,
+      quantity: qty,
+      ...(hasPrismaJsonKeys(metaJson) ? { meta: metaJson } : {}),
     },
   });
 }

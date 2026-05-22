@@ -48,7 +48,11 @@ function orderErrorMessage(err: unknown): string {
       return t("common.networkError");
     }
     const data = err.response?.data as
-      | { error?: string; details?: Record<string, string> }
+      | {
+          error?: string;
+          failedStep?: string;
+          details?: Record<string, string>;
+        }
       | undefined;
     if (
       data?.error === "Есть неизвестные поля" ||
@@ -62,7 +66,19 @@ function orderErrorMessage(err: unknown): string {
       );
       if (first) return first;
     }
-    if (data?.error) return data.error;
+    if (data?.error) {
+      const step = typeof data.failedStep === "string" ? data.failedStep : "";
+      if (step === "stock_reserved") {
+        return "Не удалось зарезервировать товар на складе. Обновите корзину и попробуйте снова.";
+      }
+      if (step === "delivery_init") {
+        return "Не удалось настроить доставку для заказа. Попробуйте ещё раз.";
+      }
+      if (step === "order_created") {
+        return "Не удалось сохранить заказ. Обновите корзину и попробуйте снова.";
+      }
+      return data.error;
+    }
   }
   return t("checkout.errorGeneric");
 }

@@ -1,4 +1,4 @@
-import { DeliveryMode, OrderStatus, Prisma } from "@prisma/client";
+import { DeliveryMode, Prisma } from "@prisma/client";
 
 /** Safe positive integer for Prisma Int fields (quantity, productId, etc.). */
 export function coercePositiveInt(value: unknown): number | null {
@@ -18,12 +18,12 @@ export function coerceNonNegativeInt(value: unknown): number | null {
   return r;
 }
 
-/** Plain JSON object safe for OrderItem.options (no undefined / non-JSON values). */
-export function orderOptionsToJson(
-  options: Record<string, unknown>,
+/** Plain JSON object safe for Prisma Json fields (no undefined / non-JSON values). */
+export function recordToPrismaJson(
+  record: Record<string, unknown>,
 ): Prisma.InputJsonValue {
   const plain: Record<string, Prisma.JsonValue> = {};
-  for (const [k, v] of Object.entries(options)) {
+  for (const [k, v] of Object.entries(record)) {
     if (v === undefined) continue;
     if (
       v === null ||
@@ -49,6 +49,18 @@ export function orderOptionsToJson(
   return plain;
 }
 
+/** @deprecated Use recordToPrismaJson */
+export const orderOptionsToJson = recordToPrismaJson;
+
+export function hasPrismaJsonKeys(value: Prisma.InputJsonValue): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.keys(value).length > 0
+  );
+}
+
 /** Accept deliveryMode (enum) or deliveryType (storefront: delivery / pickup). */
 export function parseCheckoutDeliveryMode(body: {
   deliveryMode?: unknown;
@@ -67,9 +79,9 @@ export type CheckoutOrderItemRow = {
   name: string;
   size: string;
   color: string;
-  options: Prisma.InputJsonValue;
   quantity: number;
   price: number;
+  options?: Prisma.InputJsonValue;
 };
 
 export function buildCheckoutOrderItemRows(
@@ -100,16 +112,18 @@ export function buildCheckoutOrderItemRows(
       throw new Error("INVALID_ITEM");
     }
 
-    return {
+    const optionsJson = recordToPrismaJson(opts);
+    const row: CheckoutOrderItemRow = {
       businessId,
       productId,
       name: String(line.name ?? "Товар").trim().slice(0, 500) || "Товар",
       size: String(line.size ?? "").trim().slice(0, 200),
       color: String(line.color ?? "").trim().slice(0, 200),
-      options: orderOptionsToJson(opts),
       quantity,
       price,
+      ...(hasPrismaJsonKeys(optionsJson) ? { options: optionsJson } : {}),
     };
+    return row;
   });
 }
 

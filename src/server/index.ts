@@ -116,6 +116,7 @@ import {
   parseCheckoutDeliveryMode,
 } from "./checkoutOrderWrite.js";
 import {
+  checkoutFailureResponse,
   logCheckoutStep,
   runCheckoutStep,
   surfaceCheckoutError,
@@ -4572,6 +4573,20 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
     ...(corrId ? { correlationId: corrId } : {}),
   });
 
+  const schemaProbe = await probeCheckoutSchema(prisma);
+  if (!schemaProbe.ok) {
+    logCheckoutReject({
+      businessId: tenantBusinessId,
+      reason: `schema_missing:${schemaProbe.missing.join(",")}`,
+      ...(corrId ? { correlationId: corrId } : {}),
+    });
+    return res.status(503).json({
+      error:
+        "База данных не обновлена. Администратору нужно выполнить миграции.",
+      checkoutSchemaMissing: schemaProbe.missing,
+    });
+  }
+
   let order: {
     id: number;
     businessId: number;
@@ -4842,16 +4857,19 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
       });
       return res.status(409).json({ error: msg.slice(6) });
     }
-    if (msg === "INVALID_ITEM") {
+    if (msg === "INVALID_ITEM" || msg === "INVALID_STOCK_QTY") {
       return res.status(400).json({ error: "Неверные данные позиции в заказе" });
     }
-    const surfaced = surfaceCheckoutError(e, "POST /orders transaction");
+    const failure = checkoutFailureResponse(e, "POST /orders transaction");
     logCheckoutReject({
       businessId: tenantBusinessId,
-      reason: surfaced.error,
+      reason: String(failure.body.error),
       ...(corrId ? { correlationId: corrId } : {}),
+      ...(failure.body.failedStep
+        ? { detail: `step=${String(failure.body.failedStep)}` }
+        : {}),
     });
-    return res.status(surfaced.statusCode).json({ error: surfaced.error });
+    return res.status(failure.statusCode).json(failure.body);
   }
 
   try {
@@ -4973,14 +4991,14 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
       return res.status(409).json({ error: code.slice("DUPLICATE:".length) });
     }
     console.error("ORDER ERROR FULL:", error);
-    const surfaced = surfaceCheckoutError(error, "POST /orders post-create");
-    res.status(surfaced.statusCode).json({ error: surfaced.error });
+    const failure = checkoutFailureResponse(error, "POST /orders post-create");
+    res.status(failure.statusCode).json(failure.body);
   }
   } catch (e) {
     console.error("ORDERS POST ROUTE ERROR:", e);
-    const surfaced = surfaceCheckoutError(e, "POST /orders outer");
     if (!res.headersSent) {
-      res.status(surfaced.statusCode).json({ error: surfaced.error });
+      const failure = checkoutFailureResponse(e, "POST /orders outer");
+      res.status(failure.statusCode).json(failure.body);
     }
   }
 });

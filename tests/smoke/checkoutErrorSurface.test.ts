@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { Prisma } from "@prisma/client";
-import { surfaceCheckoutError } from "../../src/server/checkoutErrorSurface.js";
+import {
+  CheckoutStepError,
+  checkoutFailureResponse,
+  surfaceCheckoutError,
+} from "../../src/server/checkoutErrorSurface.js";
 
 describe("surfaceCheckoutError", () => {
   it("maps missing table to RU migration hint", () => {
@@ -42,6 +46,17 @@ describe("surfaceCheckoutError", () => {
     const out = surfaceCheckoutError(err, "test");
     expect(out.error).not.toContain("foo.ts");
     expect(out.error).not.toContain("secret internal");
+  });
+
+  it("checkoutFailureResponse includes failedStep from CheckoutStepError", () => {
+    const prismaErr = new Prisma.PrismaClientValidationError("bad field", {
+      clientVersion: "5.22.0",
+    });
+    const wrapped = new CheckoutStepError("stock_reserved", prismaErr);
+    const out = checkoutFailureResponse(wrapped, "test");
+    expect(out.statusCode).toBe(400);
+    expect(out.body.failedStep).toBe("stock_reserved");
+    expect(out.body.error).toContain("Некорректные данные заказа");
   });
 });
 

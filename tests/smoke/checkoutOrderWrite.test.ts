@@ -48,6 +48,24 @@ describe("checkoutOrderWrite", () => {
     expect(rows[0]!.options).toEqual({ packaging: "paper" });
   });
 
+  it("omits options field when validated options are empty", () => {
+    const rows = buildCheckoutOrderItemRows(
+      10,
+      [
+        {
+          productId: 5,
+          name: "RED rozes",
+          size: "11",
+          color: "",
+          quantity: 1,
+          unitPrice: 5000,
+        },
+      ],
+      [{}],
+    );
+    expect(rows[0]!.options).toBeUndefined();
+  });
+
   it("coerceCheckoutOrderTotal rounds floats", () => {
     expect(coerceCheckoutOrderTotal(5000.7)).toBe(5001);
     expect(() => coerceCheckoutOrderTotal(Number.NaN)).toThrow("INVALID_ITEM");

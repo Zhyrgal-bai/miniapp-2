@@ -1,10 +1,9 @@
 import type { Prisma } from "@prisma/client";
-import { DeliveryStage } from "@prisma/client";
+import { DeliveryMode, DeliveryStage } from "@prisma/client";
 import {
   defaultPreparationMinutes,
   estimateDeliveryAt,
   inferDeliveryStage,
-  type DeliveryMode,
 } from "../shared/delivery.js";
 import { prisma } from "./db.js";
 import { createMerchantNotification } from "./merchantNotificationsService.js";
@@ -17,7 +16,10 @@ export async function initializeOrderDelivery(
     preparationMinutes?: number | null;
   }
 ): Promise<void> {
-  const mode = input.deliveryMode === "PICKUP" ? "PICKUP" : "DELIVERY";
+  const mode =
+    input.deliveryMode === DeliveryMode.PICKUP
+      ? DeliveryMode.PICKUP
+      : DeliveryMode.DELIVERY;
   const prep =
     input.preparationMinutes != null && Number.isFinite(input.preparationMinutes)
       ? Math.max(5, Math.round(input.preparationMinutes))
