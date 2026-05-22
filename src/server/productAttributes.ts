@@ -1,10 +1,23 @@
 import type { ProductVariantInput } from "../shared/inventory.js";
 import { parseProductVariants } from "../shared/inventory.js";
+import { COMMERCE_META_ATTR_KEYS } from "../shared/productAttributeNormalization.js";
 import { normalizeVariantsForSave } from "../shared/productDto.js";
 import type { BusinessType } from "@prisma/client";
 import { validateProductAttributesForAdmin } from "./templateValidation.js";
 
 const RESERVED_ATTR_KEYS = new Set(["variants"]);
+
+function pickCommerceMetaFromAttributes(
+  src: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of COMMERCE_META_ATTR_KEYS) {
+    if (src[key] !== undefined) {
+      out[key] = src[key];
+    }
+  }
+  return out;
+}
 
 export function mergeProductAttributesWithVariants(
   businessType: BusinessType,
@@ -33,7 +46,10 @@ export function mergeProductAttributesWithVariants(
     return out;
   }
 
-  const merged: Record<string, unknown> = { ...vAttr.value };
+  const merged: Record<string, unknown> = {
+    ...vAttr.value,
+    ...pickCommerceMetaFromAttributes(base),
+  };
   if (variantList.length > 0) {
     merged.variants = variantList;
   }

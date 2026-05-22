@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { effectiveUnitPriceFromProduct } from "../shared/productPricing.js";
 import { inventoryVariantKey } from "../shared/inventory.js";
 import { formatOrderLineSummary } from "../shared/businessCommerce.js";
 import { logCheckoutReject, logInventoryReserveFailed } from "./structuredLog.js";
@@ -19,20 +20,6 @@ export type PricedCheckoutLine = CheckoutLineInput & {
   lineTotal: number;
   available: number;
 };
-
-function effectiveUnitPrice(product: {
-  price: number;
-  discountPercent: number | null;
-}): number {
-  const base = Number(product.price);
-  if (!Number.isFinite(base) || base < 0) return 0;
-  const d = product.discountPercent;
-  if (d == null || !Number.isFinite(Number(d)) || Number(d) <= 0) {
-    return Math.round(base);
-  }
-  const pct = Math.min(100, Math.max(0, Math.round(Number(d))));
-  return Math.max(0, Math.round((base * (100 - pct)) / 100));
-}
 
 export async function priceCheckoutLines(
   tx: Tx,
@@ -64,7 +51,7 @@ export async function priceCheckoutLines(
         businessId: true,
         name: true,
         price: true,
-        discountPercent: true,
+        attributes: true,
       },
     });
     if (!product || product.businessId !== businessId) {
@@ -114,7 +101,10 @@ export async function priceCheckoutLines(
       };
     }
 
-    const unitPrice = effectiveUnitPrice(product);
+    const unitPrice = effectiveUnitPriceFromProduct({
+      price: product.price,
+      attributes: product.attributes,
+    });
     priced.push({
       ...line,
       productId,

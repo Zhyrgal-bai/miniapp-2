@@ -3511,10 +3511,39 @@ app.post("/products", async (req: Request, res: Response) => {
       categoryId?: unknown;
       attributes?: unknown;
       variants?: unknown;
+      discountPercent?: unknown;
+      isSale?: unknown;
+      isNew?: unknown;
+      isPopular?: unknown;
     };
 
-    const { name, price, image, images, description, categoryId, attributes, variants } =
-      body;
+    const {
+      name,
+      price,
+      image,
+      images,
+      description,
+      categoryId,
+      attributes,
+      variants,
+      discountPercent,
+      isSale,
+      isNew,
+      isPopular,
+    } = body;
+
+    const attributesWithCommerce: Record<string, unknown> =
+      attributes != null &&
+      typeof attributes === "object" &&
+      !Array.isArray(attributes)
+        ? { ...(attributes as Record<string, unknown>) }
+        : {};
+    if (discountPercent !== undefined) {
+      attributesWithCommerce.discountPercent = discountPercent;
+    }
+    if (isSale !== undefined) attributesWithCommerce.isSale = isSale;
+    if (isNew !== undefined) attributesWithCommerce.isNew = isNew;
+    if (isPopular !== undefined) attributesWithCommerce.isPopular = isPopular;
 
     const rawImages = Array.isArray(images)
       ? (images as unknown[])
@@ -3555,7 +3584,7 @@ app.post("/products", async (req: Request, res: Response) => {
     }
     const vAttr = mergeProductAttributesWithVariants(
       businessType as any,
-      attributes,
+      attributesWithCommerce,
       variants,
       { businessId: merchant.businessId },
     );
@@ -5092,6 +5121,10 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       categoryId?: unknown;
       attributes?: unknown;
       variants?: unknown;
+      discountPercent?: unknown;
+      isSale?: unknown;
+      isNew?: unknown;
+      isPopular?: unknown;
     };
 
     const id = Number(req.params.id);
@@ -5099,8 +5132,20 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Неверный id" });
     }
 
-    const { name, price, image, images, description, categoryId, attributes, variants } =
-      body;
+    const {
+      name,
+      price,
+      image,
+      images,
+      description,
+      categoryId,
+      attributes,
+      variants,
+      discountPercent,
+      isSale,
+      isNew,
+      isPopular,
+    } = body;
 
     if (
       name === undefined &&
@@ -5110,7 +5155,11 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       description === undefined &&
       categoryId === undefined &&
       attributes === undefined &&
-      variants === undefined
+      variants === undefined &&
+      discountPercent === undefined &&
+      isSale === undefined &&
+      isNew === undefined &&
+      isPopular === undefined
     ) {
       return res.status(400).json({ error: "Нет полей для обновления" });
     }
@@ -5168,7 +5217,14 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Товар не найден" });
     }
 
-    if (attributes !== undefined || variants !== undefined) {
+    if (
+      attributes !== undefined ||
+      variants !== undefined ||
+      discountPercent !== undefined ||
+      isSale !== undefined ||
+      isNew !== undefined ||
+      isPopular !== undefined
+    ) {
       const b2 = await prisma.business.findUnique({
         where: { id: merchant.businessId },
       });
@@ -5176,13 +5232,25 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       if (typeof businessType !== "string" || businessType.trim() === "") {
         return res.status(400).json({ error: "Магазин без businessType" });
       }
-      const baseAttrs =
-        attributes !== undefined
-          ? attributes
-          : (exists?.attributes as unknown) ?? {};
+      const baseAttrsRecord: Record<string, unknown> =
+        attributes !== undefined &&
+        typeof attributes === "object" &&
+        !Array.isArray(attributes)
+          ? { ...(attributes as Record<string, unknown>) }
+          : exists.attributes != null &&
+              typeof exists.attributes === "object" &&
+              !Array.isArray(exists.attributes)
+            ? { ...(exists.attributes as Record<string, unknown>) }
+            : {};
+      if (discountPercent !== undefined) {
+        baseAttrsRecord.discountPercent = discountPercent;
+      }
+      if (isSale !== undefined) baseAttrsRecord.isSale = isSale;
+      if (isNew !== undefined) baseAttrsRecord.isNew = isNew;
+      if (isPopular !== undefined) baseAttrsRecord.isPopular = isPopular;
       const vAttr = mergeProductAttributesWithVariants(
         businessType as any,
-        baseAttrs,
+        baseAttrsRecord,
         variants,
         { businessId: merchant.businessId, productId: id },
       );

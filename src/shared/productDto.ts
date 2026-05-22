@@ -1,4 +1,5 @@
 import type { BusinessType } from "@prisma/client";
+import { discountPercentFromAttributes } from "./productPricing.js";
 import {
   findStockConsistencyIssues,
   parseCatalogVariantShapes,
@@ -102,7 +103,14 @@ export function toPublicProduct(
     ...(images && images.length > 0 ? { images } : {}),
     description: raw.description ?? null,
     categoryId: raw.categoryId ?? null,
-    discountPercent: raw.discountPercent ?? null,
+    discountPercent: (() => {
+      const fromRaw = raw.discountPercent;
+      if (fromRaw != null && Number.isFinite(Number(fromRaw)) && Number(fromRaw) > 0) {
+        return Math.min(100, Math.max(0, Math.round(Number(fromRaw))));
+      }
+      const fromAttrs = discountPercentFromAttributes(attrs);
+      return fromAttrs > 0 ? fromAttrs : null;
+    })(),
     attributes: stripVariantsFromAttributes(attrs),
     variants,
     totalAvailable,

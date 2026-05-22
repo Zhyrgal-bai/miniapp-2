@@ -77,6 +77,9 @@ function orderErrorMessage(err: unknown): string {
       if (step === "order_created") {
         return "Не удалось сохранить заказ. Обновите корзину и попробуйте снова.";
       }
+      if (step === "pricing") {
+        return "Не удалось проверить цену товара. Обновите корзину и попробуйте снова.";
+      }
       return data.error;
     }
   }

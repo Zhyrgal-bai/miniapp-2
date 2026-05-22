@@ -1,6 +1,14 @@
 /** Reserved keys stored outside productSchema (variants live in attributes JSON + ProductStock). */
 export const RESERVED_PRODUCT_ATTR_KEYS = new Set(["variants"]);
 
+/** Commerce flags stored in attributes JSON (no Product columns in schema). */
+export const COMMERCE_META_ATTR_KEYS = new Set([
+  "discountPercent",
+  "isSale",
+  "isNew",
+  "isPopular",
+]);
+
 /**
  * Keys often left in `product.attributes` after vertical template migrations.
  * Informational only — stripping is driven by the active productSchema keys.
@@ -58,6 +66,10 @@ export function stripProductAttributesToSchema(
 
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (COMMERCE_META_ATTR_KEYS.has(k)) {
+      out[k] = v;
+      continue;
+    }
     if (RESERVED_PRODUCT_ATTR_KEYS.has(k) || !allowed.has(k)) {
       strippedKeys.push(k);
       if (staleSet.has(k)) staleLegacyKeys.push(k);
