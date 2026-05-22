@@ -9,6 +9,7 @@ import {
   isStorefrontClosedForCustomers,
 } from "../server/subscriptionAccess.js";
 import { verifiedTelegramIdFromRequest } from "./verifiedTelegramAuth.js";
+import { API_ERR_STORE_UNAVAILABLE } from "../shared/apiClientMessages.js";
 
 declare global {
   namespace Express {
@@ -124,7 +125,7 @@ export async function businessMiddleware(
         return;
       }
       if (isStorefrontClosedForCustomers(business)) {
-        res.status(403).json({ error: "Store unavailable" });
+        res.status(403).json({ error: API_ERR_STORE_UNAVAILABLE });
         return;
       }
 
@@ -178,7 +179,7 @@ export async function businessMiddleware(
       return;
     }
     if (isStorefrontClosedForCustomers(business)) {
-      res.status(403).json({ error: "Store unavailable" });
+      res.status(403).json({ error: API_ERR_STORE_UNAVAILABLE });
       return;
     }
 

@@ -8,6 +8,13 @@ import {
 import { safeParseStorefrontPublicApiResponse } from "../storefront/storefrontPublicApiResponseSchema.js";
 import { templateForBusinessType } from "../templates/index.js";
 import type { BusinessType } from "@prisma/client";
+import {
+  API_ERR_BUSINESS_NOT_FOUND,
+  API_ERR_INVALID_BUSINESS_ID,
+  API_ERR_SERVER,
+  API_ERR_STORE_UNAVAILABLE,
+  API_ERR_STOREFRONT_INVALID,
+} from "../shared/apiClientMessages.js";
 
 /** Public GET /api/storefront payload (shared by numeric id and slug routes). */
 export async function sendStorefrontPublicPayload(
@@ -16,7 +23,7 @@ export async function sendStorefrontPublicPayload(
 ): Promise<void> {
   try {
     if (!Number.isInteger(businessId) || businessId <= 0) {
-      res.status(400).json({ error: "Invalid businessId" });
+      res.status(400).json({ error: API_ERR_INVALID_BUSINESS_ID });
       return;
     }
 
@@ -51,11 +58,11 @@ export async function sendStorefrontPublicPayload(
       } as any,
     });
     if (!b) {
-      res.status(404).json({ error: "Business not found" });
+      res.status(404).json({ error: API_ERR_BUSINESS_NOT_FOUND });
       return;
     }
     if (!(b as any).isActive || (b as any).isBlocked) {
-      res.status(403).json({ error: "Store unavailable" });
+      res.status(403).json({ error: API_ERR_STORE_UNAVAILABLE });
       return;
     }
 
@@ -177,7 +184,7 @@ export async function sendStorefrontPublicPayload(
         `GET /api/storefront/${businessId}: payload failed validation:`,
         payloadOk.error,
       );
-      res.status(500).json({ error: "Storefront payload invalid" });
+      res.status(500).json({ error: API_ERR_STOREFRONT_INVALID });
       return;
     }
 
@@ -188,7 +195,7 @@ export async function sendStorefrontPublicPayload(
     res.json(payloadOk.data);
   } catch (e) {
     console.error("GET /api/storefront payload:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 }
 

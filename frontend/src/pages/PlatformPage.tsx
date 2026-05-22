@@ -38,6 +38,7 @@ import {
   type StoreReadinessPayload,
 } from "../services/platformApi";
 import { trackPlatformFunnel } from "../services/platformFunnel";
+import { formatAdminApiError } from "../utils/adminApiError";
 import {
   MerchantSettingsRenderer,
   type SchemaObject as MerchantSchemaObject,
@@ -359,7 +360,7 @@ export default function PlatformPage() {
       setOperatorIdentity(false);
       setIsPlatformAdmin(false);
       setOperatorSessionToken(null);
-      setError(e instanceof Error ? e.message : "Не удалось загрузить");
+      setError(formatAdminApiError(e));
       setBusinesses([]);
     } finally {
       setLoading(false);
@@ -395,7 +396,7 @@ export default function PlatformPage() {
         });
         setOperatorRequests(rows);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Не удалось загрузить заявки");
+        setError(formatAdminApiError(e));
       } finally {
         setOperatorRequestsLoading(false);
       }
@@ -415,7 +416,7 @@ export default function PlatformPage() {
       await postOperatorReauth(token, pass.trim());
       return true;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось подтвердить пароль");
+      setError(formatAdminApiError(e));
       return false;
     }
   }, [operatorSessionToken]);
@@ -523,9 +524,7 @@ export default function PlatformPage() {
         setSettingsNewToken("");
       } catch (e) {
         if (!cancelled) {
-          setSettingsErr(
-            e instanceof Error ? e.message : "Не удалось загрузить настройки",
-          );
+          setSettingsErr(formatAdminApiError(e));
         }
       } finally {
         if (!cancelled) setSettingsLoading(false);
@@ -584,7 +583,7 @@ export default function PlatformPage() {
       await loadOperatorBusinesses(merchantTelegramId, token);
       setInfoBanner(`${b.name}: статус бота обновлён`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось изменить бота");
+      setError(formatAdminApiError(e));
     } finally {
       setPending(b.id, "toggle", false);
     }
@@ -624,7 +623,7 @@ export default function PlatformPage() {
       );
     } catch (e) {
       setInfoBanner(null);
-      setError(e instanceof Error ? e.message : "Не удалось проверить webhook");
+      setError(formatAdminApiError(e));
     } finally {
       setPending(b.id, "webhook", false);
     }
@@ -677,7 +676,7 @@ export default function PlatformPage() {
       setInfoBanner(`Магазин «${b.name}» удалён`);
       await loadOperatorBusinesses(merchantTelegramId, token);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось удалить магазин");
+      setError(formatAdminApiError(e));
     } finally {
       setPending(b.id, "delete", false);
     }
@@ -713,7 +712,7 @@ export default function PlatformPage() {
       );
       await loadOperatorBusinesses(merchantTelegramId, token);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось продлить подписку");
+      setError(formatAdminApiError(e));
     } finally {
       setPending(b.id, "extend", false);
     }
@@ -740,7 +739,7 @@ export default function PlatformPage() {
       setInfoBanner(`${b.name}: блокировка снята`);
       await loadOperatorBusinesses(merchantTelegramId, token);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось снять блокировку");
+      setError(formatAdminApiError(e));
     } finally {
       setPending(b.id, "unblock", false);
     }
@@ -773,7 +772,7 @@ export default function PlatformPage() {
         setFinikMsg("Откроется страница оплаты Finik");
       }
     } catch (e) {
-      setFinikErr(e instanceof Error ? e.message : "Не удалось создать оплату");
+      setFinikErr(formatAdminApiError(e));
     } finally {
       setPayPlanBusy(null);
     }
@@ -800,12 +799,7 @@ export default function PlatformPage() {
       setOperatorUnlockOpen(false);
       setInfoBanner(ru.platform.operatorActivated);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Не удалось войти";
-      setOperatorUnlockError(
-        msg === "Load failed" || msg === "Failed to fetch"
-          ? ru.common.networkError
-          : msg,
-      );
+      setOperatorUnlockError(formatAdminApiError(e));
     } finally {
       setOperatorUnlockBusy(false);
     }
@@ -903,7 +897,7 @@ export default function PlatformPage() {
       await loadOperatorBusinesses(merchantTelegramId, token);
       setInfoBanner(ru.platform.requestApproved);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось одобрить");
+      setError(formatAdminApiError(e));
     } finally {
       setOperatorRequestBusyId(null);
     }
@@ -933,7 +927,7 @@ export default function PlatformPage() {
       setRejectReasonDraft("");
       setInfoBanner(ru.platform.requestRejected);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось отклонить");
+      setError(formatAdminApiError(e));
     } finally {
       setOperatorRequestBusyId(null);
     }
@@ -1033,7 +1027,7 @@ export default function PlatformPage() {
           : "Finik отключён.",
       );
     } catch (e) {
-      setFinikErr(e instanceof Error ? e.message : "Не удалось сохранить");
+      setFinikErr(formatAdminApiError(e));
     } finally {
       setFinikSaving(false);
     }
@@ -1115,7 +1109,7 @@ export default function PlatformPage() {
         ),
       );
     } catch (e) {
-      setSettingsErr(e instanceof Error ? e.message : "Не удалось сохранить");
+      setSettingsErr(formatAdminApiError(e));
     } finally {
       setSettingsSaving(false);
     }

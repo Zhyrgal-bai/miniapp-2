@@ -1,5 +1,5 @@
 import { apiAbsoluteUrl } from "./api";
-import { telegramWebAppInitDataHeader } from "../utils/telegramInitDataHeader";
+import { adminFetchJson } from "./adminRequest";
 
 /** Контракт с `GET /my-businesses` (синхрон с `merchantDashboard.ts` на сервере). */
 export type MerchantBusinessCardDTO = {
@@ -17,18 +17,9 @@ export type MerchantBusinessCardDTO = {
 };
 
 export async function fetchMerchantBusinesses(): Promise<MerchantBusinessCardDTO[]> {
-  const initHdr = telegramWebAppInitDataHeader();
-  const res = await fetch(apiAbsoluteUrl("/my-businesses"), {
-    method: "GET",
-    credentials: "omit",
-    headers: {
-      ...initHdr,
-    },
-  });
-  if (!res.ok) {
-    const j = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(j.error ?? `HTTP ${res.status}`);
-  }
-  const data = (await res.json()) as { businesses?: MerchantBusinessCardDTO[] };
+  const data = await adminFetchJson<{ businesses?: MerchantBusinessCardDTO[] }>(
+    apiAbsoluteUrl("/my-businesses"),
+    { method: "GET", json: false },
+  );
   return Array.isArray(data.businesses) ? data.businesses : [];
 }

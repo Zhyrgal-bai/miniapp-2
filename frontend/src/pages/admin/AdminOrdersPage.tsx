@@ -10,6 +10,7 @@ import {
   isFinikPaymentMethod,
 } from "@repo-shared/finikPaymentState";
 import { showErrorToast, showSuccessToast } from "../../store/toast.store";
+import { formatAdminApiError } from "../../utils/adminApiError";
 
 const FILTER_TABS = [
   "ALL",
@@ -71,7 +72,7 @@ export default function AdminOrdersPage() {
     } catch (e) {
       console.error(e);
       if (!opts?.silent) {
-        setError("Не удалось загрузить заказы");
+        setError(formatAdminApiError(e));
         setOrders([]);
       }
     } finally {
@@ -159,9 +160,7 @@ export default function AdminOrdersPage() {
       window.dispatchEvent(new CustomEvent("miniapp:admin-orders-changed"));
     } catch (e) {
       console.error(e);
-      showErrorToast(
-        e instanceof Error ? e.message : "Ошибка при обновлении",
-      );
+      showErrorToast(formatAdminApiError(e));
     } finally {
       setBusyId(null);
     }
@@ -188,7 +187,7 @@ export default function AdminOrdersPage() {
       }
     } catch (e) {
       console.error(e);
-      showErrorToast(e instanceof Error ? e.message : "Не удалось проверить оплату");
+      showErrorToast(formatAdminApiError(e));
     } finally {
       setBusySyncId(null);
     }
@@ -204,9 +203,7 @@ export default function AdminOrdersPage() {
       window.dispatchEvent(new CustomEvent("miniapp:admin-orders-changed"));
     } catch (e) {
       console.error(e);
-      showErrorToast(
-        e instanceof Error ? e.message : "Не удалось сохранить комментарий",
-      );
+      showErrorToast(formatAdminApiError(e));
     } finally {
       setBusyTrackingId(null);
     }
@@ -223,7 +220,7 @@ export default function AdminOrdersPage() {
       showSuccessToast(`Удалено заказов: ${deleted}`);
     } catch (e) {
       console.error(e);
-      showErrorToast(e instanceof Error ? e.message : "Не удалось очистить заказы");
+      showErrorToast(formatAdminApiError(e));
     } finally {
       setClearBusy(null);
     }

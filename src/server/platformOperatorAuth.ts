@@ -74,7 +74,7 @@ export async function unlockOperatorSession(input: {
       ok: false,
       status: 401,
       code: "operator_unlock_failed",
-      message: "Invalid operator password",
+      message: "Неверный пароль оператора",
     };
   }
 

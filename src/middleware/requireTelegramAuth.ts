@@ -2,6 +2,16 @@ import type { NextFunction, Request, Response } from "express";
 import { plainBotTokenFromStored } from "../server/businessBotToken.js";
 import { prisma } from "../server/db.js";
 import {
+  logAuthHeaderMissing,
+  logAuthHeaderPresent,
+  logBusinessNotFound,
+  logInitDataInvalid,
+  logPrivilegedRouteReject,
+  logStartParamMissing,
+  logTokenMismatch,
+} from "../server/structuredLog.js";
+import { tenantBusinessIdFromRequest } from "../server/tenantHintFromRequest.js";
+import {
   envCandidateBotTokensForWebAppInit,
   parseBusinessIdFromWebAppStartParam,
   parseStoreSlugFromWebAppStartParam,
@@ -10,6 +20,13 @@ import {
 } from "../server/telegramWebAppInitData.js";
 
 const HEADER = "x-telegram-init-data";
+
+type TokenSource =
+  | "start_param"
+  | "request_tenant"
+  | "slug"
+  | "env"
+  | "db_scan";
 
 function shouldLogTelegramAuthDebug(): boolean {
   return (
@@ -33,6 +50,14 @@ function emptyInitDataBypassAllowed(): boolean {
   );
 }
 
+function authPath(req: Request): string {
+  return req.path ?? req.url ?? "";
+}
+
+function authMethod(req: Request): string {
+  return req.method.toUpperCase();
+}
+
 function headerInitData(req: Request): string {
   const raw = req.headers[HEADER];
   const s =
@@ -42,6 +67,15 @@ function headerInitData(req: Request): string {
         ? raw[0].trim()
         : "";
   return s;
+}
+
+function startParamPresent(initData: string): boolean {
+  try {
+    const sp = new URLSearchParams(initData).get("start_param")?.trim() ?? "";
+    return sp !== "";
+  } catch {
+    return false;
+  }
 }
 
 /** Не роняем весь запрос, если один из магазинов в БД с битым ciphertext/ключом. */
@@ -57,26 +91,111 @@ function safePlainBotTokenFromStored(raw: string | null | undefined): string {
   }
 }
 
-/**
- * true — ответ уже отправлен (next или ошибка acceptInitData).
- */
-function tryValidateInitDataWithToken(
+function acceptInitData(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  initData: string,
+  source: TokenSource,
+): void {
+  const telegramId = telegramUserIdStringFromInitData(initData);
+  if (telegramId == null) {
+    logPrivilegedRouteReject({
+      path: authPath(req),
+      method: authMethod(req),
+      reason: "init_data_missing_user_id",
+      status: 403,
+    });
+    res.status(403).json({ error: "В initData нет user.id" });
+    return;
+  }
+  if (shouldLogTelegramAuthDebug()) {
+    console.log(
+      "[telegram-auth] initData hash OK",
+      authMethod(req),
+      authPath(req),
+      `source=${source}`,
+    );
+  }
+  req.platformTelegramId = telegramId;
+  next();
+}
+
+function tryToken(
   initData: string,
   plainToken: string,
   req: Request,
   res: Response,
   next: NextFunction,
+  source: TokenSource,
+  triedTokens: Set<string>,
 ): boolean {
-  if (plainToken.trim() === "") return false;
-  if (!validateTelegramInitData(initData, plainToken)) return false;
-  logHashOk(req);
-  acceptInitData(req, res, next, initData);
+  const token = plainToken.trim();
+  if (token === "" || triedTokens.has(token)) return false;
+  triedTokens.add(token);
+  if (!validateTelegramInitData(initData, token)) return false;
+  acceptInitData(req, res, next, initData, source);
   return true;
+}
+
+async function tryBusinessToken(
+  initData: string,
+  businessId: number,
+  source: TokenSource,
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  triedTokens: Set<string>,
+): Promise<boolean> {
+  const path = authPath(req);
+  const method = authMethod(req);
+
+  const row = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { botToken: true },
+  });
+  if (row == null) {
+    logBusinessNotFound({
+      path,
+      method,
+      businessId,
+      source,
+      tokenPresent: false,
+    });
+    return false;
+  }
+
+  const plain = safePlainBotTokenFromStored(row.botToken);
+  if (plain.trim() === "") {
+    logBusinessNotFound({
+      path,
+      method,
+      businessId,
+      source,
+      tokenPresent: false,
+    });
+    return false;
+  }
+
+  if (
+    tryToken(initData, plain, req, res, next, source, triedTokens)
+  ) {
+    return true;
+  }
+
+  logTokenMismatch({
+    path,
+    method,
+    source,
+    businessId,
+    tokenPresent: true,
+  });
+  return false;
 }
 
 /**
  * Mini App: multi-bot initData.
- * Порядок: start_param → Business.botToken → BOT_TOKENS/env → скан магазинов в БД (по умолчанию вкл.).
+ * Порядок: start_param → x-business-id/shop/body → slug → env → скан БД.
  */
 export async function requireTelegramAuth(
   req: Request,
@@ -85,6 +204,8 @@ export async function requireTelegramAuth(
 ): Promise<void> {
   try {
     const initData = headerInitData(req);
+    const path = authPath(req);
+    const method = authMethod(req);
 
     if (shouldLogTelegramAuthDebug()) {
       console.log(
@@ -95,6 +216,7 @@ export async function requireTelegramAuth(
     }
 
     if (initData === "") {
+      logAuthHeaderMissing({ path, method });
       if (emptyInitDataBypassAllowed()) {
         const tid = process.env.DEV_TELEGRAM_USER_ID?.trim();
         if (tid !== undefined && /^\d+$/.test(tid)) {
@@ -106,6 +228,12 @@ export async function requireTelegramAuth(
           return;
         }
       }
+      logPrivilegedRouteReject({
+        path,
+        method,
+        reason: "missing_init_data_header",
+        status: 401,
+      });
       res.status(401).json({
         error:
           "Нужен заголовок x-telegram-init-data — откройте Mini App из Telegram (или задайте DEV_TELEGRAM_USER_ID в режиме разработки)",
@@ -113,13 +241,30 @@ export async function requireTelegramAuth(
       return;
     }
 
-    const envToks = envCandidateBotTokensForWebAppInit();
+    logAuthHeaderPresent({ path, method, length: initData.length });
+
     const businessIdHint = parseBusinessIdFromWebAppStartParam(initData);
     const slugHint = parseStoreSlugFromWebAppStartParam(initData);
+    const requestTenantId = tenantBusinessIdFromRequest(req);
+    const hadStartParam = startParamPresent(initData);
+    const envToks = envCandidateBotTokensForWebAppInit();
     const scanOn = shouldScanStoreBotsForInitData();
+    const triedTokens = new Set<string>();
+
+    if (!hadStartParam) {
+      logStartParamMissing({
+        path,
+        method,
+        requestTenantBusinessId: requestTenantId,
+      });
+    }
 
     const canTrySomething =
-      businessIdHint != null || envToks.length > 0 || scanOn;
+      businessIdHint != null ||
+      requestTenantId != null ||
+      slugHint != null ||
+      envToks.length > 0 ||
+      scanOn;
     if (!canTrySomething) {
       res.status(500).json({
         error:
@@ -129,19 +274,31 @@ export async function requireTelegramAuth(
     }
 
     if (businessIdHint != null) {
-      const row = await prisma.business.findUnique({
-        where: { id: businessIdHint },
-        select: { botToken: true },
-      });
-      const plain =
-        row != null ? safePlainBotTokenFromStored(row.botToken) : "";
       if (
-        tryValidateInitDataWithToken(
+        await tryBusinessToken(
           initData,
-          plain,
+          businessIdHint,
+          "start_param",
           req,
           res,
           next,
+          triedTokens,
+        )
+      ) {
+        return;
+      }
+    }
+
+    if (requestTenantId != null && requestTenantId !== businessIdHint) {
+      if (
+        await tryBusinessToken(
+          initData,
+          requestTenantId,
+          "request_tenant",
+          req,
+          res,
+          next,
+          triedTokens,
         )
       ) {
         return;
@@ -151,25 +308,44 @@ export async function requireTelegramAuth(
     if (slugHint != null) {
       const row = await prisma.business.findFirst({
         where: { slug: { equals: slugHint, mode: "insensitive" } } as any,
-        select: { botToken: true },
+        select: { id: true, botToken: true },
       });
-      const plain =
-        row != null ? safePlainBotTokenFromStored(row.botToken) : "";
-      if (
-        tryValidateInitDataWithToken(
-          initData,
-          plain,
-          req,
-          res,
-          next,
-        )
-      ) {
-        return;
+      if (row == null) {
+        logBusinessNotFound({
+          path,
+          method,
+          businessId: -1,
+          source: "slug",
+          tokenPresent: false,
+        });
+      } else {
+        const plain = safePlainBotTokenFromStored(row.botToken);
+        if (plain.trim() === "") {
+          logBusinessNotFound({
+            path,
+            method,
+            businessId: row.id,
+            source: "slug",
+            tokenPresent: false,
+          });
+        } else if (
+          tryToken(initData, plain, req, res, next, "slug", triedTokens)
+        ) {
+          return;
+        } else {
+          logTokenMismatch({
+            path,
+            method,
+            source: "slug",
+            businessId: row.id,
+            tokenPresent: true,
+          });
+        }
       }
     }
 
     for (const t of envToks) {
-      if (tryValidateInitDataWithToken(initData, t, req, res, next)) {
+      if (tryToken(initData, t, req, res, next, "env", triedTokens)) {
         return;
       }
     }
@@ -182,7 +358,7 @@ export async function requireTelegramAuth(
       });
       for (const r of rows) {
         const plain = safePlainBotTokenFromStored(r.botToken);
-        if (tryValidateInitDataWithToken(initData, plain, req, res, next)) {
+        if (tryToken(initData, plain, req, res, next, "db_scan", triedTokens)) {
           return;
         }
       }
@@ -198,49 +374,42 @@ export async function requireTelegramAuth(
         /* ignore */
       }
       console.warn(
-        "[telegram-auth] все проверки подписи не прошли: hasHash=%s envTokens=%s startParamBizId=%s startParamSlug=%s scan=%s",
+        "[telegram-auth] все проверки подписи не прошли: hasHash=%s envTokens=%s startParamBizId=%s requestTenant=%s startParamSlug=%s scan=%s tried=%s",
         hasHexHash,
         envToks.length,
         businessIdHint ?? "none",
+        requestTenantId ?? "none",
         slugHint ?? "none",
         scanOn,
+        triedTokens.size,
       );
     }
+
+    logInitDataInvalid({
+      path,
+      method,
+      tokensTried: triedTokens.size,
+      hadStartParam,
+      hadTenantHint: requestTenantId != null,
+      startParamBusinessId: businessIdHint,
+      requestTenantBusinessId: requestTenantId,
+    });
 
     console.warn(
       "[telegram-auth] invalid WebApp signature",
       req.method,
       req.path ?? req.url,
     );
+    logPrivilegedRouteReject({
+      path,
+      method,
+      reason: "invalid_init_data_signature",
+      status: 403,
+    });
     res.status(403).json({
       error: "Недействительные данные авторизации Telegram",
     });
   } catch (e) {
     next(e);
   }
-}
-
-function logHashOk(req: Request): void {
-  if (shouldLogTelegramAuthDebug()) {
-    console.log(
-      "[telegram-auth] initData hash OK",
-      req.method,
-      req.path ?? req.url,
-    );
-  }
-}
-
-function acceptInitData(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-  initData: string,
-): void {
-  const telegramId = telegramUserIdStringFromInitData(initData);
-  if (telegramId == null) {
-    res.status(403).json({ error: "В initData нет user.id" });
-    return;
-  }
-  req.platformTelegramId = telegramId;
-  next();
 }

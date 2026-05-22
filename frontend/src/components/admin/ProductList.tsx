@@ -1,7 +1,7 @@
 import { showErrorToast } from "../../store/toast.store";
 import { useEffect } from "react";
-import axios from "axios";
 import { useAdminStore } from "../../store/admin.store";
+import { formatAdminApiError } from "../../utils/adminApiError";
 import { getPrimaryImage, getTotalStockSum } from "../../utils/product";
 
 const ProductList = () => {
@@ -42,11 +42,7 @@ const ProductList = () => {
                 try {
                   await deleteProduct(p.id!);
                 } catch (e) {
-                  if (axios.isAxiosError(e) && e.response?.status === 403) {
-                    showErrorToast("Нет прав");
-                  } else {
-                    showErrorToast("Не удалось удалить товар");
-                  }
+                  showErrorToast(formatAdminApiError(e));
                 }
               }}
               className="delete"

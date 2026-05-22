@@ -2,14 +2,15 @@ import type { ProductVariantInput } from "../shared/inventory.js";
 import { parseProductVariants } from "../shared/inventory.js";
 import { normalizeVariantsForSave } from "../shared/productDto.js";
 import type { BusinessType } from "@prisma/client";
-import { validateProductAttributes } from "./templateValidation.js";
+import { validateProductAttributesForAdmin } from "./templateValidation.js";
 
 const RESERVED_ATTR_KEYS = new Set(["variants"]);
 
 export function mergeProductAttributesWithVariants(
   businessType: BusinessType,
   attributes: unknown,
-  variants?: unknown
+  variants?: unknown,
+  logCtx?: { businessId?: number; productId?: number },
 ): { ok: true; value: Record<string, unknown> } | { ok: false; error: string; details?: Record<string, string> } {
   const variantList =
     variants != null
@@ -22,7 +23,7 @@ export function mergeProductAttributesWithVariants(
 
   delete base.variants;
 
-  const vAttr = validateProductAttributes(businessType, base);
+  const vAttr = validateProductAttributesForAdmin(businessType, base, logCtx);
   if (!vAttr.ok) {
     const out: { ok: false; error: string; details?: Record<string, string> } = {
       ok: false,

@@ -6,6 +6,10 @@ import { PRODUCT_SIZES } from "../../constants/productCatalog";
 import { getNormalizedVariants } from "../../utils/product";
 import { getProductImages } from "../../utils/product";
 import { categoryRoots } from "../../utils/categoryTree";
+import {
+  schemaKeysFromProductSchema,
+  stripProductAttributesToSchema,
+} from "@repo-shared/productAttributeNormalization";
 import type { Category, Product, Variant } from "../../types";
 import {
   TierStockEditor,
@@ -28,11 +32,12 @@ import {
   resolvePickerHex,
 } from "../../utils/variantColor";
 
-function normalizeProductAttributes(raw: unknown): Record<string, unknown> {
-  if (raw != null && typeof raw === "object" && !Array.isArray(raw)) {
-    return { ...(raw as Record<string, unknown>) };
-  }
-  return {};
+function normalizeProductAttributesForSchema(
+  raw: unknown,
+  schema: Record<string, unknown>,
+): Record<string, unknown> {
+  return stripProductAttributesToSchema(schemaKeysFromProductSchema(schema), raw)
+    .value;
 }
 
 const SIZE_OPTIONS = PRODUCT_SIZES;
@@ -184,8 +189,8 @@ export default function ProductEditModal({
     setVariantDrafts(productToDrafts(p));
     const bt = String(p.businessType ?? merchantBusinessType ?? "clothing");
     setTierRows(variantsToTierRows(bt, getNormalizedVariants(p)));
-    setAttributes(normalizeProductAttributes(p.attributes));
-  }, [merchantBusinessType]);
+    setAttributes(normalizeProductAttributesForSchema(p.attributes, productSchema));
+  }, [merchantBusinessType, productSchema]);
 
   useEffect(() => {
     if (!open) return;
@@ -251,9 +256,7 @@ export default function ProductEditModal({
         resetFromProduct(p);
       } catch (e) {
         if (!cancelled) {
-          setLoadError(
-            e instanceof Error ? e.message : "Не удалось загрузить товар"
-          );
+          setLoadError(formatAdminApiError(e));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -263,6 +266,13 @@ export default function ProductEditModal({
       cancelled = true;
     };
   }, [open, productId, resetFromProduct]);
+
+  useEffect(() => {
+    if (!open || Object.keys(productSchema).length === 0) return;
+    setAttributes((prev) =>
+      normalizeProductAttributesForSchema(prev, productSchema),
+    );
+  }, [open, productSchema]);
 
   const updateDraft = (
     sid: string,
@@ -445,12 +455,12 @@ export default function ProductEditModal({
         await adminService.updateProduct(productId, {
           ...basePatch,
           variants: tierRowsToVariants(tierRows) as unknown as Product["variants"],
-          attributes,
+          attributes: normalizeProductAttributesForSchema(attributes, productSchema),
         });
       } else {
         await adminService.updateProduct(productId, {
           ...basePatch,
-          attributes,
+          attributes: normalizeProductAttributesForSchema(attributes, productSchema),
         });
       }
       onSaved();

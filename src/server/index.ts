@@ -64,6 +64,17 @@ import {
   verifyOperatorPassword,
 } from "./platformOperatorAuth.js";
 import { toPublicProduct, findStockConsistencyIssues } from "../shared/productDto.js";
+import {
+  API_ERR_BUSINESS_NOT_FOUND,
+  API_ERR_FORBIDDEN,
+  API_ERR_INVALID_BUSINESS_ID,
+  API_ERR_INVALID_SLUG,
+  API_ERR_MISSING_TENANT_QUERY,
+  API_ERR_MISSING_TENANT_SHOP,
+  API_ERR_NOT_FOUND,
+  API_ERR_SERVER,
+  API_ERR_STORE_UNAVAILABLE,
+} from "../shared/apiClientMessages.js";
 import { templateForBusinessType } from "../templates/index.js";
 import {
   StorefrontConfigSchema,
@@ -275,7 +286,9 @@ console.log(
       ? "1 token (BOT_TOKEN)"
       : "missing"
 );
-console.log("CHAT ID env:", process.env.CHAT_ID ?? "(empty)");
+if (process.env.NODE_ENV !== "production") {
+  console.log("CHAT ID env:", process.env.CHAT_ID ?? "(empty)");
+}
 
 type OrderTotalBody = {
   total?: unknown;
@@ -447,7 +460,7 @@ app.get("/api/business/:businessId", async (req: Request, res: Response) => {
   try {
     const businessId = Number(req.params.businessId);
     if (!Number.isSafeInteger(businessId) || businessId <= 0) {
-      res.status(400).json({ error: "Invalid business id" });
+      res.status(400).json({ error: API_ERR_INVALID_BUSINESS_ID });
       return;
     }
     const row = await prisma.business.findUnique({
@@ -465,13 +478,13 @@ app.get("/api/business/:businessId", async (req: Request, res: Response) => {
       },
     });
     if (row == null) {
-      res.status(404).json({ error: "Not found" });
+      res.status(404).json({ error: API_ERR_NOT_FOUND });
       return;
     }
     // Публичная витрина/тема: доступность определяется флагами витрины.
     // Подписка/триал — отдельная бизнес-логика (платформа/лимиты), не "hard-disable" theme fetch.
     if (row.isBlocked || !row.isActive) {
-      res.status(403).json({ error: "Store unavailable" });
+      res.status(403).json({ error: API_ERR_STORE_UNAVAILABLE });
       return;
     }
     const settings = await prisma.settings.findUnique({
@@ -491,7 +504,7 @@ app.get("/api/business/:businessId", async (req: Request, res: Response) => {
     });
   } catch (e) {
     console.error("GET /api/business/:id:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -502,7 +515,7 @@ function platformTelegramIdFromWebApp(req: Request): string | null {
 }
 
 function operatorForbidden(res: Response, code = "operator_forbidden"): void {
-  res.status(403).json({ error: "Forbidden", code });
+  res.status(403).json({ error: API_ERR_FORBIDDEN, code });
 }
 
 function operatorSessionTokenFromReq(req: Request): string | null {
@@ -1101,7 +1114,7 @@ app.get("/api/storefront/by-slug/:slug", async (req: Request, res: Response) => 
   try {
     const slug = normalizePublicStoreSlug(String(req.params.slug ?? ""));
     if (!slug) {
-      res.status(400).json({ error: "Invalid slug" });
+      res.status(400).json({ error: API_ERR_INVALID_SLUG });
       return;
     }
     const b = await prisma.business.findFirst({
@@ -1115,13 +1128,13 @@ app.get("/api/storefront/by-slug/:slug", async (req: Request, res: Response) => 
       return;
     }
     if (!(b as any).isActive || (b as any).isBlocked) {
-      res.status(403).json({ error: "Store unavailable" });
+      res.status(403).json({ error: API_ERR_STORE_UNAVAILABLE });
       return;
     }
     await sendStorefrontPublicPayload(res, (b as any).id);
   } catch (e) {
     console.error("GET /api/storefront/by-slug/:slug:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -1131,7 +1144,7 @@ app.get("/api/storefront/:businessId", async (req: Request, res: Response) => {
     await sendStorefrontPublicPayload(res, businessId);
   } catch (e) {
     console.error("GET /api/storefront/:businessId:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -1155,7 +1168,7 @@ app.get("/api/merchant/storefront-builder", async (req: Request, res: Response) 
         storefrontConfigVersion: true,
       } as any,
     });
-    if (!b) return res.status(404).json({ error: "Business not found" });
+    if (!b) return res.status(404).json({ error: API_ERR_BUSINESS_NOT_FOUND });
 
     const parseCfg = (raw: unknown) => {
       const out = StorefrontConfigSchema.safeParse(raw ?? {});
@@ -1212,7 +1225,7 @@ app.get("/api/merchant/storefront-builder", async (req: Request, res: Response) 
     });
   } catch (e) {
     console.error("GET /api/merchant/storefront-builder:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -1295,7 +1308,7 @@ app.put("/api/merchant/storefront-builder/draft", async (req: Request, res: Resp
     res.json({ ok: true, draftVersion: parsed.data.version, ux });
   } catch (e) {
     console.error("PUT /api/merchant/storefront-builder/draft:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -1312,7 +1325,7 @@ app.post("/api/merchant/storefront-builder/publish", async (req: Request, res: R
         themeConfig: true,
       } as any,
     });
-    if (!b) return res.status(404).json({ error: "Business not found" });
+    if (!b) return res.status(404).json({ error: API_ERR_BUSINESS_NOT_FOUND });
 
     const sf = await prisma.storefront.findFirst({
       where: { businessId: merchant.businessId },
@@ -1353,7 +1366,7 @@ app.post("/api/merchant/storefront-builder/publish", async (req: Request, res: R
     res.json({ ok: true, publishedAt: new Date().toISOString(), ux });
   } catch (e) {
     console.error("POST /api/merchant/storefront-builder/publish:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -1385,7 +1398,7 @@ app.post("/api/merchant/storefront-builder/reset", async (req: Request, res: Res
     res.json({ ok: true, draft: def });
   } catch (e) {
     console.error("POST /api/merchant/storefront-builder/reset:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -1409,7 +1422,7 @@ app.get("/api/merchant/reusable-blocks", async (req: Request, res: Response) => 
     res.json({ blocks: rows });
   } catch (e) {
     console.error("GET /api/merchant/reusable-blocks:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -1452,7 +1465,7 @@ app.post("/api/merchant/reusable-blocks", async (req: Request, res: Response) =>
     res.json({ ok: true, block: created });
   } catch (e) {
     console.error("POST /api/merchant/reusable-blocks:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -1468,7 +1481,7 @@ app.delete(
       }
       const row = await prisma.storefrontReusableBlock.findUnique({ where: { id } });
       if (!row || (row as any).businessId !== merchant.businessId) {
-        return res.status(404).json({ error: "Not found" });
+        return res.status(404).json({ error: API_ERR_NOT_FOUND });
       }
 
       // Safe delete sync: delete Cloudinary assets referenced by this block config.
@@ -1485,7 +1498,7 @@ app.delete(
       res.json({ ok: true });
     } catch (e) {
       console.error("DELETE /api/merchant/reusable-blocks/:id:", e);
-      res.status(500).json({ error: "Server error" });
+      res.status(500).json({ error: API_ERR_SERVER });
     }
   },
 );
@@ -1497,7 +1510,7 @@ app.get("/api/merchant/storefront-config", async (req: Request, res: Response) =
     const b = await prisma.business.findUnique({
       where: { id: merchant.businessId },
     });
-    if (!b) return res.status(404).json({ error: "Business not found" });
+    if (!b) return res.status(404).json({ error: API_ERR_BUSINESS_NOT_FOUND });
     const raw = (b as any).storefrontConfig ?? {};
     const out = StorefrontConfigSchema.safeParse(raw);
     const rawSafe = out.success ? out.data : { version: 1, sections: [] };
@@ -1518,7 +1531,7 @@ app.get("/api/merchant/storefront-config", async (req: Request, res: Response) =
     });
   } catch (e) {
     console.error("GET /api/merchant/storefront-config:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -1541,7 +1554,7 @@ app.put("/api/merchant/storefront-config", async (req: Request, res: Response) =
     res.json({ ok: true, storefrontConfigVersion: parsed.data.version });
   } catch (e) {
     console.error("PUT /api/merchant/storefront-config:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -1565,7 +1578,7 @@ app.put("/api/merchant/storefront-style-catalog-patch", async (req: Request, res
       } as any,
     });
     if (!b) {
-      res.status(404).json({ error: "Business not found" });
+      res.status(404).json({ error: API_ERR_BUSINESS_NOT_FOUND });
       return;
     }
 
@@ -1645,7 +1658,7 @@ app.put("/api/merchant/storefront-style-catalog-patch", async (req: Request, res
     res.json({ ok: true });
   } catch (e) {
     console.error("PUT /api/merchant/storefront-style-catalog-patch:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -2010,7 +2023,7 @@ app.get("/api/platform/admin/template-info", async (req: Request, res: Response)
     }
     const b = await prisma.business.findUnique({ where: { id: bid } });
     if (!b) {
-      res.status(404).json({ error: "Business not found" });
+      res.status(404).json({ error: API_ERR_BUSINESS_NOT_FOUND });
       return;
     }
     const bt = (b as any).businessType;
@@ -2045,7 +2058,7 @@ app.post("/api/platform/admin/reapply-template", async (req: Request, res: Respo
       return;
     }
     const b = await prisma.business.findUnique({ where: { id: bid } });
-    if (!b) return res.status(404).json({ error: "Business not found" });
+    if (!b) return res.status(404).json({ error: API_ERR_BUSINESS_NOT_FOUND });
     const bt = (b as any).businessType;
     if (typeof bt !== "string" || bt.trim() === "") {
       return res.status(400).json({ error: "Business без businessType" });
@@ -2068,7 +2081,7 @@ app.post("/api/platform/admin/regenerate-demo", async (req: Request, res: Respon
       return;
     }
     const b = await prisma.business.findUnique({ where: { id: bid } });
-    if (!b) return res.status(404).json({ error: "Business not found" });
+    if (!b) return res.status(404).json({ error: API_ERR_BUSINESS_NOT_FOUND });
     const bt = (b as any).businessType;
     if (typeof bt !== "string" || bt.trim() === "") {
       return res.status(400).json({ error: "Business без businessType" });
@@ -2096,7 +2109,7 @@ app.post("/api/platform/admin/migrate-template", async (req: Request, res: Respo
       return;
     }
     const b = await prisma.business.findUnique({ where: { id: bid } });
-    if (!b) return res.status(404).json({ error: "Business not found" });
+    if (!b) return res.status(404).json({ error: API_ERR_BUSINESS_NOT_FOUND });
     const bt = (b as any).businessType;
     if (typeof bt !== "string" || bt.trim() === "") {
       return res.status(400).json({ error: "Business без businessType" });
@@ -2178,7 +2191,7 @@ app.put("/api/business/:businessId/theme", async (req: Request, res: Response) =
   try {
     const bid = Number(req.params.businessId);
     if (!Number.isSafeInteger(bid) || bid <= 0) {
-      res.status(400).json({ error: "Invalid business id" });
+      res.status(400).json({ error: API_ERR_INVALID_BUSINESS_ID });
       return;
     }
     if (typeof req.businessId !== "number" || req.businessId !== bid) {
@@ -2203,7 +2216,7 @@ app.put("/api/business/:businessId/theme", async (req: Request, res: Response) =
       select: { themeConfig: true, templateId: true },
     });
     if (!business) {
-      res.status(404).json({ error: "Not found" });
+      res.status(404).json({ error: API_ERR_NOT_FOUND });
       return;
     }
 
@@ -2253,7 +2266,7 @@ app.put("/api/business/:businessId/theme", async (req: Request, res: Response) =
     });
   } catch (e) {
     console.error("PUT /api/business/:id/theme:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -2261,7 +2274,7 @@ app.put("/api/business/template", async (req: Request, res: Response) => {
   try {
     if (typeof req.businessId !== "number") {
       res.status(400).json({
-        error: "Missing tenant: pass shop or businessId in query",
+        error: API_ERR_MISSING_TENANT_QUERY,
       });
       return;
     }
@@ -2288,7 +2301,7 @@ app.put("/api/business/template", async (req: Request, res: Response) => {
       select: { themeConfig: true, templateId: true },
     });
     if (!business) {
-      res.status(404).json({ error: "Not found" });
+      res.status(404).json({ error: API_ERR_NOT_FOUND });
       return;
     }
 
@@ -2319,7 +2332,7 @@ app.put("/api/business/template", async (req: Request, res: Response) => {
     });
   } catch (e) {
     console.error("PUT /api/business/template:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -2327,7 +2340,7 @@ app.get("/api/me", (req: Request, res: Response) => {
   try {
     if (typeof req.businessId !== "number" || req.tenantBusiness == null) {
       res.status(400).json({
-        error: "Missing tenant: pass shop or businessId in query",
+        error: API_ERR_MISSING_TENANT_QUERY,
       });
       return;
     }
@@ -2349,7 +2362,7 @@ app.get("/api/me", (req: Request, res: Response) => {
     });
   } catch (e) {
     console.error("GET /api/me:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -2357,7 +2370,7 @@ app.get("/api/me", (req: Request, res: Response) => {
 app.get("/api/memberships", async (req: Request, res: Response) => {
   try {
     if (typeof req.businessId !== "number") {
-      res.status(400).json({ error: "Missing tenant shop" });
+      res.status(400).json({ error: API_ERR_MISSING_TENANT_SHOP });
       return;
     }
     const ownerCtx = await requireStoreOwnerForApi(req, res, req.businessId);
@@ -2366,7 +2379,7 @@ app.get("/api/memberships", async (req: Request, res: Response) => {
     res.json(await listStaffPublicRows(req.businessId));
   } catch (e) {
     console.error("GET /api/memberships:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -2375,9 +2388,9 @@ function telegramIdFromRequest(req: Request): string | null {
   return verifiedTelegramIdFromRequest(req);
 }
 
-const PUBLIC_BUSINESS_PARSE_ERROR = "Invalid businessId";
-const PUBLIC_BUSINESS_MISSING_ERROR = "Not found";
-const PUBLIC_BUSINESS_UNAVAILABLE_ERROR = "Store unavailable";
+const PUBLIC_BUSINESS_PARSE_ERROR = API_ERR_INVALID_BUSINESS_ID;
+const PUBLIC_BUSINESS_MISSING_ERROR = API_ERR_NOT_FOUND;
+const PUBLIC_BUSINESS_UNAVAILABLE_ERROR = API_ERR_STORE_UNAVAILABLE;
 
 function queryParamToTrimmedString(raw: unknown): string {
   if (typeof raw === "string") return raw.trim();
@@ -2646,7 +2659,9 @@ app.post(
   async (req: Request, res: Response) => {
     const webhookRouteToken = String(req.params.webhookRouteToken ?? "").trim();
     console.log("WEBHOOK HIT:", req.params);
-    console.log("BODY:", req.body);
+    if (process.env.WEBHOOK_DEBUG === "1") {
+      console.log("WEBHOOK BODY:", req.body);
+    }
 
     let businessId: number | null = null;
 
@@ -3135,7 +3150,7 @@ app.post("/payment/list", async (req: Request, res: Response) => {
     res.json(await listPaymentDetailsFromDb(prisma, merchant.businessId));
   } catch (e) {
     console.error("PAYMENT LIST ERROR:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -3172,7 +3187,7 @@ app.delete("/payment/:id", async (req: Request, res: Response) => {
     res.status(204).send();
   } catch (e) {
     console.error("PAYMENT DELETE ERROR:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -3223,7 +3238,7 @@ app.post("/promo/apply", async (req: Request, res: Response) => {
     }
   } catch (e) {
     console.error("PROMO APPLY ERROR:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -3234,7 +3249,7 @@ app.post("/promo/list", async (req: Request, res: Response) => {
     res.json(await listPromosFromDb(prisma, merchant.businessId));
   } catch (e) {
     console.error("PROMO LIST ERROR:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -3296,7 +3311,7 @@ app.delete("/promo/:code", async (req: Request, res: Response) => {
     res.status(204).send();
   } catch (e) {
     console.error("PROMO DELETE ERROR:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -3529,7 +3544,8 @@ app.post("/products", async (req: Request, res: Response) => {
     const vAttr = mergeProductAttributesWithVariants(
       businessType as any,
       attributes,
-      variants
+      variants,
+      { businessId: merchant.businessId },
     );
     if (!vAttr.ok) {
       return res.status(400).json({ error: vAttr.error, details: vAttr.details });
@@ -3705,7 +3721,7 @@ app.post("/order/status", async (req: Request, res: Response) => {
     return res.json(jsonWithBigInt(result.body));
   } catch (e) {
     console.error("ORDER STATUS ERROR:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -3729,7 +3745,7 @@ app.put("/orders/:id/status", async (req: Request, res: Response) => {
     return res.json(jsonWithBigInt(result.body));
   } catch (e) {
     console.error("PUT ORDER STATUS ERROR:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -3855,7 +3871,7 @@ app.post("/orders/:id/sync-finik-payment", async (req: Request, res: Response) =
     );
   } catch (e) {
     console.error("POST /orders/:id/sync-finik-payment:", e);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: API_ERR_SERVER });
   }
 });
 
@@ -4507,7 +4523,7 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
 
   const hintedTenant = businessIdFromNonApiHint(req);
   if (hintedTenant != null && hintedTenant !== tenantBusinessId) {
-    return res.status(403).json({ error: "Forbidden" });
+    return res.status(403).json({ error: API_ERR_FORBIDDEN });
   }
 
   const promoRaw = String(body.promo ?? body.promoCode ?? "").trim();
@@ -5129,7 +5145,8 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       const vAttr = mergeProductAttributesWithVariants(
         businessType as any,
         baseAttrs,
-        variants
+        variants,
+        { businessId: merchant.businessId, productId: id },
       );
       if (!vAttr.ok) {
         return res

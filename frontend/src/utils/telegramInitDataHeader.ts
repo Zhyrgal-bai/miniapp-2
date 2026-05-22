@@ -1,15 +1,16 @@
-/** Заголовок для проверки подписи Mini App (`requireTelegramAuth`). Только подписанная строка `initData`, не initDataUnsafe. */
-export function telegramWebAppInitDataHeader(): {
+import { readTelegramInitData } from "./telegramSession";
+
+/** Header for backend HMAC verification — signed `Telegram.WebApp.initData` only. */
+export function telegramWebAppInitDataHeader(opts?: {
+  silent?: boolean;
+}): {
   "x-telegram-init-data": string;
 } {
-  const tg =
-    typeof window !== "undefined" ? window.Telegram?.WebApp : undefined;
+  const initData = readTelegramInitData();
 
-  const initData = tg?.initData ?? "";
-
-  if (initData === "") {
+  if (initData === "" && opts?.silent !== true) {
     console.warn(
-      "[Mini App] initData пустой — приложение открыто не из Telegram или WebApp.ready() ещё не подготовил данные.",
+      "[Mini App] initData пустой — откройте из Telegram или дождитесь готовности WebApp.",
     );
   }
 

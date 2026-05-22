@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { BusinessStaffRole } from "@prisma/client";
+import { API_ERR_MISSING_TENANT_SHOP, API_ERR_SERVER } from "../shared/apiClientMessages.js";
 import {
   inviteStaffMember,
   listStaffPublicRows,
@@ -23,7 +24,7 @@ export function attachStaffRoutes(
   app.get("/api/staff", async (req: Request, res: Response) => {
     try {
       if (typeof req.businessId !== "number") {
-        res.status(400).json({ error: "Missing tenant shop" });
+        res.status(400).json({ error: API_ERR_MISSING_TENANT_SHOP });
         return;
       }
       const ownerCtx = await deps.requireStoreOwnerForApi(
@@ -37,14 +38,14 @@ export function attachStaffRoutes(
       res.json(rows);
     } catch (e) {
       console.error("GET /api/staff:", e);
-      res.status(500).json({ error: "Server error" });
+      res.status(500).json({ error: API_ERR_SERVER });
     }
   });
 
   app.post("/api/staff/preview", async (req: Request, res: Response) => {
     try {
       if (typeof req.businessId !== "number") {
-        res.status(400).json({ error: "Missing tenant shop" });
+        res.status(400).json({ error: API_ERR_MISSING_TENANT_SHOP });
         return;
       }
       const ownerCtx = await deps.requireStoreOwnerForApi(
@@ -70,14 +71,14 @@ export function attachStaffRoutes(
       res.json(result.preview);
     } catch (e) {
       console.error("POST /api/staff/preview:", e);
-      res.status(500).json({ error: "Server error" });
+      res.status(500).json({ error: API_ERR_SERVER });
     }
   });
 
   app.post("/api/staff/invite", async (req: Request, res: Response) => {
     try {
       if (typeof req.businessId !== "number") {
-        res.status(400).json({ error: "Missing tenant shop" });
+        res.status(400).json({ error: API_ERR_MISSING_TENANT_SHOP });
         return;
       }
       const ownerCtx = await deps.requireStoreOwnerForApi(
@@ -111,14 +112,14 @@ export function attachStaffRoutes(
         return;
       }
       console.error("POST /api/staff/invite:", e);
-      res.status(500).json({ error: "Server error" });
+      res.status(500).json({ error: API_ERR_SERVER });
     }
   });
 
   app.post("/api/staff/update-role", async (req: Request, res: Response) => {
     try {
       if (typeof req.businessId !== "number") {
-        res.status(400).json({ error: "Missing tenant shop" });
+        res.status(400).json({ error: API_ERR_MISSING_TENANT_SHOP });
         return;
       }
       const ownerCtx = await deps.requireStoreOwnerForApi(
@@ -152,14 +153,14 @@ export function attachStaffRoutes(
       res.json({ ok: true });
     } catch (e) {
       console.error("POST /api/staff/update-role:", e);
-      res.status(500).json({ error: "Server error" });
+      res.status(500).json({ error: API_ERR_SERVER });
     }
   });
 
   app.post("/api/staff/update-permissions", async (req: Request, res: Response) => {
     try {
       if (typeof req.businessId !== "number") {
-        res.status(400).json({ error: "Missing tenant shop" });
+        res.status(400).json({ error: API_ERR_MISSING_TENANT_SHOP });
         return;
       }
       const ownerCtx = await deps.requireStoreOwnerForApi(
@@ -188,14 +189,14 @@ export function attachStaffRoutes(
       res.json({ ok: true });
     } catch (e) {
       console.error("POST /api/staff/update-permissions:", e);
-      res.status(500).json({ error: "Server error" });
+      res.status(500).json({ error: API_ERR_SERVER });
     }
   });
 
   app.post("/api/staff/remove", async (req: Request, res: Response) => {
     try {
       if (typeof req.businessId !== "number") {
-        res.status(400).json({ error: "Missing tenant shop" });
+        res.status(400).json({ error: API_ERR_MISSING_TENANT_SHOP });
         return;
       }
       const ownerCtx = await deps.requireStoreOwnerForApi(
@@ -227,7 +228,7 @@ export function attachStaffRoutes(
       res.json({ ok: true });
     } catch (e) {
       console.error("POST /api/staff/remove:", e);
-      res.status(500).json({ error: "Server error" });
+      res.status(500).json({ error: API_ERR_SERVER });
     }
   });
 }

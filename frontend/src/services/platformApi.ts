@@ -1,5 +1,5 @@
 import { apiAbsoluteUrl } from "./api";
-import { telegramWebAppInitDataHeader } from "../utils/telegramInitDataHeader";
+import { adminFetch, adminFetchJson, adminFetchVoid } from "./adminRequest";
 
 export type PlatformMyBusinessDTO = {
   id: number;
@@ -21,16 +21,10 @@ export async function fetchPlatformMyBusinesses(params: {
   telegramId: number;
 }): Promise<PlatformMyBusinessDTO[]> {
   void params.telegramId;
-  const res = await fetch(apiAbsoluteUrl("/api/platform/my-businesses"), {
-    method: "GET",
-    credentials: "omit",
-    headers: { ...telegramWebAppInitDataHeader() },
-  });
-  if (!res.ok) {
-    const j = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(j.error ?? `HTTP ${res.status}`);
-  }
-  const data = (await res.json()) as unknown;
+  const data = await adminFetchJson<unknown>(
+    apiAbsoluteUrl("/api/platform/my-businesses"),
+    { method: "GET", json: false },
+  );
   if (!Array.isArray(data)) return [];
   const mapped = data.map((row) => {
     const x = row as Partial<PlatformMyBusinessDTO> & Pick<
@@ -88,19 +82,13 @@ export async function fetchPlatformWhoAmI(): Promise<{
   telegramId: string;
   isPlatformAdmin: boolean;
 }> {
-  const res = await fetch(apiAbsoluteUrl("/api/platform/admin/whoami"), {
-    method: "GET",
-    credentials: "omit",
-    headers: { ...telegramWebAppInitDataHeader() },
-  });
-  const j = (await res.json().catch(() => ({}))) as {
-    error?: string;
+  const j = await adminFetchJson<{
     telegramId?: string;
     isPlatformAdmin?: boolean;
-  };
-  if (!res.ok) {
-    throw new Error(j.error ?? `HTTP ${res.status}`);
-  }
+  }>(apiAbsoluteUrl("/api/platform/admin/whoami"), {
+    method: "GET",
+    json: false,
+  });
   const tid = typeof j.telegramId === "string" ? j.telegramId.trim() : "";
   if (tid === "") {
     throw new Error("Некорректный ответ сервера");
@@ -115,19 +103,13 @@ export async function fetchOperatorCapabilities(): Promise<{
   isOperatorIdentity: boolean;
   canShowOperatorEntry: boolean;
 }> {
-  const res = await fetch(apiAbsoluteUrl("/api/platform/operator/capabilities"), {
-    method: "GET",
-    credentials: "omit",
-    headers: { ...telegramWebAppInitDataHeader() },
-  });
-  const j = (await res.json().catch(() => ({}))) as {
-    error?: string;
+  const j = await adminFetchJson<{
     isOperatorIdentity?: boolean;
     canShowOperatorEntry?: boolean;
-  };
-  if (!res.ok) {
-    throw new Error(j.error ?? `HTTP ${res.status}`);
-  }
+  }>(apiAbsoluteUrl("/api/platform/operator/capabilities"), {
+    method: "GET",
+    json: false,
+  });
   return {
     isOperatorIdentity: Boolean(j.isOperatorIdentity),
     canShowOperatorEntry: Boolean(j.canShowOperatorEntry),
@@ -138,30 +120,13 @@ export async function postOperatorUnlock(password: string): Promise<{
   token: string;
   expiresAt: string;
 }> {
-  const res = await fetch(apiAbsoluteUrl("/api/platform/operator/unlock"), {
-    method: "POST",
-    credentials: "omit",
-    headers: {
-      "Content-Type": "application/json",
-      ...telegramWebAppInitDataHeader(),
+  const j = await adminFetchJson<{ token?: string; expiresAt?: string }>(
+    apiAbsoluteUrl("/api/platform/operator/unlock"),
+    {
+      method: "POST",
+      body: JSON.stringify({ password }),
     },
-    body: JSON.stringify({ password }),
-  });
-  const j = (await res.json().catch(() => ({}))) as {
-    error?: string;
-    code?: string;
-    token?: string;
-    expiresAt?: string;
-  };
-  if (!res.ok) {
-    const err = new Error(j.error ?? `HTTP ${res.status}`) as Error & {
-      code?: string;
-      status?: number;
-    };
-    err.code = j.code;
-    err.status = res.status;
-    throw err;
-  }
+  );
   if (typeof j.token !== "string" || typeof j.expiresAt !== "string") {
     throw new Error("Некорректный ответ сервера");
   }
@@ -172,46 +137,22 @@ export async function postOperatorUnlock(password: string): Promise<{
 }
 
 export async function postOperatorLock(token: string): Promise<void> {
-  const res = await fetch(apiAbsoluteUrl("/api/platform/operator/lock"), {
+  await adminFetch(apiAbsoluteUrl("/api/platform/operator/lock"), {
     method: "POST",
-    credentials: "omit",
-    headers: {
-      "Content-Type": "application/json",
-      "x-operator-session": token,
-      ...telegramWebAppInitDataHeader(),
-    },
+    headers: { "x-operator-session": token },
     body: JSON.stringify({}),
   });
-  const j = (await res.json().catch(() => ({}))) as { error?: string };
-  if (!res.ok) {
-    throw new Error(j.error ?? `HTTP ${res.status}`);
-  }
 }
 
 export async function postOperatorReauth(
   token: string,
   password: string,
 ): Promise<void> {
-  const res = await fetch(apiAbsoluteUrl("/api/platform/operator/reauth"), {
+  await adminFetch(apiAbsoluteUrl("/api/platform/operator/reauth"), {
     method: "POST",
-    credentials: "omit",
-    headers: {
-      "Content-Type": "application/json",
-      "x-operator-session": token,
-      ...telegramWebAppInitDataHeader(),
-    },
+    headers: { "x-operator-session": token },
     body: JSON.stringify({ password }),
   });
-  const j = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
-  if (!res.ok) {
-    const err = new Error(j.error ?? `HTTP ${res.status}`) as Error & {
-      code?: string;
-      status?: number;
-    };
-    err.code = j.code;
-    err.status = res.status;
-    throw err;
-  }
 }
 
 export type PlatformSubscriptionPaymentResult =
@@ -233,22 +174,7 @@ export async function postPlatformSubscriptionPaymentCreate(params: {
   plan: 30 | 90;
 }): Promise<PlatformSubscriptionPaymentResult> {
   void params.telegramId;
-  const res = await fetch(
-    apiAbsoluteUrl("/api/platform/subscription-payment/create"),
-    {
-      method: "POST",
-      credentials: "omit",
-      headers: {
-        "Content-Type": "application/json",
-        ...telegramWebAppInitDataHeader(),
-      },
-      body: JSON.stringify({
-        businessId: params.businessId,
-        plan: params.plan,
-      }),
-    },
-  );
-  const j = (await res.json().catch(() => ({}))) as {
+  const j = await adminFetchJson<{
     error?: string;
     finikConfigured?: boolean;
     useManualPaymentRequest?: boolean;
@@ -257,10 +183,14 @@ export async function postPlatformSubscriptionPaymentCreate(params: {
     subscriptionPaymentId?: number;
     planDays?: number;
     amountSom?: number;
-  };
-  if (!res.ok) {
-    throw new Error(j.error ?? `HTTP ${res.status}`);
-  }
+  }>(apiAbsoluteUrl("/api/platform/subscription-payment/create"), {
+    method: "POST",
+    businessId: params.businessId,
+    body: JSON.stringify({
+      businessId: params.businessId,
+      plan: params.plan,
+    }),
+  });
   if (
     j.finikConfigured === false &&
     j.useManualPaymentRequest === true &&
@@ -310,15 +240,7 @@ export async function fetchPlatformStoreSettings(params: {
   const q = new URLSearchParams({
     businessId: String(params.businessId),
   });
-  const res = await fetch(
-    apiAbsoluteUrl(`/api/platform/store-settings?${q.toString()}`),
-    {
-      method: "GET",
-      credentials: "omit",
-      headers: { ...telegramWebAppInitDataHeader() },
-    },
-  );
-  const j = (await res.json().catch(() => ({}))) as {
+  const j = await adminFetchJson<{
     error?: string;
     businessId?: number;
     name?: string;
@@ -330,10 +252,10 @@ export async function fetchPlatformStoreSettings(params: {
     subscriptionStatus?: unknown;
     subscriptionEndsAt?: unknown;
     trialEndsAt?: unknown;
-  };
-  if (!res.ok) {
-    throw new Error(j.error ?? `HTTP ${res.status}`);
-  }
+  }>(
+    apiAbsoluteUrl(`/api/platform/store-settings?${q.toString()}`),
+    { method: "GET", businessId: params.businessId, json: false },
+  );
   const bid =
     typeof j.businessId === "number" && Number.isInteger(j.businessId)
       ? j.businessId
@@ -396,26 +318,18 @@ export async function savePlatformStoreSettings(payload: {
   if (payload.merchantConfig !== undefined)
     body.merchantConfig = payload.merchantConfig;
 
-  const res = await fetch(apiAbsoluteUrl("/api/platform/store-settings"), {
-    method: "POST",
-    credentials: "omit",
-    headers: {
-      "Content-Type": "application/json",
-      ...telegramWebAppInitDataHeader(),
-    },
-    body: JSON.stringify(body),
-  });
-  const j = (await res.json().catch(() => ({}))) as {
+  const j = await adminFetchJson<{
     error?: string;
     ok?: boolean;
     name?: string;
     finikConfigured?: boolean;
     pendingBotTokenChange?: boolean;
     botTokenChangeRequestId?: number;
-  };
-  if (!res.ok) {
-    throw new Error(j.error ?? `HTTP ${res.status}`);
-  }
+  }>(apiAbsoluteUrl("/api/platform/store-settings"), {
+    method: "POST",
+    businessId: payload.businessId,
+    body: JSON.stringify(body),
+  });
   if (j.ok !== true) {
     throw new Error(j.error ?? "Некорректный ответ сервера");
   }
@@ -436,26 +350,18 @@ export async function postPlatformUpdateFinik(payload: {
   finikApiKey: string;
 }): Promise<{ ok: true; finikConfigured: boolean }> {
   void payload.telegramId;
-  const res = await fetch(apiAbsoluteUrl("/api/platform/update-finik"), {
+  const j = await adminFetchJson<{
+    error?: string;
+    ok?: boolean;
+    finikConfigured?: boolean;
+  }>(apiAbsoluteUrl("/api/platform/update-finik"), {
     method: "POST",
-    credentials: "omit",
-    headers: {
-      "Content-Type": "application/json",
-      ...telegramWebAppInitDataHeader(),
-    },
+    businessId: payload.businessId,
     body: JSON.stringify({
       businessId: payload.businessId,
       finikApiKey: payload.finikApiKey,
     }),
   });
-  const j = (await res.json().catch(() => ({}))) as {
-    error?: string;
-    ok?: boolean;
-    finikConfigured?: boolean;
-  };
-  if (!res.ok) {
-    throw new Error(j.error ?? `HTTP ${res.status}`);
-  }
   if (j.ok !== true) {
     throw new Error(j.error ?? "Некорректный ответ сервера");
   }
@@ -471,13 +377,8 @@ export async function submitPlatformRegisterRequest(payload: {
   ownerUsername?: string;
 }): Promise<void> {
   void payload.telegramId;
-  const res = await fetch(apiAbsoluteUrl("/api/platform/register-request"), {
+  await adminFetchVoid(apiAbsoluteUrl("/api/platform/register-request"), {
     method: "POST",
-    credentials: "omit",
-    headers: {
-      "Content-Type": "application/json",
-      ...telegramWebAppInitDataHeader(),
-    },
     body: JSON.stringify({
       storeName: payload.storeName,
       botToken: payload.botToken,
@@ -487,10 +388,6 @@ export async function submitPlatformRegisterRequest(payload: {
       ownerUsername: payload.ownerUsername,
     }),
   });
-  if (!res.ok) {
-    const j = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(j.error ?? `HTTP ${res.status}`);
-  }
 }
 
 export type RegistrationStatusPayload = {
@@ -503,16 +400,10 @@ export type RegistrationStatusPayload = {
 };
 
 export async function fetchRegistrationStatus(): Promise<RegistrationStatusPayload> {
-  const res = await fetch(apiAbsoluteUrl("/api/platform/registration-status"), {
-    method: "GET",
-    credentials: "omit",
-    headers: { ...telegramWebAppInitDataHeader() },
-  });
-  if (!res.ok) {
-    const j = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(j.error ?? `HTTP ${res.status}`);
-  }
-  return (await res.json()) as RegistrationStatusPayload;
+  return adminFetchJson<RegistrationStatusPayload>(
+    apiAbsoluteUrl("/api/platform/registration-status"),
+    { method: "GET", json: false },
+  );
 }
 
 export async function postPlatformCheckWebhook(params: {
@@ -520,23 +411,15 @@ export async function postPlatformCheckWebhook(params: {
   businessId: number;
 }): Promise<{ status: "OK" | "ERROR"; lastErrorMessage: string | null }> {
   void params.telegramId;
-  const res = await fetch(apiAbsoluteUrl("/api/platform/check-webhook"), {
-    method: "POST",
-    credentials: "omit",
-    headers: {
-      "Content-Type": "application/json",
-      ...telegramWebAppInitDataHeader(),
-    },
-    body: JSON.stringify({ businessId: params.businessId }),
-  });
-  const j = (await res.json().catch(() => ({}))) as {
+  const j = await adminFetchJson<{
     error?: string;
     status?: string;
     lastErrorMessage?: string | null;
-  };
-  if (!res.ok) {
-    throw new Error(j.error ?? `HTTP ${res.status}`);
-  }
+  }>(apiAbsoluteUrl("/api/platform/check-webhook"), {
+    method: "POST",
+    businessId: params.businessId,
+    body: JSON.stringify({ businessId: params.businessId }),
+  });
   const status = j.status === "OK" || j.status === "ERROR" ? j.status : null;
   if (status == null) {
     throw new Error("Некорректный ответ сервера");
@@ -554,26 +437,18 @@ export async function postPlatformToggleBot(params: {
   action: "enable" | "disable";
 }): Promise<{ ok: boolean; isActive: boolean }> {
   void params.telegramId;
-  const res = await fetch(apiAbsoluteUrl("/api/platform/toggle-bot"), {
+  const j = await adminFetchJson<{
+    error?: string;
+    ok?: boolean;
+    isActive?: boolean;
+  }>(apiAbsoluteUrl("/api/platform/toggle-bot"), {
     method: "POST",
-    credentials: "omit",
-    headers: {
-      "Content-Type": "application/json",
-      ...telegramWebAppInitDataHeader(),
-    },
+    businessId: params.businessId,
     body: JSON.stringify({
       businessId: params.businessId,
       action: params.action,
     }),
   });
-  const j = (await res.json().catch(() => ({}))) as {
-    error?: string;
-    ok?: boolean;
-    isActive?: boolean;
-  };
-  if (!res.ok) {
-    throw new Error(j.error ?? `HTTP ${res.status}`);
-  }
   if (
     typeof j.ok !== "boolean" ||
     typeof j.isActive !== "boolean"
@@ -601,16 +476,11 @@ export async function fetchStoreReadiness(
 ): Promise<StoreReadinessPayload> {
   const url = new URL(apiAbsoluteUrl("/api/platform/store-readiness"));
   url.searchParams.set("businessId", String(businessId));
-  const res = await fetch(url.toString(), {
+  return adminFetchJson<StoreReadinessPayload>(url.toString(), {
     method: "GET",
-    credentials: "omit",
-    headers: { ...telegramWebAppInitDataHeader() },
+    businessId,
+    json: false,
   });
-  if (!res.ok) {
-    const j = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(j.error ?? `HTTP ${res.status}`);
-  }
-  return (await res.json()) as StoreReadinessPayload;
 }
 
 export async function postPlatformFeedback(input: {
@@ -619,17 +489,9 @@ export async function postPlatformFeedback(input: {
   businessId?: number;
   page?: string;
 }): Promise<void> {
-  const res = await fetch(apiAbsoluteUrl("/api/platform/feedback"), {
+  await adminFetchVoid(apiAbsoluteUrl("/api/platform/feedback"), {
     method: "POST",
-    credentials: "omit",
-    headers: {
-      "Content-Type": "application/json",
-      ...telegramWebAppInitDataHeader(),
-    },
+    businessId: input.businessId,
     body: JSON.stringify(input),
   });
-  if (!res.ok) {
-    const j = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(j.error ?? `HTTP ${res.status}`);
-  }
 }

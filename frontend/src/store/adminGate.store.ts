@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { getWebAppUserId } from "../utils/telegramUserId";
-import { waitForTelegramInitData } from "../utils/waitForTelegramInitData";
 import { API_BASE_URL } from "../services/api";
+import { adminFetchJson } from "../services/adminRequest";
 
 type AdminGateStatus = "idle" | "loading" | "ready";
 
@@ -54,37 +54,29 @@ export const useAdminGateStore = create<AdminGateState>((set) => ({
 
     set({ status: "loading" });
     try {
-      const initData = await waitForTelegramInitData();
-
-      const qs = new URLSearchParams({
-        userId: String(userId),
-        shop: String(businessId),
-      });
-      const res = await fetch(`${API_BASE_URL}/api/me?${qs.toString()}`, {
-        method: "GET",
-        headers: {
-          "x-telegram-init-data": initData,
-        },
-      });
-      const j = (await res.json().catch(() => ({}))) as {
+      const url = new URL(`${API_BASE_URL}/api/me`);
+      url.searchParams.set("shop", String(businessId));
+      const res = await adminFetchJson<{
         role?: string;
         permissions?: string[];
-      };
+      }>(url.toString(), {
+        method: "GET",
+        businessId,
+        json: false,
+      });
+      const j = res ?? {};
       const admin =
-        res.ok &&
-        (j.role === "OWNER" ||
-          j.role === "ADMIN" ||
-          j.role === "MANAGER" ||
-          j.role === "SUPPORT");
-      const r =
-        res.ok && typeof j.role === "string" ? j.role : null;
-      const perms =
-        res.ok && Array.isArray(j.permissions)
-          ? j.permissions.filter((p): p is string => typeof p === "string")
-          : null;
+        j.role === "OWNER" ||
+        j.role === "ADMIN" ||
+        j.role === "MANAGER" ||
+        j.role === "SUPPORT";
+      const r = typeof j.role === "string" ? j.role : null;
+      const perms = Array.isArray(j.permissions)
+        ? j.permissions.filter((p): p is string => typeof p === "string")
+        : null;
       set({
         status: "ready",
-        lastHttpOk: res.ok,
+        lastHttpOk: true,
         merchantRole: r,
         merchantPermissions: perms,
         serverIsAdmin: admin,

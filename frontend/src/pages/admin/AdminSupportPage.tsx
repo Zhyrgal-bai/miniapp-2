@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { adminService, type SupportSuggestion } from "../../services/admin.service";
 import { showErrorToast } from "../../store/toast.store";
+import { formatAdminApiError } from "../../utils/adminApiError";
 import { SF_ADMIN_SUPPORT_TAB_KEY } from "../../utils/accountMenuStorage";
 import { formatTimeAgoRu } from "../../utils/formatTimeAgo";
 import { orderDisplayLabel } from "@repo-shared/orderDisplay";
@@ -132,7 +133,7 @@ export default function AdminSupportPage() {
       setError(null);
     } catch (e) {
       console.error(e);
-      setError("Не удалось загрузить данные");
+      setError(formatAdminApiError(e));
     } finally {
       setLoading(false);
     }
@@ -232,7 +233,7 @@ export default function AdminSupportPage() {
       await loadTickets();
     } catch (e) {
       console.error(e);
-      showErrorToast(e instanceof Error ? e.message : "Ошибка отправки");
+      showErrorToast(formatAdminApiError(e));
     } finally {
       setBusy(false);
     }
@@ -250,7 +251,7 @@ export default function AdminSupportPage() {
       await loadTickets();
     } catch (e) {
       console.error(e);
-      showErrorToast(e instanceof Error ? e.message : "Ошибка сохранения");
+      showErrorToast(formatAdminApiError(e));
     } finally {
       setBusy(false);
     }
@@ -279,7 +280,7 @@ export default function AdminSupportPage() {
       await loadTickets();
     } catch (e) {
       console.error(e);
-      showErrorToast(e instanceof Error ? e.message : "Ошибка");
+      showErrorToast(formatAdminApiError(e));
     } finally {
       setBusy(false);
     }
@@ -300,7 +301,7 @@ export default function AdminSupportPage() {
       await loadTickets();
     } catch (e) {
       console.error(e);
-      showErrorToast(e instanceof Error ? e.message : "Ошибка");
+      showErrorToast(formatAdminApiError(e));
     } finally {
       setBusy(false);
     }
@@ -316,7 +317,7 @@ export default function AdminSupportPage() {
       await loadReturns();
     } catch (e) {
       console.error(e);
-      showErrorToast(e instanceof Error ? e.message : "Ошибка");
+      showErrorToast(formatAdminApiError(e));
     } finally {
       setBusy(false);
     }

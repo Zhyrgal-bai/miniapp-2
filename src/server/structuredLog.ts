@@ -98,6 +98,88 @@ export function logAuthReject(fields: {
   emit("warn", "auth_reject", fields);
 }
 
+/** Temp debug: initData header present on privileged route. */
+export function logAuthHeaderPresent(fields: {
+  path: string;
+  method: string;
+  length: number;
+}): void {
+  emit("info", "auth_header_present", fields);
+}
+
+/** Temp debug: initData header missing on privileged route. */
+export function logAuthHeaderMissing(fields: {
+  path: string;
+  method: string;
+}): void {
+  emit("warn", "auth_header_missing", fields);
+}
+
+/** Temp debug: privileged route rejected after auth check. */
+export function logPrivilegedRouteReject(fields: {
+  path: string;
+  method: string;
+  reason: string;
+  status: number;
+}): void {
+  emit("warn", "privileged_route_reject", fields);
+}
+
+/** Temp debug: initData present but signature did not match any candidate token. */
+export function logInitDataInvalid(fields: {
+  path: string;
+  method: string;
+  tokensTried: number;
+  hadStartParam: boolean;
+  hadTenantHint: boolean;
+  startParamBusinessId?: number | null;
+  requestTenantBusinessId?: number | null;
+}): void {
+  emit("warn", "initData_invalid", fields);
+}
+
+/** Temp debug: business token candidate failed HMAC (wrong bot or decrypt empty). */
+export function logTokenMismatch(fields: {
+  path: string;
+  method: string;
+  source: string;
+  businessId?: number;
+  tokenPresent: boolean;
+}): void {
+  emit("info", "token_mismatch", fields);
+}
+
+/** Temp debug: business id hint but row missing or botToken empty. */
+export function logBusinessNotFound(fields: {
+  path: string;
+  method: string;
+  businessId: number;
+  source: string;
+  tokenPresent: boolean;
+}): void {
+  emit("warn", "business_not_found", fields);
+}
+
+/** Temp debug: initData has no start_param (menu-button opens). */
+export function logStartParamMissing(fields: {
+  path: string;
+  method: string;
+  requestTenantBusinessId?: number | null;
+}): void {
+  emit("info", "start_param_missing", fields);
+}
+
+/** Admin save: stale/unknown product.attributes keys removed before validation. */
+export function logProductAttributesStripped(fields: {
+  businessType: string;
+  strippedKeys: string[];
+  staleLegacyKeys: string[];
+  businessId?: number;
+  productId?: number;
+}): void {
+  emit("warn", "product_attributes_stripped", fields);
+}
+
 export function logCheckoutReject(fields: {
   businessId: number;
   reason: string;

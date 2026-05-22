@@ -1,10 +1,10 @@
 import { showErrorToast } from "../../store/toast.store";
 import { useCallback, useEffect, useState } from "react";
-import axios from "axios";
 import {
   adminService,
   type AdminPaymentDetail,
 } from "../../services/admin.service";
+import { formatAdminApiError } from "../../utils/adminApiError";
 
 const FIELDS = ["mbank", "optima", "other", "card", "qr"] as const;
 type PayField = (typeof FIELDS)[number];
@@ -56,7 +56,7 @@ export default function PaymentDetailsPanel() {
       setError(null);
     } catch (e) {
       console.error(e);
-      setError("Не удалось загрузить реквизиты");
+      setError(formatAdminApiError(e));
     } finally {
       setListLoading(false);
     }
@@ -80,13 +80,7 @@ export default function PaymentDetailsPanel() {
       });
       await load();
     } catch (err) {
-      if (axios.isAxiosError(err) && err.response?.status === 403) {
-        setError("Нет прав");
-      } else if (err instanceof Error && err.message.includes("Telegram")) {
-        setError(err.message);
-      } else {
-        setError("Не удалось сохранить");
-      }
+      setError(formatAdminApiError(err));
     } finally {
       setLoading(false);
     }
@@ -102,7 +96,7 @@ export default function PaymentDetailsPanel() {
       setValues((prev) => ({ ...prev, qr: url }));
     } catch (err) {
       console.error(err);
-      setError("Не удалось загрузить QR");
+      setError(formatAdminApiError(err));
     } finally {
       setQrUploading(false);
       e.target.value = "";
@@ -114,11 +108,7 @@ export default function PaymentDetailsPanel() {
       await adminService.deletePaymentDetail(id);
       await load();
     } catch (err) {
-      if (axios.isAxiosError(err) && err.response?.status === 403) {
-        showErrorToast("Нет прав");
-      } else {
-        showErrorToast("Не удалось удалить");
-      }
+      showErrorToast(formatAdminApiError(err));
     }
   };
 

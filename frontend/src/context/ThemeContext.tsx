@@ -14,6 +14,7 @@ import {
   type ResolvedStoreTheme,
 } from "@repo-shared/storeTheme";
 import { fetchBusinessPublic } from "../services/businessThemeApi";
+import { formatApiError } from "../utils/adminApiError";
 import { useShop } from "./ShopContext";
 
 type ThemeCtx = {
@@ -61,7 +62,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       if (ac.signal.aborted) return;
       console.error("[Theme]", e);
-      setError(e instanceof Error ? e.message : "Ошибка темы");
+      setError(formatApiError(e));
       setServerTheme({
         ...DEFAULT_STORE_THEME,
         banner: { ...DEFAULT_STORE_THEME.banner },

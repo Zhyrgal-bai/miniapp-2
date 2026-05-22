@@ -19,7 +19,7 @@ export default function AdminCategoriesPage() {
       setCategories(tree);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Ошибка загрузки");
+      setError(formatAdminApiError(e));
     } finally {
       setLoading(false);
     }

@@ -4,6 +4,7 @@ import type {
   MerchantGrowthDashboard,
 } from "../../services/admin.service";
 import { adminService } from "../../services/admin.service";
+import { formatAdminApiError } from "../../utils/adminApiError";
 import { ru } from "../../i18n/ru";
 import { mapStatus, ORDER_STATUS_RU } from "../../i18n/statusMaps";
 import "./adminOperations.css";
@@ -44,7 +45,7 @@ export default function AdminAnalyticsPage() {
       setError(null);
     } catch (e) {
       console.error(e);
-      setError("Не удалось загрузить аналитику");
+      setError(formatAdminApiError(e));
       setData(null);
       setDashboard(null);
     }

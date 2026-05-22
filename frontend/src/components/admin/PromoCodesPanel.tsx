@@ -1,10 +1,10 @@
 import { showErrorToast } from "../../store/toast.store";
 import { useCallback, useEffect, useState } from "react";
-import axios from "axios";
 import {
   adminService,
   type AdminPromoRecord,
 } from "../../services/admin.service";
+import { formatAdminApiError } from "../../utils/adminApiError";
 
 export default function PromoCodesPanel() {
   const [items, setItems] = useState<AdminPromoRecord[]>([]);
@@ -23,7 +23,7 @@ export default function PromoCodesPanel() {
       setError(null);
     } catch (e) {
       console.error(e);
-      setError("Не удалось загрузить промокоды");
+      setError(formatAdminApiError(e));
     } finally {
       setListLoading(false);
     }
@@ -58,15 +58,7 @@ export default function PromoCodesPanel() {
       setCode("");
       await load();
     } catch (err) {
-      if (axios.isAxiosError(err) && err.response?.status === 403) {
-        setError("Нет прав");
-      } else if (axios.isAxiosError(err) && err.response?.status === 409) {
-        setError("Такой код уже есть");
-      } else {
-        const msg = (err as { response?: { data?: { error?: string } } })
-          ?.response?.data?.error;
-        setError(msg ?? "Не удалось добавить");
-      }
+      setError(formatAdminApiError(err));
     } finally {
       setLoading(false);
     }
@@ -77,11 +69,7 @@ export default function PromoCodesPanel() {
       await adminService.deletePromo(promoCode);
       await load();
     } catch (err) {
-      if (axios.isAxiosError(err) && err.response?.status === 403) {
-        showErrorToast("Нет прав");
-      } else {
-        showErrorToast("Не удалось удалить");
-      }
+      showErrorToast(formatAdminApiError(err));
     }
   };
 

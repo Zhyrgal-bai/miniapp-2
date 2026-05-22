@@ -1,7 +1,8 @@
 import axios, { AxiosHeaders } from "axios";
+import { formatHttpStatusError } from "../utils/adminApiError";
 import { getBusinessIdNumber } from "../utils/storeParams";
 import { telegramWebAppInitDataHeader } from "../utils/telegramInitDataHeader";
-import { waitForTelegramInitData } from "../utils/waitForTelegramInitData";
+import { requireTelegramInitData } from "../utils/telegramSession";
 
 function normalizeBaseUrl(url: string): string {
   return url.replace(/\/$/, "");
@@ -78,13 +79,23 @@ export const api = axios.create({
 api.interceptors.response.use(
   (res) => res,
   (error) => {
-    if (
-      axios.isAxiosError(error) &&
-      (!error.response ||
+    if (axios.isAxiosError(error)) {
+      if (
+        !error.response ||
         error.code === "ERR_NETWORK" ||
-        error.code === "ECONNABORTED")
-    ) {
-      error.message = "Ошибка сети. Проверьте подключение и попробуйте снова.";
+        error.code === "ECONNABORTED"
+      ) {
+        error.message = "Ошибка сети. Проверьте подключение и попробуйте снова.";
+      } else if (error.response) {
+        const data = error.response.data;
+        const body =
+          typeof data === "object" && data != null && "error" in data
+            ? String((data as { error?: unknown }).error ?? "")
+            : typeof data === "string"
+              ? data
+              : "";
+        error.message = formatHttpStatusError(error.response.status, body);
+      }
     }
     return Promise.reject(error);
   },
@@ -242,8 +253,8 @@ api.interceptors.request.use(async (config) => {
   }
 
   const bid = String(businessId);
-  await waitForTelegramInitData({ maxAttempts: 12, delayMs: 100 });
-  const initData = telegramWebAppInitDataHeader()["x-telegram-init-data"];
+  await requireTelegramInitData();
+  const initData = telegramWebAppInitDataHeader({ silent: true })["x-telegram-init-data"];
   if (existing instanceof AxiosHeaders) {
     existing.set(TENANT_HEADER, bid);
     existing.set("x-telegram-init-data", initData);

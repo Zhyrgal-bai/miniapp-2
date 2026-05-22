@@ -1,4 +1,5 @@
 import { apiAbsoluteUrl } from "./api";
+import { formatHttpStatusError } from "../utils/adminApiError";
 import { telegramWebAppInitDataHeader } from "../utils/telegramInitDataHeader";
 
 export type PlatformAdminRequestDTO = {
@@ -62,7 +63,7 @@ async function throwIfNotOk(res: Response): Promise<void> {
     err.status = 403;
     throw err;
   }
-  throw new Error(j.error ?? `HTTP ${res.status}`);
+  throw new Error(formatHttpStatusError(res.status, j.error ?? ""));
 }
 
 export async function fetchPlatformAdminRequests(

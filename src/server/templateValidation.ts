@@ -1,6 +1,8 @@
 import type { BusinessType } from "@prisma/client";
 import type { FieldSchema, SchemaObject } from "../templates/types.js";
 import { templateForBusinessType } from "../templates/index.js";
+import { stripProductAttributesToSchema } from "../shared/productAttributeNormalization.js";
+import { logProductAttributesStripped } from "./structuredLog.js";
 
 export type ValidationResult<T> =
   | { ok: true; value: T }
@@ -143,6 +145,69 @@ function validateObjectAgainstSchema(
   return { ok: true, value: out };
 }
 
+/** Admin save: coerce legacy shapes (e.g. select stored as string[]). */
+function coerceRawForAdminField(field: FieldSchema, raw: unknown): unknown {
+  if (raw === undefined || raw === null) return raw;
+
+  switch (field.type) {
+    case "select": {
+      if (Array.isArray(raw)) {
+        const allowed = normalizeStringArray(field.values ?? []);
+        for (const item of raw) {
+          const s = String(item).trim();
+          if (s === "") continue;
+          if (allowed.length === 0 || allowed.includes(s)) return s;
+        }
+        const first = raw.map((x) => String(x).trim()).find((s) => s !== "");
+        return first ?? "";
+      }
+      return raw;
+    }
+    case "multiselect": {
+      if (!Array.isArray(raw)) {
+        const s = String(raw).trim();
+        return s === "" ? [] : [s];
+      }
+      return raw;
+    }
+    default:
+      return raw;
+  }
+}
+
+/** Validate only schema keys (unknown keys must already be stripped). */
+function validateKnownAttributesAgainstSchema(
+  schema: SchemaObject,
+  raw: unknown,
+  opts?: { coerceForAdmin?: boolean },
+): ValidationResult<Record<string, unknown>> {
+  if (!isPlainObject(raw)) raw = {};
+  const input = raw as Record<string, unknown>;
+
+  const out: Record<string, unknown> = {};
+  const details: Record<string, string> = {};
+
+  for (const [key, field] of Object.entries(schema)) {
+    let v = input[key];
+    if (opts?.coerceForAdmin) {
+      v = coerceRawForAdminField(field, v);
+    }
+    const r = validateField(key, field, v);
+    if (!r.ok) {
+      details[key] = r.error;
+      continue;
+    }
+    if (r.value !== undefined) {
+      out[key] = r.value;
+    }
+  }
+
+  if (Object.keys(details).length > 0) {
+    return { ok: false, error: "Некорректные значения", details };
+  }
+  return { ok: true, value: out };
+}
+
 function safeSchemaFor(
   businessType: BusinessType,
   picker: (t: ReturnType<typeof templateForBusinessType>) => SchemaObject,
@@ -166,6 +231,36 @@ export function validateProductAttributes(
 ): ValidationResult<Record<string, unknown>> {
   const schema = safeSchemaFor(businessType, (t) => t.productSchema);
   return validateObjectAgainstSchema(schema, attributes);
+}
+
+export type AdminProductAttributesLogContext = {
+  businessId?: number;
+  productId?: number;
+};
+
+/** Lenient admin path: strip stale/unknown keys, coerce legacy values, validate schema keys only. */
+export function validateProductAttributesForAdmin(
+  businessType: BusinessType,
+  attributes: unknown,
+  logCtx?: AdminProductAttributesLogContext,
+): ValidationResult<Record<string, unknown>> {
+  const schema = safeSchemaFor(businessType, (t) => t.productSchema);
+  const { value: stripped, strippedKeys, staleLegacyKeys } =
+    stripProductAttributesToSchema(Object.keys(schema), attributes);
+
+  if (strippedKeys.length > 0) {
+    logProductAttributesStripped({
+      businessType,
+      strippedKeys,
+      staleLegacyKeys,
+      ...(logCtx?.businessId != null ? { businessId: logCtx.businessId } : {}),
+      ...(logCtx?.productId != null ? { productId: logCtx.productId } : {}),
+    });
+  }
+
+  return validateKnownAttributesAgainstSchema(schema, stripped, {
+    coerceForAdmin: true,
+  });
 }
 
 export function validateMerchantConfig(

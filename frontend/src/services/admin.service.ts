@@ -1,10 +1,10 @@
-import { api, API_BASE_URL, apiAbsoluteUrl } from "./api";
+import { API_BASE_URL, apiAbsoluteUrl } from "./api";
 import type { Category, Product } from "../types";
-import { getWebAppUserId } from "../utils/telegramUserId";
-import { withTenantHeaders } from "./api";
-import { telegramWebAppInitDataHeader } from "../utils/telegramInitDataHeader";
-import { waitForTelegramInitData } from "../utils/waitForTelegramInitData";
-import { formatHttpStatusError } from "../utils/adminApiError";
+import {
+  adminFetch,
+  adminFetchJson,
+  adminFetchVoid,
+} from "./adminRequest";
 
 /** Относительный путь или уже полный `https://...` (не дублируем API_BASE_URL). */
 function resolveAdminUrl(path: string): string {
@@ -15,46 +15,10 @@ function resolveAdminUrl(path: string): string {
   return `${base}${p}`;
 }
 
-function requireAdminUserId(): number {
-  const userId = getWebAppUserId();
-  if (!Number.isFinite(userId) || userId <= 0) {
-    throw new Error("Откройте приложение в Telegram");
-  }
-  return userId;
-}
-
 export async function postConnectBot(
-  botToken: string
+  botToken: string,
 ): Promise<{ ok: boolean; shopId: number; botUsername: string }> {
   return adminPost("/connect-bot", { botToken });
-}
-
-async function readFetchError(res: Response): Promise<string> {
-  const text = await res.text();
-  try {
-    const j = JSON.parse(text) as { message?: string; error?: string };
-    return (j.message ?? j.error ?? text) || res.statusText;
-  } catch {
-    return text || res.statusText;
-  }
-}
-
-async function adminInitHeaders(
-  url: string,
-  opts?: { businessId?: number; json?: boolean },
-): Promise<HeadersInit> {
-  await waitForTelegramInitData();
-  const base: Record<string, string> = {
-    ...telegramWebAppInitDataHeader(),
-  };
-  if (opts?.json !== false) {
-    base["Content-Type"] = "application/json";
-  }
-  return withTenantHeaders(
-    base,
-    url,
-    opts?.businessId != null ? { businessId: opts.businessId } : undefined,
-  );
 }
 
 async function adminStaffFetch<T>(
@@ -62,115 +26,61 @@ async function adminStaffFetch<T>(
   businessId: number,
   init: { method: "GET" | "POST"; body?: Record<string, unknown> },
 ): Promise<T> {
-  const userId = requireAdminUserId();
   const url = new URL(resolveAdminUrl(path));
-  url.searchParams.set("userId", String(userId));
   url.searchParams.set("shop", String(businessId));
-  const headers = await adminInitHeaders(url.toString(), { businessId });
-  const res = await fetch(url.toString(), {
-    method: init.method,
-    headers,
-    body:
-      init.body != null ? JSON.stringify(init.body) : undefined,
-  });
-  if (!res.ok) {
-    throw new Error(
-      formatHttpStatusError(res.status, await readFetchError(res)),
-    );
-  }
   if (init.method === "GET") {
-    return res.json() as Promise<T>;
+    return adminFetchJson<T>(url.toString(), {
+      method: "GET",
+      businessId,
+      json: false,
+    });
   }
-  const text = await res.text();
-  if (!text.trim()) return undefined as T;
-  return JSON.parse(text) as T;
+  return adminFetchJson<T>(url.toString(), {
+    method: "POST",
+    businessId,
+    body: JSON.stringify(init.body ?? {}),
+  });
 }
 
 async function adminPost<T>(
   path: string,
-  body: Record<string, unknown> = {}
+  body: Record<string, unknown> = {},
 ): Promise<T> {
-  const userId = requireAdminUserId();
-  const url = resolveAdminUrl(path);
-  const res = await fetch(url, {
+  return adminFetchJson<T>(resolveAdminUrl(path), {
     method: "POST",
-    headers: await adminInitHeaders(url),
-    body: JSON.stringify({ ...body, userId }),
+    body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    throw new Error(
-      formatHttpStatusError(res.status, await readFetchError(res)),
-    );
-  }
-  return res.json() as Promise<T>;
 }
 
 async function adminGet<T>(path: string): Promise<T> {
-  const userId = requireAdminUserId();
-  const url = new URL(resolveAdminUrl(path));
-  url.searchParams.set("userId", String(userId));
-  const res = await fetch(url.toString(), {
+  return adminFetchJson<T>(resolveAdminUrl(path), {
     method: "GET",
-    headers: await adminInitHeaders(url.toString(), { json: false }),
+    json: false,
   });
-  if (!res.ok) {
-    throw new Error(
-      formatHttpStatusError(res.status, await readFetchError(res)),
-    );
-  }
-  return res.json() as Promise<T>;
 }
 
-async function adminPatch<T>(path: string, body: Record<string, unknown>): Promise<T> {
-  const userId = requireAdminUserId();
-  const url = resolveAdminUrl(path);
-  const res = await fetch(url, {
+async function adminPatch<T>(
+  path: string,
+  body: Record<string, unknown>,
+): Promise<T> {
+  return adminFetchJson<T>(resolveAdminUrl(path), {
     method: "PATCH",
-    headers: await adminInitHeaders(url),
-    body: JSON.stringify({ ...body, userId }),
+    body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    throw new Error(
-      formatHttpStatusError(res.status, await readFetchError(res)),
-    );
-  }
-  return res.json() as Promise<T>;
 }
 
 async function adminDelete(path: string): Promise<void> {
-  const userId = requireAdminUserId();
-  const resolved = resolveAdminUrl(path);
-  const sep = resolved.includes("?") ? "&" : "?";
-  const url = `${resolved}${sep}userId=${encodeURIComponent(String(userId))}`;
-  const res = await fetch(url, {
-    method: "DELETE",
-    headers: await adminInitHeaders(url),
-    body: JSON.stringify({ userId }),
-  });
-  if (!res.ok) {
-    throw new Error(
-      formatHttpStatusError(res.status, await readFetchError(res)),
-    );
-  }
+  await adminFetchVoid(resolveAdminUrl(path), { method: "DELETE" });
 }
 
 async function adminPut<T>(
   path: string,
   body: Record<string, unknown> = {},
 ): Promise<T> {
-  const userId = requireAdminUserId();
-  const url = resolveAdminUrl(path);
-  const res = await fetch(url, {
+  return adminFetchJson<T>(resolveAdminUrl(path), {
     method: "PUT",
-    headers: await adminInitHeaders(url),
-    body: JSON.stringify({ ...body, userId }),
+    body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    throw new Error(
-      formatHttpStatusError(res.status, await readFetchError(res)),
-    );
-  }
-  return res.json() as Promise<T>;
 }
 
 export type AdminPaymentDetail = {
@@ -360,9 +270,7 @@ export const adminService = {
     businessType: string;
     productSchema: Record<string, unknown>;
   }> {
-    const userId = requireAdminUserId();
-    const res = await api.get("/api/merchant/schemas", { params: { userId } });
-    const data = res.data as unknown;
+    const data = await adminGet<unknown>("/api/merchant/schemas");
     const x =
       data != null && typeof data === "object" && !Array.isArray(data)
         ? (data as Record<string, unknown>)
@@ -378,36 +286,26 @@ export const adminService = {
     };
   },
   async getProducts(): Promise<Product[]> {
-    const userId = requireAdminUserId();
-    const res = await api.get<Product[]>("/products", { params: { userId } });
-    return res.data;
+    const data = await adminGet<Product[]>("/products");
+    return Array.isArray(data) ? data : [];
   },
 
   async getProduct(id: number): Promise<Product> {
-    const userId = requireAdminUserId();
-    const res = await api.get<Product>(`/products/${id}`, { params: { userId } });
-    return res.data;
+    return adminGet<Product>(`/products/${id}`);
   },
 
   async createProduct(data: Product): Promise<Product> {
-    try {
-      const images =
-        data.images && data.images.length > 0
-          ? data.images
-          : data.image
-            ? [data.image]
-            : [];
-      return await adminPost<Product>("/products", {
-        ...data,
-        images,
-        image: images[0] ?? data.image,
-      } as unknown as Record<string, unknown>);
-    } catch (e: unknown) {
-      if (e instanceof Error) {
-        console.error("CREATE ERROR:", e.message);
-      }
-      throw e;
-    }
+    const images =
+      data.images && data.images.length > 0
+        ? data.images
+        : data.image
+          ? [data.image]
+          : [];
+    return adminPost<Product>("/products", {
+      ...data,
+      images,
+      image: images[0] ?? data.image,
+    } as unknown as Record<string, unknown>);
   },
 
   async deleteProduct(id: number): Promise<void> {
@@ -492,38 +390,32 @@ export const adminService = {
   listAllOrders: fetchAdminOrders,
 
   async uploadImage(file: File): Promise<string> {
-    const userId = requireAdminUserId();
     const form = new FormData();
-    form.append("userId", String(userId));
     form.append("file", file);
     const url = `${API_BASE_URL}/upload`;
-    const res = await fetch(url, {
+    const res = await adminFetch(url, {
       method: "POST",
-      headers: await adminInitHeaders(url, { json: false }),
+      json: false,
       body: form,
     });
-    if (!res.ok) throw new Error(await readFetchError(res));
     const j = (await res.json()) as { url?: string; secure_url?: string };
     const out = j.url ?? j.secure_url;
-    if (!out) throw new Error("Нет url в ответе");
+    if (!out) throw new Error("Сервер не вернул ссылку на файл");
     return out;
   },
 
   async uploadImages(files: File[]): Promise<string[]> {
     if (files.length === 0) return [];
-    const userId = requireAdminUserId();
     const form = new FormData();
-    form.append("userId", String(userId));
     for (const f of files) {
       form.append("files", f);
     }
     const url = `${API_BASE_URL}/products/upload-images`;
-    const res = await fetch(url, {
+    const res = await adminFetch(url, {
       method: "POST",
-      headers: await adminInitHeaders(url, { json: false }),
+      json: false,
       body: form,
     });
-    if (!res.ok) throw new Error(await readFetchError(res));
     const j = (await res.json()) as { urls?: string[]; assets?: Array<{ url?: string }> };
     if (Array.isArray(j.urls)) return j.urls;
     if (Array.isArray(j.assets)) return j.assets.map((a) => String(a.url ?? "")).filter(Boolean);
@@ -539,14 +431,11 @@ export const adminService = {
       | "DELIVERED"
       | "CANCELLED"
   ): Promise<unknown> {
-    const userId = requireAdminUserId();
     const url = `${API_BASE_URL}/orders/${id}`;
-    const res = await fetch(url, {
+    const res = await adminFetch(url, {
       method: "PUT",
-      headers: withTenantHeaders({ "Content-Type": "application/json" }, url),
-      body: JSON.stringify({ status, userId }),
+      body: JSON.stringify({ status }),
     });
-    if (!res.ok) throw new Error(await readFetchError(res));
     const text = await res.text();
     if (!text.trim()) return null;
     try {
@@ -562,19 +451,15 @@ export const adminService = {
     duplicate?: boolean;
     order?: unknown;
   }> {
-    const userId = requireAdminUserId();
     const url = `${API_BASE_URL}/orders/${id}/sync-finik-payment`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: withTenantHeaders({ "Content-Type": "application/json" }, url),
-      body: JSON.stringify({ userId }),
-    });
-    if (!res.ok) throw new Error(await readFetchError(res));
-    const j = (await res.json()) as {
+    const j = await adminFetchJson<{
       paymentState?: unknown;
       duplicate?: unknown;
       order?: unknown;
-    };
+    }>(url, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
     const ps = j.paymentState;
     if (ps !== "paid" && ps !== "pending" && ps !== "failed") {
       throw new Error("Некорректный ответ проверки оплаты");
@@ -588,14 +473,11 @@ export const adminService = {
 
   /** Статус доставки / комментарий (только tracking, без смены status). */
   async updateOrderTracking(id: number, tracking: string): Promise<unknown> {
-    const userId = requireAdminUserId();
     const url = `${API_BASE_URL}/orders/${id}`;
-    const res = await fetch(url, {
+    const res = await adminFetch(url, {
       method: "PUT",
-      headers: withTenantHeaders({ "Content-Type": "application/json" }, url),
-      body: JSON.stringify({ tracking, userId }),
+      body: JSON.stringify({ tracking }),
     });
-    if (!res.ok) throw new Error(await readFetchError(res));
     const text = await res.text();
     if (!text.trim()) return null;
     try {
@@ -606,21 +488,12 @@ export const adminService = {
   },
 
   async clearOrders(type: "completed" | "rejected" | "all"): Promise<number> {
-    const userId = requireAdminUserId();
     const url = new URL(`${API_BASE_URL}/orders/clear`);
     url.searchParams.set("type", type);
-    url.searchParams.set("userId", String(userId));
-    const res = await fetch(url.toString(), {
+    const data = await adminFetchJson<{ deleted?: unknown }>(url.toString(), {
       method: "DELETE",
-      headers: withTenantHeaders(
-        { "Content-Type": "application/json" },
-        url.toString(),
-      ),
-      body: JSON.stringify({ userId }),
     });
-    if (!res.ok) throw new Error(await readFetchError(res));
-    const data = (await res.json().catch(() => ({}))) as { deleted?: unknown };
-    return typeof data.deleted === "number" ? data.deleted : 0;
+    return typeof data?.deleted === "number" ? data.deleted : 0;
   },
 
   async getAnalytics(rangeDays: 7 | 30 | 90 = 30): Promise<AdminAnalytics> {
@@ -890,19 +763,12 @@ export const adminService = {
   },
 
   async getNotifications(limit = 20): Promise<MerchantNotificationsPayload> {
-    const userId = requireAdminUserId();
     const url = new URL(resolveAdminUrl("/merchant/notifications"));
-    url.searchParams.set("userId", String(userId));
     url.searchParams.set("limit", String(limit));
-    const res = await fetch(url.toString(), {
-      headers: await adminInitHeaders(url.toString(), { json: false }),
+    const data = await adminFetchJson<MerchantNotificationsPayload>(url.toString(), {
+      method: "GET",
+      json: false,
     });
-    if (!res.ok) {
-      throw new Error(
-        formatHttpStatusError(res.status, await readFetchError(res)),
-      );
-    }
-    const data = (await res.json()) as MerchantNotificationsPayload;
     return {
       unreadCount: Number(data.unreadCount) || 0,
       items: Array.isArray(data.items) ? data.items : [],
@@ -911,15 +777,9 @@ export const adminService = {
 
   async markAllNotificationsRead(): Promise<void> {
     const url = resolveAdminUrl("/merchant/notifications/read-all");
-    const res = await fetch(url, {
+    await adminFetchVoid(url, {
       method: "POST",
-      headers: await adminInitHeaders(url),
       body: JSON.stringify({}),
     });
-    if (!res.ok) {
-      throw new Error(
-        formatHttpStatusError(res.status, await readFetchError(res)),
-      );
-    }
   },
 };

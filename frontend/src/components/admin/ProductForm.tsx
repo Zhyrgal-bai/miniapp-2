@@ -21,6 +21,10 @@ import { useResolvedBusinessType } from "./useResolvedBusinessType";
 import { AdminCategoryFields } from "./AdminCategoryFields";
 import { resolveProductCategoryId } from "../../utils/resolveProductCategoryId";
 import { formatAdminApiError } from "../../utils/adminApiError";
+import {
+  schemaKeysFromProductSchema,
+  stripProductAttributesToSchema,
+} from "@repo-shared/productAttributeNormalization";
 const SIZE_OPTIONS = PRODUCT_SIZES;
 type SizeOption = (typeof SIZE_OPTIONS)[number];
 
@@ -313,7 +317,10 @@ const ProductForm = () => {
       discountPercent: disc,
       description: description.trim(),
       variants,
-      attributes,
+      attributes: stripProductAttributesToSchema(
+        schemaKeysFromProductSchema(productSchema),
+        attributes,
+      ).value,
     };
 
     try {

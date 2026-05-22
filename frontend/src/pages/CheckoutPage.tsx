@@ -279,8 +279,7 @@ export default function CheckoutPage({ onBack }: Props) {
         }
       }
       setAddressSuggestions(next);
-    } catch (e) {
-      console.error(e);
+    } catch {
       if (seq === addressSearchSeqRef.current) {
         setAddressSuggestions([]);
       }
@@ -369,8 +368,7 @@ export default function CheckoutPage({ onBack }: Props) {
             ) {
               setAddress(data.display_name.trim().slice(0, 2000));
             }
-          } catch (e) {
-            console.error(e);
+          } catch {
             setCheckoutError(t("checkout.geoAddressFail"));
           } finally {
             setLoadingLocation(false);
@@ -506,7 +504,6 @@ export default function CheckoutPage({ onBack }: Props) {
 
       setCheckoutError(t("checkout.payLinkMissing"));
     } catch (err) {
-      console.error(err);
       setCheckoutError(orderErrorMessage(err));
     } finally {
       if (!redirecting) {

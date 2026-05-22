@@ -7,6 +7,7 @@ import {
   submitPlatformRegisterRequest,
 } from "../services/platformApi";
 import { trackPlatformFunnel } from "../services/platformFunnel";
+import { formatApiError } from "../utils/adminApiError";
 import "./MerchantRegisterPage.css";
 
 const SS_SHOP = "miniapp-active-shop";
@@ -203,7 +204,7 @@ export default function MerchantRegisterPage() {
       }
       goMerchant();
     } catch (e) {
-      setSubmitError(e instanceof Error ? e.message : "Не удалось отправить");
+      setSubmitError(formatApiError(e));
       setStep(5);
     } finally {
       setSubmitting(false);

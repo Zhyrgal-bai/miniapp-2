@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchMyOrders } from "../services/myOrdersApi";
 import { showErrorToast, showSuccessToast } from "../store/toast.store";
+import { formatApiError } from "../utils/adminApiError";
 import { apiAbsoluteUrl } from "../services/api";
 import { useShop } from "../context/ShopContext";
 import { useStorefrontPayload } from "../components/storefront/runtime/StorefrontPayloadContext";
@@ -193,7 +194,7 @@ function OrderReceiptBlock({
       setInputKey((k) => k + 1);
       await onUploaded();
     } catch (e) {
-      showErrorToast(e instanceof Error ? e.message : "Ошибка загрузки");
+      showErrorToast(formatApiError(e));
     } finally {
       setLoading(false);
     }
@@ -570,7 +571,7 @@ export default function MyOrders({
       setSessionTicket(t);
       setScreen({ kind: "chat", order });
     } catch (e) {
-      showErrorToast(e instanceof Error ? e.message : "Не удалось отправить");
+      showErrorToast(formatApiError(e));
     } finally {
       setSupportBusy(false);
     }
@@ -600,7 +601,7 @@ export default function MyOrders({
       setSessionTicket(t);
       setTicketDraft("");
     } catch (e) {
-      showErrorToast(e instanceof Error ? e.message : "Ошибка");
+      showErrorToast(formatApiError(e));
     } finally {
       setSupportBusy(false);
     }
@@ -643,7 +644,7 @@ export default function MyOrders({
             setSessionTicket(t);
           }
         } catch (e) {
-          showErrorToast(e instanceof Error ? e.message : "Загрузка не удалась");
+          showErrorToast(formatApiError(e));
         } finally {
           setSupportBusy(false);
         }
@@ -674,7 +675,7 @@ export default function MyOrders({
       await load();
       setScreen({ kind: "order", order });
     } catch (e) {
-      showErrorToast(e instanceof Error ? e.message : "Ошибка");
+      showErrorToast(formatApiError(e));
     } finally {
       setSupportBusy(false);
     }
@@ -704,7 +705,7 @@ export default function MyOrders({
       await load();
       setScreen({ kind: "order", order });
     } catch (e) {
-      showErrorToast(e instanceof Error ? e.message : "Ошибка");
+      showErrorToast(formatApiError(e));
     } finally {
       setSupportBusy(false);
     }
@@ -735,7 +736,7 @@ export default function MyOrders({
       await loadSupportSession(order.id);
       setScreen({ kind: "order", order });
     } catch (e) {
-      showErrorToast(e instanceof Error ? e.message : "Ошибка");
+      showErrorToast(formatApiError(e));
     } finally {
       setSupportBusy(false);
     }

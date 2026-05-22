@@ -4,6 +4,7 @@ import { useBodyScrollLock } from "../utils/bodyScrollLock";
 import { fetchMyOrders } from "../services/myOrdersApi";
 import { useShop } from "../context/ShopContext";
 import { showErrorToast, showSuccessToast } from "../store/toast.store";
+import { formatApiError } from "../utils/adminApiError";
 import { getWebAppUserId } from "../utils/telegramUserId";
 import { getTelegramUser } from "../utils/telegram";
 import { telegramDisplayName } from "../utils/telegramUserMark";
@@ -216,7 +217,7 @@ export default function SupportHubPage({
       });
       setSessionTicket(t);
     } catch (e) {
-      showErrorToast(e instanceof Error ? e.message : "Не удалось отправить");
+      showErrorToast(formatApiError(e));
     } finally {
       setBusy(false);
     }
@@ -237,7 +238,7 @@ export default function SupportHubPage({
       setSessionTicket(t);
       setTicketDraft("");
     } catch (e) {
-      showErrorToast(e instanceof Error ? e.message : "Ошибка");
+      showErrorToast(formatApiError(e));
     } finally {
       setBusy(false);
     }
@@ -269,7 +270,7 @@ export default function SupportHubPage({
           );
           setSessionTicket(t);
         } catch (e) {
-          showErrorToast(e instanceof Error ? e.message : "Загрузка не удалась");
+          showErrorToast(formatApiError(e));
         } finally {
           setBusy(false);
         }
@@ -296,7 +297,7 @@ export default function SupportHubPage({
       await refreshSession(order.id);
       await load();
     } catch (e) {
-      showErrorToast(e instanceof Error ? e.message : "Ошибка");
+      showErrorToast(formatApiError(e));
     } finally {
       setBusy(false);
     }
@@ -341,7 +342,7 @@ export default function SupportHubPage({
       await refreshSession(order.id);
       await load();
     } catch (e) {
-      showErrorToast(e instanceof Error ? e.message : "Ошибка");
+      showErrorToast(formatApiError(e));
     } finally {
       setBusy(false);
     }
@@ -363,7 +364,7 @@ export default function SupportHubPage({
       await refreshSession(order.id);
       await load();
     } catch (e) {
-      showErrorToast(e instanceof Error ? e.message : "Ошибка");
+      showErrorToast(formatApiError(e));
     } finally {
       setBusy(false);
     }
@@ -551,7 +552,7 @@ export default function SupportHubPage({
                     );
                     setReturnPhotos((p) => [...p, url].slice(0, 8));
                   } catch (e) {
-                    showErrorToast(e instanceof Error ? e.message : "Ошибка");
+                    showErrorToast(formatApiError(e));
                   } finally {
                     setBusy(false);
                   }
@@ -610,7 +611,7 @@ export default function SupportHubPage({
           <p className="sf-support-hub__muted">{readTxt("loading", "Загрузка…")}</p>
         )}
         {error && (
-          <div className="sf-support-hub__error-wrap" role="showErrorToast">
+          <div className="sf-support-hub__error-wrap" role="alert">
             <p className="sf-support-hub__error">{error}</p>
             <button
               type="button"
@@ -710,6 +711,9 @@ export default function SupportHubPage({
               value={ticketDraft}
               disabled={busy || !sessionTicket}
               onChange={(e) => setTicketDraft(e.target.value)}
+              onFocus={(e) => {
+                e.currentTarget.scrollIntoView({ block: "nearest", behavior: "smooth" });
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") void sendMessage();
               }}

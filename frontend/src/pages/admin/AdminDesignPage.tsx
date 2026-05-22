@@ -14,7 +14,7 @@ import {
   type CatalogFooterSlideInput,
 } from "../../services/storefrontStyleCatalogApi";
 import { adminService } from "../../services/admin.service";
-import { api, TENANT_HEADER } from "../../services/api";
+import { formatAdminApiError } from "../../utils/adminApiError";
 import type { Product } from "../../types";
 import { ru } from "../../i18n/ru";
 
@@ -139,11 +139,9 @@ export default function AdminDesignPage(): ReactElement {
     let alive = true;
     void (async () => {
       try {
-        const res = await api.get<Product[]>("/products", {
-          headers: { [TENANT_HEADER]: String(businessId) },
-        });
+        const rows = await adminService.getProducts();
         if (!alive) return;
-        setCatalogProducts(Array.isArray(res.data) ? res.data : []);
+        setCatalogProducts(rows);
       } catch {
         if (!alive) return;
         setCatalogProducts([]);
@@ -193,7 +191,7 @@ export default function AdminDesignPage(): ReactElement {
         prev.map((r, i) => (i === idx ? { ...r, image: url, productId: undefined } : r)),
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось загрузить фото");
+      setError(formatAdminApiError(err));
     } finally {
       setUploadingSlideIdx(null);
     }
@@ -273,7 +271,7 @@ export default function AdminDesignPage(): ReactElement {
       await Promise.all([refresh(), refreshStorefrontPayload()]);
       setOk("Сохранено. Откройте «Магазин» — цвета и нижний блок обновятся.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось сохранить");
+      setError(formatAdminApiError(e));
     } finally {
       setSaving(false);
     }
