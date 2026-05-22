@@ -5,7 +5,12 @@ import { fileURLToPath } from "node:url";
 import express from "express";
 import type { NextFunction, Request, Response } from "express";
 import multer from "multer";
-import { BusinessStaffRole, MembershipRole, Prisma } from "@prisma/client";
+import {
+  BusinessStaffRole,
+  MembershipRole,
+  OrderStatus as PrismaOrderStatus,
+  Prisma,
+} from "@prisma/client";
 import cors from "cors";
 import {
   isCloudinaryConfigured,
@@ -104,6 +109,12 @@ import {
   syncProductStockFromVariants,
 } from "./inventoryService.js";
 import { priceCheckoutLines } from "./checkoutPricing.js";
+import {
+  buildCheckoutOrderItemRows,
+  coerceCheckoutOrderTotal,
+  coercePositiveInt,
+  parseCheckoutDeliveryMode,
+} from "./checkoutOrderWrite.js";
 import {
   logCheckoutStep,
   runCheckoutStep,
@@ -4478,16 +4489,34 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
     return res.status(400).json({ error: "Корзина пуста" });
   }
 
-  const items = rawItems.map((item) => ({
-    ...item,
-    name: cleanInput(item.name),
-    size: cleanInput(item.size),
-    color: cleanInput(item.color),
-    options: item.options,
-    quantity: Number(item.quantity),
-    price: Number(item.price),
-    productId: Number(item.productId),
-  }));
+  const items: Array<{
+    productId: number;
+    name: string;
+    size: string;
+    color: string;
+    options?: unknown;
+    quantity: number;
+    price: number;
+  }> = [];
+  for (const item of rawItems) {
+    const productId = coercePositiveInt(item.productId);
+    const quantity = coercePositiveInt(item.quantity);
+    const priceRaw = Number(item.price);
+    const price =
+      Number.isFinite(priceRaw) && priceRaw >= 0 ? Math.round(priceRaw) : null;
+    if (productId == null || quantity == null || price == null) {
+      return res.status(400).json({ error: "Неверные данные позиции в заказе" });
+    }
+    items.push({
+      productId,
+      name: cleanInput(item.name),
+      size: cleanInput(item.size),
+      color: cleanInput(item.color),
+      options: item.options,
+      quantity,
+      price,
+    });
+  }
 
   const probe = await prisma.product.findUnique({
     where: { id: items[0]!.productId },
@@ -4610,6 +4639,7 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
           }
         }, checkoutCtx);
       }
+      orderTotal = coerceCheckoutOrderTotal(orderTotal);
 
       const telegramId = verifiedTg;
       const businessId = tenantBusinessId;
@@ -4683,6 +4713,12 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
         checkoutCtx,
       );
 
+      const itemCreates = buildCheckoutOrderItemRows(
+        businessId,
+        priced.lines,
+        itemsValidated.map((it) => it.optionsValidated),
+      );
+
       const order = await runCheckoutStep(
         "order_created",
         businessId,
@@ -4696,30 +4732,13 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
               phone: customerPhoneValue,
               address: addrFinal,
               total: orderTotal,
-              status: "NEW",
+              status: PrismaOrderStatus.NEW,
               lat: orderLat,
               lng: orderLng,
               paymentMethod,
               paymentId: paymentMethod === "finik" ? null : paymentId,
               items: {
-                create: priced.lines.map((line) => {
-                  const validated = itemsValidated.find(
-                    (it) =>
-                      it.productId === line.productId &&
-                      it.size === line.size &&
-                      it.color === line.color,
-                  );
-                  return {
-                    businessId,
-                    productId: line.productId,
-                    name: line.name,
-                    size: line.size,
-                    color: line.color,
-                    options: validated?.optionsValidated ?? {},
-                    quantity: line.quantity,
-                    price: line.unitPrice,
-                  };
-                }) as any,
+                create: itemCreates,
               },
             },
             include: {
@@ -4755,11 +4774,9 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
       );
       void reserved;
 
-      const rawDeliveryMode = (body as { deliveryMode?: unknown }).deliveryMode;
-      const deliveryMode =
-        String(rawDeliveryMode ?? "").trim().toUpperCase() === "PICKUP"
-          ? "PICKUP"
-          : "DELIVERY";
+      const deliveryMode = parseCheckoutDeliveryMode(
+        body as { deliveryMode?: unknown; deliveryType?: unknown },
+      );
       const rawPrep = (body as { preparationMinutes?: unknown }).preparationMinutes;
       const preparationMinutes =
         rawPrep != null && Number.isFinite(Number(rawPrep))
@@ -4824,6 +4841,9 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
         ...(corrId ? { correlationId: corrId } : {}),
       });
       return res.status(409).json({ error: msg.slice(6) });
+    }
+    if (msg === "INVALID_ITEM") {
+      return res.status(400).json({ error: "Неверные данные позиции в заказе" });
     }
     const surfaced = surfaceCheckoutError(e, "POST /orders transaction");
     logCheckoutReject({
