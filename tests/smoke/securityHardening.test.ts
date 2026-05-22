@@ -32,6 +32,28 @@ describe("merchant auth hardening", () => {
     );
   });
 
+  it("GET /orders requires verified telegram (admin list)", () => {
+    expect(routeRequiresVerifiedTelegram(mockReq("GET", "/orders"))).toBe(
+      true,
+    );
+  });
+
+  it("GET /merchant/support/tickets requires verified telegram", () => {
+    expect(
+      routeRequiresVerifiedTelegram(
+        mockReq("GET", "/merchant/support/tickets"),
+      ),
+    ).toBe(true);
+  });
+
+  it("GET /merchant/intelligence/growth requires verified telegram", () => {
+    expect(
+      routeRequiresVerifiedTelegram(
+        mockReq("GET", "/merchant/intelligence/growth"),
+      ),
+    ).toBe(true);
+  });
+
   it("GET /integrations/finik requires verified telegram", () => {
     expect(
       routeRequiresVerifiedTelegram(mockReq("GET", "/integrations/finik")),

@@ -29,6 +29,14 @@ function normalizedPath(req: Request): string {
   return p.split("?")[0] ?? p;
 }
 
+/** GET routes that call requireMerchantStaff or verified telegramIdFromRequest. */
+function isMerchantStaffReadPath(path: string): boolean {
+  if (path === "/orders") return true;
+  if (path.startsWith("/orders/my")) return true;
+  if (path.startsWith("/merchant/")) return true;
+  return false;
+}
+
 export function routeRequiresVerifiedTelegram(req: Request): boolean {
   const method = req.method.toUpperCase();
   const path = normalizedPath(req);
@@ -55,6 +63,7 @@ export function routeRequiresVerifiedTelegram(req: Request): boolean {
   if (path.startsWith("/support/")) return true;
 
   if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
+    if (isMerchantStaffReadPath(path)) return true;
     if (path === "/products" || /^\/products\/\d+$/.test(path)) return false;
     if (path === "/categories") return false;
     return false;
