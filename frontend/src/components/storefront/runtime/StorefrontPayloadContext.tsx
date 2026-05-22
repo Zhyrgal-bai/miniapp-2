@@ -7,6 +7,8 @@ import type { ResolvedStorefrontPayload } from "../StorefrontRenderer";
 import { safeParseStorefrontPublicApiResponse } from "@repo-storefront/storefrontPublicApiResponseSchema";
 import { readStoreSlugString, rememberResolvedStoreSlug } from "../../../utils/storeParams";
 
+const FETCH_TIMEOUT_MS = 12_000;
+
 type StorefrontPayloadCtx = {
   payload: ResolvedStorefrontPayload | null;
   loading: boolean;
@@ -50,9 +52,12 @@ export function StorefrontPayloadProvider(props: { children: React.ReactNode }):
       return;
     }
 
+    const timeoutId = window.setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS);
+    let keepLoading = false;
+
     try {
       const res = await api.get(url, { signal: ac.signal });
-      if (ac.signal.aborted) return;
+      if (aborted.current !== ac) return;
       const parsed = safeParseStorefrontPublicApiResponse(res.data);
       if (!parsed.ok) {
         console.error("[StorefrontPayload]", parsed.error);
@@ -68,27 +73,36 @@ export function StorefrontPayloadProvider(props: { children: React.ReactNode }):
         window.dispatchEvent(new CustomEvent("sf:tenantResolved"));
       }
     } catch (e) {
-      if (ac.signal.aborted) return;
+      if (aborted.current !== ac) return;
       console.error(e);
       const status = (e as { response?: { status?: number } })?.response?.status;
-      const canRetry = (status == null || status >= 500) && transientRetries.current < 2;
+      const timedOut = ac.signal.aborted;
+      const canRetry =
+        (status == null || status >= 500 || timedOut) &&
+        transientRetries.current < 2;
       if (canRetry) {
         transientRetries.current += 1;
         const delayMs = 500 * transientRetries.current;
         setError("Подключаем витрину…");
+        keepLoading = true;
         window.setTimeout(() => {
-          if (!ac.signal.aborted) void refresh();
+          void refresh();
         }, delayMs);
         return;
       }
       setPayload(null);
       if (status === 404) {
         setError("Витрина пока недоступна");
+      } else if (timedOut) {
+        setError("Сервер не ответил вовремя. Попробуйте ещё раз.");
       } else {
         setError("Не удалось загрузить витрину");
       }
     } finally {
-      if (!ac.signal.aborted) setLoading(false);
+      window.clearTimeout(timeoutId);
+      if (!keepLoading && aborted.current === ac) {
+        setLoading(false);
+      }
     }
   }, [slug, businessId]);
 

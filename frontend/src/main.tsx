@@ -8,6 +8,7 @@ import { StorefrontPayloadProvider } from "./components/storefront/runtime/Store
 import MerchantDashboardPage from "./pages/MerchantDashboardPage";
 import MerchantRegisterPage from "./pages/MerchantRegisterPage";
 import RootAppOrPlatform from "./pages/RootAppOrPlatform";
+import AppErrorBoundary from "./components/ui/AppErrorBoundary";
 import "leaflet/dist/leaflet.css";
 import "./index.css";
 /** Последним в бандле: перебивает ProductCard.css / ProductGrid.css / kits (порядок каскада). */
@@ -19,7 +20,8 @@ bootstrapTelegramWebApp();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <AppErrorBoundary>
+      <BrowserRouter>
       <ShopProvider>
         <ThemeProvider>
           <StorefrontPayloadProvider>
@@ -41,6 +43,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           </StorefrontPayloadProvider>
         </ThemeProvider>
       </ShopProvider>
-    </BrowserRouter>
+      </BrowserRouter>
+    </AppErrorBoundary>
   </React.StrictMode>,
 );

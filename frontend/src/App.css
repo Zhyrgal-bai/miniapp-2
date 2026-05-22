@@ -277,6 +277,73 @@ button:active {
   box-sizing: border-box;
 }
 
+.app--tenant-loading {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.tenant-boot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 32px 20px;
+  text-align: center;
+  max-width: 360px;
+}
+
+.tenant-boot__spinner {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--sf-color-text, #fff) 18%, transparent);
+  border-top-color: var(--sf-color-primary, #6366f1);
+  animation: tenant-boot-spin 0.85s linear infinite;
+}
+
+@keyframes tenant-boot-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.tenant-boot__message {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--sf-color-text, #f8fafc);
+  line-height: 1.45;
+}
+
+.tenant-boot__hint {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--sf-color-text, #f8fafc) 72%, transparent);
+}
+
+.tenant-boot__retry {
+  margin-top: 4px;
+  border: 1px solid color-mix(in srgb, var(--sf-color-text, #fff) 22%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--sf-color-text, #fff) 10%, transparent);
+  color: var(--sf-color-text, #fff);
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.tenant-boot__retry:active {
+  transform: scale(0.98);
+}
+
 .shop-missing {
   max-width: 420px;
   text-align: center;

@@ -2175,6 +2175,13 @@
   gap: 12px;
   padding: 24px 16px;
   text-align: center;
+  color: #f1f5f9;
+}
+
+.telegram-session-gate .muted {
+  margin: 0;
+  color: #d1d5db;
+  font-size: 15px;
 }
 
 .telegram-session-gate__title {

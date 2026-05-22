@@ -1,4 +1,4 @@
-import HomePage from "./pages/HomePage";
+﻿import HomePage from "./pages/HomePage";
 import CartPage from "./pages/CartPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import AdminApp from "./pages/admin/AdminApp";
@@ -25,6 +25,7 @@ import { useTelegramBackButton } from "./hooks/useTelegramBackButton";
 import {
   mergeTenantIntoLocation,
   parseStoreSlugFromPath,
+  readStoreSlugString,
 } from "./utils/storeParams";
 import type { MyOrderRow } from "./types/myOrder";
 import "./App.css";
@@ -44,6 +45,7 @@ import "./components/storefront/cart/stickyCart.css";
 import { ThemeVarsProvider } from "./components/storefront/theme/ThemeVarsProvider";
 import { useTheme } from "./context/ThemeContext";
 import { useStorefrontPayload } from "./components/storefront/runtime/StorefrontPayloadContext";
+import TenantBootScreen from "./components/ui/TenantBootScreen";
 import {
   buildStorefrontLayoutCssVars,
   kitFromTemplateId,
@@ -79,7 +81,7 @@ export default function App() {
   const location = useLocation();
   const { businessId, shopIdString } = useShop();
   const { theme, templateId } = useTheme();
-  const { payload, loading: storefrontLoading, error: storefrontError } = useStorefrontPayload();
+  const { payload, loading: storefrontLoading, error: storefrontError, refresh: refreshStorefront } = useStorefrontPayload();
   const [page, setPage] = useState<AppNavPage>(initialPageFromPath);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [myOrdersAttention, setMyOrdersAttention] = useState(false);
@@ -138,7 +140,11 @@ export default function App() {
   const allowWithoutShop =
     page === "admin" || adminByHash || page === "faq";
   const slugPath = parseStoreSlugFromPath(location.pathname);
-  const tenantBoot = !allowWithoutShop && businessId == null && storefrontLoading;
+  const slugHint = readStoreSlugString(location.pathname, location.search);
+  const tenantBoot =
+    !allowWithoutShop &&
+    businessId == null &&
+    (storefrontLoading || (Boolean(slugHint) && storefrontError == null));
   const shopMissing = !allowWithoutShop && businessId == null && !tenantBoot;
 
   const items = useCartStore((state) => state.items);
@@ -542,9 +548,10 @@ export default function App() {
     return (
       <ThemeVarsProvider theme={theme}>
         <div className="app app--tenant-loading" role="status">
-          <p className="shop-missing__hint" style={{ textAlign: "center", padding: "32px 20px" }}>
-            Открываем витрину…
-          </p>
+          <TenantBootScreen
+            message={storefrontError ?? undefined}
+            onRetry={() => void refreshStorefront()}
+          />
         </div>
       </ThemeVarsProvider>
     );
@@ -576,8 +583,11 @@ export default function App() {
             </p>
           ) : null}
           <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-            <button type="button" className="checkout-btn" onClick={() => window.location.reload()}>
+            <button type="button" className="checkout-btn" onClick={() => void refreshStorefront()}>
               Повторить
+            </button>
+            <button type="button" className="checkout-btn" onClick={() => window.location.reload()}>
+              Обновить
             </button>
             <button type="button" className="go-shop" onClick={openViaTelegram}>
               Открыть через Telegram
