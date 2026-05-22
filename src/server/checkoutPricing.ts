@@ -48,12 +48,7 @@ export async function priceCheckoutLines(
   for (const line of lines) {
     const productId = Math.round(Number(line.productId));
     const qty = Math.round(Number(line.quantity));
-    if (
-      !Number.isInteger(productId) ||
-      productId <= 0 ||
-      !Number.isInteger(qty) ||
-      qty < 1
-    ) {
+    if (!Number.isInteger(productId) || productId <= 0 || qty < 1) {
       return { ok: false, statusCode: 400, error: "Неверная позиция в корзине" };
     }
 
@@ -127,5 +122,5 @@ export async function priceCheckoutLines(
   }
 
   const subtotal = priced.reduce((acc, l) => acc + l.lineTotal, 0);
-  return { ok: true, lines: priced, subtotal: Math.round(subtotal) };
+  return { ok: true, lines: priced, subtotal };
 }
