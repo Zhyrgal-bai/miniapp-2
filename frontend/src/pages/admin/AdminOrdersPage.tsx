@@ -11,6 +11,7 @@ import {
 } from "@repo-shared/finikPaymentState";
 import { showErrorToast, showSuccessToast } from "../../store/toast.store";
 import { formatAdminApiError } from "../../utils/adminApiError";
+import { refreshTelegramSessionAssessment } from "../../utils/telegramSession";
 
 const FILTER_TABS = [
   "ALL",
@@ -56,10 +57,16 @@ export default function AdminOrdersPage() {
   const [busySyncId, setBusySyncId] = useState<number | null>(null);
   const [busyTrackingId, setBusyTrackingId] = useState<number | null>(null);
   const [clearBusy, setClearBusy] = useState<"completed" | "rejected" | "all" | null>(null);
+  const [retryBusy, setRetryBusy] = useState(false);
   const [trackingDraft, setTrackingDraft] = useState<Record<number, string>>(
     {}
   );
   const trackingDirtyRef = useRef<Set<number>>(new Set());
+  const errorRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    errorRef.current = error;
+  }, [error]);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) {
@@ -82,6 +89,16 @@ export default function AdminOrdersPage() {
     }
   }, []);
 
+  const retryLoad = useCallback(async () => {
+    setRetryBusy(true);
+    try {
+      await refreshTelegramSessionAssessment();
+      await load();
+    } finally {
+      setRetryBusy(false);
+    }
+  }, [load]);
+
   useEffect(() => {
     void load();
   }, [load]);
@@ -91,6 +108,18 @@ export default function AdminOrdersPage() {
       void load({ silent: true });
     }, 3000);
     return () => clearInterval(interval);
+  }, [load]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible" || !errorRef.current) return;
+      void (async () => {
+        await refreshTelegramSessionAssessment();
+        await load({ silent: true });
+      })();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [load]);
 
   const filtered = useMemo(() => {
@@ -247,8 +276,19 @@ export default function AdminOrdersPage() {
       </div>
 
       {error && (
-        <div className="admin-form-error admin-dash-page__alert" role="alert">
-          {error}
+        <div
+          className="admin-form-error admin-form-error--with-action admin-dash-page__alert"
+          role="alert"
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            className="admin-form-error__retry"
+            disabled={retryBusy || loading}
+            onClick={() => void retryLoad()}
+          >
+            {retryBusy ? "Повтор…" : "Повторить"}
+          </button>
         </div>
       )}
 

@@ -20,7 +20,7 @@
 }
 
 .admin-order-search__input::placeholder {
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.68);
 }
 
 .analytics {
@@ -90,6 +90,29 @@
   line-height: 1.4;
 }
 
+.admin-form-error--with-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.admin-form-error__retry {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-form-error__retry:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .admin-form-section {
   display: flex;
   flex-direction: column;
@@ -99,7 +122,7 @@
 .admin-field-label {
   font-size: 11px;
   font-weight: 600;
-  color: #9ca3af;
+  color: #c4cad4;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -113,7 +136,7 @@
 .admin-form-hint {
   margin: 0;
   font-size: 13px;
-  color: #9ca3af;
+  color: #c4cad4;
   line-height: 1.4;
 }
 
@@ -155,7 +178,7 @@
 }
 
 .admin-input::placeholder {
-  color: #9ca3af;
+  color: rgba(255, 255, 255, 0.68);
 }
 
 .image-preview {
@@ -727,7 +750,7 @@
 .admin-dash-page__subtitle {
   margin: 0;
   font-size: 13px;
-  color: #9ca3af;
+  color: #d1d5db;
   line-height: 1.45;
   max-width: 52ch;
 }
@@ -739,7 +762,7 @@
 .admin-dash-page__muted {
   margin: 12px 0;
   font-size: 14px;
-  color: #9ca3af;
+  color: #d1d5db;
 }
 
 .admin-dash-section {
