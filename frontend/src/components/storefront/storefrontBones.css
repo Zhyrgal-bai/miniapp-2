@@ -123,11 +123,11 @@
 
 .sf-root .product-card .product-info,
 .sf-root .product-card .product-bottom {
-  color: color-mix(in srgb, var(--sf-color-text, #f8fafc) 18%, #141210) !important;
+  color: var(--sf-color-text, #f8fafc) !important;
 }
 
 .sf-root .product-card .product-info .product-title {
-  color: color-mix(in srgb, var(--sf-color-text, #f8fafc) 14%, #10100c) !important;
+  color: var(--sf-color-text, #f8fafc) !important;
 }
 
 .sf-root .product-card:hover,
