@@ -8,18 +8,23 @@ import {
   type ReactElement,
   type TouchEvent,
 } from "react";
-import { motion } from "framer-motion";
 import type { Product } from "../../../types";
 import { buildCloudinaryResponsiveUrl } from "../../../utils/cloudinaryTransforms";
 import "./CatalogFooterSlider.css";
 
 const AUTOPLAY_MS = 5500;
+const PROGRESS_SEGMENTS_MAX = 8;
+const SWIPE_THRESHOLD_PX = 48;
+const PARALLAX_FACTOR = 0.12;
+const PARALLAX_MAX_PX = 14;
 
 type ResolvedSlide = {
   imageUrl: string;
   caption: string;
   product?: Product;
   externalHref: string;
+  kicker: string;
+  subtitle: string;
 };
 
 function productPrimaryImage(p: Product): string {
@@ -43,6 +48,41 @@ function readCatalogFooter(styleConfig: Record<string, unknown> | null | undefin
   };
 }
 
+function formatProductKicker(p: Product | undefined): string {
+  if (!p) return "";
+  if (p.isSale) return "Скидка";
+  if (p.isPopular) return "Хит";
+  if (p.isNew) return "Новинка";
+  return "";
+}
+
+function formatProductSubtitle(p: Product | undefined): string {
+  if (!p || !Number.isFinite(p.price)) return "";
+  const price = Math.round(p.price);
+  const discount = p.discountPercent;
+  if (typeof discount === "number" && discount > 0 && discount < 100) {
+    const sale = Math.round(price * (1 - discount / 100));
+    return `${sale.toLocaleString("ru-RU")} сом`;
+  }
+  return `${price.toLocaleString("ru-RU")} сом`;
+}
+
+function formatProductSubtitleWithStrike(p: Product | undefined): ReactElement | string {
+  const line = formatProductSubtitle(p);
+  if (!p || line === "") return "";
+  const discount = p.discountPercent;
+  if (typeof discount === "number" && discount > 0 && discount < 100) {
+    const old = Math.round(p.price).toLocaleString("ru-RU");
+    return (
+      <>
+        <s>{old} сом</s>
+        {line}
+      </>
+    );
+  }
+  return line;
+}
+
 export function buildFooterSliderSlidesFromProducts(products: Product[]): ResolvedSlide[] {
   const seen = new Set<number>();
   const out: ResolvedSlide[] = [];
@@ -57,6 +97,8 @@ export function buildFooterSliderSlidesFromProducts(products: Product[]): Resolv
       caption: (p.name ?? "").trim(),
       product: p,
       externalHref: "",
+      kicker: formatProductKicker(p),
+      subtitle: formatProductSubtitle(p),
     });
   }
   return out;
@@ -70,11 +112,10 @@ export function catalogFooterCanShow(
   return buildFooterSliderSlidesFromProducts(products).length > 0;
 }
 
-function displayCaption(slide: ResolvedSlide): string | null {
+function displayTitle(slide: ResolvedSlide): string {
   const fromProduct = slide.product?.name?.trim() ?? "";
   if (fromProduct !== "") return fromProduct;
-  const raw = slide.caption.trim();
-  return raw !== "" ? raw : null;
+  return slide.caption.trim();
 }
 
 function slideIsActionable(slide: ResolvedSlide, onOpenProduct?: (p: Product) => void): boolean {
@@ -83,9 +124,7 @@ function slideIsActionable(slide: ResolvedSlide, onOpenProduct?: (p: Product) =>
   return href !== "" && /^https?:\/\//i.test(href);
 }
 
-const PROGRESS_SEGMENTS_MAX = 8;
-
-function ProgressBar(props: {
+function PromoProgress(props: {
   count: number;
   index: number;
   animKey: number;
@@ -95,27 +134,20 @@ function ProgressBar(props: {
   if (props.count <= 1) return null;
 
   const fillClass = [
-    "sf-catalog-footer__progress-fill",
-    props.paused ? "sf-catalog-footer__progress-fill--paused" : "",
+    "sf-cine-promo__progress-fill",
+    props.paused ? "sf-cine-promo__progress-fill--paused" : "",
   ]
     .filter(Boolean)
     .join(" ");
+
   const fillStyle = {
-    animationDuration: `${AUTOPLAY_MS}ms`,
-    ["--sf-footer-progress-ms" as string]: `${AUTOPLAY_MS}ms`,
+    ["--sf-cine-promo-autoplay-ms" as string]: `${AUTOPLAY_MS}ms`,
   } as CSSProperties;
 
   if (props.count > PROGRESS_SEGMENTS_MAX) {
     return (
-      <div
-        className="sf-catalog-footer__progress sf-catalog-footer__progress--single"
-        role="progressbar"
-        aria-valuenow={props.index + 1}
-        aria-valuemin={1}
-        aria-valuemax={props.count}
-        aria-label={`Букет ${props.index + 1} из ${props.count}`}
-      >
-        <div className="sf-catalog-footer__progress-seg">
+      <div className="sf-cine-promo__progress sf-cine-promo__progress--single" role="progressbar">
+        <div className="sf-cine-promo__progress-seg">
           <span className={fillClass} style={fillStyle} key={`fill-${props.animKey}`} />
         </div>
       </div>
@@ -123,7 +155,7 @@ function ProgressBar(props: {
   }
 
   return (
-    <div className="sf-catalog-footer__progress" role="tablist" aria-label="Слайды каталога">
+    <div className="sf-cine-promo__progress" role="tablist" aria-label="Слайды акций">
       {Array.from({ length: props.count }, (_, i) => {
         const active = i === props.index;
         return (
@@ -133,14 +165,14 @@ function ProgressBar(props: {
             role="tab"
             aria-selected={active}
             aria-label={`Слайд ${i + 1}`}
-            className="sf-catalog-footer__progress-seg"
+            className="sf-cine-promo__progress-seg"
             onClick={() => props.onPick(i)}
           >
             <span
               className={
                 active
                   ? fillClass
-                  : "sf-catalog-footer__progress-fill sf-catalog-footer__progress-fill--done"
+                  : "sf-cine-promo__progress-fill sf-cine-promo__progress-fill--done"
               }
               style={active ? fillStyle : undefined}
               key={active ? `fill-${props.index}-${props.animKey}` : `done-${i}`}
@@ -150,67 +182,6 @@ function ProgressBar(props: {
       })}
     </div>
   );
-}
-
-function SlideCard(props: {
-  slide: ResolvedSlide;
-  onOpenProduct?: (product: Product) => void;
-}): ReactElement {
-  const { slide: r } = props;
-  const imgSrc = buildCloudinaryResponsiveUrl(r.imageUrl, "preview");
-  const cap = displayCaption(r);
-  const actionable = slideIsActionable(r, props.onOpenProduct);
-
-  const inner = (
-    <div className="sf-catalog-footer__frame">
-      <div className="sf-catalog-footer__media">
-        <img
-          src={imgSrc}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          className="sf-catalog-footer__media-img"
-        />
-        <div className="sf-catalog-footer__shade" aria-hidden />
-        <div className="sf-catalog-footer__overlay">
-          {cap != null ? <p className="sf-catalog-footer__caption">{cap}</p> : null}
-          {actionable ? (
-            <span className="sf-catalog-footer__cta">Смотреть</span>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
-
-  const cardClass = "sf-catalog-footer__card";
-
-  if (r.product != null && props.onOpenProduct) {
-    return (
-      <button
-        type="button"
-        className={`${cardClass} sf-catalog-footer__card--action`}
-        onClick={() => props.onOpenProduct?.(r.product!)}
-      >
-        {inner}
-      </button>
-    );
-  }
-
-  const href = r.externalHref;
-  if (href !== "" && /^https?:\/\//i.test(href)) {
-    return (
-      <a
-        className={`${cardClass} sf-catalog-footer__card--action`}
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        {inner}
-      </a>
-    );
-  }
-
-  return <div className={cardClass}>{inner}</div>;
 }
 
 export function CatalogFooterSlider(props: {
@@ -224,21 +195,47 @@ export function CatalogFooterSlider(props: {
     return buildFooterSliderSlidesFromProducts(props.catalogProducts);
   }, [cfg?.enabled, props.catalogProducts]);
 
+  const count = resolved.length;
   const [slideIndex, setSlideIndex] = useState(0);
+  const [leavingIndex, setLeavingIndex] = useState<number | null>(null);
   const [progressKey, setProgressKey] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [parallaxX, setParallaxX] = useState(0);
   const touchStartX = useRef<number | null>(null);
-  const count = resolved.length;
+  const leaveTimer = useRef<number | null>(null);
 
-  const goTo = useCallback((i: number) => {
-    setSlideIndex(i);
-    setProgressKey((k) => k + 1);
-  }, []);
+  const goTo = useCallback(
+    (next: number) => {
+      if (count <= 0) return;
+      setSlideIndex((current) => {
+        const clamped = ((next % count) + count) % count;
+        if (clamped === current) return current;
+        setLeavingIndex(current);
+        setProgressKey((k) => k + 1);
+        setParallaxX(0);
+        if (leaveTimer.current != null) window.clearTimeout(leaveTimer.current);
+        leaveTimer.current = window.setTimeout(() => {
+          setLeavingIndex(null);
+          leaveTimer.current = null;
+        }, 780);
+        return clamped;
+      });
+    },
+    [count],
+  );
 
   useEffect(() => {
     setSlideIndex(0);
+    setLeavingIndex(null);
     setProgressKey((k) => k + 1);
   }, [count]);
+
+  useEffect(
+    () => () => {
+      if (leaveTimer.current != null) window.clearTimeout(leaveTimer.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (count <= 1 || paused) return undefined;
@@ -250,9 +247,15 @@ export function CatalogFooterSlider(props: {
       if (document.visibilityState !== "visible") return;
       setSlideIndex((i) => {
         const next = i + 1 >= count ? 0 : i + 1;
+        setLeavingIndex(i);
+        setProgressKey((k) => k + 1);
+        if (leaveTimer.current != null) window.clearTimeout(leaveTimer.current);
+        leaveTimer.current = window.setTimeout(() => {
+          setLeavingIndex(null);
+          leaveTimer.current = null;
+        }, 780);
         return next;
       });
-      setProgressKey((k) => k + 1);
     }, AUTOPLAY_MS);
     return () => window.clearInterval(id);
   }, [count, paused]);
@@ -262,100 +265,183 @@ export function CatalogFooterSlider(props: {
     touchStartX.current = e.touches[0]?.clientX ?? null;
   }, []);
 
+  const onTouchMove = useCallback((e: TouchEvent) => {
+    const start = touchStartX.current;
+    if (start == null) return;
+    const x = e.touches[0]?.clientX ?? start;
+    const dx = x - start;
+    const clamped = Math.max(-PARALLAX_MAX_PX, Math.min(PARALLAX_MAX_PX, dx * PARALLAX_FACTOR));
+    setParallaxX(clamped);
+  }, []);
+
   const onTouchEnd = useCallback(
     (e: TouchEvent) => {
       const start = touchStartX.current;
       touchStartX.current = null;
-      if (start == null || count <= 1) {
-        setPaused(false);
-        return;
-      }
-      const endX = e.changedTouches[0]?.clientX;
-      if (endX == null) {
-        setPaused(false);
-        return;
-      }
-      const dx = endX - start;
-      const th = 44;
-      if (dx < -th) {
-        setSlideIndex((i) => {
-          const next = i + 1 >= count ? 0 : i + 1;
-          setProgressKey((k) => k + 1);
-          return next;
-        });
-      } else if (dx > th) {
-        setSlideIndex((i) => {
-          const next = i <= 0 ? count - 1 : i - 1;
-          setProgressKey((k) => k + 1);
-          return next;
-        });
-      }
-      window.setTimeout(() => setPaused(false), 400);
+      setParallaxX(0);
+      window.setTimeout(() => setPaused(false), 2400);
+      if (start == null || count <= 1) return;
+      const dx = (e.changedTouches[0]?.clientX ?? 0) - start;
+      if (dx < -SWIPE_THRESHOLD_PX) goTo(slideIndex + 1);
+      else if (dx > SWIPE_THRESHOLD_PX) goTo(slideIndex - 1);
     },
-    [count],
+    [count, slideIndex, goTo],
+  );
+
+  const onPickProgress = useCallback((i: number) => goTo(i), [goTo]);
+
+  const openSlide = useCallback(
+    (slide: ResolvedSlide) => {
+      if (slide.product != null && props.onOpenProduct) {
+        props.onOpenProduct(slide.product);
+        return;
+      }
+      const href = slide.externalHref;
+      if (href !== "" && /^https?:\/\//i.test(href)) {
+        window.open(href, "_blank", "noopener,noreferrer");
+      }
+    },
+    [props.onOpenProduct],
   );
 
   if (!cfg?.enabled || resolved.length === 0) return null;
 
-  const title = cfg.title.trim() !== "" ? cfg.title : "Букеты";
+  const sectionTitle = cfg.title.trim() !== "" ? cfg.title : "Букеты";
   const safeIndex = Math.min(slideIndex, Math.max(resolved.length - 1, 0));
+  const current = resolved[safeIndex];
+  const currentTitle = current ? displayTitle(current) : "";
+  const actionable = current ? slideIsActionable(current, props.onOpenProduct) : false;
+
+  const parallaxStyle = {
+    transform: `scale(1.05) translate3d(${parallaxX}px, 0, 0)`,
+  } as CSSProperties;
 
   return (
     <section
-      className="sf-catalog-footer"
-      aria-label={title}
+      className="sf-cine-promo-section"
+      aria-label={sectionTitle}
       aria-roledescription="carousel"
     >
-      <div className="sf-catalog-footer__head">
-        <span className="sf-catalog-footer__title">{title}</span>
+      <header className="sf-cine-promo__head">
+        <h2 className="sf-cine-promo__section-title">{sectionTitle}</h2>
         {count > 1 ? (
-          <span className="sf-catalog-footer__counter">
-            {safeIndex + 1}/{count}
+          <span className="sf-cine-promo__head-meta">
+            {safeIndex + 1} / {count}
           </span>
         ) : null}
-      </div>
+      </header>
 
-      <div
-        className="sf-catalog-footer__viewport"
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
-        onPointerEnter={() => setPaused(true)}
-        onPointerLeave={() => setPaused(false)}
-      >
-        <div className="sf-catalog-footer__stack">
-          {resolved.map((slide, i) => (
-            <motion.div
-              key={
-                slide.product?.id != null
-                  ? `product-${slide.product.id}`
-                  : `${i}-${slide.imageUrl.slice(0, 32)}`
-              }
-              className="sf-catalog-footer__layer"
-              initial={false}
-              animate={{
-                opacity: i === safeIndex ? 1 : 0,
-                scale: i === safeIndex ? 1 : 1.03,
-              }}
-              transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
-              style={{
-                zIndex: i === safeIndex ? 2 : 1,
-                pointerEvents: i === safeIndex ? "auto" : "none",
-              }}
-              aria-hidden={i !== safeIndex}
-            >
-              <SlideCard slide={slide} onOpenProduct={props.onOpenProduct} />
-            </motion.div>
-          ))}
+      <div className="sf-cine-promo__wrap">
+        <div className="sf-cine-promo">
+          <div
+            className="sf-cine-promo__viewport"
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+            onPointerEnter={() => setPaused(true)}
+            onPointerLeave={() => setPaused(false)}
+          >
+            <div className="sf-cine-promo__stack" aria-hidden>
+              {resolved.map((slide, i) => {
+                const isActive = i === safeIndex;
+                const isLeaving = i === leavingIndex;
+                const imgSrc = buildCloudinaryResponsiveUrl(slide.imageUrl, "preview");
+                const slideClass = [
+                  "sf-cine-promo__slide",
+                  isActive ? "is-active" : "",
+                  isLeaving ? "is-leaving" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ");
+
+                return (
+                  <div
+                    key={
+                      slide.product?.id != null
+                        ? `product-${slide.product.id}`
+                        : `${i}-${slide.imageUrl.slice(0, 24)}`
+                    }
+                    className={slideClass}
+                  >
+                    <button
+                      type="button"
+                      className="sf-cine-promo__hit"
+                      onClick={() => isActive && openSlide(slide)}
+                      tabIndex={isActive ? 0 : -1}
+                      aria-hidden={!isActive}
+                    >
+                      <div className="sf-cine-promo__media">
+                        <img
+                          src={imgSrc}
+                          alt=""
+                          className={[
+                            "sf-cine-promo__img",
+                            parallaxX !== 0 && isActive ? "sf-cine-promo__img--parallax" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                          style={isActive && parallaxX !== 0 ? parallaxStyle : undefined}
+                          loading={i === 0 ? "eager" : "lazy"}
+                          decoding="async"
+                        />
+                        <div className="sf-cine-promo__shade" />
+                        <div className="sf-cine-promo__ambient" />
+                        <div className="sf-cine-promo__edge" />
+                      </div>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {count > 1 ? (
+              <span className="sf-cine-promo__counter" aria-hidden>
+                {safeIndex + 1}/{count}
+              </span>
+            ) : null}
+
+            <PromoProgress
+              count={count}
+              index={safeIndex}
+              animKey={progressKey}
+              paused={paused}
+              onPick={onPickProgress}
+            />
+
+            {current ? (
+              <div className="sf-cine-promo__content" aria-live="polite">
+                <div
+                  className="sf-cine-promo__content-inner"
+                  key={`promo-copy-${safeIndex}-${progressKey}`}
+                >
+                  {current.kicker ? (
+                    <span className="sf-cine-promo__kicker">{current.kicker}</span>
+                  ) : null}
+                  {currentTitle ? (
+                    <h3 className="sf-cine-promo__title">{currentTitle}</h3>
+                  ) : null}
+                  {current.subtitle !== "" ? (
+                    <p className="sf-cine-promo__subtitle">
+                      {formatProductSubtitleWithStrike(current.product)}
+                    </p>
+                  ) : null}
+                  {actionable ? (
+                    <div className="sf-cine-promo__cta-row">
+                      <button
+                        type="button"
+                        className="sf-cine-promo__cta"
+                        onClick={() => openSlide(current)}
+                      >
+                        Смотреть
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
-
-      <ProgressBar
-        count={count}
-        index={safeIndex}
-        animKey={progressKey}
-        paused={paused}
-        onPick={goTo}
-      />
     </section>
   );
 }
