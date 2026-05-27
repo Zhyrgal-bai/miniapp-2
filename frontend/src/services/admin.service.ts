@@ -360,26 +360,47 @@ export const adminService = {
     await adminDelete(`/payment/${id}`);
   },
 
-  async listPromos(): Promise<AdminPromoRecord[]> {
-    const data = await adminPost<AdminPromoRecord[]>("/promo/list", {});
+  async listPromos(businessId: number): Promise<AdminPromoRecord[]> {
+    const url = new URL(resolveAdminUrl("/promo/list"));
+    url.searchParams.set("shop", String(businessId));
+    const data = await adminFetchJson<AdminPromoRecord[]>(url.toString(), {
+      method: "POST",
+      businessId,
+      body: JSON.stringify({ businessId }),
+    });
     return data ?? [];
   },
 
   async addPromo(
+    businessId: number,
     code: string,
     discount: number,
-    maxUses: number
+    maxUses: number,
   ): Promise<AdminPromoRecord> {
-    return adminPost<AdminPromoRecord>("/promo", {
-      code,
-      discount,
-      maxUses,
-      limit: maxUses,
+    const url = new URL(resolveAdminUrl("/promo"));
+    url.searchParams.set("shop", String(businessId));
+    return adminFetchJson<AdminPromoRecord>(url.toString(), {
+      method: "POST",
+      businessId,
+      body: JSON.stringify({
+        businessId,
+        code,
+        discount,
+        maxUses,
+        limit: maxUses,
+      }),
     });
   },
 
-  async deletePromo(code: string): Promise<void> {
-    await adminDelete(`/promo/${encodeURIComponent(code)}`);
+  async deletePromo(businessId: number, code: string): Promise<void> {
+    const url = new URL(
+      resolveAdminUrl(`/promo/${encodeURIComponent(code)}`),
+    );
+    url.searchParams.set("shop", String(businessId));
+    await adminFetchVoid(url.toString(), {
+      method: "DELETE",
+      businessId,
+    });
   },
 
   /** Список заказов из PostgreSQL (polling и после действий). */

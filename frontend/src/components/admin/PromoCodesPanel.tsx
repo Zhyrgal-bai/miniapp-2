@@ -5,8 +5,10 @@ import {
   type AdminPromoRecord,
 } from "../../services/admin.service";
 import { formatAdminApiError } from "../../utils/adminApiError";
+import { useShop } from "../../context/ShopContext";
 
 export default function PromoCodesPanel() {
+  const { businessId } = useShop();
   const [items, setItems] = useState<AdminPromoRecord[]>([]);
   const [code, setCode] = useState("");
   const [discount, setDiscount] = useState("");
@@ -16,9 +18,17 @@ export default function PromoCodesPanel() {
   const [listLoading, setListLoading] = useState(true);
 
   const load = useCallback(async () => {
+    if (businessId == null || businessId <= 0) {
+      setItems([]);
+      setError(
+        "Магазин не выбран. Откройте админку из витрины магазина (ссылка с ?shop=ID).",
+      );
+      setListLoading(false);
+      return;
+    }
     setListLoading(true);
     try {
-      const data = await adminService.listPromos();
+      const data = await adminService.listPromos(businessId);
       setItems(data);
       setError(null);
     } catch (e) {
@@ -27,14 +37,20 @@ export default function PromoCodesPanel() {
     } finally {
       setListLoading(false);
     }
-  }, []);
+  }, [businessId]);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (businessId == null || businessId <= 0) {
+      setError(
+        "Магазин не выбран. Откройте админку из витрины магазина (ссылка с ?shop=ID).",
+      );
+      return;
+    }
     const c = code.trim();
     const d = Number(discount);
     const m = Number(maxUses);
@@ -54,7 +70,7 @@ export default function PromoCodesPanel() {
     setLoading(true);
     setError(null);
     try {
-      await adminService.addPromo(c, d, m);
+      await adminService.addPromo(businessId, c, d, m);
       setCode("");
       await load();
     } catch (err) {
@@ -65,6 +81,12 @@ export default function PromoCodesPanel() {
   };
 
   const handleDelete = async (promoCode: string) => {
+    if (businessId == null || businessId <= 0) {
+      setError(
+        "Магазин не выбран. Откройте админку из витрины магазина (ссылка с ?shop=ID).",
+      );
+      return;
+    }
     if (
       !window.confirm(
         `Удалить промокод «${promoCode}»? Уже использованные заказы не изменятся.`,
@@ -73,7 +95,7 @@ export default function PromoCodesPanel() {
       return;
     }
     try {
-      await adminService.deletePromo(promoCode);
+      await adminService.deletePromo(businessId, promoCode);
       await load();
     } catch (err) {
       showErrorToast(formatAdminApiError(err));
