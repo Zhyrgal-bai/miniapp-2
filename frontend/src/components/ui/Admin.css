@@ -1736,6 +1736,249 @@
   background: rgba(148, 163, 184, 0.12);
 }
 
+.admin-dash-page__head-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* —— Приглашение в команду —— */
+.admin-staff-invite {
+  margin-bottom: 18px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(15, 23, 42, 0.5) 100%
+  );
+}
+
+.admin-staff-invite__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.admin-staff-invite__title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.admin-staff-invite__hint {
+  margin: 6px 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--sf-color-muted, #94a3b8);
+}
+
+.admin-staff-invite__close {
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.admin-staff-invite__form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-staff-invite__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-staff-invite__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.admin-staff-invite__preview {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  background: rgba(6, 78, 59, 0.15);
+}
+
+.admin-staff-invite__preview--pending {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(69, 26, 3, 0.2);
+}
+
+.admin-staff-invite__preview-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-staff-invite__preview-name {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.admin-staff-invite__preview-handle {
+  margin: 4px 0 8px;
+  font-size: 0.875rem;
+  color: #94a3b8;
+}
+
+.admin-staff-invite__badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.admin-staff-invite__badge--ok {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+}
+
+.admin-staff-invite__badge--warn {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+}
+
+.admin-staff-invite__steps {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.admin-staff-invite__steps-title {
+  margin: 0 0 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.admin-staff-invite__steps-list {
+  margin: 0 0 12px;
+  padding-left: 1.2rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: #cbd5e1;
+}
+
+.admin-staff-invite__cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-staff-invite__confirm {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.admin-staff-invite__error {
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
+/* —— Карточки команды —— */
+.admin-team-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-team-card {
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.admin-team-card__top {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.admin-team-card__identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-team-card__name {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.admin-team-card__username {
+  margin: 4px 0 10px;
+  font-size: 0.8125rem;
+  color: #94a3b8;
+}
+
+.admin-team-card__username--muted {
+  font-style: italic;
+}
+
+.admin-team-card__perms {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-team-card__perms-title {
+  margin: 0 0 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.admin-team-card__perm-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-bottom: 10px;
+}
+
+.admin-team-card__perm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+}
+
+.admin-team-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-team-card__role-select {
+  flex: 1;
+  min-width: 140px;
+}
+
 /* —— Тема витрины (настройки) —— */
 .admin-theme-editor {
   display: flex;

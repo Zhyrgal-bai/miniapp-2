@@ -148,6 +148,68 @@ export function validateTelegramInitData(initData: string, botToken: string): bo
   }
 }
 
+export type TelegramWebAppUser = {
+  id: string;
+  username: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  photoUrl: string | null;
+};
+
+/** Из уже доверенной строки initData — профиль user (без проверки подписи). */
+export function parseTelegramWebAppUserFromInitData(
+  initData: string,
+): TelegramWebAppUser | null {
+  const raw = initData.trim();
+  if (raw === "") return null;
+  let params: URLSearchParams;
+  try {
+    params = new URLSearchParams(raw);
+  } catch {
+    return null;
+  }
+  const userJson = params.get("user");
+  if (userJson == null || userJson.trim() === "") return null;
+  try {
+    const u = JSON.parse(userJson) as {
+      id?: unknown;
+      username?: unknown;
+      first_name?: unknown;
+      last_name?: unknown;
+      photo_url?: unknown;
+    };
+    const id = u.id;
+    if (typeof id !== "number" || !Number.isFinite(id) || id <= 0) return null;
+    const n = Math.trunc(id);
+    if (!Number.isSafeInteger(n)) return null;
+    const username =
+      typeof u.username === "string" && u.username.trim() !== ""
+        ? u.username.trim().replace(/^@+/, "").toLowerCase()
+        : null;
+    const firstName =
+      typeof u.first_name === "string" && u.first_name.trim() !== ""
+        ? u.first_name.trim()
+        : null;
+    const lastName =
+      typeof u.last_name === "string" && u.last_name.trim() !== ""
+        ? u.last_name.trim()
+        : null;
+    const photoUrl =
+      typeof u.photo_url === "string" && u.photo_url.trim() !== ""
+        ? u.photo_url.trim()
+        : null;
+    return {
+      id: String(n),
+      username,
+      firstName,
+      lastName,
+      photoUrl,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Из уже доверенной строки initData — id пользователя (без проверки подписи). */
 export function telegramUserIdStringFromInitData(initData: string): string | null {
   const raw = initData.trim();

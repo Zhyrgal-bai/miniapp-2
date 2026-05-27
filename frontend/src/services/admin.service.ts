@@ -99,6 +99,22 @@ export type AdminStaffRow = {
   permissions?: string[];
 };
 
+export type StaffInvitePreview = {
+  name: string;
+  username: string;
+  photoUrl: string | null;
+  alreadyStaff: boolean;
+  lookupStatus: "ready" | "already_staff" | "needs_bot_contact" | "bot_not_configured";
+  canInviteNow: boolean;
+  hasPendingInvite: boolean;
+  botLink: string | null;
+  userId: number | null;
+};
+
+export type StaffInviteResult =
+  | { kind: "added"; staff: AdminStaffRow }
+  | { kind: "pending"; message: string };
+
 /** @deprecated Use AdminStaffRow */
 export type AdminMembershipRow = AdminStaffRow;
 
@@ -612,15 +628,21 @@ export const adminService = {
   async previewStaffInvite(input: {
     businessId: number;
     username: string;
-  }): Promise<{
-    name: string;
-    username: string;
-    photoUrl: string | null;
-    alreadyStaff: boolean;
-  }> {
-    return adminStaffFetch("/api/staff/preview", input.businessId, {
+  }): Promise<StaffInvitePreview> {
+    return adminStaffFetch<StaffInvitePreview>("/api/staff/preview", input.businessId, {
       method: "POST",
       body: { username: input.username },
+    });
+  },
+
+  async createPendingStaffInvite(input: {
+    businessId: number;
+    username: string;
+    role: "ADMIN" | "MANAGER" | "SUPPORT";
+  }): Promise<{ pending: true; message: string }> {
+    return adminStaffFetch("/api/staff/pending-invite", input.businessId, {
+      method: "POST",
+      body: { username: input.username, role: input.role },
     });
   },
 
@@ -628,11 +650,24 @@ export const adminService = {
     businessId: number;
     username: string;
     role: "ADMIN" | "MANAGER" | "SUPPORT";
-  }): Promise<AdminStaffRow> {
-    return adminStaffFetch<AdminStaffRow>("/api/staff/invite", input.businessId, {
+  }): Promise<StaffInviteResult> {
+    const url = new URL(resolveAdminUrl("/api/staff/invite"));
+    url.searchParams.set("shop", String(input.businessId));
+    const res = await adminFetch(url.toString(), {
       method: "POST",
-      body: { username: input.username, role: input.role },
+      businessId: input.businessId,
+      body: JSON.stringify({ username: input.username, role: input.role }),
     });
+    const text = await res.text();
+    const data = text.trim() ? (JSON.parse(text) as Record<string, unknown>) : {};
+    if (res.status === 202 || data.pending === true) {
+      const message =
+        typeof data.message === "string" && data.message.trim() !== ""
+          ? data.message
+          : "Приглашение сохранено. Сотрудник получит доступ после /start в боте.";
+      return { kind: "pending", message };
+    }
+    return { kind: "added", staff: data as AdminStaffRow };
   },
 
   async updateStaffRole(input: {

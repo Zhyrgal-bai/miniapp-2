@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { BusinessStaffRole } from "@prisma/client";
 import { API_ERR_MISSING_TENANT_SHOP, API_ERR_SERVER } from "../shared/apiClientMessages.js";
 import {
+  createPendingStaffInvite,
   inviteStaffMember,
   listStaffPublicRows,
   parseStaffRole,
@@ -62,10 +63,7 @@ export function attachStaffRoutes(
         username,
       });
       if (!result.ok) {
-        res.status(result.pendingInvite ? 404 : 400).json({
-          error: result.error,
-          pendingInvite: result.pendingInvite ?? false,
-        });
+        res.status(result.statusCode ?? 400).json({ error: result.error });
         return;
       }
       res.json(result.preview);
@@ -100,6 +98,10 @@ export function attachStaffRoutes(
         res.status(result.statusCode).json({ error: result.error });
         return;
       }
+      if (result.pending) {
+        res.status(202).json({ pending: true, message: result.message });
+        return;
+      }
       res.status(201).json(result.staff);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
@@ -112,6 +114,42 @@ export function attachStaffRoutes(
         return;
       }
       console.error("POST /api/staff/invite:", e);
+      res.status(500).json({ error: API_ERR_SERVER });
+    }
+  });
+
+  app.post("/api/staff/pending-invite", async (req: Request, res: Response) => {
+    try {
+      if (typeof req.businessId !== "number") {
+        res.status(400).json({ error: API_ERR_MISSING_TENANT_SHOP });
+        return;
+      }
+      const ownerCtx = await deps.requireStoreOwnerForApi(
+        req,
+        res,
+        req.businessId,
+      );
+      if (!ownerCtx) return;
+
+      const body = req.body as { username?: unknown; role?: unknown };
+      const role = parseStaffRole(body.role) ?? BusinessStaffRole.ADMIN;
+      const result = await createPendingStaffInvite({
+        businessId: req.businessId,
+        invitedByUserId: ownerCtx.requesterDbUserId,
+        username: String(body.username ?? ""),
+        role,
+      });
+      if (!result.ok) {
+        res.status(result.statusCode).json({ error: result.error });
+        return;
+      }
+      res.status(201).json({
+        pending: true,
+        message:
+          "Приглашение сохранено. Сотрудник получит доступ после /start в боте магазина.",
+      });
+    } catch (e) {
+      console.error("POST /api/staff/pending-invite:", e);
       res.status(500).json({ error: API_ERR_SERVER });
     }
   });

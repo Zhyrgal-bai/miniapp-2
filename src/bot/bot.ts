@@ -489,6 +489,30 @@ export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
     });
 
   tgBot.start(async (ctx) => {
+    if (role.type === "dynamic" && ctx.from?.id != null) {
+      try {
+        const { syncTelegramUserProfile } = await import(
+          "../server/telegramUserSync.js"
+        );
+        const { acceptPendingStaffInvitesForUser } = await import(
+          "../server/businessStaffService.js"
+        );
+        const synced = await syncTelegramUserProfile({
+          telegramId: String(ctx.from.id),
+          username: ctx.from.username ?? null,
+          firstName: ctx.from.first_name ?? null,
+          lastName: ctx.from.last_name ?? null,
+        });
+        await acceptPendingStaffInvitesForUser({
+          businessId: role.businessId,
+          userId: synced.id,
+          telegramUsername: synced.telegramUsername,
+        });
+      } catch (e) {
+        console.error("[bot] staff invite sync on /start:", e);
+      }
+    }
+
     const tenantRoleResolved =
       (ctx as TenantTelegrafCtx).tenantRole ?? null;
     const merchantHere = isMerchantBotRole(tenantRoleResolved);

@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { showErrorToast } from "../../store/toast.store";
+import { showErrorToast, showSuccessToast } from "../../store/toast.store";
 import { formatAdminApiError } from "../../utils/adminApiError";
-import { adminService, type AdminStaffRow } from "../../services/admin.service";
+import {
+  adminService,
+  type AdminStaffRow,
+  type StaffInvitePreview,
+} from "../../services/admin.service";
 import { useShop } from "../../context/ShopContext";
 import {
   ALL_MERCHANT_PERMISSION_IDS,
@@ -43,6 +47,246 @@ function effectiveAdminPermissions(stored: string[] | undefined): MerchantPermis
   return ALL_MERCHANT_PERMISSION_IDS.filter((p) => list.includes(p));
 }
 
+function StaffInvitePanel(props: {
+  businessId: number;
+  onClose: () => void;
+  onDone: () => void;
+}): React.ReactElement {
+  const [username, setUsername] = useState("");
+  const [role, setRole] = useState<InviteRole>("ADMIN");
+  const [preview, setPreview] = useState<StaffInvitePreview | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const normalizedUsername = username.trim().replace(/^@+/, "");
+
+  const onFind = useCallback(async () => {
+    if (normalizedUsername === "") {
+      setError("Введите @username из Telegram");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setPreview(null);
+    try {
+      const p = await adminService.previewStaffInvite({
+        businessId: props.businessId,
+        username: normalizedUsername,
+      });
+      setPreview(p);
+    } catch (e) {
+      setError(formatAdminApiError(e));
+    } finally {
+      setBusy(false);
+    }
+  }, [normalizedUsername, props.businessId]);
+
+  const onInviteNow = useCallback(async () => {
+    if (!preview?.canInviteNow) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await adminService.inviteStaffMember({
+        businessId: props.businessId,
+        username: normalizedUsername,
+        role,
+      });
+      if (result.kind === "pending") {
+        showSuccessToast(result.message);
+      } else {
+        showSuccessToast(`${preview.name} добавлен в команду`);
+      }
+      props.onDone();
+      props.onClose();
+    } catch (e) {
+      setError(formatAdminApiError(e));
+    } finally {
+      setBusy(false);
+    }
+  }, [preview, normalizedUsername, props, role]);
+
+  const onSavePending = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const out = await adminService.createPendingStaffInvite({
+        businessId: props.businessId,
+        username: normalizedUsername,
+        role,
+      });
+      showSuccessToast(out.message);
+      props.onDone();
+      props.onClose();
+    } catch (e) {
+      setError(formatAdminApiError(e));
+    } finally {
+      setBusy(false);
+    }
+  }, [normalizedUsername, props, role]);
+
+  const copyBotLink = useCallback(() => {
+    const link = preview?.botLink;
+    if (!link) return;
+    void navigator.clipboard?.writeText(link).then(() => {
+      showSuccessToast("Ссылка скопирована");
+    });
+  }, [preview?.botLink]);
+
+  const needsBot = preview?.lookupStatus === "needs_bot_contact";
+
+  return (
+    <div className="admin-staff-invite">
+      <div className="admin-staff-invite__head">
+        <div>
+          <h3 className="admin-staff-invite__title">Пригласить в команду</h3>
+          <p className="admin-staff-invite__hint">
+            Укажите @username. Если человек ещё не писал боту магазина, сохраните приглашение —
+            доступ откроется после /start.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="admin-staff-invite__close"
+          onClick={props.onClose}
+          aria-label="Закрыть"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="admin-staff-invite__form">
+        <label className="admin-staff-invite__field">
+          <span className="admin-staff-invite__label">Telegram @username</span>
+          <input
+            type="text"
+            className="admin-input"
+            placeholder="username"
+            value={username}
+            onChange={(e) => {
+              setUsername(e.target.value);
+              setPreview(null);
+              setError(null);
+            }}
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </label>
+        <label className="admin-staff-invite__field">
+          <span className="admin-staff-invite__label">Роль</span>
+          <select
+            className="admin-input"
+            value={role}
+            onChange={(e) => setRole(e.target.value as InviteRole)}
+          >
+            {INVITE_ROLES.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="admin-members-actions__btn"
+          disabled={busy || normalizedUsername === ""}
+          onClick={() => void onFind()}
+        >
+          {busy ? "Поиск…" : "Найти пользователя"}
+        </button>
+      </div>
+
+      {preview ? (
+        <div
+          className={[
+            "admin-staff-invite__preview",
+            needsBot ? "admin-staff-invite__preview--pending" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
+          <div className="admin-staff-invite__preview-user">
+            <PersonAvatar name={preview.name} photoUrl={preview.photoUrl} size="lg" />
+            <div>
+              <p className="admin-staff-invite__preview-name">{preview.name}</p>
+              <p className="admin-staff-invite__preview-handle">{preview.username}</p>
+              {preview.alreadyStaff ? (
+                <span className="admin-staff-invite__badge admin-staff-invite__badge--warn">
+                  Уже в команде
+                </span>
+              ) : preview.canInviteNow ? (
+                <span className="admin-staff-invite__badge admin-staff-invite__badge--ok">
+                  Можно добавить сейчас
+                </span>
+              ) : preview.hasPendingInvite ? (
+                <span className="admin-staff-invite__badge">Приглашение уже сохранено</span>
+              ) : null}
+            </div>
+          </div>
+
+          {needsBot && !preview.alreadyStaff ? (
+            <div className="admin-staff-invite__steps">
+              <p className="admin-staff-invite__steps-title">
+                Пользователь ещё не связан с ботом магазина
+              </p>
+              <ol className="admin-staff-invite__steps-list">
+                <li>Попросите открыть бота магазина и нажать «Старт»</li>
+                <li>Или открыть витрину из этого бота хотя бы один раз</li>
+                <li>После этого нажмите «Найти» снова или сохраните приглашение</li>
+              </ol>
+              <div className="admin-staff-invite__cta-row">
+                {preview.botLink ? (
+                  <>
+                    <a
+                      href={preview.botLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="admin-members-actions__btn admin-members-actions__btn--promote"
+                    >
+                      Открыть бота
+                    </a>
+                    <button
+                      type="button"
+                      className="admin-members-actions__btn"
+                      onClick={copyBotLink}
+                    >
+                      Скопировать ссылку
+                    </button>
+                  </>
+                ) : null}
+                <button
+                  type="button"
+                  className="admin-members-actions__btn admin-members-actions__btn--promote"
+                  disabled={busy}
+                  onClick={() => void onSavePending()}
+                >
+                  {busy ? "Сохранение…" : "Сохранить приглашение"}
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {preview.canInviteNow && !preview.alreadyStaff ? (
+            <button
+              type="button"
+              className="admin-members-actions__btn admin-members-actions__btn--promote admin-staff-invite__confirm"
+              disabled={busy}
+              onClick={() => void onInviteNow()}
+            >
+              {busy ? "Добавление…" : `Добавить как ${mapStatus(role, STAFF_ROLE_RU)}`}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {error ? (
+        <p className="admin-dash-page__alert admin-staff-invite__error" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export default function AdminUsersPage() {
   const { businessId } = useShop();
   const [rows, setRows] = useState<AdminStaffRow[]>([]);
@@ -51,17 +295,7 @@ export default function AdminUsersPage() {
   const [busyUserId, setBusyUserId] = useState<number | null>(null);
   const [permBusyUserId, setPermBusyUserId] = useState<number | null>(null);
   const [permDraft, setPermDraft] = useState<Record<number, MerchantPermissionId[]>>({});
-
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [inviteUsername, setInviteUsername] = useState("");
-  const [inviteRole, setInviteRole] = useState<InviteRole>("ADMIN");
-  const [invitePreview, setInvitePreview] = useState<{
-    name: string;
-    username: string;
-    alreadyStaff: boolean;
-  } | null>(null);
-  const [inviteBusy, setInviteBusy] = useState(false);
-  const [inviteError, setInviteError] = useState<string | null>(null);
 
   const canLoad =
     typeof businessId === "number" &&
@@ -96,45 +330,6 @@ export default function AdminUsersPage() {
     void reload();
   }, [reload]);
 
-  const onPreviewInvite = useCallback(async () => {
-    if (!canLoad || businessId == null) return;
-    setInviteBusy(true);
-    setInviteError(null);
-    setInvitePreview(null);
-    try {
-      const preview = await adminService.previewStaffInvite({
-        businessId,
-        username: inviteUsername,
-      });
-      setInvitePreview(preview);
-    } catch (e) {
-      setInviteError(formatAdminApiError(e));
-    } finally {
-      setInviteBusy(false);
-    }
-  }, [businessId, canLoad, inviteUsername]);
-
-  const onConfirmInvite = useCallback(async () => {
-    if (!canLoad || businessId == null || invitePreview?.alreadyStaff) return;
-    setInviteBusy(true);
-    setInviteError(null);
-    try {
-      await adminService.inviteStaffMember({
-        businessId,
-        username: inviteUsername,
-        role: inviteRole,
-      });
-      setInviteOpen(false);
-      setInviteUsername("");
-      setInvitePreview(null);
-      await reload();
-    } catch (e) {
-      setInviteError(formatAdminApiError(e));
-    } finally {
-      setInviteBusy(false);
-    }
-  }, [businessId, canLoad, invitePreview, inviteRole, inviteUsername, reload]);
-
   const onRemove = useCallback(
     async (targetUserId: number) => {
       if (!canLoad || businessId == null) return;
@@ -142,6 +337,7 @@ export default function AdminUsersPage() {
       setBusyUserId(targetUserId);
       try {
         await adminService.removeStaffMember({ targetUserId, businessId });
+        showSuccessToast("Сотрудник удалён из команды");
         await reload();
       } catch (e) {
         showErrorToast(formatAdminApiError(e));
@@ -158,6 +354,7 @@ export default function AdminUsersPage() {
       setBusyUserId(targetUserId);
       try {
         await adminService.updateStaffRole({ targetUserId, businessId, role });
+        showSuccessToast("Роль обновлена");
         await reload();
       } catch (e) {
         showErrorToast(formatAdminApiError(e));
@@ -188,6 +385,7 @@ export default function AdminUsersPage() {
           businessId,
           permissions: next,
         });
+        showSuccessToast("Права сохранены");
         await reload();
       } catch (e) {
         showErrorToast(formatAdminApiError(e));
@@ -215,120 +413,48 @@ export default function AdminUsersPage() {
   return (
     <section>
       <div className="admin-dash-page__head">
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div className="admin-dash-page__head-row">
           <div>
             <h2 className="admin-dash-page__title">{title}</h2>
             <p className="admin-dash-page__subtitle">
-              Только сотрудники магазина. Покупатели здесь не отображаются.
-              Аудитория и активность — в разделе «Операции».
+              Назначайте администраторов, менеджеров и поддержку. Покупатели здесь не отображаются.
             </p>
           </div>
           <button
             type="button"
             className="admin-members-actions__btn admin-members-actions__btn--promote"
-            onClick={() => {
-              setInviteOpen(true);
-              setInviteError(null);
-              setInvitePreview(null);
-            }}
+            onClick={() => setInviteOpen(true)}
           >
-            Добавить администратора
+            + Пригласить
           </button>
         </div>
       </div>
 
-      {inviteOpen ? (
-        <div className="admin-dash-card" style={{ marginBottom: 16 }}>
-          <h3 style={{ margin: "0 0 12px", fontSize: 17 }}>Приглашение в команду</h3>
-          <label style={{ display: "block", marginBottom: 8, fontSize: 14 }}>
-            Telegram @username
-            <input
-              type="text"
-              className="admin-input"
-              placeholder="@username"
-              value={inviteUsername}
-              onChange={(e) => setInviteUsername(e.target.value)}
-              style={{ display: "block", width: "100%", marginTop: 6 }}
-            />
-          </label>
-          <label style={{ display: "block", marginBottom: 12, fontSize: 14 }}>
-            Роль
-            <select
-              value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value as InviteRole)}
-              style={{ display: "block", width: "100%", marginTop: 6 }}
-            >
-              {INVITE_ROLES.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button
-              type="button"
-              className="admin-members-actions__btn"
-              disabled={inviteBusy || inviteUsername.trim() === ""}
-              onClick={() => void onPreviewInvite()}
-            >
-              {inviteBusy ? "…" : "Найти"}
-            </button>
-            {invitePreview && !invitePreview.alreadyStaff ? (
-              <button
-                type="button"
-                className="admin-members-actions__btn admin-members-actions__btn--promote"
-                disabled={inviteBusy}
-                onClick={() => void onConfirmInvite()}
-              >
-                Подтвердить
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="admin-members-actions__btn admin-members-actions__btn--demote"
-              onClick={() => setInviteOpen(false)}
-            >
-              Отмена
-            </button>
-          </div>
-          {invitePreview ? (
-            <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 10 }}>
-              <PersonAvatar name={invitePreview.name} size="md" />
-              <div>
-                <p style={{ margin: 0, fontWeight: 600 }}>{invitePreview.name}</p>
-                <p className="admin-dash-page__muted" style={{ margin: "4px 0 0" }}>
-                  {invitePreview.username}
-                </p>
-                {invitePreview.alreadyStaff ? (
-                  <p style={{ margin: "6px 0 0", color: "var(--sf-color-warning, #c90)" }}>
-                    Уже в команде
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-          {inviteError ? (
-            <p className="admin-dash-page__alert" style={{ marginTop: 12 }} role="alert">
-              {inviteError}
-            </p>
-          ) : null}
-        </div>
+      {inviteOpen && businessId != null ? (
+        <StaffInvitePanel
+          businessId={businessId}
+          onClose={() => setInviteOpen(false)}
+          onDone={() => void reload()}
+        />
       ) : null}
 
-      {loading && (
+      {loading ? (
         <p className="admin-dash-page__muted" role="status">
-          Загрузка...
+          Загрузка команды…
         </p>
-      )}
-      {error != null && !loading && (
+      ) : null}
+
+      {error != null && !loading ? (
         <div className="admin-dash-card admin-dash-page__alert" role="alert">
           {error}
         </div>
-      )}
+      ) : null}
 
-      {!loading && error == null && (
-        <div className="admin-members-list">
+      {!loading && error == null ? (
+        <div className="admin-team-grid">
+          {rows.length === 0 ? (
+            <p className="admin-dash-page__muted">В команде пока только владелец.</p>
+          ) : null}
           {rows.map((r) => {
             const rl = String(r.role).toUpperCase();
             const busy = busyUserId === r.userId;
@@ -336,104 +462,80 @@ export default function AdminUsersPage() {
             const draft = permDraft[r.userId] ?? effectiveAdminPermissions(r.permissions);
             const canEditPerms = rl === "ADMIN" || rl === "MANAGER";
             return (
-              <div key={`${r.staffId}-${businessId}`} className="admin-members-row">
-                <div className="admin-members-row__main">
-                  <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                    <PersonAvatar
-                      name={r.name}
-                      photoUrl={r.photoUrl}
-                      size="lg"
-                    />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p className="admin-members-row__name">{r.name}</p>
-                      {r.username ? (
-                        <p className="admin-members-row__meta">{r.username}</p>
-                      ) : null}
-                      <p style={{ margin: "10px 0 0" }}>
-                        <span className={roleBadgeClass(rl)}>
-                          {mapStatus(rl, STAFF_ROLE_RU)}
-                        </span>
+              <article key={`${r.staffId}-${businessId}`} className="admin-team-card">
+                <div className="admin-team-card__top">
+                  <PersonAvatar name={r.name} photoUrl={r.photoUrl} size="lg" />
+                  <div className="admin-team-card__identity">
+                    <h3 className="admin-team-card__name">{r.name}</h3>
+                    {r.username ? (
+                      <p className="admin-team-card__username">{r.username}</p>
+                    ) : (
+                      <p className="admin-team-card__username admin-team-card__username--muted">
+                        Без username
                       </p>
-                    </div>
+                    )}
+                    <span className={roleBadgeClass(rl)}>{mapStatus(rl, STAFF_ROLE_RU)}</span>
                   </div>
-                  {canEditPerms ? (
-                    <div style={{ marginTop: 12 }}>
-                      <p className="admin-dash-page__muted" style={{ marginBottom: 8 }}>
-                        Доступ к разделам
-                      </p>
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: "8px 14px",
-                          alignItems: "center",
-                        }}
-                      >
-                        {PERM_LABELS.map(({ id, label }) => (
-                          <label
-                            key={id}
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 6,
-                              fontSize: 14,
-                            }}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={draft.includes(id)}
-                              onChange={() => togglePerm(r.userId, id)}
-                              disabled={permBusy}
-                            />
-                            {label}
-                          </label>
-                        ))}
-                      </div>
-                      <button
-                        type="button"
-                        className="admin-members-actions__btn"
-                        style={{ marginTop: 10 }}
-                        disabled={permBusy}
-                        onClick={() => void savePermissions(r.userId)}
-                      >
-                        {permBusy ? "…" : "Сохранить права"}
-                      </button>
+                </div>
+
+                {canEditPerms ? (
+                  <div className="admin-team-card__perms">
+                    <p className="admin-team-card__perms-title">Доступ к разделам</p>
+                    <div className="admin-team-card__perm-grid">
+                      {PERM_LABELS.map(({ id, label }) => (
+                        <label key={id} className="admin-team-card__perm">
+                          <input
+                            type="checkbox"
+                            checked={draft.includes(id)}
+                            onChange={() => togglePerm(r.userId, id)}
+                            disabled={permBusy}
+                          />
+                          <span>{label}</span>
+                        </label>
+                      ))}
                     </div>
-                  ) : null}
-                </div>
-                <div className="admin-members-actions">
-                  {rl === "OWNER" ? null : (
-                    <>
-                      <select
-                        value={rl === "ADMIN" || rl === "MANAGER" || rl === "SUPPORT" ? rl : "ADMIN"}
-                        disabled={busy}
-                        onChange={(e) =>
-                          void onRoleChange(r.userId, e.target.value as InviteRole)
-                        }
-                        style={{ marginBottom: 8, maxWidth: "100%" }}
-                      >
-                        {INVITE_ROLES.map((opt) => (
-                          <option key={opt.id} value={opt.id}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        className="admin-members-actions__btn admin-members-actions__btn--demote"
-                        disabled={busy}
-                        onClick={() => void onRemove(r.userId)}
-                      >
-                        {busy ? "…" : "Удалить"}
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
+                    <button
+                      type="button"
+                      className="admin-members-actions__btn"
+                      disabled={permBusy}
+                      onClick={() => void savePermissions(r.userId)}
+                    >
+                      {permBusy ? "Сохранение…" : "Сохранить права"}
+                    </button>
+                  </div>
+                ) : null}
+
+                {rl !== "OWNER" ? (
+                  <div className="admin-team-card__actions">
+                    <select
+                      className="admin-input admin-team-card__role-select"
+                      value={rl === "ADMIN" || rl === "MANAGER" || rl === "SUPPORT" ? rl : "ADMIN"}
+                      disabled={busy}
+                      onChange={(e) =>
+                        void onRoleChange(r.userId, e.target.value as InviteRole)
+                      }
+                    >
+                      {INVITE_ROLES.map((opt) => (
+                        <option key={opt.id} value={opt.id}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="admin-members-actions__btn admin-members-actions__btn--demote"
+                      disabled={busy}
+                      onClick={() => void onRemove(r.userId)}
+                    >
+                      {busy ? "…" : "Удалить"}
+                    </button>
+                  </div>
+                ) : null}
+              </article>
             );
           })}
         </div>
-      )}
+      ) : null}
     </section>
   );
 }

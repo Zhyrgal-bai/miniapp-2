@@ -9,6 +9,9 @@ import {
   isStorefrontClosedForCustomers,
 } from "../server/subscriptionAccess.js";
 import { verifiedTelegramIdFromRequest } from "./verifiedTelegramAuth.js";
+import { acceptPendingStaffInvitesForUser } from "../server/businessStaffService.js";
+import { parseTelegramWebAppUserFromInitData } from "../server/telegramWebAppInitData.js";
+import { syncTelegramUserProfile } from "../server/telegramUserSync.js";
 import { API_ERR_STORE_UNAVAILABLE } from "../shared/apiClientMessages.js";
 
 declare global {
@@ -129,7 +132,26 @@ export async function businessMiddleware(
         return;
       }
 
-      const userRow = await prisma.user.findUnique({ where: { telegramId } });
+      let userRow = await prisma.user.findUnique({ where: { telegramId } });
+
+      const initDataRaw = trimmedHeader(req, "x-telegram-init-data");
+      if (initDataRaw) {
+        const webAppUser = parseTelegramWebAppUserFromInitData(initDataRaw);
+        if (webAppUser?.id === telegramId) {
+          userRow = await syncTelegramUserProfile({
+            telegramId,
+            username: webAppUser.username,
+            firstName: webAppUser.firstName,
+            lastName: webAppUser.lastName,
+            photoUrl: webAppUser.photoUrl,
+          });
+          await acceptPendingStaffInvitesForUser({
+            businessId: hinted,
+            userId: userRow.id,
+            telegramUsername: userRow.telegramUsername,
+          });
+        }
+      }
 
       const staffRow =
         userRow == null
