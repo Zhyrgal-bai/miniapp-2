@@ -34,9 +34,9 @@
 }
 
 /* ── Hero + section containers — soft radii, subtle shadow ── */
-.sf-root .sf-hero,
+.sf-root .sf-hero:not(.sf-cine-hero),
 .sf-root .sf-section-card,
-.sf-root .sf-section--hero > div,
+.sf-root .sf-section--hero > div:not(.sf-cine-hero),
 .sf-root .sf-section--featured > div,
 .sf-root .sf-section--promo > div {
   border-radius: var(--sf-radius-lg, 18px) !important;
@@ -45,9 +45,14 @@
   transform: none !important;
 }
 
-.sf-root .sf-hero {
+.sf-root .sf-hero:not(.sf-cine-hero) {
   border: 1px solid color-mix(in srgb, var(--sf-color-border, #555) 38%, transparent) !important;
   background: var(--sf-color-card, #fff) !important;
+}
+
+.sf-root .sf-cine-hero-section.sf-section--padded {
+  padding-left: max(10px, var(--sf-mobile-pad, 12px)) !important;
+  padding-right: max(10px, var(--sf-mobile-pad, 12px)) !important;
 }
 
 /* ── Hero typography — calmer weight, no all-caps ── */

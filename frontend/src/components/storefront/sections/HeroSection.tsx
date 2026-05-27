@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from "react";
+import { useCallback, useMemo, type ReactElement } from "react";
 import { useTheme } from "../../../context/ThemeContext";
-import { buildCloudinaryResponsiveUrl } from "../../../utils/cloudinaryTransforms";
 import {
   formatFeaturedPromoLine,
   type FeaturedPromo,
 } from "../../../storefront/featuredPromo";
+import {
+  CinematicHeroSlider,
+  type CinematicHeroSlide,
+} from "./CinematicHeroSlider";
 
 export type HeroCtaPayload = {
   kind: "scrollToSection" | "openCategory" | "openProduct" | "url" | "none";
@@ -40,26 +43,13 @@ function slideHasContent(s: Record<string, unknown>): boolean {
   );
 }
 
-function HeroDots(props: {
-  count: number;
-  index: number;
-  onPick: (i: number) => void;
-}): ReactElement | null {
-  if (props.count <= 1) return null;
-  return (
-    <div className="sf-hero__dots" role="tablist" aria-label="Слайды">
-      {Array.from({ length: props.count }, (_, i) => (
-        <button
-          key={i}
-          type="button"
-          role="tab"
-          aria-selected={i === props.index}
-          className={i === props.index ? "sf-hero__dot sf-hero__dot--active" : "sf-hero__dot"}
-          onClick={() => props.onPick(i)}
-        />
-      ))}
-    </div>
-  );
+function readKicker(slide: Record<string, unknown>, textConfig?: Record<string, unknown>): string {
+  const fromSlide =
+    readString(slide, "kicker").trim() ||
+    readString(slide, "badge").trim() ||
+    readString(slide, "eyebrow").trim();
+  if (fromSlide !== "") return fromSlide;
+  return readTextConfigString(textConfig, "heroDefaultKicker").trim();
 }
 
 export function HeroSection(props: {
@@ -70,14 +60,7 @@ export function HeroSection(props: {
   heroStyle?: Record<string, unknown>;
   onHeroCta?: (ev: HeroCtaPayload) => void;
 }): ReactElement | null {
-  const {
-    config,
-    textConfig,
-    featuredPromo,
-    kit: kitProp = "default",
-    heroStyle,
-    onHeroCta,
-  } = props;
+  const { config, textConfig, featuredPromo, heroStyle, onHeroCta } = props;
   const promoSubtitle = useMemo(
     () => (featuredPromo ? formatFeaturedPromoLine(featuredPromo) : ""),
     [featuredPromo],
@@ -109,53 +92,62 @@ export function HeroSection(props: {
     [effectiveSlides],
   );
 
-  const [slideIndex, setSlideIndex] = useState(0);
-  useEffect(() => {
-    setSlideIndex(0);
-  }, [effectiveSlides]);
+  const hs = heroStyle ?? {};
+  const ctaPosRaw = typeof hs.ctaPosition === "string" ? hs.ctaPosition : "";
+  const ctaPosition: "below" | "overlay" | "hidden" =
+    ctaPosRaw === "overlay" || ctaPosRaw === "hidden" ? (ctaPosRaw as "overlay" | "hidden") : "overlay";
 
-  const touchStartX = useRef<number | null>(null);
-
-  const onTouchStart = useCallback((e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0]?.clientX ?? null;
-  }, []);
-
-  const onTouchEnd = useCallback(
-    (e: React.TouchEvent) => {
-      if (touchStartX.current == null || effectiveSlides.length <= 1) return;
-      const dx = (e.changedTouches[0]?.clientX ?? 0) - touchStartX.current;
-      touchStartX.current = null;
-      const th = 44;
-      if (dx < -th) {
-        setSlideIndex((i) => Math.min(i + 1, effectiveSlides.length - 1));
-      } else if (dx > th) {
-        setSlideIndex((i) => Math.max(i - 1, 0));
-      }
-    },
-    [effectiveSlides.length],
-  );
+  const defaultTitle = readTextConfigString(textConfig, "heroDefaultTitle").trim();
+  const defaultSubtitle = readTextConfigString(textConfig, "heroDefaultSubtitle").trim();
+  const defaultCta = readTextConfigString(textConfig, "heroDefaultCta").trim();
+  const defaultKicker = readTextConfigString(textConfig, "heroDefaultKicker").trim();
 
   const autoplayMs = useMemo(() => {
     if (effectiveSlides.length <= 1) return 0;
-    const hs = heroStyle ?? {};
     const raw = (hs as { autoplayIntervalMs?: unknown }).autoplayIntervalMs;
     if (typeof raw === "number" && Number.isFinite(raw) && raw >= 2500) return Math.min(raw, 60_000);
     if ((hs as { autoplay?: unknown }).autoplay === true) return 5500;
-    return 0;
-  }, [effectiveSlides.length, heroStyle]);
+    return effectiveSlides.length > 1 ? 5500 : 0;
+  }, [effectiveSlides.length, hs]);
 
-  useEffect(() => {
-    if (autoplayMs <= 0) return undefined;
-    const prefersReduced =
-      typeof window !== "undefined" &&
-      window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-    if (prefersReduced) return undefined;
-    const id = window.setInterval(() => {
-      if (document.visibilityState !== "visible") return;
-      setSlideIndex((i) => (i + 1 >= effectiveSlides.length ? 0 : i + 1));
-    }, autoplayMs);
-    return () => window.clearInterval(id);
-  }, [autoplayMs, effectiveSlides.length]);
+  const heroPreset =
+    readString(config, "heroPreset").trim() || readString(hs, "heroPreset").trim();
+  const heightModeRaw = readString(hs, "heightMode").trim().toLowerCase();
+  const heightMode: "tall" | "compact" | "" =
+    heightModeRaw === "tall" ? "tall" : heightModeRaw === "compact" ? "compact" : "";
+
+  const cinematicSlides = useMemo((): CinematicHeroSlide[] => {
+    return effectiveSlides.filter(slideHasContent).map((slide, idx) => {
+      const title =
+        readString(slide, "title").trim() !== "" ? readString(slide, "title") : defaultTitle;
+      const subtitle =
+        promoSubtitle && idx === 0
+          ? promoSubtitle
+          : readString(slide, "subtitle").trim() !== ""
+            ? readString(slide, "subtitle")
+            : defaultSubtitle;
+      const ctaText =
+        readString(slide, "ctaText").trim() !== "" ? readString(slide, "ctaText") : defaultCta;
+      const kicker = readKicker(slide, textConfig) || (idx === 0 ? defaultKicker : "");
+      return {
+        raw: slide,
+        title,
+        subtitle,
+        kicker,
+        ctaText,
+        imageUrl: readString(slide, "imageUrl"),
+        overlayGradient: readString(slide, "overlayGradient").trim(),
+      };
+    });
+  }, [
+    effectiveSlides,
+    defaultTitle,
+    defaultSubtitle,
+    defaultCta,
+    defaultKicker,
+    promoSubtitle,
+    textConfig,
+  ]);
 
   const activateCta = useCallback(
     (slide: Record<string, unknown>) => {
@@ -190,163 +182,22 @@ export function HeroSection(props: {
       };
       const nk = kind.replace(/-/g, "").toLowerCase();
       const mapped = map[nk];
-      if (!mapped) return;
-      if (!target) return;
+      if (!mapped || !target) return;
       onHeroCta?.({ kind: mapped, target });
     },
     [onHeroCta],
   );
 
-  const kit = kitProp;
-  const hs = heroStyle ?? {};
-  const layoutRaw = typeof hs.layout === "string" ? hs.layout : "";
-  const layout: "centered" | "split" | "banner" | "editorial" | "" =
-    layoutRaw === "split" || layoutRaw === "banner" || layoutRaw === "editorial" || layoutRaw === "centered"
-      ? (layoutRaw as "split" | "banner" | "editorial" | "centered")
-      : "";
-  const heroClass = layout ? `sf-hero sf-hero--${layout}` : "sf-hero";
-  const ctaPosRaw = typeof hs.ctaPosition === "string" ? hs.ctaPosition : "";
-  const ctaPosition: "below" | "overlay" | "hidden" =
-    ctaPosRaw === "overlay" || ctaPosRaw === "hidden" ? (ctaPosRaw as "overlay" | "hidden") : "below";
-
-  const slide = effectiveSlides[Math.min(slideIndex, Math.max(effectiveSlides.length - 1, 0))] ?? {};
-
-  const defaultTitle =
-    readTextConfigString(textConfig ?? undefined, "heroDefaultTitle").trim() !== ""
-      ? readTextConfigString(textConfig ?? undefined, "heroDefaultTitle")
-      : "";
-  const defaultSubtitle =
-    readTextConfigString(textConfig ?? undefined, "heroDefaultSubtitle").trim() !== ""
-      ? readTextConfigString(textConfig ?? undefined, "heroDefaultSubtitle")
-      : "";
-  const defaultCta =
-    readTextConfigString(textConfig ?? undefined, "heroDefaultCta").trim() !== ""
-      ? readTextConfigString(textConfig ?? undefined, "heroDefaultCta")
-      : "";
-
-  const title =
-    readString(slide, "title").trim() !== "" ? readString(slide, "title") : defaultTitle;
-  const subtitle = promoSubtitle
-    ? promoSubtitle
-    : readString(slide, "subtitle").trim() !== ""
-      ? readString(slide, "subtitle")
-      : defaultSubtitle;
-  const ctaText =
-    readString(slide, "ctaText").trim() !== "" ? readString(slide, "ctaText") : defaultCta;
-  const imageUrlRaw = readString(slide, "imageUrl");
-  const imageUrl = buildCloudinaryResponsiveUrl(imageUrlRaw, "preview");
-  const overlayGrad = readString(slide, "overlayGradient").trim();
-
-  const heroPreset =
-    readString(config, "heroPreset").trim() || readString(hs, "heroPreset").trim();
-  const heightModeRaw = readString(hs, "heightMode").trim().toLowerCase();
-
-  if (!hasMeaningfulSlide) return null;
-
-  const heroRootStyle = overlayGrad
-    ? ({ ["--sf-hero-slide-overlay" as string]: overlayGrad } as CSSProperties)
-    : undefined;
-
-  const ctaBtn = (cls: string) =>
-    ctaText && ctaPosition !== "hidden" ? (
-      <button type="button" className={cls} onClick={() => activateCta(slide)}>
-        {ctaText}
-      </button>
-    ) : null;
-
-  if (kit === "fashion") {
-    return (
-      <section className="sf-section sf-section--hero sf-section--padded" aria-roledescription="carousel">
-        <div
-          className={`${heroClass} sf-hero--fashion`}
-          data-sf-hero-preset={heroPreset || undefined}
-          data-sf-hero-height={
-            heightModeRaw === "tall" ? "tall" : heightModeRaw === "compact" ? "compact" : undefined
-          }
-          style={heroRootStyle}
-        >
-          <div className="sf-hero__copy" aria-live="polite">
-            <div className="sf-hero__kicker">Подборка</div>
-            <div className="sf-hero__title">{title}</div>
-            {subtitle ? <div className="sf-hero__subtitle">{subtitle}</div> : null}
-            {ctaText && ctaPosition !== "hidden" ? (
-              <div className="sf-hero__cta-wrap">
-                <button type="button" className="sf-hero__cta" onClick={() => activateCta(slide)}>
-                  {ctaText}
-                </button>
-              </div>
-            ) : null}
-            <HeroDots count={effectiveSlides.length} index={slideIndex} onPick={setSlideIndex} />
-          </div>
-          <div className="sf-hero__media" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-            {imageUrl ? <img src={imageUrl} alt="" loading="lazy" /> : null}
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  if (kit === "luxury") {
-    return (
-      <section className="sf-section sf-section--hero sf-section--padded" aria-roledescription="carousel">
-        <div
-          className={`${heroClass} sf-hero--luxury`}
-          data-sf-hero-preset={heroPreset || undefined}
-          data-sf-hero-height={
-            heightModeRaw === "tall" ? "tall" : heightModeRaw === "compact" ? "compact" : undefined
-          }
-          style={heroRootStyle}
-        >
-          {imageUrl ? (
-            <div className="sf-hero__media" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-              <img src={imageUrl} alt="" loading="lazy" />
-              <div className="sf-hero__overlay" aria-live="polite">
-                <div className="sf-hero__title">{title}</div>
-                {subtitle ? <div className="sf-hero__subtitle">{subtitle}</div> : null}
-                {ctaText && ctaPosition !== "hidden" ? (
-                  <div className="sf-hero__cta-wrap">{ctaBtn("sf-hero__cta")}</div>
-                ) : null}
-                <HeroDots count={effectiveSlides.length} index={slideIndex} onPick={setSlideIndex} />
-              </div>
-            </div>
-          ) : (
-            <div className="sf-hero__overlay sf-hero__overlay--noimg" aria-live="polite">
-              <div className="sf-hero__title">{title}</div>
-              {subtitle ? <div className="sf-hero__subtitle">{subtitle}</div> : null}
-              {ctaText && ctaPosition !== "hidden" ? (
-                <div className="sf-hero__cta-wrap">{ctaBtn("sf-hero__cta")}</div>
-              ) : null}
-              <HeroDots count={effectiveSlides.length} index={slideIndex} onPick={setSlideIndex} />
-            </div>
-          )}
-        </div>
-      </section>
-    );
-  }
+  if (!hasMeaningfulSlide || cinematicSlides.length === 0) return null;
 
   return (
-    <section className="sf-section sf-section--hero sf-section--padded" aria-roledescription="carousel">
-      <div
-        className={`${heroClass} sf-hero--centered`}
-        data-sf-hero-preset={heroPreset || undefined}
-        data-sf-hero-height={
-          heightModeRaw === "tall" ? "tall" : heightModeRaw === "compact" ? "compact" : undefined
-        }
-        style={heroRootStyle}
-      >
-        <div className="sf-hero__media" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-          {imageUrl ? <img src={imageUrl} alt="" loading="lazy" /> : null}
-          <div className="sf-hero__overlay">
-            <div className="sf-hero__body" aria-live="polite">
-              <div className="sf-hero__title">{title}</div>
-              {subtitle ? <div className="sf-hero__subtitle">{subtitle}</div> : null}
-              {ctaText && ctaPosition === "overlay" ? ctaBtn("sf-hero__cta") : null}
-              <HeroDots count={effectiveSlides.length} index={slideIndex} onPick={setSlideIndex} />
-            </div>
-          </div>
-        </div>
-        {ctaText && ctaPosition === "below" ? <div className="sf-hero__below">{ctaBtn("sf-hero__cta")}</div> : null}
-      </div>
-    </section>
+    <CinematicHeroSlider
+      slides={cinematicSlides}
+      autoplayMs={autoplayMs}
+      heightMode={heightMode}
+      heroPreset={heroPreset}
+      ctaPosition={ctaPosition}
+      onActivateCta={activateCta}
+    />
   );
 }
