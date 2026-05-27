@@ -154,10 +154,9 @@ function ProgressBar(props: {
 
 function SlideCard(props: {
   slide: ResolvedSlide;
-  active: boolean;
   onOpenProduct?: (product: Product) => void;
 }): ReactElement {
-  const { slide: r, active } = props;
+  const { slide: r } = props;
   const imgSrc = buildCloudinaryResponsiveUrl(r.imageUrl, "preview");
   const cap = displayCaption(r);
   const actionable = slideIsActionable(r, props.onOpenProduct);
@@ -170,11 +169,7 @@ function SlideCard(props: {
           alt=""
           loading="lazy"
           decoding="async"
-          className={
-            active
-              ? "sf-catalog-footer__media-img sf-catalog-footer__media-img--live"
-              : "sf-catalog-footer__media-img"
-          }
+          className="sf-catalog-footer__media-img"
         />
         <div className="sf-catalog-footer__shade" aria-hidden />
         <div className="sf-catalog-footer__overlay">
@@ -348,11 +343,7 @@ export function CatalogFooterSlider(props: {
               }}
               aria-hidden={i !== safeIndex}
             >
-              <SlideCard
-                slide={slide}
-                active={i === safeIndex}
-                onOpenProduct={props.onOpenProduct}
-              />
+              <SlideCard slide={slide} onOpenProduct={props.onOpenProduct} />
             </motion.div>
           ))}
         </div>
