@@ -140,8 +140,8 @@ export type StorefrontTextConfig = {
   menuFaqLabel: string;
 
   /** Короткий слоган под названием в шапке витрины и в меню. */
-  brandTagline?: string;
-  drawerTagline?: string;
+  brandTagline: string;
+  drawerTagline: string;
 };
 
 export type StorefrontStyleConfig = {
@@ -424,8 +424,8 @@ const StorefrontTextConfigSchema = z
     menuOrdersLabel: z.string().trim().max(24).optional().default("Мои заказы"),
     menuFaqLabel: z.string().trim().max(24).optional().default("FAQ"),
 
-    brandTagline: z.string().trim().max(120).optional(),
-    drawerTagline: z.string().trim().max(120).optional(),
+    brandTagline: z.string().trim().max(120).optional().default(""),
+    drawerTagline: z.string().trim().max(120).optional().default(""),
   })
   .default({
     heroDefaultTitle: "Добро пожаловать",
@@ -456,6 +456,9 @@ const StorefrontTextConfigSchema = z
     menuCartLabel: "Корзина",
     menuOrdersLabel: "Мои заказы",
     menuFaqLabel: "FAQ",
+
+    brandTagline: "",
+    drawerTagline: "",
   });
 
 const StorefrontStyleConfigSchema = z
