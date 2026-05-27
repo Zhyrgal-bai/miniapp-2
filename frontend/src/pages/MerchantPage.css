@@ -347,10 +347,13 @@
 /* Модалка настроек — секции */
 .mp-settings-header {
   display: flex;
+  flex-shrink: 0;
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-bottom: 1.15rem;
+  margin-bottom: 0;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .mp-settings-header__title {
@@ -369,8 +372,28 @@
 
 .mp-settings-form {
   display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  gap: 0;
+}
+
+.mp-settings-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 0.85rem 0 0.5rem;
+  display: flex;
   flex-direction: column;
   gap: 0.85rem;
+}
+
+.mp-settings-scroll > .mp-muted,
+.mp-settings-scroll > [role="alert"] {
+  margin: 0;
 }
 
 .mp-settings-section {
@@ -579,8 +602,16 @@
 }
 
 .mp-settings-save-footer {
-  margin-top: 0.35rem;
-  padding-top: 0.15rem;
+  flex-shrink: 0;
+  margin-top: 0;
+  padding: 0.9rem 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(
+    180deg,
+    rgba(17, 24, 39, 0.72) 0%,
+    rgba(17, 24, 39, 0.98) 28%
+  );
+  box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.22);
 }
 
 /* Карточки тарифов подписки (30 / 90 дней) */
@@ -922,8 +953,8 @@
   align-items: flex-end;
   justify-content: center;
   box-sizing: border-box;
-  padding: 1rem;
-  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  padding: max(0.65rem, env(safe-area-inset-top, 0px)) 0.75rem
+    max(0.75rem, env(safe-area-inset-bottom, 0px));
   background: rgba(15, 23, 42, 0.94);
   backdrop-filter: blur(10px);
 }
@@ -935,17 +966,21 @@
 }
 
 .mp-settings-dialog-shell {
-  max-height: calc(90vh - env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  max-height: min(
+    90dvh,
+    calc(100vh - env(safe-area-inset-top, 0px) - 1.25rem)
+  );
   width: 100%;
   max-width: 26rem;
-  overflow: hidden auto;
-  -webkit-overflow-scrolling: touch;
+  overflow: hidden;
   border-radius: 1.15rem;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
   background: rgba(17, 24, 39, 0.96) !important;
   backdrop-filter: blur(20px);
   color: #f8fafc;
-  padding: 1.35rem !important;
+  padding: 1.15rem 1.35rem max(1.15rem, env(safe-area-inset-bottom, 0px)) !important;
   box-shadow:
     0 28px 64px rgba(0, 0, 0, 0.55),
     0 0 0 1px rgba(34, 197, 94, 0.06);
@@ -953,6 +988,7 @@
 
 @media (min-width: 640px) {
   .mp-settings-dialog-shell {
-    padding: 1.5rem !important;
+    max-height: min(88vh, 40rem);
+    padding: 1.25rem 1.5rem 1.5rem !important;
   }
 }

@@ -2039,16 +2039,21 @@ export default function PlatformPage() {
             </div>
 
             {settingsLoading ? (
-              <p className="mp-muted text-sm">Загрузка…</p>
+              <div className="mp-settings-scroll">
+                <p className="mp-muted text-sm">Загрузка…</p>
+              </div>
             ) : settingsErr != null && settingsSnap == null ? (
-              <p className="text-sm text-red-300" role="alert">
-                {settingsErr}
-              </p>
+              <div className="mp-settings-scroll">
+                <p className="text-sm text-red-300" role="alert">
+                  {settingsErr}
+                </p>
+              </div>
             ) : (
               <form
                 className="mp-settings-form"
                 onSubmit={(e) => void handleSaveSettings(e)}
               >
+                <div className="mp-settings-scroll">
                 {settingsSnap?.pendingBotTokenChange ? (
                   <p className="mp-settings-alert mp-settings-alert--amber" role="status">
                     Ожидается подтверждение администратором смены токена бота.
@@ -2372,6 +2377,7 @@ export default function PlatformPage() {
                     )}
                   </div>
                 ) : null}
+                </div>
 
                 <div className="mp-settings-save-footer">
                   {settingsErr ? (
