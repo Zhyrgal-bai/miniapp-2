@@ -10,7 +10,10 @@ import { useTheme } from "../../context/ThemeContext";
 import { useStorefrontPayload } from "../../components/storefront/runtime/StorefrontPayloadContext";
 import { saveBusinessThemePut } from "../../services/businessThemeApi";
 import { putStorefrontStyleCatalogPatch } from "../../services/storefrontStyleCatalogApi";
+import { putStorefrontTextBrandingPatch } from "../../services/storefrontTextBrandingApi";
 import { adminService } from "../../services/admin.service";
+import { buildCloudinaryResponsiveUrl } from "../../utils/cloudinaryTransforms";
+import { storeBrandInitials } from "../../components/layout/storeBrandHeaderUtils";
 import { formatAdminApiError } from "../../utils/adminApiError";
 import type { Product } from "../../types";
 import { buildFooterSliderSlidesFromProducts } from "../../components/storefront/sections/CatalogFooterSlider";
@@ -50,6 +53,8 @@ export default function AdminDesignPage(): ReactElement {
   const [bannerTitle, setBannerTitle] = useState("");
   const [bannerSubtitle, setBannerSubtitle] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
+  const [brandTagline, setBrandTagline] = useState("");
+  const [logoUploadBusy, setLogoUploadBusy] = useState(false);
 
   const [footerSliderEnabled, setFooterSliderEnabled] = useState(false);
   const [footerSliderTitle, setFooterSliderTitle] = useState("Букеты");
@@ -84,6 +89,13 @@ export default function AdminDesignPage(): ReactElement {
     theme.logoUrl,
   ]);
 
+  const syncBrandingFromPayload = useCallback(() => {
+    const txt = storefrontPayload?.storefrontTextConfig;
+    if (!txt || typeof txt !== "object") return;
+    const tag = (txt as Record<string, unknown>).brandTagline;
+    if (typeof tag === "string") setBrandTagline(tag);
+  }, [storefrontPayload?.storefrontTextConfig]);
+
   const syncCatalogStyleFromPayload = useCallback(() => {
     const st = storefrontPayload?.storefrontStyleConfig;
     if (!st || typeof st !== "object") return;
@@ -103,7 +115,8 @@ export default function AdminDesignPage(): ReactElement {
 
   useEffect(() => {
     syncCatalogStyleFromPayload();
-  }, [syncCatalogStyleFromPayload]);
+    syncBrandingFromPayload();
+  }, [syncCatalogStyleFromPayload, syncBrandingFromPayload]);
 
   useEffect(() => {
     if (businessId == null) return;
@@ -145,6 +158,33 @@ export default function AdminDesignPage(): ReactElement {
 
   const footerSliderProductCount = buildFooterSliderSlidesFromProducts(catalogProducts).length;
 
+  const previewStoreName =
+    storefrontPayload?.storeName?.trim() || "Ваш магазин";
+  const previewLogoSrc =
+    logoUrl.trim() !== ""
+      ? buildCloudinaryResponsiveUrl(logoUrl.trim(), "thumbnail")
+      : "";
+
+  const onLogoFile = async (file: File | null) => {
+    if (!file || businessId == null) return;
+    const okType = /image\/(png|jpe?g|webp)/i.test(file.type);
+    if (!okType) {
+      setError("Логотип: PNG, JPG или WEBP.");
+      return;
+    }
+    setLogoUploadBusy(true);
+    setError(null);
+    try {
+      const url = await adminService.uploadImage(file);
+      setLogoUrl(url);
+      setOk("Логотип загружен. Нажмите «Сохранить».");
+    } catch (e) {
+      setError(formatAdminApiError(e));
+    } finally {
+      setLogoUploadBusy(false);
+    }
+  };
+
   const onSave = async () => {
     if (businessId == null) return;
     setSaving(true);
@@ -170,6 +210,10 @@ export default function AdminDesignPage(): ReactElement {
         ...(templateId != null ? { templateId } : {}),
       };
       await saveBusinessThemePut(businessId, patch);
+      await putStorefrontTextBrandingPatch(businessId, {
+        brandTagline: brandTagline.trim(),
+        drawerTagline: brandTagline.trim(),
+      });
       await putStorefrontStyleCatalogPatch(businessId, {
         catalog: { gridBoost: catalogGridBoost },
         catalogFooter: {
@@ -333,14 +377,87 @@ export default function AdminDesignPage(): ReactElement {
           </label>
         </div>
 
-        <div className="admin-theme-logo">
+        <p className="admin-theme-subtitle">Бренд в шапке витрины</p>
+        <p className="admin-dash-page__subtitle" style={{ marginBottom: 12 }}>
+          Логотип, название и слоган — как в премиум Mini App. Покупатели увидят это вверху
+          витрины.
+        </p>
+        <div className="admin-theme-logo admin-brand-header-editor">
+          <div
+            className="admin-brand-header-preview"
+            style={{
+              borderColor: `${primaryColor}44`,
+              background: `linear-gradient(145deg, ${primaryColor}22, ${bgColor})`,
+            }}
+          >
+            <div className="admin-brand-header-preview__main">
+              <div className="admin-brand-header-preview__logo">
+                {previewLogoSrc !== "" ? (
+                  <img src={previewLogoSrc} alt="" />
+                ) : (
+                  <span>{storeBrandInitials(previewStoreName)}</span>
+                )}
+              </div>
+              <div className="admin-brand-header-preview__copy">
+                <strong>{previewStoreName}</strong>
+                <span>
+                  {brandTagline.trim() !== ""
+                    ? brandTagline.trim()
+                    : bannerSubtitle.trim() !== ""
+                      ? bannerSubtitle.trim()
+                      : "Слоган магазина"}
+                </span>
+              </div>
+            </div>
+            <div className="admin-brand-header-preview__actions" aria-hidden>
+              <i />
+              <i />
+            </div>
+          </div>
+
+          <label className="admin-theme-upload">
+            Загрузить логотип
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              disabled={logoUploadBusy || saving}
+              onChange={(e) => {
+                const f = e.target.files?.[0] ?? null;
+                void onLogoFile(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          {logoUploadBusy ? (
+            <p className="admin-dash-page__muted">Загрузка…</p>
+          ) : null}
           <label className="admin-theme-field admin-theme-field--full">
-            Логотип (URL, только https)
+            Или вставьте ссылку (https)
             <input
               type="url"
               value={logoUrl}
               onChange={(e) => setLogoUrl(e.target.value)}
               placeholder="https://…"
+            />
+          </label>
+          {logoUrl.trim() !== "" ? (
+            <button
+              type="button"
+              className="admin-theme-reset"
+              disabled={saving || logoUploadBusy}
+              onClick={() => setLogoUrl("")}
+            >
+              Удалить логотип
+            </button>
+          ) : null}
+          <label className="admin-theme-field admin-theme-field--full">
+            Слоган под названием
+            <input
+              type="text"
+              value={brandTagline}
+              onChange={(e) => setBrandTagline(e.target.value)}
+              maxLength={120}
+              placeholder="Например: доставка цветов за 2 часа"
             />
           </label>
         </div>

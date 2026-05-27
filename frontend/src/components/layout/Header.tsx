@@ -5,6 +5,8 @@ import { getTelegramUser } from "../../utils/telegram";
 import { useBodyScrollLock } from "../../utils/bodyScrollLock";
 import { telegramDisplayInitial } from "../../utils/telegramUserMark";
 import { APP_NAME } from "../../config/brand";
+import { buildCloudinaryResponsiveUrl } from "../../utils/cloudinaryTransforms";
+import { storeBrandInitials } from "./storeBrandHeaderUtils";
 import "./app-shell.css";
 
 export type HeaderAccountCallbacks = {
@@ -29,6 +31,12 @@ type HeaderProps = {
   ordersAttentionDot?: boolean;
   title?: string;
   storeName?: string;
+  /** Логотип магазина (theme.logoUrl). */
+  logoUrl?: string | null;
+  /** Слоган под названием в шапке. */
+  subtitle?: string | null;
+  /** Premium identity header (витрина). */
+  storeBrandMode?: boolean;
   /** Показать блок «Магазин» (OWNER/ADMIN). */
   isMerchantStaff?: boolean;
   accountMenu?: HeaderAccountCallbacks;
@@ -50,6 +58,9 @@ export default function Header({
   ordersAttentionDot = false,
   title,
   storeName,
+  logoUrl,
+  subtitle,
+  storeBrandMode = false,
   isMerchantStaff = false,
   accountMenu,
   merchantMenu,
@@ -59,8 +70,16 @@ export default function Header({
   const displayName = useMemo(() => telegramDisplayName(user), [user]);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  const centerTitle = (title?.trim() || APP_NAME).toUpperCase();
-  const shopLine = (storeName ?? title)?.trim() || null;
+  const displayNameRaw = (storeName ?? title)?.trim() || "";
+  const centerTitle = displayNameRaw !== "" ? displayNameRaw : APP_NAME;
+  const shopLine = displayNameRaw || null;
+  const tagline = subtitle?.trim() || null;
+  const logoSrc =
+    logoUrl != null && logoUrl.trim() !== ""
+      ? buildCloudinaryResponsiveUrl(logoUrl.trim(), "thumbnail")
+      : "";
+  const useStoreBrand = storeBrandMode && displayNameRaw !== "";
+  const storeInitials = storeBrandInitials(displayNameRaw || APP_NAME);
 
   const showAccountPanel = Boolean(accountMenu);
 
@@ -286,71 +305,104 @@ export default function Header({
         )
       : null;
 
+  const burgerButton = (
+    <div className="app-header__burger-wrap">
+      <motion.button
+        type="button"
+        className={`app-header__burger${menuOpen ? " app-header__burger--open" : ""}`}
+        onClick={onMenuToggle}
+        aria-label={menuOpen ? "Закрыть меню" : "Открыть меню"}
+        aria-expanded={menuOpen}
+        whileTap={{ scale: 0.94 }}
+      >
+        <span className="app-header__burger-line" />
+        <span className="app-header__burger-line" />
+        <span className="app-header__burger-line" />
+      </motion.button>
+      {attentionDot ? (
+        <span className="app-header__notify-dot" title="Есть уведомления" />
+      ) : null}
+    </div>
+  );
+
+  const userButton = (
+    <div
+      className={`app-header__user-wrap${userMenuOpen ? " app-header__user-wrap--open" : ""}`}
+    >
+      <button
+        type="button"
+        className="app-header__user-trigger"
+        aria-expanded={userMenuOpen}
+        aria-haspopup={showAccountPanel ? "dialog" : undefined}
+        title={displayName ?? "Профиль и поддержка"}
+        onClick={() => {
+          if (showAccountPanel) setUserMenuOpen((o) => !o);
+        }}
+      >
+        <span className="app-header__user app-header__user--trigger-inner">
+          <span
+            className="app-header__mark"
+            aria-hidden={displayName ? true : undefined}
+          >
+            {user?.photo_url ? (
+              <img
+                src={user.photo_url}
+                alt={displayName ?? user.first_name ?? ""}
+                width={40}
+                height={40}
+              />
+            ) : (
+              initial
+            )}
+          </span>
+          {displayName && !useStoreBrand ? (
+            <span className="app-header__user-name app-header__user-name--trigger">
+              {displayName}
+            </span>
+          ) : null}
+        </span>
+      </button>
+    </div>
+  );
+
+  if (useStoreBrand) {
+    return (
+      <header className="app-header app-header--store-brand">
+        {sheetPortal}
+        <div className="app-header__brand-card">
+          <div className="app-header__brand-main">
+            <div className="app-header__store-logo" aria-hidden={logoSrc !== ""}>
+              {logoSrc !== "" ? (
+                <img src={logoSrc} alt="" width={44} height={44} />
+              ) : (
+                <span className="app-header__store-logo-fallback">{storeInitials}</span>
+              )}
+            </div>
+            <div className="app-header__store-copy">
+              <h1 className="app-header__store-name">{centerTitle}</h1>
+              {tagline ? (
+                <p className="app-header__store-tagline">{tagline}</p>
+              ) : null}
+            </div>
+          </div>
+          <div className="app-header__actions">
+            {burgerButton}
+            {userButton}
+          </div>
+        </div>
+      </header>
+    );
+  }
+
   return (
     <header className="app-header">
       {sheetPortal}
 
-      <div className="app-header__cell app-header__cell--left">
-        <div className="app-header__burger-wrap">
-          <motion.button
-            type="button"
-            className={`app-header__burger${menuOpen ? " app-header__burger--open" : ""}`}
-            onClick={onMenuToggle}
-            aria-label={menuOpen ? "Закрыть меню" : "Открыть меню"}
-            aria-expanded={menuOpen}
-            whileTap={{ scale: 0.94 }}
-          >
-            <span className="app-header__burger-line" />
-            <span className="app-header__burger-line" />
-            <span className="app-header__burger-line" />
-          </motion.button>
-          {attentionDot ? (
-            <span className="app-header__notify-dot" title="Есть уведомления" />
-          ) : null}
-        </div>
-      </div>
+      <div className="app-header__cell app-header__cell--left">{burgerButton}</div>
 
       <h1 className="app-header__logo">{centerTitle}</h1>
 
-      <div className="app-header__cell app-header__cell--right">
-        <div
-          className={`app-header__user-wrap${userMenuOpen ? " app-header__user-wrap--open" : ""}`}
-        >
-          <button
-            type="button"
-            className="app-header__user-trigger"
-            aria-expanded={userMenuOpen}
-            aria-haspopup={showAccountPanel ? "dialog" : undefined}
-            title={displayName ?? "Профиль и поддержка"}
-            onClick={() => {
-              if (showAccountPanel) setUserMenuOpen((o) => !o);
-            }}
-          >
-            <span className="app-header__user app-header__user--trigger-inner">
-              <span
-                className="app-header__mark"
-                aria-hidden={displayName ? true : undefined}
-              >
-                {user?.photo_url ? (
-                  <img
-                    src={user.photo_url}
-                    alt={displayName ?? user.first_name ?? ""}
-                    width={40}
-                    height={40}
-                  />
-                ) : (
-                  initial
-                )}
-              </span>
-              {displayName ? (
-                <span className="app-header__user-name app-header__user-name--trigger">
-                  {displayName}
-                </span>
-              ) : null}
-            </span>
-          </button>
-        </div>
-      </div>
+      <div className="app-header__cell app-header__cell--right">{userButton}</div>
     </header>
   );
 }

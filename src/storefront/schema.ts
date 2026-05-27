@@ -138,6 +138,10 @@ export type StorefrontTextConfig = {
   menuCartLabel: string;
   menuOrdersLabel: string;
   menuFaqLabel: string;
+
+  /** Короткий слоган под названием в шапке витрины и в меню. */
+  brandTagline?: string;
+  drawerTagline?: string;
 };
 
 export type StorefrontStyleConfig = {
@@ -419,6 +423,9 @@ const StorefrontTextConfigSchema = z
     menuCartLabel: z.string().trim().max(24).optional().default("Корзина"),
     menuOrdersLabel: z.string().trim().max(24).optional().default("Мои заказы"),
     menuFaqLabel: z.string().trim().max(24).optional().default("FAQ"),
+
+    brandTagline: z.string().trim().max(120).optional(),
+    drawerTagline: z.string().trim().max(120).optional(),
   })
   .default({
     heroDefaultTitle: "Добро пожаловать",
@@ -679,6 +686,30 @@ export const StorefrontStyleCatalogPatchSchema = z
   });
 
 export type StorefrontStyleCatalogPatch = z.infer<typeof StorefrontStyleCatalogPatchSchema>;
+
+export const StorefrontTextBrandingPatchSchema = z
+  .object({
+    brandTagline: z.string().trim().max(120).optional(),
+    drawerTagline: z.string().trim().max(120).optional(),
+  })
+  .strict()
+  .refine((v) => v.brandTagline !== undefined || v.drawerTagline !== undefined, {
+    message: "Нужен brandTagline или drawerTagline",
+  });
+
+export type StorefrontTextBrandingPatch = z.infer<typeof StorefrontTextBrandingPatchSchema>;
+
+export function applyStorefrontTextBrandingPatch(
+  currentText: unknown,
+  patch: StorefrontTextBrandingPatch,
+): StorefrontTextConfig {
+  const base = StorefrontTextConfigSchema.parse(currentText ?? {});
+  return StorefrontTextConfigSchema.parse({
+    ...base,
+    ...(patch.brandTagline !== undefined ? { brandTagline: patch.brandTagline } : {}),
+    ...(patch.drawerTagline !== undefined ? { drawerTagline: patch.drawerTagline } : {}),
+  });
+}
 
 export function applyStorefrontStyleCatalogPatch(
   currentStyle: unknown,

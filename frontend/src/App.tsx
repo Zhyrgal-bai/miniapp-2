@@ -82,6 +82,19 @@ export default function App() {
   const { businessId, shopIdString } = useShop();
   const { theme, templateId } = useTheme();
   const { payload, loading: storefrontLoading, error: storefrontError, refresh: refreshStorefront } = useStorefrontPayload();
+
+  const headerSubtitle = useMemo(() => {
+    const txt = payload?.storefrontTextConfig;
+    if (txt && typeof txt === "object") {
+      const tag = (txt as Record<string, unknown>).brandTagline;
+      if (typeof tag === "string" && tag.trim() !== "") return tag.trim();
+    }
+    const bannerSub = theme.banner.subtitle?.trim();
+    return bannerSub !== "" ? bannerSub : null;
+  }, [payload?.storefrontTextConfig, theme.banner.subtitle]);
+
+  const storeDisplayName = payload?.storeName?.trim() || "";
+  const storeBrandHeader = storeDisplayName !== "";
   const [page, setPage] = useState<AppNavPage>(initialPageFromPath);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [myOrdersAttention, setMyOrdersAttention] = useState(false);
@@ -601,14 +614,17 @@ export default function App() {
   }
 
   const content = (
-    <div className="app">
+    <div className={`app${storeBrandHeader ? " app--store-brand" : ""}`}>
       <Header
         menuOpen={isMenuOpen}
         onMenuToggle={handleMenuToggle}
         attentionDot={showHeaderAttentionDot}
         ordersAttentionDot={myOrdersAttention}
-        title={payload?.storeName?.trim() || undefined}
-        storeName={payload?.storeName?.trim() || undefined}
+        title={storeDisplayName || undefined}
+        storeName={storeDisplayName || undefined}
+        logoUrl={theme.logoUrl}
+        subtitle={headerSubtitle}
+        storeBrandMode={storeBrandHeader}
         isMerchantStaff={adminAllowed}
         accountMenu={{
           onGoToStore: () => handleNav("home"),
@@ -713,6 +729,7 @@ export default function App() {
         data-sf-kit={sfKit}
         data-sf-scroll-root=""
         className="sf-root sf-app"
+        data-sf-store-brand={storeBrandHeader ? "1" : undefined}
         data-sf-product-sheet={productSheetOpen ? "open" : undefined}
         style={sfVars as unknown as React.CSSProperties}
       >

@@ -109,6 +109,163 @@
   box-shadow: 0 1px 10px rgba(0, 0, 0, 0.08);
 }
 
+.sf-app {
+  --app-header-approx: 76px;
+}
+
+.sf-app .app-header--store-brand {
+  display: block;
+  padding-top: max(8px, env(safe-area-inset-top, 0px));
+  padding-bottom: 10px;
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
+  min-height: calc(var(--app-header-approx) + env(safe-area-inset-top, 0px));
+  background: transparent;
+  border-bottom: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.sf-app .app-header__brand-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--sf-color-primary) 28%, transparent);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--sf-color-primary) 18%, var(--sf-color-surface)) 0%,
+    color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface)) 92%, transparent) 55%,
+    color-mix(in srgb, var(--sf-color-surface) 96%, transparent) 100%
+  );
+  box-shadow:
+    0 8px 28px color-mix(in srgb, black 14%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 12%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  position: relative;
+  overflow: hidden;
+}
+
+.sf-app .app-header__brand-card::before {
+  content: "";
+  position: absolute;
+  inset: -40% auto auto -20%;
+  width: 55%;
+  height: 120%;
+  background: radial-gradient(
+    circle at 30% 20%,
+    color-mix(in srgb, var(--sf-color-primary) 35%, transparent),
+    transparent 68%
+  );
+  pointer-events: none;
+}
+
+.sf-app .app-header__brand-main {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.sf-app .app-header__store-logo {
+  position: relative;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--sf-color-primary) 35%, transparent);
+  background: color-mix(in srgb, var(--sf-color-surface) 88%, transparent);
+  box-shadow:
+    0 4px 14px color-mix(in srgb, var(--sf-color-primary) 22%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 14%, transparent);
+}
+
+.sf-app .app-header__store-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.sf-app .app-header__store-logo-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--sf-color-primary) 85%, var(--sf-color-text));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--sf-color-primary) 22%, transparent),
+    color-mix(in srgb, var(--sf-color-surface) 90%, transparent)
+  );
+}
+
+.sf-app .app-header__store-copy {
+  min-width: 0;
+}
+
+.sf-app .app-header__store-name {
+  margin: 0;
+  font-family: var(--sf-font-heading);
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--sf-color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sf-app .app-header__store-tagline {
+  margin: 0.2rem 0 0;
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  font-weight: 500;
+  color: var(--sf-color-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sf-app .app-header__actions {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sf-app .app-header--store-brand .app-header__burger {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 55%, transparent);
+  background: color-mix(in srgb, var(--sf-color-surface) 75%, transparent);
+}
+
+.sf-app .app-header--store-brand .app-header__mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+}
+
+.sf-app[data-sf-store-brand="1"] .sf-identity-band__name,
+.sf-app[data-sf-store-brand="1"] .sf-identity-band__tagline {
+  display: none;
+}
+
 .sf-app .app-header__logo {
   color: var(--sf-color-text);
   font-family: var(--sf-font-heading);
@@ -755,8 +912,12 @@
   }
 
   .sf-app {
-    --app-header-approx: 52px;
+    --app-header-approx: 68px;
     --app-header-pad-x: 12px;
+  }
+
+  .sf-app .app-header__store-name {
+    font-size: 0.95rem;
   }
 
   .app-header__logo {
