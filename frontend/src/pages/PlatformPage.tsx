@@ -1,11 +1,23 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { getTelegramWebApp } from "../utils/telegram";
 import { resolveMerchantTelegramUserId } from "../utils/telegramUserId";
-import { ArchaHeader } from "../components/archa/ArchaHeader";
 import { archa } from "../components/archa/archaUi";
+import {
+  PlatformQuickActions,
+  PlatformShell,
+  type PlatformMenuItem,
+} from "../components/platform/PlatformShell";
+import { PlatformStoreCard } from "../components/platform/PlatformStoreCard";
+import {
+  businessTypeLabel,
+  formatDaysRemaining,
+  formatRuDateShort,
+  miniAppOpenUrl,
+  subscriptionBadge,
+} from "./platform/platformUi";
 import {
   formatSaasPriceSom,
   SAAS_SUBSCRIPTION_PLANS,
@@ -54,71 +66,10 @@ import type { RegistrationStatusPayload } from "../services/platformApi";
 import { ru } from "../i18n/ru";
 import { useBodyScrollLock } from "../utils/bodyScrollLock";
 
-function platformStatusLabel(status: string): string {
-  const map: Record<string, string> = {
-    blocked: "🔒 Заблокирован",
-    inactive: "🔴 Не активен",
-    subscription_expired: "⏳ Подписка истекла",
-    trialing: "🟡 Пробный период",
-    active: "🟢 Активен",
-    past_due: "⚠️ Просрочен платёж",
-    canceled: "⛔ Отменён",
-    expired: "⏹ Истёк",
-  };
-  return map[status] ?? status;
-}
-
-function businessTypeLabel(type: string | undefined): string {
-  const map: Record<string, string> = {
-    clothing: "👕 Одежда",
-    coffee: "☕ Кофейня",
-    fastfood: "🍔 Фастфуд",
-    flowers: "🌸 Цветочный",
-  };
-  return type != null && map[type] != null ? map[type] : type ?? "—";
-}
-
-function webhookUrlLine(b: PlatformMyBusinessDTO): string {
-  const u = b.webhookUrl;
-  if (u != null && u.trim() !== "") return u.trim();
-  return "URL вебхука не задан или недоступен";
-}
-
-function miniAppOpenUrl(b: Pick<PlatformMyBusinessDTO, "id" | "slug">): string {
-  if (typeof window === "undefined") return "";
-  const origin = window.location.origin.replace(/\/$/, "");
-  const s = typeof b.slug === "string" ? b.slug.trim() : "";
-  if (s !== "") {
-    return `${origin}/s/${encodeURIComponent(s)}`;
-  }
-  return `${origin}/?shop=${encodeURIComponent(String(b.id))}`;
-}
-
 function miniAppNavigatePath(b: Pick<PlatformMyBusinessDTO, "id" | "slug">): string {
   const s = typeof b.slug === "string" ? b.slug.trim() : "";
   if (s !== "") return `/s/${encodeURIComponent(s)}`;
   return `/?shop=${encodeURIComponent(String(b.id))}`;
-}
-
-function formatRuDateShort(iso: string | null): string | null {
-  if (iso == null || iso.trim() === "") return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return new Intl.DateTimeFormat("ru-RU", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(d);
-}
-
-function formatDaysRemaining(iso: string | null): string | null {
-  if (iso == null || iso.trim() === "") return null;
-  const end = new Date(iso).getTime();
-  if (Number.isNaN(end)) return null;
-  const days = Math.ceil((end - Date.now()) / 86400000);
-  if (days < 0) return `истекло ${Math.abs(days)} дн. назад`;
-  if (days === 0) return "истекает сегодня";
-  return `осталось дней: ${days}`;
 }
 
 function subscriptionDaysLeftNumber(iso: string | null): number | null {
@@ -161,90 +112,11 @@ function adminBusinessToCard(row: PlatformAdminBusinessDTO): PlatformMyBusinessD
   };
 }
 
-function botRunBadge(b: PlatformMyBusinessDTO): { label: string; className: string } {
-  if (b.isBlocked) {
-    return {
-      label: "⛔ Заблокирован",
-      className: "mp-tag mp-tag--run-blocked",
-    };
-  }
-  if (!b.isActive) {
-    return {
-      label: "🔴 Отключён",
-      className: "mp-tag mp-tag--run-off",
-    };
-  }
-  return {
-    label: "🟢 Активен",
-    className: "mp-tag mp-tag--run-ok",
-  };
-}
-
-function subscriptionBadge(status: string): { label: string; className: string } {
-  const s = status.toLowerCase();
-  if (s === "trialing") {
-    return {
-      label: ru.platform.trial,
-      className: "mp-tag mp-tag--sub-trial",
-    };
-  }
-  if (s === "active") {
-    return {
-      label: ru.platform.active,
-      className: "mp-tag mp-tag--sub-active",
-    };
-  }
-  if (s === "inactive") {
-    return {
-      label: ru.platform.inactive,
-      className: "mp-tag mp-tag--sub-muted",
-    };
-  }
-  if (s === "subscription_expired" || s === "expired") {
-    return {
-      label: ru.platform.expired,
-      className: "mp-tag mp-tag--sub-muted",
-    };
-  }
-  if (s === "past_due") {
-    return {
-      label: ru.platform.pastDue,
-      className: "mp-tag mp-tag--sub-warn",
-    };
-  }
-  if (s === "canceled") {
-    return {
-      label: ru.platform.canceled,
-      className: "mp-tag mp-tag--sub-muted",
-    };
-  }
-  return {
-    label: platformStatusLabel(status),
-    className: "mp-tag mp-tag--sub-muted",
-  };
-}
-
 const LS_ONBOARDING_COMPLETED = "onboardingCompleted";
 
 function readOnboardingCompleted(): boolean {
   if (typeof window === "undefined") return true;
   return localStorage.getItem(LS_ONBOARDING_COMPLETED) === "true";
-}
-
-function webhookBadge(ws: PlatformMyBusinessDTO["webhookStatus"]): {
-  label: string;
-  className: string;
-} {
-  if (ws === "OK") {
-    return {
-      label: `✔ ${ru.platform.webhookOk}`,
-      className: "mp-tag mp-tag--hook-ok",
-    };
-  }
-  return {
-    label: `❌ ${ru.platform.webhookError}`,
-    className: "mp-tag mp-tag--hook-bad",
-  };
 }
 
 /** Панель клиента Mini App: маршрут `/merchant` (витрины: `/store/:slug` или legacy `/?shop=ID`). */
@@ -320,6 +192,9 @@ export default function PlatformPage() {
     null,
   );
   const [payPlanBusy, setPayPlanBusy] = useState<30 | 90 | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const storesSectionRef = useRef<HTMLElement>(null);
+  const helpSectionRef = useRef<HTMLElement>(null);
 
   const loadBusinesses = useCallback(async () => {
     setLoading(true);
@@ -1158,48 +1033,212 @@ export default function PlatformPage() {
     businesses.length === 0 &&
     !regPending;
 
+  const primaryBusiness = businesses[0] ?? null;
+  const primarySubLocked = primaryBusiness != null && !primaryBusiness.subscriptionActive;
+
+  const scrollToStores = useCallback(() => {
+    storesSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  const scrollToHelp = useCallback(() => {
+    helpSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  const closeMiniApp = useCallback(() => {
+    try {
+      (getTelegramWebApp() as { close?: () => void } | undefined)?.close?.();
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const openPrimarySettings = useCallback(() => {
+    if (primaryBusiness == null) return;
+    setSettingsErr(null);
+    setSettingsOkMsg(null);
+    setSettingsBusinessId(primaryBusiness.id);
+  }, [primaryBusiness]);
+
+  const platformMenuItems = useMemo((): PlatformMenuItem[] => {
+    const items: PlatformMenuItem[] = [
+      { id: "stores", label: "Мои магазины", icon: "🏪", onClick: scrollToStores },
+      {
+        id: "create",
+        label: "Создать магазин",
+        icon: "➕",
+        onClick: goToMerchantRegister,
+      },
+      {
+        id: "analytics",
+        label: "Аналитика",
+        icon: "📊",
+        onClick: () => {
+          if (primaryBusiness != null && !primarySubLocked) {
+            openStorefront(primaryBusiness);
+          } else {
+            scrollToStores();
+          }
+        },
+      },
+      { id: "support", label: "Поддержка", icon: "💬", onClick: scrollToHelp },
+      {
+        id: "docs",
+        label: "Документация",
+        icon: "📖",
+        onClick: () => {
+          const url = "https://t.me/archa_kg";
+          try {
+            getTelegramWebApp()?.openTelegramLink?.(url);
+          } catch {
+            window.open(url, "_blank", "noopener,noreferrer");
+          }
+        },
+      },
+      {
+        id: "subscription",
+        label: "Подписка",
+        icon: "⭐",
+        onClick: () => {
+          if (primaryBusiness != null) openPrimarySettings();
+          else scrollToStores();
+        },
+      },
+      {
+        id: "settings",
+        label: "Настройки",
+        icon: "⚙️",
+        onClick: () => {
+          if (primaryBusiness != null) openPrimarySettings();
+          else goToMerchantRegister();
+        },
+      },
+      { id: "close", label: "Закрыть", icon: "✕", onClick: closeMiniApp, danger: true },
+    ];
+    return items;
+  }, [
+    scrollToStores,
+    goToMerchantRegister,
+    primaryBusiness,
+    primarySubLocked,
+    openStorefront,
+    scrollToHelp,
+    openPrimarySettings,
+    closeMiniApp,
+  ]);
+
+  const quickActions = useMemo(() => {
+    if (loading || businesses.length === 0) return [];
+    const b = primaryBusiness;
+    if (b == null) return [];
+    const locked = !b.subscriptionActive;
+    return [
+      {
+        id: "open",
+        label: "Магазин",
+        icon: "🛍",
+        accent: true,
+        disabled: locked,
+        onClick: () => openStorefront(b),
+      },
+      {
+        id: "settings",
+        label: "Настройки",
+        icon: "⚙️",
+        onClick: () => {
+          setSettingsErr(null);
+          setSettingsOkMsg(null);
+          setSettingsBusinessId(b.id);
+        },
+      },
+      {
+        id: "share",
+        label: "Поделиться",
+        icon: "🔗",
+        onClick: () => void handleCopyMiniAppUrl(b),
+      },
+      {
+        id: "create",
+        label: "Новый",
+        icon: "➕",
+        onClick: goToMerchantRegister,
+      },
+      {
+        id: "orders",
+        label: "Заказы",
+        icon: "📦",
+        disabled: locked,
+        onClick: () => {
+          if (!locked) openStorefront(b);
+        },
+      },
+      {
+        id: "products",
+        label: "Товары",
+        icon: "🏷",
+        disabled: locked,
+        onClick: () => {
+          if (!locked) openStorefront(b);
+        },
+      },
+    ];
+  }, [
+    loading,
+    businesses.length,
+    primaryBusiness,
+    openStorefront,
+    goToMerchantRegister,
+    handleCopyMiniAppUrl,
+  ]);
+
+  const readinessPct =
+    readiness != null && readiness.maxScore > 0
+      ? Math.round((readiness.score / readiness.maxScore) * 100)
+      : 0;
+
   return (
     <>
-      <div className="mp-page">
+      <div className="mp-page mp-page--v2">
         <div
-          className={`mp-shell ${showBottomCreateBar ? "mp-shell--dock" : ""}`}
+          className={`mp-shell mp-shell--v2 ${showBottomCreateBar ? "mp-shell--dock" : ""}`}
         >
-          <ArchaHeader
-            className="mp-top-header"
-            subtitle="Управляйте своими магазинами"
-          />
-          <div className="mb-2 flex items-center justify-end gap-2">
-            {operatorIdentity && !isPlatformAdmin ? (
-              <button
-                type="button"
-                className="mp-btn mp-btn--ghost mp-btn--sm"
-                style={{ opacity: 0.55 }}
-                onClick={() => {
-                  setOperatorUnlockError(null);
-                  setOperatorPassword("");
-                  setOperatorUnlockOpen(true);
-                }}
-              >
-                {ru.platform.operatorMode}
-              </button>
+          <PlatformShell
+            subtitle={
+              isPlatformAdmin
+                ? "Панель оператора платформы"
+                : "Управляйте магазинами в одном месте"
+            }
+            roleLabel={isPlatformAdmin ? "Оператор" : "Продавец"}
+            isAdmin={isPlatformAdmin}
+            menuOpen={menuOpen}
+            onMenuOpenChange={setMenuOpen}
+            menuItems={platformMenuItems}
+            operatorAction={
+              operatorIdentity && !isPlatformAdmin ? (
+                <button
+                  type="button"
+                  className="mp-v2-header-link"
+                  onClick={() => {
+                    setOperatorUnlockError(null);
+                    setOperatorPassword("");
+                    setOperatorUnlockOpen(true);
+                  }}
+                >
+                  {ru.platform.operatorMode}
+                </button>
+              ) : isPlatformAdmin ? (
+                <button
+                  type="button"
+                  className="mp-v2-header-link"
+                  onClick={() => void handleOperatorLock()}
+                >
+                  {ru.platform.operatorModeClose}
+                </button>
+              ) : null
+            }
+          >
+            {!loading && businesses.length > 0 && !isPlatformAdmin ? (
+              <PlatformQuickActions actions={quickActions} />
             ) : null}
-            {isPlatformAdmin ? (
-              <button
-                type="button"
-                className="mp-btn mp-btn--ghost mp-btn--sm"
-                onClick={() => void handleOperatorLock()}
-              >
-                {ru.platform.operatorModeClose}
-              </button>
-            ) : null}
-          </div>
-          <p className="mp-access-hint">
-            {isPlatformAdmin ? (
-              <>{ru.platform.operatorHint}</>
-            ) : (
-              <>{ru.platform.merchantHint}</>
-            )}
-          </p>
 
         {successFlash ? (
           <p className="mp-flash mp-flash--ok" role="status">
@@ -1230,7 +1269,13 @@ export default function PlatformPage() {
             ) : null}
             {!error && businesses.length === 0 ? (
               <motion.div
-                className="mp-panel mp-panel--empty"
+                className={`mp-v2-card mp-v2-empty ${
+                  registrationStatus?.status === "pending"
+                    ? "mp-v2-empty--pending"
+                    : registrationStatus?.status === "rejected"
+                      ? "mp-v2-empty--rejected"
+                      : ""
+                }`}
                 role="status"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1238,20 +1283,22 @@ export default function PlatformPage() {
               >
                 {registrationStatus?.status === "pending" ? (
                   <>
-                    <p className="text-lg font-semibold text-white">
-                      ⏳ Заявка на рассмотрении
-                    </p>
-                    <p className="mt-2 text-base leading-relaxed text-slate-400">
+                    <div className="mp-v2-empty-icon" aria-hidden>
+                      ⏳
+                    </div>
+                    <h3>Заявка на рассмотрении</h3>
+                    <p>
                       «{registrationStatus.storeName ?? "Магазин"}» — оператор проверит
-                      данные. Уведомление придёт в Telegram-бот.
+                      данные. Уведомление придёт в Telegram.
                     </p>
                   </>
                 ) : registrationStatus?.status === "rejected" ? (
                   <>
-                    <p className="text-lg font-semibold text-white">
-                      ❌ Заявка отклонена
-                    </p>
-                    <p className="mt-2 text-base leading-relaxed text-slate-400">
+                    <div className="mp-v2-empty-icon" aria-hidden>
+                      ✕
+                    </div>
+                    <h3>Заявка отклонена</h3>
+                    <p>
                       {registrationStatus.storeName
                         ? `«${registrationStatus.storeName}»`
                         : "Последняя заявка"}
@@ -1273,11 +1320,13 @@ export default function PlatformPage() {
                   </>
                 ) : (
                   <>
-                    <p className="text-lg font-semibold text-white">
-                      У вас пока нет магазинов
-                    </p>
-                    <p className="mt-2 text-base leading-relaxed text-slate-400">
-                      Создайте магазин в Mini App — заявка уйдёт на проверку оператору.
+                    <div className="mp-v2-empty-icon" aria-hidden>
+                      🏪
+                    </div>
+                    <h3>Запустите свой магазин</h3>
+                    <p>
+                      Создайте витрину в Mini App — заявка уйдёт на проверку, затем
+                      откроется полный доступ.
                     </p>
                     <button
                       type="button"
@@ -1288,7 +1337,7 @@ export default function PlatformPage() {
                       }}
                       className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg mt-8"
                     >
-                      ➕ Создать магазин
+                      Создать магазин
                     </button>
                   </>
                 )}
@@ -1383,310 +1432,114 @@ export default function PlatformPage() {
             {businesses.length > 0 ? (
               <>
             {readiness ? (
-              <div className="mp-panel mb-4" role="status">
-                <p className="text-sm font-semibold text-white">
-                  Готовность магазина: {readiness.score}/{readiness.maxScore}
-                </p>
-                {readiness.recommendations.length > 0 ? (
-                  <ul className="mt-2 list-disc pl-4 text-sm text-slate-400">
-                    {readiness.recommendations.map((r) => (
-                      <li key={r}>{r}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-2 text-sm text-emerald-400">
-                    Отлично — магазин готов к продажам.
+              <section className="mp-v2-section" aria-label="Готовность">
+                <h2 className="mp-v2-section-title">Готовность</h2>
+                <div className="mp-v2-card mp-v2-readiness" role="status">
+                  <p className="mp-v2-readiness-score">
+                    {readiness.score}
+                    <span> / {readiness.maxScore}</span>
                   </p>
-                )}
-              </div>
+                  <div className="mp-v2-readiness-bar-wrap">
+                    <div
+                      className="mp-v2-readiness-bar"
+                      style={{ width: `${readinessPct}%` }}
+                    />
+                  </div>
+                  {readiness.recommendations.length > 0 ? (
+                    <ul className="mt-3 list-none space-y-1.5 p-0 text-sm text-slate-400">
+                      {readiness.recommendations.map((r) => (
+                        <li key={r}>· {r}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-3 text-sm text-emerald-400">
+                      Магазин готов к продажам.
+                    </p>
+                  )}
+                </div>
+              </section>
             ) : null}
-              <ul className="mp-store-list">
-                {businesses.map((b, index) => {
-                  const toggleBusy = pendingByBusiness[b.id] === "toggle";
-                  const webhookBusy = pendingByBusiness[b.id] === "webhook";
-                  const deleteBusy = pendingByBusiness[b.id] === "delete";
-                  const extendBusy = pendingByBusiness[b.id] === "extend";
-                  const unblockBusy = pendingByBusiness[b.id] === "unblock";
-                  const runBadge = botRunBadge(b);
-                  const subBadge = subscriptionBadge(b.status);
-                  const whBadge = webhookBadge(b.webhookStatus);
-                  const subLocked = !b.subscriptionActive;
-                  const trialEndLabel = formatRuDateShort(b.trialEndsAt);
-                  const subEndLabel = formatRuDateShort(b.subscriptionEndsAt);
-                  const trialRem = formatDaysRemaining(b.trialEndsAt);
-                  const subRem = formatDaysRemaining(b.subscriptionEndsAt);
-                  return (
-                    <motion.li
-                      key={b.id}
-                      initial={{ opacity: 0, y: 14 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{
-                        duration: 0.3,
-                        delay: index * 0.05,
-                        ease: [0.22, 1, 0.36, 1],
-                      }}
-                      className="mp-panel mp-store group"
-                    >
-                      <div className="flex gap-3">
-                        <div className="mp-store-avatar" aria-hidden>
-                          <img
-                            src="/674440574_18101674030793392_828162833995675842_n.jpg"
-                            alt=""
-                          />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h2 className="truncate text-lg font-bold tracking-tight text-white">
-                            {b.name}
-                          </h2>
-                          <p className="mt-0.5 font-mono text-[11px] text-slate-400">
-                            id {b.id}
-                          </p>
-                          <div className="mp-tag-row">
-                            <span className={runBadge.className}>
-                              {runBadge.label}
-                            </span>
-                            <span className={subBadge.className}>
-                              {subBadge.label}
-                            </span>
-                            {isPlatformAdmin ? (
-                              <span className={whBadge.className}>
-                                {whBadge.label}
-                              </span>
-                            ) : null}
-                          </div>
-                          {!isPlatformAdmin ? (
-                            <div className="mp-subscription-hint">
-                              {trialEndLabel != null ? (
-                                <p>
-                                  Пробный период до {trialEndLabel}
-                                  {trialRem != null ? ` — ${trialRem}` : ""}
-                                </p>
-                              ) : null}
-                              {subEndLabel != null ? (
-                                <p>
-                                  Подписка до {subEndLabel}
-                                  {subRem != null ? ` — ${subRem}` : ""}
-                                </p>
-                              ) : null}
-                              {trialEndLabel == null && subEndLabel == null ? (
-                                <p className="text-slate-500">
-                                  Сроки подписки и оплата — в настройках.
-                                </p>
-                              ) : null}
-                              <button
-                                type="button"
-                                className="mp-btn mp-btn--ghost mp-btn--sm mt-1 min-w-0"
-                                onClick={(ev) => {
-                                  ev.preventDefault();
-                                  ev.stopPropagation();
-                                  setSettingsErr(null);
-                                  setSettingsOkMsg(null);
-                                  setSettingsBusinessId(b.id);
-                                }}
-                              >
-                                Настройки
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="mp-subscription-hint">
-                              {trialEndLabel != null ? (
-                                <p>Пробный до {trialEndLabel}</p>
-                              ) : null}
-                              {subEndLabel != null ? (
-                                <p>Оплата до {subEndLabel}</p>
-                              ) : null}
-                            </div>
-                          )}
-                          {isPlatformAdmin ? (
-                            <div className="mp-webhook-block">
-                              <div className="mp-webhook-label">
-                                Вебхук Telegram
-                              </div>
-                              <div className="mp-webhook-url">
-                                {webhookUrlLine(b)}
-                              </div>
-                            </div>
-                          ) : null}
-                          <div className="mp-webhook-block mp-webhook-block--miniapp">
-                            <div className="mp-webhook-label">
-                              Ссылка для Mini App (BotFather → Menu / Web App)
-                            </div>
-                            <div className="mp-webhook-url">{miniAppOpenUrl(b)}</div>
-                            <div className="mp-copy-row">
-                              <button
-                                type="button"
-                                className="mp-btn mp-btn--secondary mp-btn--sm"
-                                onClick={() => void handleCopyMiniAppUrl(b)}
-                              >
-                                Скопировать ссылку
-                              </button>
-                            </div>
-                          </div>
-                          {!b.isBlocked && subLocked ? (
-                            <p className="mt-3 text-sm font-semibold text-amber-200/95">
-                              Оплатите подписку — без действующего периода функции
-                              магазина недоступны.
-                            </p>
-                          ) : null}
-                          <div className="mp-store-actions-primary">
-                            <button
-                              type="button"
-                              disabled={subLocked}
-                              onClick={() =>
-                                openStorefront(b)
-                              }
-                              className="mp-btn mp-btn--primary mp-btn--sm min-w-0"
-                              title={
-                                subLocked
-                                  ? "Оплатите подписку"
-                                  : undefined
-                              }
-                            >
-                              Открыть магазин
-                            </button>
-                            <button
-                              type="button"
-                              disabled={
-                                subLocked ||
-                                (settingsBusinessId === b.id &&
-                                  (settingsLoading || settingsSaving))
-                              }
-                              onClick={(ev) => {
-                                ev.preventDefault();
-                                ev.stopPropagation();
-                                setSettingsErr(null);
-                                setSettingsOkMsg(null);
-                                setSettingsBusinessId(b.id);
-                              }}
-                              className="mp-btn mp-btn--secondary mp-btn--sm min-w-0 sm:min-w-[8.5rem]"
-                            >
-                              {settingsBusinessId === b.id &&
-                              (settingsLoading || settingsSaving)
-                                ? "…"
-                                : "Настройки"}
-                            </button>
-                          </div>
-                          <div className="mp-store-actions-secondary">
-                            {isPlatformAdmin ? (
-                              <>
-                                {b.isBlocked ? (
-                                  <button
-                                    type="button"
-                                    disabled={unblockBusy}
-                                    onClick={() => void handleUnblockShop(b)}
-                                    className="mp-btn mp-btn-enable mp-btn-wide-mobile"
-                                  >
-                                    {unblockBusy ? "…" : "Снять блокировку"}
-                                  </button>
-                                ) : null}
-                                {b.isActive && !b.isBlocked ? (
-                                  <button
-                                    type="button"
-                                    disabled={toggleBusy}
-                                    onClick={() => void handleToggleBot(b)}
-                                    className="mp-btn mp-btn--danger mp-btn-wide-mobile"
-                                  >
-                                    {toggleBusy ? "…" : "Отключить бота"}
-                                  </button>
-                                ) : null}
-                                {!b.isActive && !b.isBlocked ? (
-                                  <button
-                                    type="button"
-                                    disabled={toggleBusy}
-                                    title="Включить магазин"
-                                    onClick={() => void handleToggleBot(b)}
-                                    className="mp-btn mp-btn-enable mp-btn-wide-mobile"
-                                  >
-                                    {toggleBusy ? "…" : "🟢 Включить"}
-                                  </button>
-                                ) : null}
-                                {!b.isActive && b.isBlocked ? (
-                                  <span className="inline-flex min-h-[2.5rem] items-center text-sm font-semibold text-yellow-300">
-                                    ⛔ Заблокирован
-                                  </span>
-                                ) : null}
-                                <button
-                                  type="button"
-                                  disabled={webhookBusy}
-                                  onClick={() => void handleCheckWebhook(b)}
-                                  className="mp-btn mp-btn--ghost mp-btn-wide-mobile"
-                                >
-                                  {webhookBusy ? "Проверка…" : "Проверить webhook"}
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={deleteBusy}
-                                  onClick={() => void handleDeleteShop(b)}
-                                  className="mp-btn mp-btn--danger-outline mp-btn-wide-mobile"
-                                  title="Безвозвратно удалить магазин из платформы"
-                                >
-                                  {deleteBusy ? "…" : "Удалить магазин"}
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={extendBusy}
-                                  onClick={() =>
-                                    void handleExtendSubscription(b, 30)
-                                  }
-                                  className="mp-btn mp-btn--secondary mp-btn-wide-mobile"
-                                >
-                                  {extendBusy ? "…" : "+30 дн. подписки"}
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={extendBusy}
-                                  onClick={() =>
-                                    void handleExtendSubscription(b, 90)
-                                  }
-                                  className="mp-btn mp-btn--secondary mp-btn-wide-mobile"
-                                >
-                                  {extendBusy ? "…" : "+90 дн. подписки"}
-                                </button>
-                              </>
-                            ) : b.isBlocked ? (
-                              <span className="inline-flex min-h-[2.5rem] items-center text-sm font-semibold text-yellow-300">
-                                ⛔ Магазин заблокирован оператором. Обратитесь в
-                                поддержку.
-                              </span>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                    </motion.li>
-                  );
-                })}
-              </ul>
-            <div className="mp-panel mt-4">
-              <p className="text-sm font-semibold text-white">Обратная связь (beta)</p>
-              <p className="mt-1 text-xs text-slate-400">
-                Нашли баг или непонятный экран? Напишите — это помогает улучшить продукт.
-              </p>
-              <textarea
-                className="mp-input mt-3 w-full min-h-[72px] rounded-lg border border-slate-600 bg-slate-900 p-2 text-sm text-white"
-                rows={3}
-                value={feedbackText}
-                disabled={feedbackBusy}
-                placeholder="Опишите проблему или идею…"
-                onChange={(e) => setFeedbackText(e.target.value)}
-              />
-              <button
-                type="button"
-                className="mp-btn mp-btn--secondary mt-2"
-                disabled={feedbackBusy || feedbackText.trim().length < 4}
-                onClick={() => void submitFeedback()}
+              <section
+                ref={storesSectionRef}
+                className="mp-v2-section"
+                aria-label="Магазины"
               >
-                {feedbackBusy ? "Отправка…" : "Отправить"}
-              </button>
-              {feedbackOk ? (
-                <p className="mt-2 text-sm text-slate-300" role="status">
-                  {feedbackOk}
+                <h2 className="mp-v2-section-title">
+                  {isPlatformAdmin ? "Магазины платформы" : "Мои магазины"}
+                </h2>
+                <ul className="mp-v2-store-list">
+                {businesses.map((b, index) => (
+                  <PlatformStoreCard
+                    key={b.id}
+                    business={b}
+                    index={index}
+                    isPlatformAdmin={isPlatformAdmin}
+                    settingsBusinessId={settingsBusinessId}
+                    settingsLoading={settingsLoading}
+                    settingsSaving={settingsSaving}
+                    toggleBusy={pendingByBusiness[b.id] === "toggle"}
+                    webhookBusy={pendingByBusiness[b.id] === "webhook"}
+                    deleteBusy={pendingByBusiness[b.id] === "delete"}
+                    extendBusy={pendingByBusiness[b.id] === "extend"}
+                    unblockBusy={pendingByBusiness[b.id] === "unblock"}
+                    onOpenStore={openStorefront}
+                    onOpenSettings={(row) => {
+                      setSettingsErr(null);
+                      setSettingsOkMsg(null);
+                      setSettingsBusinessId(row.id);
+                    }}
+                    onCopyMiniApp={(row) => void handleCopyMiniAppUrl(row)}
+                    onToggleBot={(row) => void handleToggleBot(row)}
+                    onCheckWebhook={(row) => void handleCheckWebhook(row)}
+                    onDeleteShop={(row) => void handleDeleteShop(row)}
+                    onExtendSubscription={(row, days) =>
+                      void handleExtendSubscription(row, days)
+                    }
+                    onUnblockShop={(row) => void handleUnblockShop(row)}
+                  />
+                ))}
+              </ul>
+              </section>
+            <section
+              ref={helpSectionRef}
+              className="mp-v2-section"
+              aria-label="Поддержка"
+            >
+              <h2 className="mp-v2-section-title">Помощь</h2>
+              <div className="mp-v2-card mp-v2-help-card">
+                <p className="text-sm font-semibold text-white">Обратная связь</p>
+                <p>
+                  Нашли баг или непонятный экран? Напишите — это помогает улучшить
+                  продукт.
                 </p>
-              ) : null}
-            </div>
+                <textarea
+                  className="mp-input w-full min-h-[72px] rounded-lg border border-slate-600 bg-slate-900 p-2 text-sm text-white"
+                  rows={3}
+                  value={feedbackText}
+                  disabled={feedbackBusy}
+                  placeholder="Опишите проблему или идею…"
+                  onChange={(e) => setFeedbackText(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="mp-btn mp-btn--secondary mt-2"
+                  disabled={feedbackBusy || feedbackText.trim().length < 4}
+                  onClick={() => void submitFeedback()}
+                >
+                  {feedbackBusy ? "Отправка…" : "Отправить"}
+                </button>
+                {feedbackOk ? (
+                  <p className="mt-2 text-sm text-slate-300" role="status">
+                    {feedbackOk}
+                  </p>
+                ) : null}
+              </div>
+            </section>
               </>
             ) : null}
           </>
         )}
+          </PlatformShell>
         </div>
       </div>
 
