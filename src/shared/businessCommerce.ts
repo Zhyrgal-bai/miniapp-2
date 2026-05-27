@@ -58,7 +58,7 @@ export const VERTICAL_PROFILES: Record<BusinessType, VerticalCommerceProfile> = 
     showFashionVariantMatrix: false,
     showOrderOptionsOnStorefront: true,
     variantEditor: "bouquet_tiers",
-    defaultPrimaryValues: ["11", "21", "51", "101"],
+    defaultPrimaryValues: ["3", "5", "7", "11", "21", "51", "101"],
     cardPlaceholder: "21 роза",
   },
   fastfood: {
@@ -178,6 +178,9 @@ export function formatFlowerStemCount(count: string): string {
 }
 
 export const FLOWER_TIER_LABELS: Record<string, string> = {
+  "3": "3 розы",
+  "5": "5 роз",
+  "7": "7 роз",
   "11": "11 роз",
   "21": "21 роза",
   "51": "51 роза",

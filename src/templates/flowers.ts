@@ -30,7 +30,7 @@ export const flowersTemplate: BusinessTemplateConfig = {
       type: "select",
       label: "Количество роз",
       required: false,
-      values: ["21", "51", "101"],
+      values: ["3", "5", "7", "11", "21", "51", "101"],
     },
     packaging: { type: "select", label: "Упаковка", required: false, values: ["paper", "box"], default: "paper" },
     freshness: { type: "select", label: "Свежесть", required: false, values: ["today", "tomorrow"], default: "today" },
@@ -43,7 +43,12 @@ export const flowersTemplate: BusinessTemplateConfig = {
     packagingEnabled: { type: "boolean", label: "Упаковка", required: false, default: true },
   },
   orderOptionsSchema: {
-    bouquetCount: { type: "select", label: "Количество роз", required: false, values: ["21", "51", "101"] },
+    bouquetCount: {
+      type: "select",
+      label: "Количество роз",
+      required: false,
+      values: ["3", "5", "7", "11", "21", "51", "101"],
+    },
     deliveryDate: { type: "date", label: "Дата доставки", required: false },
     postcardText: { type: "text", label: "Текст открытки", required: false, maxLen: 280 },
     packaging: { type: "select", label: "Упаковка", required: false, values: ["paper", "box"], default: "paper" },
