@@ -65,6 +65,7 @@ import "./MerchantPage.css";
 import type { RegistrationStatusPayload } from "../services/platformApi";
 import { ru } from "../i18n/ru";
 import { useBodyScrollLock } from "../utils/bodyScrollLock";
+import { shareMiniAppLink } from "../utils/miniAppShare";
 
 function miniAppNavigatePath(b: Pick<PlatformMyBusinessDTO, "id" | "slug">): string {
   const s = typeof b.slug === "string" ? b.slug.trim() : "";
@@ -533,18 +534,25 @@ export default function PlatformPage() {
     }
   };
 
-  const handleCopyMiniAppUrl = async (b: PlatformMyBusinessDTO) => {
+  const handleCopyMiniAppUrl = useCallback(async (b: PlatformMyBusinessDTO) => {
     const url = miniAppOpenUrl(b);
     if (url === "") return;
     setError(null);
-    try {
-      await navigator.clipboard.writeText(url);
-      setInfoBanner(`${b.name}: ссылка Mini App скопирована`);
-    } catch {
-      setInfoBanner(null);
-      setError("Не удалось скопировать — выделите ссылку вручную");
+    const result = await shareMiniAppLink(url, `Магазин «${b.name}»`);
+    if (result === "shared") {
+      setInfoBanner(`${b.name}: выберите чат для отправки ссылки`);
+      return;
     }
-  };
+    if (result === "copied") {
+      setInfoBanner(`${b.name}: ссылка скопирована в буфер`);
+      return;
+    }
+    if (result === "cancelled") return;
+    setInfoBanner(null);
+    setError(
+      "Не удалось поделиться. Откройте «Ссылка Mini App и ещё» и скопируйте вручную.",
+    );
+  }, []);
 
   const handleDeleteShop = async (b: PlatformMyBusinessDTO) => {
     if (!Number.isFinite(merchantTelegramId)) {
@@ -1034,7 +1042,6 @@ export default function PlatformPage() {
     !regPending;
 
   const primaryBusiness = businesses[0] ?? null;
-  const primarySubLocked = primaryBusiness != null && !primaryBusiness.subscriptionActive;
 
   const scrollToStores = useCallback(() => {
     storesSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1067,18 +1074,6 @@ export default function PlatformPage() {
         label: "Создать магазин",
         icon: "➕",
         onClick: goToMerchantRegister,
-      },
-      {
-        id: "analytics",
-        label: "Аналитика",
-        icon: "📊",
-        onClick: () => {
-          if (primaryBusiness != null && !primarySubLocked) {
-            openStorefront(primaryBusiness);
-          } else {
-            scrollToStores();
-          }
-        },
       },
       { id: "support", label: "Поддержка", icon: "💬", onClick: scrollToHelp },
       {
@@ -1119,8 +1114,6 @@ export default function PlatformPage() {
     scrollToStores,
     goToMerchantRegister,
     primaryBusiness,
-    primarySubLocked,
-    openStorefront,
     scrollToHelp,
     openPrimarySettings,
     closeMiniApp,
@@ -1161,24 +1154,6 @@ export default function PlatformPage() {
         label: "Новый",
         icon: "➕",
         onClick: goToMerchantRegister,
-      },
-      {
-        id: "orders",
-        label: "Заказы",
-        icon: "📦",
-        disabled: locked,
-        onClick: () => {
-          if (!locked) openStorefront(b);
-        },
-      },
-      {
-        id: "products",
-        label: "Товары",
-        icon: "🏷",
-        disabled: locked,
-        onClick: () => {
-          if (!locked) openStorefront(b);
-        },
       },
     ];
   }, [

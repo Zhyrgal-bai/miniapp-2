@@ -31,6 +31,8 @@ interface TelegramWebApp {
   openLink?: (url: string) => void;
   /** Opens `https://t.me/...` inside Telegram when available */
   openTelegramLink?: (url: string) => void;
+  /** Bot API 8.0+ — native share sheet for URL */
+  shareUrl?: (url: string, callback?: (success: boolean) => void) => void;
   setHeaderColor?: (color: string) => void;
   setBackgroundColor?: (color: string) => void;
 }
