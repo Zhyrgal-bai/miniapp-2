@@ -7,6 +7,11 @@ import { resolveMerchantTelegramUserId } from "../utils/telegramUserId";
 import { ArchaHeader } from "../components/archa/ArchaHeader";
 import { archa } from "../components/archa/archaUi";
 import {
+  formatSaasPriceSom,
+  SAAS_SUBSCRIPTION_PLANS,
+  saasPricePerDayLabel,
+} from "@repo-shared/saasSubscriptionPricing";
+import {
   fetchPlatformAdminBusinesses,
   fetchPlatformAdminRequests,
   postPlatformAdminApprove,
@@ -2190,32 +2195,79 @@ export default function PlatformPage() {
                 </div>
 
                 {!isPlatformAdmin && settingsSnap != null ? (
-                  <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/20 px-3 py-3">
-                    <div className="text-sm font-semibold text-white">
-                      Оплата подписки (Finik)
+                  <div className="mp-subscription-pay-block">
+                    <div className="text-sm font-semibold tracking-tight text-white">
+                      Продление подписки
                     </div>
-                    <p className="mp-muted mt-2 text-xs leading-relaxed">
-                      Продление только онлайн через платёжную страницу Finik
-                      магазина (нужны API key и secret на стороне Finik).
+                    <p className="mp-muted mt-1.5 text-xs leading-relaxed">
+                      Оплата откроется на странице Finik вашего магазина.
                     </p>
-                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                      <button
-                        type="button"
-                        disabled={payPlanBusy !== null}
-                        onClick={() => void handleClientSubscriptionPay(30)}
-                        className="mp-btn mp-btn--secondary mp-btn--sm flex-1"
-                      >
-                        {payPlanBusy === 30 ? "…" : "Оплатить 30 дней"}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={payPlanBusy !== null}
-                        onClick={() => void handleClientSubscriptionPay(90)}
-                        className="mp-btn mp-btn--secondary mp-btn--sm flex-1"
-                      >
-                        {payPlanBusy === 90 ? "…" : "Оплатить 90 дней"}
-                      </button>
+                    <div className="mp-plan-grid" role="group" aria-label="Тарифы подписки">
+                      {SAAS_SUBSCRIPTION_PLANS.map((plan) => {
+                        const busy = payPlanBusy === plan.days;
+                        const anyBusy = payPlanBusy !== null;
+                        const finikReady = settingsSnap.finikConfigured;
+                        return (
+                          <button
+                            key={plan.days}
+                            type="button"
+                            disabled={!finikReady || anyBusy}
+                            aria-busy={busy}
+                            onClick={() =>
+                              void handleClientSubscriptionPay(plan.days)
+                            }
+                            className={[
+                              "mp-plan-card",
+                              plan.featured ? "mp-plan-card--featured" : "",
+                              busy ? "mp-plan-card--busy" : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                          >
+                            <div className="min-w-0 flex-1">
+                              {plan.badge ? (
+                                <span className="mp-plan-card__badge">
+                                  {plan.badge}
+                                </span>
+                              ) : null}
+                              <div className="mp-plan-card__title">
+                                {plan.title}
+                              </div>
+                              <div className="mp-plan-card__subtitle">
+                                {plan.subtitle}
+                                <span className="text-[#64748b]">
+                                  {" "}
+                                  · {saasPricePerDayLabel(plan.amountSom, plan.days)}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <div className="mp-plan-card__price">
+                                {formatSaasPriceSom(plan.amountSom)}
+                              </div>
+                              <div
+                                className={
+                                  busy
+                                    ? "mp-plan-card__cta"
+                                    : "mp-plan-card__cta mp-plan-card__cta--muted"
+                                }
+                              >
+                                {busy ? "Открываем оплату…" : "Оплатить →"}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
+                    {!settingsSnap.finikConfigured ? (
+                      <p className="mp-subscription-pay-block__hint mp-subscription-pay-block__hint--warn">
+                        Сначала подключите Finik выше и сохраните API-ключ.
+                      </p>
+                    ) : (
+                      <p className="mp-subscription-pay-block__hint">
+                        Нужны API key и secret в личном кабинете Finik магазина.
+                      </p>
+                    )}
                   </div>
                 ) : null}
 

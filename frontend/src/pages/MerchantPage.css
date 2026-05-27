@@ -352,6 +352,136 @@
   padding: 1rem;
 }
 
+/* Карточки тарифов подписки (30 / 90 дней) */
+.mp-plan-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+}
+
+.mp-plan-card {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    transform 0.12s ease,
+    box-shadow 0.18s ease;
+}
+
+.mp-plan-card:hover:not(:disabled) {
+  border-color: rgba(34, 197, 94, 0.45);
+  background: rgba(34, 197, 94, 0.06);
+}
+
+.mp-plan-card:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.mp-plan-card:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.mp-plan-card--featured {
+  border-color: rgba(34, 197, 94, 0.38);
+  background: linear-gradient(
+    135deg,
+    rgba(34, 197, 94, 0.14) 0%,
+    rgba(255, 255, 255, 0.03) 55%
+  );
+  box-shadow: 0 0 28px -12px rgba(34, 197, 94, 0.45);
+}
+
+.mp-plan-card--featured:hover:not(:disabled) {
+  border-color: rgba(74, 222, 128, 0.55);
+  box-shadow: 0 0 32px -10px rgba(34, 197, 94, 0.55);
+}
+
+.mp-plan-card--busy {
+  pointer-events: none;
+}
+
+.mp-plan-card__badge {
+  display: inline-block;
+  margin-bottom: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mp-plan-card__title {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #f8fafc;
+}
+
+.mp-plan-card__subtitle {
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: #94a3b8;
+}
+
+.mp-plan-card__price {
+  font-size: 1.125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  color: #f8fafc;
+}
+
+.mp-plan-card__cta {
+  margin-top: 0.2rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #86efac;
+}
+
+.mp-plan-card__cta--muted {
+  color: #94a3b8;
+}
+
+.mp-subscription-pay-block {
+  border: 1px solid rgba(34, 197, 94, 0.22);
+  border-radius: 1rem;
+  background: linear-gradient(
+    180deg,
+    rgba(6, 78, 59, 0.28) 0%,
+    rgba(15, 23, 42, 0.35) 100%
+  );
+  padding: 1rem;
+}
+
+.mp-subscription-pay-block__hint {
+  margin-top: 0.65rem;
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  color: #94a3b8;
+}
+
+.mp-subscription-pay-block__hint--warn {
+  color: #fcd34d;
+}
+
 /* Список карточек магазинов — без маркера ul */
 .mp-store-list {
   list-style: none;
