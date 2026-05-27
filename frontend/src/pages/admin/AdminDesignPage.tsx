@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useRef, type ReactElement, type ChangeEvent } from "react";
+import { useCallback, useEffect, useState, type ReactElement } from "react";
 import {
   TEMPLATES,
   STORE_TEMPLATE_IDS,
@@ -9,13 +9,11 @@ import { useShop } from "../../context/ShopContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useStorefrontPayload } from "../../components/storefront/runtime/StorefrontPayloadContext";
 import { saveBusinessThemePut } from "../../services/businessThemeApi";
-import {
-  putStorefrontStyleCatalogPatch,
-  type CatalogFooterSlideInput,
-} from "../../services/storefrontStyleCatalogApi";
+import { putStorefrontStyleCatalogPatch } from "../../services/storefrontStyleCatalogApi";
 import { adminService } from "../../services/admin.service";
 import { formatAdminApiError } from "../../utils/adminApiError";
 import type { Product } from "../../types";
+import { buildFooterSliderSlidesFromProducts } from "../../components/storefront/sections/CatalogFooterSlider";
 import { ru } from "../../i18n/ru";
 
 const TEMPLATE_LABELS: Record<StoreTemplateId, string> = {
@@ -54,18 +52,8 @@ export default function AdminDesignPage(): ReactElement {
   const [logoUrl, setLogoUrl] = useState("");
 
   const [footerSliderEnabled, setFooterSliderEnabled] = useState(false);
-  const [footerSliderTitle, setFooterSliderTitle] = useState("Акции");
-  const [footerSlides, setFooterSlides] = useState<CatalogFooterSlideInput[]>([
-    { image: "", href: "", caption: "" },
-    { image: "", href: "", caption: "" },
-  ]);
+  const [footerSliderTitle, setFooterSliderTitle] = useState("Букеты");
   const [catalogGridBoost, setCatalogGridBoost] = useState<"normal" | "bold">("bold");
-
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [uploadTargetSlide, setUploadTargetSlide] = useState<number | null>(null);
-  const [uploadingSlideIdx, setUploadingSlideIdx] = useState<number | null>(null);
-  const [slidePickerIdx, setSlidePickerIdx] = useState<number | null>(null);
-  const [slidePickerQ, setSlidePickerQ] = useState("");
   const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
 
   const [saving, setSaving] = useState(false);
@@ -104,24 +92,7 @@ export default function AdminDesignPage(): ReactElement {
     if (cf && typeof cf === "object") {
       const c = cf as Record<string, unknown>;
       setFooterSliderEnabled(Boolean(c.enabled));
-      setFooterSliderTitle(typeof c.title === "string" && c.title.trim() !== "" ? c.title : "Акции");
-      const slidesRaw = Array.isArray(c.slides) ? c.slides : [];
-      const slides: CatalogFooterSlideInput[] = slidesRaw.map((row) => {
-        if (!row || typeof row !== "object") return { image: "", href: "", caption: "" };
-        const r = row as Record<string, unknown>;
-        return {
-          image: typeof r.image === "string" ? r.image : "",
-          href: typeof r.href === "string" ? r.href : "",
-          caption: typeof r.caption === "string" ? r.caption : "",
-          productId:
-            typeof r.productId === "number" && Number.isFinite(r.productId) && r.productId > 0
-              ? r.productId
-              : undefined,
-        };
-      });
-      const next = slides.length > 0 ? [...slides] : [];
-      while (next.length < 2) next.push({ image: "", href: "", caption: "" });
-      setFooterSlides(next.slice(0, 10));
+      setFooterSliderTitle(typeof c.title === "string" && c.title.trim() !== "" ? c.title : "Букеты");
     }
     const cat = o.catalog;
     if (cat && typeof cat === "object" && "gridBoost" in cat) {
@@ -172,51 +143,7 @@ export default function AdminDesignPage(): ReactElement {
     setOk(null);
   };
 
-  function productRowImage(p: Product): string {
-    const a = typeof p.image === "string" ? p.image.trim() : "";
-    if (a !== "") return a;
-    const u = p.images?.[0];
-    return typeof u === "string" ? u.trim() : "";
-  }
-
-  const handleSlideUpload = async (idx: number, e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file || businessId == null) return;
-    setUploadingSlideIdx(idx);
-    setError(null);
-    try {
-      const url = await adminService.uploadImage(file);
-      setFooterSlides((prev) =>
-        prev.map((r, i) => (i === idx ? { ...r, image: url, productId: undefined } : r)),
-      );
-    } catch (err) {
-      setError(formatAdminApiError(err));
-    } finally {
-      setUploadingSlideIdx(null);
-    }
-  };
-
-  const bindProductToSlide = (idx: number, p: Product) => {
-    const id = p.id;
-    if (typeof id !== "number") return;
-    const img = productRowImage(p);
-    setFooterSlides((prev) =>
-      prev.map((r, i) =>
-        i === idx
-          ? {
-              ...r,
-              productId: id,
-              image: img,
-              href: "",
-              caption: r.caption != null && String(r.caption).trim() !== "" ? r.caption : p.name,
-            }
-          : r,
-      ),
-    );
-    setSlidePickerIdx(null);
-    setSlidePickerQ("");
-  };
+  const footerSliderProductCount = buildFooterSliderSlidesFromProducts(catalogProducts).length;
 
   const onSave = async () => {
     if (businessId == null) return;
@@ -224,25 +151,8 @@ export default function AdminDesignPage(): ReactElement {
     setError(null);
     setOk(null);
     try {
-      const slidesOut: CatalogFooterSlideInput[] = footerSlides
-        .map((s) => {
-          const img = (s.image ?? "").trim();
-          const href = (s.href ?? "").trim();
-          const caption = (s.caption ?? "").trim();
-          const productId =
-            typeof s.productId === "number" && s.productId > 0 ? s.productId : undefined;
-          const row: CatalogFooterSlideInput = { href, caption };
-          if (img !== "") row.image = img;
-          if (productId != null) row.productId = productId;
-          return row;
-        })
-        .filter(
-          (s) =>
-            (s.image != null && String(s.image).trim() !== "") ||
-            (s.productId != null && s.productId > 0),
-        );
-      if (footerSliderEnabled && slidesOut.length === 0) {
-        setError("Слайдер включён: загрузите фото или выберите товар из каталога.");
+      if (footerSliderEnabled && footerSliderProductCount === 0) {
+        setError("Слайдер включён, но в каталоге нет товаров с фото.");
         return;
       }
       const patch = {
@@ -264,8 +174,8 @@ export default function AdminDesignPage(): ReactElement {
         catalog: { gridBoost: catalogGridBoost },
         catalogFooter: {
           enabled: footerSliderEnabled,
-          title: footerSliderTitle.trim() === "" ? "Акции" : footerSliderTitle.trim(),
-          slides: slidesOut,
+          title: footerSliderTitle.trim() === "" ? "Букеты" : footerSliderTitle.trim(),
+          slides: [],
         },
       });
       await Promise.all([refresh(), refreshStorefrontPayload()]);
@@ -435,23 +345,9 @@ export default function AdminDesignPage(): ReactElement {
           </label>
         </div>
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          style={{ display: "none" }}
-          onChange={(e) => {
-            const idx = uploadTargetSlide;
-            setUploadTargetSlide(null);
-            if (idx == null) return;
-            void handleSlideUpload(idx, e);
-          }}
-        />
-
         <p className="admin-theme-subtitle">Каталог и низ витрины</p>
         <p className="admin-dash-page__subtitle" style={{ marginBottom: 10 }}>
-          Слайдер внизу витрины: загрузите картинку (Cloudinary) или выберите товар — подставится фото и
-          название. По нажатию на витрине откроется карточка товара.
+          Нижний слайдер листает все букеты из каталога. По нажатию открывается карточка товара.
         </p>
         <p className="admin-theme-subtitle admin-theme-hint--tight" style={{ marginBottom: 6 }}>
           Вид сетки товаров
@@ -478,6 +374,12 @@ export default function AdminDesignPage(): ReactElement {
             />
             Показывать нижний слайдер на витрине
           </label>
+          <p className="admin-dash-page__muted" style={{ margin: "8px 0 0", fontSize: 13 }}>
+            Слайдер автоматически показывает все товары из каталога с фото
+            {footerSliderProductCount > 0
+              ? ` (${footerSliderProductCount})`
+              : " — добавьте товары с картинками в каталог"}.
+          </p>
           <label className="admin-theme-field admin-theme-field--full">
             Заголовок над слайдером
             <input
@@ -486,179 +388,10 @@ export default function AdminDesignPage(): ReactElement {
               onChange={(e) => setFooterSliderTitle(e.target.value)}
               maxLength={80}
               disabled={!footerSliderEnabled}
+              placeholder="Букеты"
             />
           </label>
         </div>
-
-        <div className="admin-dash-page__subtitle" style={{ marginBottom: 8 }}>
-          Слайды (до 10)
-        </div>
-        <div style={{ display: "grid", gap: 12 }}>
-          {footerSlides.map((row, idx) => {
-            const q = slidePickerQ.trim().toLowerCase();
-            const filtered =
-              q === ""
-                ? catalogProducts
-                : catalogProducts.filter((p) => p.name.toLowerCase().includes(q));
-            const pickerOpen = slidePickerIdx === idx;
-            return (
-              <div
-                key={idx}
-                style={{
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  borderRadius: 10,
-                  padding: 10,
-                  opacity: footerSliderEnabled ? 1 : 0.55,
-                }}
-              >
-                <p style={{ margin: "0 0 8px", fontSize: 12, opacity: 0.85 }}>
-                  Слайд {idx + 1}
-                  {typeof row.productId === "number" && row.productId > 0 ? (
-                    <span style={{ marginLeft: 8, opacity: 0.75 }}>· товар #{row.productId}</span>
-                  ) : null}
-                </p>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
-                  <button
-                    type="button"
-                    className="admin-theme-reset"
-                    disabled={!footerSliderEnabled || uploadingSlideIdx !== null}
-                    onClick={() => {
-                      setUploadTargetSlide(idx);
-                      fileInputRef.current?.click();
-                    }}
-                  >
-                    {uploadingSlideIdx === idx ? "Загрузка…" : "Загрузить фото"}
-                  </button>
-                  <button
-                    type="button"
-                    className="admin-theme-reset"
-                    disabled={!footerSliderEnabled}
-                    onClick={() => {
-                      setSlidePickerIdx(pickerOpen ? null : idx);
-                      setSlidePickerQ("");
-                    }}
-                  >
-                    {pickerOpen ? "Скрыть каталог" : "Товар из каталога"}
-                  </button>
-                  {(row.productId != null && row.productId > 0) || (row.image ?? "").trim() !== "" ? (
-                    <button
-                      type="button"
-                      className="admin-theme-reset"
-                      disabled={!footerSliderEnabled}
-                      onClick={() =>
-                        setFooterSlides((prev) =>
-                          prev.map((r, i) =>
-                            i === idx ? { image: "", href: "", caption: "", productId: undefined } : r,
-                          ),
-                        )
-                      }
-                    >
-                      Очистить слайд
-                    </button>
-                  ) : null}
-                </div>
-                {pickerOpen ? (
-                  <div
-                    style={{
-                      marginBottom: 10,
-                      padding: 8,
-                      borderRadius: 8,
-                      background: "rgba(0,0,0,0.2)",
-                    }}
-                  >
-                    <input
-                      type="search"
-                      value={slidePickerQ}
-                      onChange={(e) => setSlidePickerQ(e.target.value)}
-                      placeholder="Поиск по названию…"
-                      disabled={!footerSliderEnabled}
-                      style={{ width: "100%", marginBottom: 8 }}
-                    />
-                    <div
-                      style={{
-                        maxHeight: 220,
-                        overflowY: "auto",
-                        display: "grid",
-                        gap: 6,
-                      }}
-                    >
-                      {filtered.slice(0, 80).map((p) => (
-                        <button
-                          key={String(p.id ?? p.name)}
-                          type="button"
-                          className="admin-theme-reset"
-                          style={{ textAlign: "left", justifyContent: "flex-start" }}
-                          disabled={!footerSliderEnabled || p.id == null}
-                          onClick={() => bindProductToSlide(idx, p)}
-                        >
-                          <span style={{ fontWeight: 600 }}>{p.name}</span>
-                          <span style={{ opacity: 0.7, marginLeft: 8 }}>{p.price} сом</span>
-                        </button>
-                      ))}
-                      {filtered.length === 0 ? (
-                        <p style={{ margin: 0, fontSize: 13, opacity: 0.75 }}>Ничего не найдено</p>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
-                <label className="admin-theme-field admin-theme-field--full">
-                  Картинка (URL, если без загрузки)
-                  <input
-                    type="url"
-                    value={row.image ?? ""}
-                    disabled={!footerSliderEnabled}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setFooterSlides((prev) =>
-                        prev.map((p, i) => (i === idx ? { ...p, image: v, productId: undefined } : p)),
-                      );
-                    }}
-                    placeholder="https://… или загрузите файл выше"
-                  />
-                </label>
-                <label className="admin-theme-field admin-theme-field--full">
-                  Внешняя ссылка (если не товар)
-                  <input
-                    type="url"
-                    value={row.href ?? ""}
-                    disabled={!footerSliderEnabled || (row.productId != null && row.productId > 0)}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setFooterSlides((prev) => prev.map((p, i) => (i === idx ? { ...p, href: v } : p)));
-                    }}
-                    placeholder="https://…"
-                  />
-                </label>
-                <label className="admin-theme-field admin-theme-field--full">
-                  Подпись на слайде
-                  <input
-                    type="text"
-                    value={row.caption ?? ""}
-                    disabled={!footerSliderEnabled}
-                    maxLength={120}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setFooterSlides((prev) => prev.map((p, i) => (i === idx ? { ...p, caption: v } : p)));
-                    }}
-                  />
-                </label>
-              </div>
-            );
-          })}
-        </div>
-        {footerSlides.length < 10 ? (
-          <button
-            type="button"
-            className="admin-theme-reset"
-            style={{ marginTop: 10 }}
-            disabled={!footerSliderEnabled}
-            onClick={() =>
-              setFooterSlides((prev) => [...prev, { image: "", href: "", caption: "" }])
-            }
-          >
-            Добавить слайд
-          </button>
-        ) : null}
 
         <div
           className="admin-theme-preview"

@@ -11,7 +11,7 @@ import { FooterSection } from "./sections/FooterSection";
 import { ReviewsSection } from "./sections/ReviewsSection";
 import { FaqSection } from "./sections/FaqSection";
 import { CommerceDiscoveryFeed } from "./discovery/CommerceDiscoveryFeed";
-import { CatalogFooterSlider } from "./sections/CatalogFooterSlider";
+import { CatalogFooterSlider, catalogFooterCanShow } from "./sections/CatalogFooterSlider";
 import { recordViewCategory } from "./runtime/commerceSession";
 import "./storefrontFeed.css";
 import "../../storefront/commerceCards.css";
@@ -222,32 +222,12 @@ export function StorefrontRenderer(props: {
     styleCfg.catalog !== null &&
     (styleCfg.catalog as { gridBoost?: string }).gridBoost !== "normal";
 
-  const sliderProductById = useMemo(() => {
-    const m = new Map<number, Product>();
-    for (const p of featuredAll) {
-      if (typeof p.id === "number") m.set(p.id, p);
-    }
-    const cat = catalog ?? [];
-    for (const p of cat) {
-      if (typeof p.id === "number" && !m.has(p.id)) m.set(p.id, p);
-    }
-    return m;
-  }, [featuredAll, catalog]);
-
   const showCatalogFooter = useMemo(() => {
     const st = styleCfg?.catalogFooter;
     if (!st || typeof st !== "object") return false;
-    if (!(st as { enabled?: boolean }).enabled) return false;
-    const slides = (st as { slides?: unknown }).slides;
-    if (!Array.isArray(slides) || slides.length === 0) return false;
-    return slides.some((row) => {
-      if (!row || typeof row !== "object") return false;
-      const im = (row as { image?: unknown }).image;
-      if (typeof im === "string" && im.trim() !== "") return true;
-      const pid = (row as { productId?: unknown }).productId;
-      return typeof pid === "number" && pid > 0;
-    });
-  }, [styleCfg]);
+    const enabled = Boolean((st as { enabled?: boolean }).enabled);
+    return catalogFooterCanShow(enabled, catalog ?? []);
+  }, [styleCfg, catalog]);
 
   const identityTextCfg = props.payload.storefrontTextConfig ?? undefined;
   const showIdentityBand = useMemo(() => {
@@ -454,7 +434,7 @@ export function StorefrontRenderer(props: {
             <div className="sf-feed__chunk sf-feed__chunk--catalog-footer sf-feed__chunk--stack">
               <CatalogFooterSlider
                 storefrontStyleConfig={styleCfg}
-                productById={sliderProductById}
+                catalogProducts={catalog ?? []}
                 onOpenProduct={openProduct}
               />
             </div>

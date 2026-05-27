@@ -235,6 +235,14 @@
   }
 }
 
+.sf-catalog-footer__progress--single {
+  pointer-events: none;
+}
+
+.sf-catalog-footer__progress--single .sf-catalog-footer__progress-seg {
+  cursor: default;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sf-catalog-footer__media-img--live {
     animation: none;

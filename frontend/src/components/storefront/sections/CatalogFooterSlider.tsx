@@ -15,13 +15,6 @@ import "./CatalogFooterSlider.css";
 
 const AUTOPLAY_MS = 5500;
 
-type SlideRow = {
-  image?: string;
-  productId?: number;
-  href?: string;
-  caption?: string;
-};
-
 type ResolvedSlide = {
   imageUrl: string;
   caption: string;
@@ -39,7 +32,6 @@ function productPrimaryImage(p: Product): string {
 function readCatalogFooter(styleConfig: Record<string, unknown> | null | undefined): {
   enabled: boolean;
   title: string;
-  slides: SlideRow[];
 } | null {
   if (!styleConfig || typeof styleConfig !== "object") return null;
   const raw = styleConfig.catalogFooter;
@@ -47,36 +39,42 @@ function readCatalogFooter(styleConfig: Record<string, unknown> | null | undefin
   const o = raw as Record<string, unknown>;
   return {
     enabled: Boolean(o.enabled),
-    title: typeof o.title === "string" ? o.title : "Акции",
-    slides: Array.isArray(o.slides) ? (o.slides as SlideRow[]) : [],
+    title: typeof o.title === "string" ? o.title : "Букеты",
   };
 }
 
-function resolveSlide(
-  slide: SlideRow,
-  productById: Map<number, Product>,
-): ResolvedSlide | null {
-  const pid =
-    typeof slide.productId === "number" && Number.isFinite(slide.productId) && slide.productId > 0
-      ? slide.productId
-      : undefined;
-  const p = pid != null ? productById.get(pid) : undefined;
-  const rawImg = typeof slide.image === "string" ? slide.image.trim() : "";
-  const fromProduct = p ? productPrimaryImage(p) : "";
-  const imageUrl = rawImg !== "" ? rawImg : fromProduct;
-  if (imageUrl === "") return null;
-  const cap = typeof slide.caption === "string" ? slide.caption.trim() : "";
-  const caption = cap !== "" ? cap : (p?.name ?? "");
-  const externalHref = typeof slide.href === "string" ? slide.href.trim() : "";
-  return { imageUrl, caption, product: p, externalHref };
+export function buildFooterSliderSlidesFromProducts(products: Product[]): ResolvedSlide[] {
+  const seen = new Set<number>();
+  const out: ResolvedSlide[] = [];
+  for (const p of products) {
+    const id = p.id;
+    if (typeof id === "number" && seen.has(id)) continue;
+    const imageUrl = productPrimaryImage(p);
+    if (imageUrl === "") continue;
+    if (typeof id === "number") seen.add(id);
+    out.push({
+      imageUrl,
+      caption: (p.name ?? "").trim(),
+      product: p,
+      externalHref: "",
+    });
+  }
+  return out;
 }
 
-/** Не показываем мусорные короткие подписи вроде «f de». */
+export function catalogFooterCanShow(
+  enabled: boolean,
+  products: Product[],
+): boolean {
+  if (!enabled) return false;
+  return buildFooterSliderSlidesFromProducts(products).length > 0;
+}
+
 function displayCaption(slide: ResolvedSlide): string | null {
-  const raw = slide.caption.trim();
   const fromProduct = slide.product?.name?.trim() ?? "";
-  const text = raw.length >= 6 ? raw : fromProduct.length >= 6 ? fromProduct : "";
-  return text !== "" ? text : null;
+  if (fromProduct !== "") return fromProduct;
+  const raw = slide.caption.trim();
+  return raw !== "" ? raw : null;
 }
 
 function slideIsActionable(slide: ResolvedSlide, onOpenProduct?: (p: Product) => void): boolean {
@@ -84,6 +82,8 @@ function slideIsActionable(slide: ResolvedSlide, onOpenProduct?: (p: Product) =>
   const href = slide.externalHref;
   return href !== "" && /^https?:\/\//i.test(href);
 }
+
+const PROGRESS_SEGMENTS_MAX = 8;
 
 function ProgressBar(props: {
   count: number;
@@ -93,8 +93,37 @@ function ProgressBar(props: {
   onPick: (i: number) => void;
 }): ReactElement | null {
   if (props.count <= 1) return null;
+
+  const fillClass = [
+    "sf-catalog-footer__progress-fill",
+    props.paused ? "sf-catalog-footer__progress-fill--paused" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const fillStyle = {
+    animationDuration: `${AUTOPLAY_MS}ms`,
+    ["--sf-footer-progress-ms" as string]: `${AUTOPLAY_MS}ms`,
+  } as CSSProperties;
+
+  if (props.count > PROGRESS_SEGMENTS_MAX) {
+    return (
+      <div
+        className="sf-catalog-footer__progress sf-catalog-footer__progress--single"
+        role="progressbar"
+        aria-valuenow={props.index + 1}
+        aria-valuemin={1}
+        aria-valuemax={props.count}
+        aria-label={`Букет ${props.index + 1} из ${props.count}`}
+      >
+        <div className="sf-catalog-footer__progress-seg">
+          <span className={fillClass} style={fillStyle} key={`fill-${props.animKey}`} />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="sf-catalog-footer__progress" role="tablist" aria-label="Слайды акций">
+    <div className="sf-catalog-footer__progress" role="tablist" aria-label="Слайды каталога">
       {Array.from({ length: props.count }, (_, i) => {
         const active = i === props.index;
         return (
@@ -110,17 +139,10 @@ function ProgressBar(props: {
             <span
               className={
                 active
-                  ? `sf-catalog-footer__progress-fill${props.paused ? " sf-catalog-footer__progress-fill--paused" : ""}`
+                  ? fillClass
                   : "sf-catalog-footer__progress-fill sf-catalog-footer__progress-fill--done"
               }
-              style={
-                active
-                  ? ({
-                      animationDuration: `${AUTOPLAY_MS}ms`,
-                      ["--sf-footer-progress-ms" as string]: `${AUTOPLAY_MS}ms`,
-                    } as CSSProperties)
-                  : undefined
-              }
+              style={active ? fillStyle : undefined}
               key={active ? `fill-${props.index}-${props.animKey}` : `done-${i}`}
             />
           </button>
@@ -198,16 +220,14 @@ function SlideCard(props: {
 
 export function CatalogFooterSlider(props: {
   storefrontStyleConfig?: Record<string, unknown> | null;
-  productById: Map<number, Product>;
+  catalogProducts: Product[];
   onOpenProduct?: (product: Product) => void;
 }): ReactElement | null {
   const cfg = readCatalogFooter(props.storefrontStyleConfig ?? undefined);
   const resolved = useMemo(() => {
     if (!cfg?.enabled) return [];
-    return cfg.slides
-      .map((s) => resolveSlide(s, props.productById))
-      .filter((x): x is ResolvedSlide => x != null && x.imageUrl !== "");
-  }, [cfg, props.productById]);
+    return buildFooterSliderSlidesFromProducts(props.catalogProducts);
+  }, [cfg?.enabled, props.catalogProducts]);
 
   const [slideIndex, setSlideIndex] = useState(0);
   const [progressKey, setProgressKey] = useState(0);
@@ -282,7 +302,7 @@ export function CatalogFooterSlider(props: {
 
   if (!cfg?.enabled || resolved.length === 0) return null;
 
-  const title = cfg.title.trim() !== "" ? cfg.title : "Акции";
+  const title = cfg.title.trim() !== "" ? cfg.title : "Букеты";
   const safeIndex = Math.min(slideIndex, Math.max(resolved.length - 1, 0));
 
   return (
@@ -310,7 +330,11 @@ export function CatalogFooterSlider(props: {
         <div className="sf-catalog-footer__stack">
           {resolved.map((slide, i) => (
             <motion.div
-              key={`${i}-${slide.imageUrl.slice(0, 32)}`}
+              key={
+                slide.product?.id != null
+                  ? `product-${slide.product.id}`
+                  : `${i}-${slide.imageUrl.slice(0, 32)}`
+              }
               className="sf-catalog-footer__layer"
               initial={false}
               animate={{
