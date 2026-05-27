@@ -487,6 +487,7 @@ export default function App() {
       | "categories"
       | "analytics"
       | "design"
+      | "promos"
       | "support"
   ) => {
     setPage("admin");
@@ -519,6 +520,7 @@ export default function App() {
       design: "#/admin/design",
       products: "#/admin/products",
       categories: "#/admin/categories",
+      promos: "#/admin/promos",
       analytics: "#/admin/analytics",
       support: "#/admin/support",
     };

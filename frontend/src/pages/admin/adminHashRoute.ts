@@ -15,6 +15,7 @@ export type AdminNavKey =
   | "categories"
   | "analytics"
   | "design"
+  | "promos"
   | "support";
 
 export function adminNavKeyFromPath(path: string): AdminNavKey {
@@ -24,6 +25,7 @@ export function adminNavKeyFromPath(path: string): AdminNavKey {
   if (path.includes("/admin/products/manage")) return "manage";
   if (path.includes("/admin/products")) return "products";
   if (path.includes("/admin/analytics")) return "analytics";
+  if (path.includes("/admin/promos")) return "promos";
   if (path.includes("/admin/support")) return "support";
   return "orders";
 }

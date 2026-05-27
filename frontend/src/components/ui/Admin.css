@@ -567,6 +567,14 @@
   color: #9ca3af;
 }
 
+.admin-promo-card__remaining {
+  color: #86efac;
+}
+
+.admin-promo-card__remaining--out {
+  color: #fcd34d;
+}
+
 .admin-promo-card__delete {
   margin-top: 4px;
   align-self: flex-start;

@@ -8,6 +8,7 @@ import AdminCategoriesPage from "./AdminCategoriesPage";
 import AdminUsersPage from "./AdminUsersPage";
 import AdminDesignPage from "./AdminDesignPage";
 import AdminSupportPage from "./AdminSupportPage";
+import AdminPromosPage from "./AdminPromosPage";
 import AdminErrorBoundary from "./AdminErrorBoundary";
 import TelegramSessionGate from "../../components/ui/TelegramSessionGate";
 import {
@@ -30,6 +31,7 @@ const NAV_REQUIRES: Partial<Record<AdminNavKey, MerchantPermissionId>> = {
   manage: MERCHANT_PERM.catalogEdit,
   categories: MERCHANT_PERM.catalogEdit,
   analytics: MERCHANT_PERM.analyticsView,
+  promos: MERCHANT_PERM.settingsManage,
   support: MERCHANT_PERM.supportManage,
 };
 
@@ -39,6 +41,7 @@ const ROUTE_ORDER: { key: AdminNavKey; hash: string }[] = [
   { key: "design", hash: "#/admin/design" },
   { key: "products", hash: "#/admin/products" },
   { key: "categories", hash: "#/admin/categories" },
+  { key: "promos", hash: "#/admin/promos" },
   { key: "analytics", hash: "#/admin/analytics" },
 ];
 
@@ -162,6 +165,9 @@ export default function AdminApp({ onExit }: AdminAppProps) {
     }
     if (path.includes("/admin/design")) {
       return <AdminDesignPage key="design" />;
+    }
+    if (path.includes("/admin/promos")) {
+      return <AdminPromosPage key="promos" />;
     }
     if (path.includes("/admin/support")) {
       return <AdminSupportPage key="support" />;

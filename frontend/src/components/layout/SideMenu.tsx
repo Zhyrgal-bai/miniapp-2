@@ -34,6 +34,7 @@ type AdminSection =
   | "categories"
   | "analytics"
   | "design"
+  | "promos"
   | "support";
 
 type SideMenuProps = {
@@ -65,6 +66,7 @@ function readHash(): string {
 function activeAdminSection(hash: string): AdminSection | null {
   if (!hash.includes("/admin")) return null;
   if (hash.includes("/admin/design")) return "design";
+  if (hash.includes("/admin/promos")) return "promos";
   if (hash.includes("/admin/support")) return "support";
   if (hash.includes("/analytics")) return "analytics";
   if (hash.includes("/categories")) return "categories";
@@ -91,6 +93,7 @@ const ADMIN_LINKS: {
   { section: "design", hash: "#/admin/design", icon: "🎨", label: "Оформление", permission: MERCHANT_PERM.designEdit },
   { section: "products", hash: "#/admin/products", icon: "🏷️", label: "Товары", permission: MERCHANT_PERM.catalogEdit },
   { section: "categories", hash: "#/admin/categories", icon: "🗂", label: "Категории", permission: MERCHANT_PERM.catalogEdit },
+  { section: "promos", hash: "#/admin/promos", icon: "🎟️", label: "Промокоды", permission: MERCHANT_PERM.settingsManage },
   { section: "analytics", hash: "#/admin/analytics", icon: "📊", label: "Аналитика", permission: MERCHANT_PERM.analyticsView },
 ];
 

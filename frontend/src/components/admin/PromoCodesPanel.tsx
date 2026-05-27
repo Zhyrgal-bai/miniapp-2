@@ -65,6 +65,13 @@ export default function PromoCodesPanel() {
   };
 
   const handleDelete = async (promoCode: string) => {
+    if (
+      !window.confirm(
+        `Удалить промокод «${promoCode}»? Уже использованные заказы не изменятся.`,
+      )
+    ) {
+      return;
+    }
     try {
       await adminService.deletePromo(promoCode);
       await load();
@@ -75,8 +82,6 @@ export default function PromoCodesPanel() {
 
   return (
     <>
-      <h2 className="admin-section-title">Промокоды</h2>
-
       <form className="admin-form admin-promo-form" onSubmit={handleSubmit}>
         {error && (
           <div className="admin-form-error" role="alert">
@@ -87,7 +92,7 @@ export default function PromoCodesPanel() {
         <input
           id="promo-code"
           className="admin-input"
-          placeholder="Код"
+          placeholder="Например SALE20"
           value={code}
           onChange={(e) => setCode(e.target.value)}
           autoComplete="off"
@@ -111,7 +116,7 @@ export default function PromoCodesPanel() {
           min={1}
           step={1}
           inputMode="numeric"
-          placeholder="Лимит"
+          placeholder="Сколько раз можно применить"
           value={maxUses}
           onChange={(e) => setMaxUses(e.target.value)}
         />
@@ -139,6 +144,17 @@ export default function PromoCodesPanel() {
               <div className="admin-promo-card__discount">{p.discount}%</div>
               <div className="admin-promo-card__usage">
                 использовано: {p.used} / {p.maxUses}
+                {p.used < p.maxUses ? (
+                  <span className="admin-promo-card__remaining">
+                    {" "}
+                    · осталось {p.maxUses - p.used}
+                  </span>
+                ) : (
+                  <span className="admin-promo-card__remaining admin-promo-card__remaining--out">
+                    {" "}
+                    · исчерпан
+                  </span>
+                )}
               </div>
               <button
                 type="button"
