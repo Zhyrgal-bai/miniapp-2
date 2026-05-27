@@ -121,6 +121,30 @@ function formatDaysRemaining(iso: string | null): string | null {
   return `осталось дней: ${days}`;
 }
 
+function subscriptionDaysLeftNumber(iso: string | null): number | null {
+  if (iso == null || iso.trim() === "") return null;
+  const end = new Date(iso).getTime();
+  if (Number.isNaN(end)) return null;
+  return Math.ceil((end - Date.now()) / 86400000);
+}
+
+function settingsPrimarySubscriptionEnd(snap: PlatformStoreSettingsDTO): {
+  endIso: string | null;
+  kind: "trial" | "paid" | null;
+} {
+  const status = snap.subscriptionStatus?.toLowerCase() ?? "";
+  if (status === "trialing" && snap.trialEndsAt) {
+    return { endIso: snap.trialEndsAt, kind: "trial" };
+  }
+  if (snap.subscriptionEndsAt) {
+    return { endIso: snap.subscriptionEndsAt, kind: "paid" };
+  }
+  if (snap.trialEndsAt) {
+    return { endIso: snap.trialEndsAt, kind: "trial" };
+  }
+  return { endIso: null, kind: null };
+}
+
 function adminBusinessToCard(row: PlatformAdminBusinessDTO): PlatformMyBusinessDTO {
   return {
     id: row.id,
@@ -1992,16 +2016,21 @@ export default function PlatformPage() {
                       ev.stopPropagation();
                     }}
                   >
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <h2
-                id="platform-settings-title"
-                className="text-lg font-semibold text-white"
-              >
-                Настройки магазина
-              </h2>
+            <div className="mp-settings-header">
+              <div>
+                <h2
+                  id="platform-settings-title"
+                  className="mp-settings-header__title"
+                >
+                  Настройки магазина
+                </h2>
+                {settingsSnap != null ? (
+                  <p className="mp-settings-header__sub">{settingsSnap.name}</p>
+                ) : null}
+              </div>
               <button
                 type="button"
-                className="rounded-xl border border-white/[0.08] px-2.5 py-1.5 text-sm text-[#9CA3AF] transition hover:border-white/15 hover:bg-white/[0.06] hover:text-[#E5E7EB]"
+                className={archa.btnIcon}
                 onClick={closeSettingsModal}
                 aria-label="Закрыть"
               >
@@ -2017,161 +2046,232 @@ export default function PlatformPage() {
               </p>
             ) : (
               <form
-                className="flex flex-col gap-4"
+                className="mp-settings-form"
                 onSubmit={(e) => void handleSaveSettings(e)}
               >
                 {settingsSnap?.pendingBotTokenChange ? (
-                  <p
-                    className="rounded-xl border border-amber-500/25 bg-amber-950/30 px-3 py-2.5 text-sm text-amber-100"
-                    role="status"
-                  >
-                    ⏳ Ожидается подтверждение администратором смены токена бота.
+                  <p className="mp-settings-alert mp-settings-alert--amber" role="status">
+                    Ожидается подтверждение администратором смены токена бота.
                   </p>
                 ) : null}
 
-                {settingsSnap != null ? (
-                  <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] px-3 py-3">
-                    <div className="text-sm font-semibold text-white">
-                      Подписка
-                    </div>
-                    <ul className="mp-muted mt-2 list-none space-y-1.5 text-sm leading-relaxed">
-                      <li>
-                        Статус:{" "}
-                        <span className="text-slate-200">
-                          {settingsSnap.subscriptionStatus || "—"}
+                {settingsSnap != null ? (() => {
+                  const subBadge = subscriptionBadge(
+                    settingsSnap.subscriptionStatus,
+                  );
+                  const primaryEnd = settingsPrimarySubscriptionEnd(settingsSnap);
+                  const daysLeft = subscriptionDaysLeftNumber(primaryEnd.endIso);
+                  const endLabel = formatRuDateShort(primaryEnd.endIso);
+                  const progressPct =
+                    daysLeft != null && daysLeft >= 0
+                      ? Math.min(100, Math.max(4, (daysLeft / 30) * 100))
+                      : 0;
+                  const progressClass =
+                    daysLeft != null && daysLeft < 0
+                      ? "mp-settings-hero__progress-fill--danger"
+                      : daysLeft != null && daysLeft <= 7
+                        ? "mp-settings-hero__progress-fill--warn"
+                        : "";
+
+                  return (
+                    <div className="mp-settings-section mp-settings-section--accent">
+                      <div className="mp-settings-section__head">
+                        <span className="mp-settings-section__title">
+                          Подписка
                         </span>
-                      </li>
-                      {formatRuDateShort(settingsSnap.trialEndsAt) != null ? (
-                        <li>
-                          Пробный до {formatRuDateShort(settingsSnap.trialEndsAt)}
-                          {formatDaysRemaining(settingsSnap.trialEndsAt) != null
-                            ? ` (${formatDaysRemaining(settingsSnap.trialEndsAt)})`
-                            : ""}
-                        </li>
-                      ) : null}
-                      {formatRuDateShort(settingsSnap.subscriptionEndsAt) !=
-                      null ? (
-                        <li>
-                          Оплаченный период до{" "}
-                          {formatRuDateShort(settingsSnap.subscriptionEndsAt)}
-                          {formatDaysRemaining(settingsSnap.subscriptionEndsAt) !=
-                          null
-                            ? ` (${formatDaysRemaining(settingsSnap.subscriptionEndsAt)})`
-                            : ""}
-                        </li>
-                      ) : null}
-                    </ul>
-                  </div>
-                ) : null}
-
-                <div>
-                  <label
-                    htmlFor="platform-settings-name"
-                    className="mp-muted mb-1 block text-sm"
-                  >
-                    Название магазина
-                  </label>
-                  <input
-                    id="platform-settings-name"
-                    type="text"
-                    required
-                    minLength={2}
-                    maxLength={160}
-                    autoComplete="organization"
-                    disabled={settingsSnap == null}
-                    value={settingsName}
-                    onChange={(e) => setSettingsName(e.target.value)}
-                    className={archa.input}
-                  />
-                </div>
-
-                {settingsSnap != null &&
-                isPlatformAdmin &&
-                Object.keys(settingsSnap.merchantSettingsSchema ?? {}).length >
-                  0 ? (
-                  <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3">
-                    <div className="mp-muted mb-2 text-sm">
-                      Настройки ({settingsSnap.businessType})
+                        <span className={subBadge.className}>
+                          {subBadge.label}
+                        </span>
+                      </div>
+                      {endLabel != null ? (
+                        <>
+                          <div className="mp-settings-hero__metrics">
+                            <div>
+                              {daysLeft != null && daysLeft >= 0 ? (
+                                <>
+                                  <div className="mp-settings-hero__days">
+                                    {daysLeft}
+                                  </div>
+                                  <div className="mp-settings-hero__days-label">
+                                    {daysLeft === 1
+                                      ? "день остался"
+                                      : daysLeft >= 2 && daysLeft <= 4
+                                        ? "дня осталось"
+                                        : "дней осталось"}
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="mp-settings-hero__days">—</div>
+                                  <div className="mp-settings-hero__days-label">
+                                    {formatDaysRemaining(primaryEnd.endIso) ??
+                                      "срок не указан"}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                            <div className="mp-settings-hero__until">
+                              <span className="mp-settings-hero__until-kind">
+                                {primaryEnd.kind === "trial"
+                                  ? "Пробный период"
+                                  : "Оплаченный период"}
+                              </span>
+                              до {endLabel}
+                            </div>
+                          </div>
+                          {daysLeft != null && daysLeft >= 0 ? (
+                            <div
+                              className="mp-settings-hero__progress"
+                              role="progressbar"
+                              aria-valuenow={daysLeft}
+                              aria-valuemin={0}
+                              aria-valuemax={30}
+                              aria-label="Оставшийся срок подписки"
+                            >
+                              <div
+                                className={[
+                                  "mp-settings-hero__progress-fill",
+                                  progressClass,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" ")}
+                                style={{ width: `${progressPct}%` }}
+                              />
+                            </div>
+                          ) : null}
+                        </>
+                      ) : (
+                        <p className="mp-settings-section__desc">
+                          Срок подписки не указан.
+                        </p>
+                      )}
                     </div>
-                    <MerchantSettingsRenderer
-                      schema={
-                        settingsSnap.merchantSettingsSchema as unknown as MerchantSchemaObject
-                      }
-                      value={merchantConfigDraft}
-                      onChange={setMerchantConfigDraft}
+                  );
+                })() : null}
+
+                <div className="mp-settings-section">
+                  <div className="mp-settings-section__head">
+                    <span className="mp-settings-section__title">Магазин</span>
+                  </div>
+                  <p className="mp-settings-section__desc">
+                    Название видят покупатели в витрине и заказах.
+                  </p>
+                  <div className="mp-settings-field">
+                    <label
+                      htmlFor="platform-settings-name"
+                      className="mp-settings-field__label"
+                    >
+                      Название магазина
+                    </label>
+                    <input
+                      id="platform-settings-name"
+                      type="text"
+                      required
+                      minLength={2}
+                      maxLength={160}
+                      autoComplete="organization"
+                      disabled={settingsSnap == null}
+                      value={settingsName}
+                      onChange={(e) => setSettingsName(e.target.value)}
+                      className={archa.input}
                     />
                   </div>
-                ) : null}
 
-                <div>
-                  <label
-                    htmlFor="platform-settings-token"
-                    className="mp-muted mb-1 block text-sm"
-                  >
-                    Новый токен бота
-                  </label>
-                  <input
-                    id="platform-settings-token"
-                    type="password"
-                    autoComplete="off"
-                    disabled={settingsSnap == null}
-                    value={settingsNewToken}
-                    onChange={(e) => setSettingsNewToken(e.target.value)}
-                    className={`${archa.input} font-mono`}
-                  />
-                  <p className="mp-muted mt-1 text-xs">
+                  {settingsSnap != null &&
+                  isPlatformAdmin &&
+                  Object.keys(settingsSnap.merchantSettingsSchema ?? {}).length >
+                    0 ? (
+                    <div className="mp-settings-field">
+                      <label className="mp-settings-field__label">
+                        Настройки ({settingsSnap.businessType})
+                      </label>
+                      <MerchantSettingsRenderer
+                        schema={
+                          settingsSnap.merchantSettingsSchema as unknown as MerchantSchemaObject
+                        }
+                        value={merchantConfigDraft}
+                        onChange={setMerchantConfigDraft}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="mp-settings-section">
+                  <div className="mp-settings-section__head">
+                    <span className="mp-settings-section__title">
+                      Telegram-бот
+                    </span>
+                  </div>
+                  <p className="mp-settings-section__desc">
                     Смена токена требует подтверждения администратором. Текущий
                     токен не отображается.
                   </p>
+                  <div className="mp-settings-field">
+                    <label
+                      htmlFor="platform-settings-token"
+                      className="mp-settings-field__label"
+                    >
+                      Новый токен бота
+                    </label>
+                    <input
+                      id="platform-settings-token"
+                      type="password"
+                      autoComplete="off"
+                      disabled={settingsSnap == null}
+                      value={settingsNewToken}
+                      onChange={(e) => setSettingsNewToken(e.target.value)}
+                      placeholder="Вставьте новый токен"
+                      className={`${archa.input} font-mono`}
+                    />
+                  </div>
                 </div>
 
-                <div className="mp-settings-slab">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-sm font-semibold tracking-tight text-white">
-                      💳 Finik
-                    </span>
+                <div className="mp-settings-section mp-settings-section--accent">
+                  <div className="mp-settings-section__head">
+                    <span className="mp-settings-section__title">Finik</span>
                     {settingsSnap?.finikConfigured ? (
-                      <span className="text-xs font-medium text-[#86EFAC]">
-                        ✅ Finik подключён
+                      <span className="mp-settings-status-pill mp-settings-status-pill--ok">
+                        Подключён
                       </span>
                     ) : (
-                      <span className="text-xs font-medium text-amber-300/95">
-                        ⚠️ Не подключён
+                      <span className="mp-settings-status-pill mp-settings-status-pill--warn">
+                        Не подключён
                       </span>
                     )}
                   </div>
-                  <p className="mt-2 font-mono text-xs text-slate-400">
+                  <p className="mp-settings-section__desc">
+                    Платежи в витрине и продление подписки. Ключ на сервер не
+                    возвращается после сохранения.
+                  </p>
+                  <div className="mp-settings-key-chip">
                     API Key:{" "}
-                    <span className="text-slate-300">
-                      {settingsSnap?.finikConfigured
-                        ? "************"
-                        : "—"}
-                    </span>
-                  </p>
-                  <label
-                    htmlFor="platform-settings-finik-draft"
-                    className="mp-muted mb-1 mt-3 block text-xs font-medium"
-                  >
-                    Новый API ключ Finik
-                  </label>
-                  <input
-                    id="platform-settings-finik-draft"
-                    type="password"
-                    autoComplete="off"
-                    disabled={settingsSnap == null || finikSaving}
-                    value={finikDraft}
-                    onChange={(e) => {
-                      setFinikDraft(e.target.value);
-                      setFinikErr(null);
-                      setFinikMsg(null);
-                    }}
-                    placeholder="Вставьте ключ"
-                    className={`${archa.input} font-mono`}
-                  />
-                  <p className="mp-muted mt-1.5 text-[11px] leading-relaxed">
-                    Оставьте поле пустым и нажмите «Сохранить», чтобы отключить
-                    Finik. Ключ на сервер не возвращается.
-                  </p>
+                    {settingsSnap?.finikConfigured ? "••••••••••••" : "—"}
+                  </div>
+                  <div className="mp-settings-field">
+                    <label
+                      htmlFor="platform-settings-finik-draft"
+                      className="mp-settings-field__label"
+                    >
+                      Новый API ключ Finik
+                    </label>
+                    <input
+                      id="platform-settings-finik-draft"
+                      type="password"
+                      autoComplete="off"
+                      disabled={settingsSnap == null || finikSaving}
+                      value={finikDraft}
+                      onChange={(e) => {
+                        setFinikDraft(e.target.value);
+                        setFinikErr(null);
+                        setFinikMsg(null);
+                      }}
+                      placeholder="Вставьте ключ"
+                      className={`${archa.input} font-mono`}
+                    />
+                    <p className="mp-settings-field__hint">
+                      Оставьте поле пустым и сохраните, чтобы отключить Finik.
+                    </p>
+                  </div>
                   {finikErr ? (
                     <p className="mt-2 text-sm text-red-300" role="alert">
                       {finikErr}
@@ -2188,18 +2288,20 @@ export default function PlatformPage() {
                       settingsSnap == null || finikSaving || settingsLoading
                     }
                     onClick={() => void handleSaveFinik()}
-                    className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg mt-3"
+                    className="mp-settings-btn-secondary"
                   >
-                    {finikSaving ? "Сохранение…" : "Сохранить"}
+                    {finikSaving ? "Сохранение…" : "Сохранить ключ Finik"}
                   </button>
                 </div>
 
                 {!isPlatformAdmin && settingsSnap != null ? (
-                  <div className="mp-subscription-pay-block">
-                    <div className="text-sm font-semibold tracking-tight text-white">
-                      Продление подписки
+                  <div className="mp-settings-section mp-settings-section--accent">
+                    <div className="mp-settings-section__head">
+                      <span className="mp-settings-section__title">
+                        Продление подписки
+                      </span>
                     </div>
-                    <p className="mp-muted mt-1.5 text-xs leading-relaxed">
+                    <p className="mp-settings-section__desc">
                       Оплата откроется на странице Finik вашего магазина.
                     </p>
                     <div className="mp-plan-grid" role="group" aria-label="Тарифы подписки">
@@ -2260,40 +2362,39 @@ export default function PlatformPage() {
                       })}
                     </div>
                     {!settingsSnap.finikConfigured ? (
-                      <p className="mp-subscription-pay-block__hint mp-subscription-pay-block__hint--warn">
+                      <p className="mp-settings-field__hint text-[#fcd34d]">
                         Сначала подключите Finik выше и сохраните API-ключ.
                       </p>
                     ) : (
-                      <p className="mp-subscription-pay-block__hint">
+                      <p className="mp-settings-field__hint">
                         Нужны API key и secret в личном кабинете Finik магазина.
                       </p>
                     )}
                   </div>
                 ) : null}
 
-                {settingsErr ? (
-                  <p className="text-sm text-red-300" role="alert">
-                    {settingsErr}
-                  </p>
-                ) : null}
-                {settingsOkMsg ? (
-                  <p
-                    className="text-sm text-[#86EFAC]"
-                    role="status"
-                  >
-                    {settingsOkMsg}
-                  </p>
-                ) : null}
+                <div className="mp-settings-save-footer">
+                  {settingsErr ? (
+                    <p className="text-sm text-red-300" role="alert">
+                      {settingsErr}
+                    </p>
+                  ) : null}
+                  {settingsOkMsg ? (
+                    <p className="text-sm text-[#86EFAC]" role="status">
+                      {settingsOkMsg}
+                    </p>
+                  ) : null}
 
-                <button
-                  type="submit"
-                  disabled={
-                    settingsSnap == null || settingsSaving || settingsLoading
-                  }
-                  className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg mt-1"
-                >
-                  {settingsSaving ? "Сохранение…" : "Сохранить"}
-                </button>
+                  <button
+                    type="submit"
+                    disabled={
+                      settingsSnap == null || settingsSaving || settingsLoading
+                    }
+                    className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg mt-2"
+                  >
+                    {settingsSaving ? "Сохранение…" : "Сохранить настройки"}
+                  </button>
+                </div>
               </form>
             )}
                   </motion.div>

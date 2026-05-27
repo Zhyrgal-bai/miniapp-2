@@ -344,12 +344,243 @@
   color: #86efac;
 }
 
-/* Вложенный блок в модалке настроек (Finik) */
-.mp-settings-slab {
-  border: 1px solid #334155;
-  background: rgba(15, 23, 42, 0.45);
-  border-radius: 12px;
+/* Модалка настроек — секции */
+.mp-settings-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1.15rem;
+}
+
+.mp-settings-header__title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #f8fafc;
+}
+
+.mp-settings-header__sub {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  color: #94a3b8;
+}
+
+.mp-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.mp-settings-section {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.04);
   padding: 1rem;
+}
+
+.mp-settings-section--accent {
+  border-color: rgba(34, 197, 94, 0.22);
+  background: linear-gradient(
+    180deg,
+    rgba(6, 78, 59, 0.22) 0%,
+    rgba(15, 23, 42, 0.32) 100%
+  );
+}
+
+.mp-settings-section__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+}
+
+.mp-settings-section__title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #f8fafc;
+}
+
+.mp-settings-section__desc {
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: #94a3b8;
+}
+
+.mp-settings-hero__metrics {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+}
+
+.mp-settings-hero__days {
+  font-size: 2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: #f8fafc;
+}
+
+.mp-settings-hero__days-label {
+  margin-top: 0.2rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.mp-settings-hero__until {
+  text-align: right;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: #cbd5e1;
+}
+
+.mp-settings-hero__until-kind {
+  display: block;
+  margin-bottom: 0.15rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.mp-settings-hero__progress {
+  margin-top: 0.85rem;
+  height: 0.35rem;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mp-settings-hero__progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #15803d, #22c55e);
+  transition: width 0.35s ease;
+}
+
+.mp-settings-hero__progress-fill--warn {
+  background: linear-gradient(90deg, #b45309, #f59e0b);
+}
+
+.mp-settings-hero__progress-fill--danger {
+  background: linear-gradient(90deg, #b91c1c, #ef4444);
+}
+
+.mp-settings-field {
+  margin-top: 0.75rem;
+}
+
+.mp-settings-field:first-child {
+  margin-top: 0;
+}
+
+.mp-settings-field__label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.mp-settings-field__hint {
+  margin-top: 0.4rem;
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+.mp-settings-status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.28rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.mp-settings-status-pill--ok {
+  background: rgba(34, 197, 94, 0.18);
+  color: #86efac;
+}
+
+.mp-settings-status-pill--warn {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fcd34d;
+}
+
+.mp-settings-key-chip {
+  display: inline-block;
+  margin-top: 0.65rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(11, 15, 20, 0.55);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+  color: #cbd5e1;
+}
+
+.mp-settings-alert {
+  border-radius: 0.85rem;
+  padding: 0.75rem 0.85rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.mp-settings-alert--amber {
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  background: rgba(69, 26, 3, 0.35);
+  color: #fde68a;
+}
+
+.mp-settings-btn-secondary {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.75rem;
+  min-height: 2.75rem;
+  padding: 0.65rem 1rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.08);
+  color: #86efac;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.12s ease;
+}
+
+.mp-settings-btn-secondary:hover:not(:disabled) {
+  border-color: rgba(74, 222, 128, 0.55);
+  background: rgba(34, 197, 94, 0.14);
+}
+
+.mp-settings-btn-secondary:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.mp-settings-btn-secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.mp-settings-save-footer {
+  margin-top: 0.35rem;
+  padding-top: 0.15rem;
 }
 
 /* Карточки тарифов подписки (30 / 90 дней) */
@@ -709,12 +940,15 @@
   max-width: 26rem;
   overflow: hidden auto;
   -webkit-overflow-scrolling: touch;
-  border-radius: 14px;
-  border: 1px solid #334155 !important;
-  background: #1e293b !important;
+  border-radius: 1.15rem;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: rgba(17, 24, 39, 0.96) !important;
+  backdrop-filter: blur(20px);
   color: #f8fafc;
   padding: 1.35rem !important;
-  box-shadow: 0 28px 64px rgba(0, 0, 0, 0.55);
+  box-shadow:
+    0 28px 64px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(34, 197, 94, 0.06);
 }
 
 @media (min-width: 640px) {
