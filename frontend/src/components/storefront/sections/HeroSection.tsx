@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from "react";
 import { useTheme } from "../../../context/ThemeContext";
 import { buildCloudinaryResponsiveUrl } from "../../../utils/cloudinaryTransforms";
+import {
+  formatFeaturedPromoLine,
+  type FeaturedPromo,
+} from "../../../storefront/featuredPromo";
 
 export type HeroCtaPayload = {
   kind: "scrollToSection" | "openCategory" | "openProduct" | "url" | "none";
@@ -61,6 +65,7 @@ function HeroDots(props: {
 export function HeroSection(props: {
   config: Record<string, unknown>;
   textConfig?: Record<string, unknown>;
+  featuredPromo?: FeaturedPromo | null;
   kit?: "minimal" | "luxury" | "fashion" | "neon" | "default";
   heroStyle?: Record<string, unknown>;
   onHeroCta?: (ev: HeroCtaPayload) => void;
@@ -68,10 +73,15 @@ export function HeroSection(props: {
   const {
     config,
     textConfig,
+    featuredPromo,
     kit: kitProp = "default",
     heroStyle,
     onHeroCta,
   } = props;
+  const promoSubtitle = useMemo(
+    () => (featuredPromo ? formatFeaturedPromoLine(featuredPromo) : ""),
+    [featuredPromo],
+  );
   const { theme } = useTheme();
   const slidesRaw = useMemo(() => readSlides(config), [config]);
 
@@ -79,20 +89,20 @@ export function HeroSection(props: {
     if (slidesRaw.length) return slidesRaw;
     const b = theme.banner;
     const t = String(b?.title ?? "").trim();
-    const st = String(b?.subtitle ?? "").trim();
+    const st = promoSubtitle || String(b?.subtitle ?? "").trim();
     if (b?.enabled && (t !== "" || st !== "")) {
       const logo = typeof theme.logoUrl === "string" ? theme.logoUrl : "";
       return [
         {
           title: b.title ?? "",
-          subtitle: b.subtitle ?? "",
+          subtitle: st,
           ctaText: "",
           imageUrl: logo,
         } as Record<string, unknown>,
       ];
     }
     return [];
-  }, [slidesRaw, theme.banner, theme.logoUrl]);
+  }, [slidesRaw, theme.banner, theme.logoUrl, promoSubtitle]);
 
   const hasMeaningfulSlide = useMemo(
     () => effectiveSlides.some(slideHasContent),
@@ -216,8 +226,11 @@ export function HeroSection(props: {
 
   const title =
     readString(slide, "title").trim() !== "" ? readString(slide, "title") : defaultTitle;
-  const subtitle =
-    readString(slide, "subtitle").trim() !== "" ? readString(slide, "subtitle") : defaultSubtitle;
+  const subtitle = promoSubtitle
+    ? promoSubtitle
+    : readString(slide, "subtitle").trim() !== ""
+      ? readString(slide, "subtitle")
+      : defaultSubtitle;
   const ctaText =
     readString(slide, "ctaText").trim() !== "" ? readString(slide, "ctaText") : defaultCta;
   const imageUrlRaw = readString(slide, "imageUrl");

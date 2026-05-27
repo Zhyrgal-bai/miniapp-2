@@ -17,6 +17,7 @@ import {
 } from "../shared/apiClientMessages.js";
 import { toPublicProduct } from "../shared/productDto.js";
 import { loadStockRowsByProductIds } from "./inventoryService.js";
+import { getFeaturedPromoForStorefront } from "./promoRepo.js";
 
 /** Public GET /api/storefront payload (shared by numeric id and slug routes). */
 export async function sendStorefrontPublicPayload(
@@ -133,6 +134,11 @@ export async function sendStorefrontPublicPayload(
         }
       }
       (payload as any).categories = roots;
+    }
+
+    const featuredPromo = await getFeaturedPromoForStorefront(prisma, businessId);
+    if (featuredPromo) {
+      (payload as any).featuredPromo = featuredPromo;
     }
 
     if (enabledTypes.has("featuredProducts")) {

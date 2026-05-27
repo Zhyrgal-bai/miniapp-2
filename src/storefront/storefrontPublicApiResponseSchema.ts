@@ -63,6 +63,12 @@ const CategoryTreeNodeSchema: z.ZodType<CategoryTreeNode> = z.lazy(() =>
   }),
 );
 
+const FeaturedPromoWireSchema = z.object({
+  code: z.string(),
+  discount: z.number(),
+  remainingUses: z.number().int().nonnegative(),
+});
+
 const FeaturedProductWireSchema = z
   .object({
     id: z.number(),
@@ -98,6 +104,7 @@ export const StorefrontPublicApiResponseSchema = z
     storeName: z.string().max(200).optional(),
     categories: z.array(CategoryTreeNodeSchema).optional(),
     featuredProducts: z.array(FeaturedProductWireSchema).optional(),
+    featuredPromo: FeaturedPromoWireSchema.optional(),
     orderOptionsSchema: z.record(z.string(), z.unknown()).optional(),
   })
   .passthrough();

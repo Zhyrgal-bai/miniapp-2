@@ -3238,6 +3238,7 @@ app.post("/promo/apply", async (req: Request, res: Response) => {
     const businessId = businessIdParsed;
     try {
       const result = await tryApplyPromoDb(prisma, businessId, String(code), t);
+      invalidateStorefrontCache(businessId);
       return res.json({
         success: true,
         newTotal: result.newTotal,
@@ -3283,6 +3284,7 @@ app.post("/promo", async (req: Request, res: Response) => {
       Number(body.discount),
       Number(lim)
     );
+    invalidateStorefrontCache(merchant.businessId);
     return res.status(201).json(row);
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
@@ -3320,6 +3322,7 @@ app.delete("/promo/:code", async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Промокод не найден" });
     }
 
+    invalidateStorefrontCache(merchant.businessId);
     res.status(204).send();
   } catch (e) {
     console.error("PROMO DELETE ERROR:", e);
@@ -4991,6 +4994,7 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
     if (promoRaw) {
       try {
         await consumePromoDb(prisma, order.businessId, promoRaw);
+        invalidateStorefrontCache(order.businessId);
       } catch (e) {
         console.error("consumePromo after /orders:", e);
       }

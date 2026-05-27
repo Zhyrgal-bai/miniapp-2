@@ -56,6 +56,12 @@ export type ResolvedStorefrontSection = {
   config: Record<string, unknown>;
 };
 
+export type StorefrontFeaturedPromo = {
+  code: string;
+  discount: number;
+  remainingUses: number;
+};
+
 export type ResolvedStorefrontPayload = {
   businessId: number;
   storefrontSlug?: string | null;
@@ -70,6 +76,7 @@ export type ResolvedStorefrontPayload = {
   storefrontStyleConfig?: Record<string, unknown>;
   categories?: Category[];
   featuredProducts?: Product[];
+  featuredPromo?: StorefrontFeaturedPromo | null;
   orderOptionsSchema?: Record<string, unknown>;
 };
 
@@ -274,6 +281,7 @@ export function StorefrontRenderer(props: {
                       key={s.id}
                       config={s.config}
                       textConfig={props.payload.storefrontTextConfig ?? undefined}
+                      featuredPromo={props.payload.featuredPromo ?? null}
                       kit={kit}
                       heroStyle={(props.payload.storefrontStyleConfig as Record<string, unknown> | undefined)?.hero as
                         | Record<string, unknown>

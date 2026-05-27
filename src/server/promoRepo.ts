@@ -11,6 +11,34 @@ export type PromoRow = {
   used: number;
 };
 
+export type StorefrontFeaturedPromo = {
+  code: string;
+  discount: number;
+  remainingUses: number;
+};
+
+/** Newest promo with remaining uses — shown on storefront hero. */
+export async function getFeaturedPromoForStorefront(
+  client: PrismaClient,
+  businessId: number,
+): Promise<StorefrontFeaturedPromo | null> {
+  const rows = await client.promo.findMany({
+    where: { businessId },
+    orderBy: { id: "desc" },
+    take: 24,
+  });
+  for (const r of rows) {
+    if (r.used < r.maxUses) {
+      return {
+        code: r.code,
+        discount: r.discount,
+        remainingUses: r.maxUses - r.used,
+      };
+    }
+  }
+  return null;
+}
+
 export async function listPromosFromDb(
   client: PrismaClient,
   businessId: number
