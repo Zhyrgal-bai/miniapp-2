@@ -1982,7 +1982,7 @@ export default function PlatformPage() {
                   );
                 })() : null}
 
-                <div className="mp-settings-section">
+                <div className="mp-settings-section mp-settings-section--accent">
                   <div className="mp-settings-section__head">
                     <span className="mp-settings-section__title">Магазин</span>
                   </div>
@@ -2029,7 +2029,7 @@ export default function PlatformPage() {
                   ) : null}
                 </div>
 
-                <div className="mp-settings-section">
+                <div className="mp-settings-section mp-settings-section--accent">
                   <div className="mp-settings-section__head">
                     <span className="mp-settings-section__title">
                       Telegram-бот
