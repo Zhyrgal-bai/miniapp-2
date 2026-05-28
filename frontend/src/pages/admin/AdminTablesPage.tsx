@@ -167,7 +167,8 @@ export default function AdminTablesPage(): ReactElement {
       <header className="admin-dash-page__head">
         <h1 className="admin-dash-page__title">Столики</h1>
         <p className="admin-dash-page__subtitle">
-          Соберите схему зала и управляйте статусами. Перетаскивайте столики пальцем.
+          Схема зала редактируется здесь (не в «Зал live»). Режим «Редактор» — перетаскивание и
+          размер угла столика.
         </p>
       </header>
 

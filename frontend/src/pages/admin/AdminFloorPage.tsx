@@ -80,7 +80,9 @@ export default function AdminFloorPage(): ReactElement {
     <div className="admin-dash-page">
       <header className="admin-dash-page__head">
         <h1 className="admin-dash-page__title">🪑 Зал live</h1>
-        <p className="admin-dash-page__subtitle">Оперативная карта столиков</p>
+        <p className="admin-dash-page__subtitle">
+          Оперативная карта столиков. Чтобы двигать и менять размер столов — раздел «Столики».
+        </p>
       </header>
 
       {metrics ? (

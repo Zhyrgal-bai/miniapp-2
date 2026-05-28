@@ -1,47 +1,57 @@
 import { describe, expect, it } from "vitest";
 import {
   isPublicStorefrontBookingPath,
+  normalizeStorefrontApiPath,
   storefrontBookingRequiresVerifiedTelegram,
 } from "../../src/shared/storefrontPublicPaths.js";
 import { routeRequiresVerifiedTelegram } from "../../src/middleware/privilegedRoutes.js";
 
 describe("public storefront table booking paths", () => {
-  it("marks dining-tables, reservations, table-qr as public (no tenant middleware)", () => {
-    expect(isPublicStorefrontBookingPath("/api/storefront/42/dining-tables")).toBe(
-      true,
+  it("normalizeStorefrontApiPath strips /api mount prefix", () => {
+    expect(normalizeStorefrontApiPath("/api/storefront/42/dining-tables")).toBe(
+      "/storefront/42/dining-tables",
     );
-    expect(
-      isPublicStorefrontBookingPath("/api/storefront/42/dining-tables/slots"),
-    ).toBe(true);
-    expect(
-      isPublicStorefrontBookingPath("/api/storefront/7/table-reservations"),
-    ).toBe(true);
-    expect(isPublicStorefrontBookingPath("/api/storefront/table-qr/abc")).toBe(
-      true,
+    expect(normalizeStorefrontApiPath("/storefront/42/dining-tables")).toBe(
+      "/storefront/42/dining-tables",
     );
+  });
+
+  it("marks dining-tables, reservations, table-qr as public (full and mounted paths)", () => {
+    for (const path of [
+      "/api/storefront/42/dining-tables",
+      "/storefront/42/dining-tables",
+      "/api/storefront/42/dining-tables/slots",
+      "/storefront/42/dining-tables/slots",
+      "/api/storefront/7/table-reservations",
+      "/storefront/7/table-reservations",
+      "/api/storefront/table-qr/abc",
+      "/storefront/table-qr/abc",
+    ]) {
+      expect(isPublicStorefrontBookingPath(path), path).toBe(true);
+    }
     expect(isPublicStorefrontBookingPath("/api/storefront/42")).toBe(false);
-    expect(isPublicStorefrontBookingPath("/api/merchant/dining-tables")).toBe(
-      false,
-    );
+    expect(isPublicStorefrontBookingPath("/storefront/42")).toBe(false);
+    expect(isPublicStorefrontBookingPath("/api/merchant/dining-tables")).toBe(false);
+    expect(isPublicStorefrontBookingPath("/merchant/dining-tables")).toBe(false);
   });
 
   it("requires verified telegram only for POST reservation and table-qr", () => {
     expect(
       storefrontBookingRequiresVerifiedTelegram(
         "GET",
-        "/api/storefront/1/dining-tables",
+        "/storefront/1/dining-tables",
       ),
     ).toBe(false);
     expect(
       storefrontBookingRequiresVerifiedTelegram(
         "POST",
-        "/api/storefront/1/table-reservations",
+        "/storefront/1/table-reservations",
       ),
     ).toBe(true);
     expect(
       storefrontBookingRequiresVerifiedTelegram(
         "GET",
-        "/api/storefront/table-qr/tok",
+        "/storefront/table-qr/tok",
       ),
     ).toBe(true);
   });

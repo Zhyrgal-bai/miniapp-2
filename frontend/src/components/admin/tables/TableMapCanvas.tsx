@@ -31,59 +31,95 @@ export function TableMapCanvas({
     startX: number;
     startY: number;
     origin: DiningTableDto;
+    moved: boolean;
   } | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const pendingPatchRef = useRef<{ id: number; patch: Partial<DiningTableDto> } | null>(
+    null,
+  );
 
   const readNorm = useCallback((clientX: number, clientY: number) => {
     const el = shellRef.current;
     if (!el) return { x: 0, y: 0 };
     const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return { x: 0, y: 0 };
     return {
       x: clamp01((clientX - r.left) / r.width),
       y: clamp01((clientY - r.top) / r.height),
     };
   }, []);
 
-  const patchTable = useCallback(
+  const flushPatch = useCallback(() => {
+    rafRef.current = null;
+    const pending = pendingPatchRef.current;
+    if (!pending) return;
+    pendingPatchRef.current = null;
+    onPatchTable(pending.id, pending.patch);
+  }, [onPatchTable]);
+
+  const schedulePatch = useCallback(
     (id: number, patch: Partial<DiningTableDto>) => {
-      onPatchTable(id, patch);
+      pendingPatchRef.current = { id, patch };
+      if (rafRef.current != null) return;
+      rafRef.current = window.requestAnimationFrame(flushPatch);
     },
-    [onPatchTable],
+    [flushPatch],
   );
 
   const onPointerMove = useCallback(
     (e: PointerEvent) => {
       const drag = dragRef.current;
       if (!drag || mode !== "editor") return;
+      e.preventDefault();
+
       const { x, y } = readNorm(e.clientX, e.clientY);
       const dx = x - drag.startX;
       const dy = y - drag.startY;
+      if (Math.abs(dx) > 0.002 || Math.abs(dy) > 0.002) {
+        drag.moved = true;
+      }
       const o = drag.origin;
 
       if (drag.kind === "move") {
         const w = o.width;
         const h = o.height;
-        patchTable(drag.tableId, {
+        schedulePatch(drag.tableId, {
           posX: clamp01(Math.min(o.posX + dx, 1 - w)),
           posY: clamp01(Math.min(o.posY + dy, 1 - h)),
         });
       } else if (drag.kind === "resize") {
-        patchTable(drag.tableId, {
-          width: clamp01(Math.max(0.08, o.width + dx)),
-          height: clamp01(Math.max(0.08, o.height + dy)),
+        schedulePatch(drag.tableId, {
+          width: clamp01(Math.max(0.08, Math.min(0.92, o.width + dx))),
+          height: clamp01(Math.max(0.08, Math.min(0.92, o.height + dy))),
         });
       }
     },
-    [mode, patchTable, readNorm],
+    [mode, readNorm, schedulePatch],
   );
 
   const endDrag = useCallback(() => {
+    if (rafRef.current != null) {
+      window.cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    flushPatch();
     dragRef.current = null;
     window.removeEventListener("pointermove", onPointerMove);
     window.removeEventListener("pointerup", endDrag);
     window.removeEventListener("pointercancel", endDrag);
-  }, [onPointerMove]);
+  }, [flushPatch, onPointerMove]);
 
   useEffect(() => () => endDrag(), [endDrag]);
+
+  const capturePointer = (e: ReactPointerEvent, chip: HTMLElement) => {
+    if (typeof chip.setPointerCapture === "function") {
+      try {
+        chip.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore — window listeners still work */
+      }
+    }
+  };
 
   const startDrag = (
     e: ReactPointerEvent,
@@ -93,6 +129,12 @@ export function TableMapCanvas({
     if (mode !== "editor") return;
     e.stopPropagation();
     e.preventDefault();
+
+    const chip = (e.currentTarget as HTMLElement).closest(".table-map-chip");
+    if (!(chip instanceof HTMLElement)) return;
+
+    onSelect(table.id);
+
     const { x, y } = readNorm(e.clientX, e.clientY);
     dragRef.current = {
       kind,
@@ -100,9 +142,10 @@ export function TableMapCanvas({
       startX: x,
       startY: y,
       origin: { ...table },
+      moved: false,
     };
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-    window.addEventListener("pointermove", onPointerMove);
+    capturePointer(e, chip);
+    window.addEventListener("pointermove", onPointerMove, { passive: false });
     window.addEventListener("pointerup", endDrag);
     window.addEventListener("pointercancel", endDrag);
   };
@@ -113,11 +156,19 @@ export function TableMapCanvas({
   return (
     <div
       ref={shellRef}
-      className={`table-map-shell${mode === "preview" ? " table-map-shell--preview" : ""}`}
-      onPointerDown={() => mode === "editor" && onSelect(null)}
+      className={`table-map-shell${mode === "preview" ? " table-map-shell--preview" : ""}${mode === "editor" ? " table-map-shell--editor" : ""}`}
+      onPointerDown={(e) => {
+        if (mode !== "editor") return;
+        if (e.target === shellRef.current) onSelect(null);
+      }}
       role="presentation"
     >
       <div className="table-map-grid" aria-hidden />
+      {mode === "editor" ? (
+        <p className="table-map-editor-hint">
+          Тяните стол для перемещения. Угол справа снизу — размер.
+        </p>
+      ) : null}
       {tables.map((table) => {
         const selected = selectedId === table.id;
         return (
@@ -128,6 +179,7 @@ export function TableMapCanvas({
               `table-map-chip--shape-${table.shape.toLowerCase()}`,
               statusClass(table.status),
               selected ? "is-selected" : "",
+              mode === "editor" ? "table-map-chip--editable" : "",
             ]
               .filter(Boolean)
               .join(" ")}
@@ -137,23 +189,19 @@ export function TableMapCanvas({
               width: `${table.width * 100}%`,
               height: `${table.height * 100}%`,
             }}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (mode === "editor") onSelect(table.id);
-            }}
             onPointerDown={(e) => {
               if (mode !== "editor") return;
-              if ((e.target as HTMLElement).classList.contains("table-map-resize")) return;
-              e.stopPropagation();
+              if ((e.target as HTMLElement).closest(".table-map-resize")) return;
               startDrag(e, table, "move");
             }}
           >
             <span className="table-map-chip__name">{table.name}</span>
             <span className="table-map-chip__seats">{table.seats} мест</span>
-            {mode === "editor" && selected ? (
+            {mode === "editor" ? (
               <span
-                className="table-map-resize"
+                className={`table-map-resize${selected ? " is-active" : ""}`}
                 role="presentation"
+                aria-label="Изменить размер"
                 onPointerDown={(e) => startDrag(e, table, "resize")}
               />
             ) : null}
