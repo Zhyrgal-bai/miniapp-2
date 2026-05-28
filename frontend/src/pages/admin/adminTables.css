@@ -1,0 +1,218 @@
+.table-admin-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 720px;
+}
+
+.table-admin-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.table-admin-mode-switch {
+  display: inline-flex;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.table-admin-mode-switch button {
+  border: 0;
+  background: transparent;
+  color: #9ca3af;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.table-admin-mode-switch button.is-on {
+  background: rgba(34, 197, 94, 0.22);
+  color: #ecfdf5;
+}
+
+.table-map-shell {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  max-height: min(72vh, 520px);
+  border-radius: 18px;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 40%, rgba(255, 255, 255, 0.04), transparent),
+    linear-gradient(165deg, #14141a 0%, #0a0a0e 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  touch-action: none;
+  user-select: none;
+}
+
+.table-map-shell--preview {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+.table-map-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 12% 12%;
+  pointer-events: none;
+}
+
+.table-map-chip {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 4px;
+  border-radius: 12px;
+  border: 2px solid transparent;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  cursor: grab;
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
+  min-width: 52px;
+  min-height: 48px;
+  text-align: center;
+}
+
+.table-map-shell--preview .table-map-chip {
+  cursor: default;
+}
+
+.table-map-chip:active {
+  cursor: grabbing;
+}
+
+.table-map-chip.is-selected {
+  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline-offset: 2px;
+  z-index: 4;
+}
+
+.table-map-chip--shape-circle {
+  border-radius: 999px;
+}
+
+.table-map-chip--shape-vip {
+  border-color: rgba(168, 85, 247, 0.75) !important;
+  background: linear-gradient(
+    145deg,
+    rgba(88, 28, 135, 0.55),
+    rgba(30, 10, 50, 0.85)
+  ) !important;
+}
+
+.table-map-chip--status-available {
+  background: linear-gradient(145deg, rgba(22, 101, 52, 0.75), rgba(6, 40, 20, 0.9));
+  border-color: rgba(74, 222, 128, 0.55);
+}
+
+.table-map-chip--status-soon_occupied {
+  background: linear-gradient(145deg, rgba(161, 98, 7, 0.8), rgba(68, 40, 4, 0.92));
+  border-color: rgba(250, 204, 21, 0.65);
+}
+
+.table-map-chip--status-occupied {
+  background: linear-gradient(145deg, rgba(153, 27, 27, 0.82), rgba(60, 10, 10, 0.94));
+  border-color: rgba(248, 113, 113, 0.6);
+}
+
+.table-map-chip--status-reserved {
+  background: linear-gradient(145deg, rgba(30, 64, 175, 0.7), rgba(15, 23, 42, 0.92));
+  border-color: rgba(96, 165, 250, 0.55);
+}
+
+.table-map-chip__name {
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: #fff;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 4px;
+}
+
+.table-map-chip__seats {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.table-map-resize {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  cursor: nwse-resize;
+  z-index: 2;
+}
+
+.table-admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.table-admin-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+  color: #e5e7eb;
+  cursor: pointer;
+}
+
+.table-admin-list li.is-active {
+  border-color: rgba(34, 197, 94, 0.45);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.table-settings-modal .admin-theme-field {
+  margin-bottom: 10px;
+}
+
+.table-shape-picker {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.table-shape-picker button {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.2);
+  color: #e5e7eb;
+  padding: 10px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.table-shape-picker button.is-on {
+  border-color: rgba(34, 197, 94, 0.55);
+  background: rgba(34, 197, 94, 0.15);
+}

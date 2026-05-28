@@ -7,6 +7,8 @@ export const MERCHANT_PERM = {
   designEdit: "design.edit",
   settingsManage: "settings.manage",
   supportManage: "support.manage",
+  floorManage: "floor.manage",
+  kitchenView: "kitchen.view",
 } as const;
 
 export type MerchantPermissionId =
@@ -19,6 +21,8 @@ export const ALL_MERCHANT_PERMISSION_IDS: MerchantPermissionId[] = [
   MERCHANT_PERM.designEdit,
   MERCHANT_PERM.settingsManage,
   MERCHANT_PERM.supportManage,
+  MERCHANT_PERM.floorManage,
+  MERCHANT_PERM.kitchenView,
 ];
 
 const MANAGER_DEFAULT: MerchantPermissionId[] = [
@@ -29,6 +33,12 @@ const MANAGER_DEFAULT: MerchantPermissionId[] = [
 ];
 
 const SUPPORT_DEFAULT: MerchantPermissionId[] = [MERCHANT_PERM.supportManage];
+
+const WAITER_DEFAULT: MerchantPermissionId[] = [
+  MERCHANT_PERM.floorManage,
+  MERCHANT_PERM.ordersManage,
+  MERCHANT_PERM.kitchenView,
+];
 
 export function defaultPermissionsForStaffRole(
   role: BusinessStaffRole,
@@ -41,6 +51,8 @@ export function defaultPermissionsForStaffRole(
       return [...MANAGER_DEFAULT];
     case BusinessStaffRole.SUPPORT:
       return [...SUPPORT_DEFAULT];
+    case BusinessStaffRole.WAITER:
+      return [...WAITER_DEFAULT];
     default:
       return [];
   }

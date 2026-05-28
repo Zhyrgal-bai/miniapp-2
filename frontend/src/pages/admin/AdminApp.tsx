@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import AdminLayout from "./AdminLayout";
 import AdminOrdersPage from "./AdminOrdersPage";
 import AdminProductsPage from "./AdminProductsPage";
@@ -9,6 +9,13 @@ import AdminUsersPage from "./AdminUsersPage";
 import AdminDesignPage from "./AdminDesignPage";
 import AdminSupportPage from "./AdminSupportPage";
 import AdminPromosPage from "./AdminPromosPage";
+import AdminTablesPage from "./AdminTablesPage";
+import AdminReservationsPage from "./AdminReservationsPage";
+import AdminFloorPage from "./AdminFloorPage";
+import AdminKitchenPage from "./AdminKitchenPage";
+import { useShop } from "../../context/ShopContext";
+import { businessTypeSupportsTableReservations } from "@repo-shared/tableReservation";
+import { adminService } from "../../services/admin.service";
 import AdminErrorBoundary from "./AdminErrorBoundary";
 import TelegramSessionGate from "../../components/ui/TelegramSessionGate";
 import {
@@ -33,6 +40,10 @@ const NAV_REQUIRES: Partial<Record<AdminNavKey, MerchantPermissionId>> = {
   analytics: MERCHANT_PERM.analyticsView,
   promos: MERCHANT_PERM.settingsManage,
   support: MERCHANT_PERM.supportManage,
+  tables: MERCHANT_PERM.settingsManage,
+  floor: MERCHANT_PERM.floorManage,
+  kitchen: MERCHANT_PERM.kitchenView,
+  reservations: MERCHANT_PERM.settingsManage,
 };
 
 const ROUTE_ORDER: { key: AdminNavKey; hash: string }[] = [
@@ -64,10 +75,34 @@ type AdminAppProps = {
 };
 
 export default function AdminApp({ onExit }: AdminAppProps) {
+  const { businessId } = useShop();
   const merchantRole = useAdminGateStore((s) => s.merchantRole);
   const gateStatus = useAdminGateStore((s) => s.status);
   const serverIsAdmin = useAdminGateStore((s) => s.serverIsAdmin);
   const merchantPermissions = useAdminGateStore((s) => s.merchantPermissions);
+  const [showVenueTablesNav, setShowVenueTablesNav] = useState(false);
+
+  useEffect(() => {
+    if (businessId == null) {
+      setShowVenueTablesNav(false);
+      return;
+    }
+    let alive = true;
+    void (async () => {
+      try {
+        const schema = await adminService.getMerchantSchemas();
+        if (!alive) return;
+        setShowVenueTablesNav(
+          businessTypeSupportsTableReservations(String(schema.businessType ?? "")),
+        );
+      } catch {
+        if (alive) setShowVenueTablesNav(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [businessId]);
 
   const path = useSyncExternalStore(
     subscribeAdminHash,
@@ -100,6 +135,22 @@ export default function AdminApp({ onExit }: AdminAppProps) {
     if (!path.includes("/admin/settings")) return;
     window.location.hash = "#/admin/design";
   }, [path]);
+
+  useEffect(() => {
+    if (
+      !path.includes("/admin/tables") &&
+      !path.includes("/admin/reservations") &&
+      !path.includes("/admin/floor") &&
+      !path.includes("/admin/kitchen")
+    ) {
+      return;
+    }
+    if (showVenueTablesNav) return;
+    window.location.hash = firstAllowedAdminHash(
+      merchantRole,
+      merchantPermissions,
+    );
+  }, [path, showVenueTablesNav, merchantRole, merchantPermissions]);
 
   useEffect(() => {
     if (gateStatus !== "ready" || !serverIsAdmin) return;
@@ -166,6 +217,18 @@ export default function AdminApp({ onExit }: AdminAppProps) {
     if (path.includes("/admin/design")) {
       return <AdminDesignPage key="design" />;
     }
+    if (path.includes("/admin/floor")) {
+      return <AdminFloorPage key="floor" />;
+    }
+    if (path.includes("/admin/kitchen")) {
+      return <AdminKitchenPage key="kitchen" />;
+    }
+    if (path.includes("/admin/tables")) {
+      return <AdminTablesPage key="tables" />;
+    }
+    if (path.includes("/admin/reservations")) {
+      return <AdminReservationsPage key="reservations" />;
+    }
     if (path.includes("/admin/promos")) {
       return <AdminPromosPage key="promos" />;
     }
@@ -183,6 +246,7 @@ export default function AdminApp({ onExit }: AdminAppProps) {
         showOwnerNav={merchantRole === "OWNER"}
         merchantPermissions={merchantPermissions}
         merchantRole={merchantRole}
+        showVenueTablesNav={showVenueTablesNav}
       >
         <AdminErrorBoundary>{page}</AdminErrorBoundary>
       </AdminLayout>

@@ -2,21 +2,24 @@ import { showSuccessToast } from "../../store/toast.store";
 import { useEffect, useMemo, useState } from "react";
 import { useAdminStore } from "../../store/admin.store";
 import { adminService } from "../../services/admin.service";
-import { PRODUCT_SIZES } from "../../constants/productCatalog";
 import type { Category, Product, Variant } from "../../types";
 import { categoryRoots } from "../../utils/categoryTree";
 import { DynamicFieldRenderer } from "./DynamicFieldRenderer";
-import { TierStockEditor } from "./TierStockEditor";
+import { DynamicVariantEditor } from "./DynamicVariantEditor";
+import { ClothingVariantEditor } from "./ClothingVariantEditor";
 import {
-  defaultTierRows,
-  tierRowsToVariants,
-  type TierStockRow,
-} from "./tierStockUtils";
+  buildClothingVariantsForApi,
+  createEmptyColorVariant,
+  validateClothingColorDrafts,
+  type ClothingColorDraft,
+} from "./clothingVariantUtils";
 import {
-  expandShortHex,
-  isValidHexColor,
-  lookupVariantHexByName,
-} from "../../utils/variantColor";
+  defaultOptionRowsForCreate,
+  optionRowsToVariants,
+  validateOptionRows,
+  type VariantOptionRow,
+} from "./variantEditorUtils";
+import { verticalProfileFor } from "@repo-shared/businessCommerce";
 import { useResolvedBusinessType } from "./useResolvedBusinessType";
 import { AdminCategoryFields } from "./AdminCategoryFields";
 import { resolveProductCategoryId } from "../../utils/resolveProductCategoryId";
@@ -25,67 +28,6 @@ import {
   schemaKeysFromProductSchema,
   stripProductAttributesToSchema,
 } from "@repo-shared/productAttributeNormalization";
-const SIZE_OPTIONS = PRODUCT_SIZES;
-type SizeOption = (typeof SIZE_OPTIONS)[number];
-
-type SizeRow = {
-  enabled: boolean;
-  stock: number | "";
-};
-
-type VariantDraft = {
-  id: string;
-  colorName: string;
-  colorHex: string;
-  sizes: Record<SizeOption, SizeRow>;
-};
-
-const COLOR_PRESETS: ReadonlyArray<{ name: string; hex: string }> = [
-  { name: "черный", hex: "#000000" },
-  { name: "белый", hex: "#ffffff" },
-  { name: "серый", hex: "#808080" },
-  { name: "молочный", hex: "#fff8e7" },
-  { name: "темно-синий", hex: "#00008b" },
-];
-
-function newVariantId() {
-  return globalThis.crypto?.randomUUID?.() ?? `v-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
-function createVariantDraft(): VariantDraft {
-  const sizes = {} as Record<SizeOption, SizeRow>;
-  for (const s of SIZE_OPTIONS) {
-    sizes[s] = { enabled: false, stock: "" };
-  }
-  return {
-    id: newVariantId(),
-    colorName: "Чёрный",
-    colorHex: "#000000",
-    sizes,
-  };
-}
-
-function buildVariantsForApi(drafts: VariantDraft[]): Variant[] {
-  return drafts.map((d) => {
-    const name = d.colorName.trim();
-    let hex = d.colorHex.trim();
-    if (!isValidHexColor(hex)) {
-      hex = lookupVariantHexByName(name) ?? "#cccccc";
-    } else {
-      hex = expandShortHex(hex);
-    }
-    const sizes = SIZE_OPTIONS.filter((sz) => d.sizes[sz].enabled).map((sz) => {
-      const st = d.sizes[sz].stock;
-      const stock = typeof st === "number" && !Number.isNaN(st) ? st : 0;
-      return { size: sz, stock };
-    });
-    return {
-      color: { name, hex },
-      sizes,
-    } as unknown as Variant;
-  });
-}
-
 const ProductForm = () => {
   const { addProduct } = useAdminStore();
 
@@ -109,12 +51,13 @@ const ProductForm = () => {
     showTierStock,
     resolved: businessTypeReady,
   } = useResolvedBusinessType();
-  const [variantDrafts, setVariantDrafts] = useState<VariantDraft[]>([
-    createVariantDraft(),
+  const [colorDrafts, setColorDrafts] = useState<ClothingColorDraft[]>([
+    createEmptyColorVariant(),
   ]);
+  const [optionRows, setOptionRows] = useState<VariantOptionRow[]>(
+    defaultOptionRowsForCreate(),
+  );
   const [formError, setFormError] = useState<string | null>(null);
-
-  const [tierRows, setTierRows] = useState<TierStockRow[]>([]);
 
   const rootCategories = useMemo(() => categoryRoots(categories), [categories]);
 
@@ -136,7 +79,7 @@ const ProductForm = () => {
 
   useEffect(() => {
     if (!merchantBusinessType) return;
-    setTierRows(defaultTierRows(merchantBusinessType));
+    setOptionRows(defaultOptionRowsForCreate());
   }, [merchantBusinessType]);
 
   useEffect(() => {
@@ -151,55 +94,6 @@ const ProductForm = () => {
       setSubCategoryId(kids[0]!.id);
     }
   }, [categories, mainCategoryId, rootCategories, subCategoryId]);
-
-  const updateDraft = (
-    id: string,
-    patch: Partial<Pick<VariantDraft, "colorName" | "colorHex">>
-  ) => {
-    setVariantDrafts((prev) =>
-      prev.map((v) => (v.id === id ? { ...v, ...patch } : v))
-    );
-  };
-
-  const setSizeEnabled = (variantId: string, size: SizeOption, enabled: boolean) => {
-    setVariantDrafts((prev) =>
-      prev.map((v) => {
-        if (v.id !== variantId) return v;
-        const next = { ...v.sizes[size], enabled };
-        if (!enabled) next.stock = "";
-        return {
-          ...v,
-          sizes: { ...v.sizes, [size]: next },
-        };
-      })
-    );
-  };
-
-  const setSizeStock = (variantId: string, size: SizeOption, stock: number | "") => {
-    setVariantDrafts((prev) =>
-      prev.map((v) =>
-        v.id === variantId
-          ? {
-              ...v,
-              sizes: {
-                ...v.sizes,
-                [size]: { ...v.sizes[size], stock },
-              },
-            }
-          : v
-      )
-    );
-  };
-
-  const addVariant = () => {
-    setVariantDrafts((prev) => [...prev, createVariantDraft()]);
-  };
-
-  const removeVariant = (id: string) => {
-    setVariantDrafts((prev) =>
-      prev.length <= 1 ? prev : prev.filter((v) => v.id !== id)
-    );
-  };
 
   const handleImageFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -247,48 +141,26 @@ const ProductForm = () => {
     }
 
     if (showClothingVariants) {
-      for (let i = 0; i < variantDrafts.length; i++) {
-        const d = variantDrafts[i];
-        if (!d) continue;
-        if (!d.colorName.trim()) {
-          setFormError(`Вариант ${i + 1}: укажите название цвета (текст).`);
-          return;
-        }
-        const enabled = SIZE_OPTIONS.filter((sz) => d.sizes[sz].enabled);
-        if (enabled.length === 0) {
-          setFormError(`Вариант ${i + 1}: выберите хотя бы один размер.`);
-          return;
-        }
-        for (const sz of enabled) {
-          const st = d.sizes[sz].stock;
-          const n = typeof st === "number" ? st : Number(st);
-          if (!Number.isFinite(n) || n <= 0) {
-            setFormError(`Вариант ${i + 1}: для размера ${sz} укажите количество больше нуля.`);
-            return;
-          }
-        }
+      const clothingErr = validateClothingColorDrafts(colorDrafts);
+      if (clothingErr) {
+        setFormError(clothingErr);
+        return;
       }
     }
 
     if (showTierStock) {
-      const enabled = tierRows.filter((r) => r.enabled);
-      if (enabled.length === 0) {
-        setFormError("Выберите хотя бы один вариант и укажите остаток.");
+      const axis = verticalProfileFor(merchantBusinessType).primaryAxisLabel;
+      const tierErr = validateOptionRows(optionRows, axis);
+      if (tierErr) {
+        setFormError(tierErr);
         return;
-      }
-      for (const row of enabled) {
-        const n = typeof row.stock === "number" ? row.stock : Number(row.stock);
-        if (!Number.isFinite(n) || n <= 0) {
-          setFormError(`Для «${row.label}» укажите количество больше нуля.`);
-          return;
-        }
       }
     }
 
     const variants = showClothingVariants
-      ? buildVariantsForApi(variantDrafts)
+      ? buildClothingVariantsForApi(colorDrafts)
       : showTierStock
-        ? (tierRowsToVariants(tierRows) as unknown as Variant[])
+        ? (optionRowsToVariants(optionRows) as unknown as Variant[])
         : ([] as Variant[]);
 
     const categoryId = resolveProductCategoryId(
@@ -334,7 +206,8 @@ const ProductForm = () => {
       setIsNew(false);
       setIsPopular(false);
       setIsSale(false);
-      setVariantDrafts([createVariantDraft()]);
+      setColorDrafts([createEmptyColorVariant()]);
+      setOptionRows(defaultOptionRowsForCreate());
       setAttributes({});
       showSuccessToast("Товар добавлен");
     } catch (err) {
@@ -492,143 +365,18 @@ const ProductForm = () => {
         onChange={setAttributes}
       />
 
-      {showClothingVariants && businessTypeReady && (
+      {showClothingVariants && businessTypeReady ? (
         <>
           <div className="admin-form-divider" />
-
-          <p className="admin-form-hint">Цвета и остатки по размерам (можно несколько вариантов)</p>
-
-          {variantDrafts.map((draft, index) => (
-            <div key={draft.id} className="admin-variant">
-              <div className="admin-variant-head">
-                <span className="admin-variant-title">Вариант {index + 1}</span>
-                {variantDrafts.length > 1 && (
-                  <button
-                    type="button"
-                    className="admin-variant-remove"
-                    onClick={() => removeVariant(draft.id)}
-                    aria-label="Удалить вариант"
-                  >
-                    Удалить
-                  </button>
-                )}
-              </div>
-
-              <div className="admin-form-section">
-                <span className="admin-field-label">Цвет</span>
-                <div className="admin-color-picker-row">
-                  <input
-                    type="color"
-                    className="admin-color-native"
-                    aria-label={`Цвет варианта ${index + 1}`}
-                    value={
-                      isValidHexColor(draft.colorHex)
-                        ? expandShortHex(draft.colorHex)
-                        : "#cccccc"
-                    }
-                    onChange={(e) =>
-                      updateDraft(draft.id, { colorHex: e.target.value })
-                    }
-                  />
-                  <input
-                    id={`pf-color-${draft.id}`}
-                    className="admin-input admin-color-name-input"
-                    placeholder="например: светло-серый"
-                    value={draft.colorName}
-                    onChange={(e) => {
-                      const next = e.target.value;
-                      const mapped = lookupVariantHexByName(next);
-                      updateDraft(draft.id, {
-                        colorName: next,
-                        ...(mapped ? { colorHex: mapped } : {}),
-                      });
-                    }}
-                    autoComplete="off"
-                  />
-                </div>
-                <div className="admin-color-presets" role="group" aria-label="Быстрый выбор цвета">
-                  {COLOR_PRESETS.map((p) => (
-                    <button
-                      key={p.name}
-                      type="button"
-                      className="admin-color-preset-btn"
-                      onClick={() =>
-                        updateDraft(draft.id, {
-                          colorName: p.name,
-                          colorHex: p.hex,
-                        })
-                      }
-                    >
-                      {p.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="admin-form-section">
-                <span className="admin-field-label">Размеры</span>
-                <div className="admin-sizes">
-                  {SIZE_OPTIONS.map((size) => (
-                    <label key={size} className="admin-size-chip">
-                      <input
-                        type="checkbox"
-                        checked={draft.sizes[size].enabled}
-                        onChange={(e) =>
-                          setSizeEnabled(draft.id, size, e.target.checked)
-                        }
-                      />
-                      <span className="admin-size-chip-text">{size}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="admin-stock-block">
-                <span className="admin-field-label">Остаток по размеру</span>
-                {SIZE_OPTIONS.filter((sz) => draft.sizes[sz].enabled).length === 0 ? (
-                  <p className="admin-stock-placeholder">Отметьте размеры выше</p>
-                ) : (
-                  SIZE_OPTIONS.filter((sz) => draft.sizes[sz].enabled).map((size) => (
-                    <div key={size} className="admin-stock-row">
-                      <span className="admin-stock-size">{size}</span>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        min={0}
-                        placeholder="Количество"
-                        value={
-                          draft.sizes[size].stock === ""
-                            ? ""
-                            : draft.sizes[size].stock
-                        }
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setSizeStock(
-                            draft.id,
-                            size,
-                            v === "" ? "" : Number(v)
-                          );
-                        }}
-                        className="admin-input"
-                      />
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          ))}
-
-          <button type="button" onClick={addVariant} className="admin-secondary-btn">
-            + Добавить цвет
-          </button>
+          <ClothingVariantEditor drafts={colorDrafts} onChange={setColorDrafts} />
         </>
-      )}
+      ) : null}
 
       {showTierStock && businessTypeReady ? (
-        <TierStockEditor
+        <DynamicVariantEditor
           businessType={merchantBusinessType}
-          rows={tierRows}
-          onChange={setTierRows}
+          rows={optionRows}
+          onChange={setOptionRows}
         />
       ) : null}
 

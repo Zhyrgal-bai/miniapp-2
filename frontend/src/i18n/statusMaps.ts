@@ -50,6 +50,7 @@ export const MEMBERSHIP_ROLE_RU: Record<string, string> = {
   ADMIN: "Администратор",
   MANAGER: "Менеджер",
   SUPPORT: "Поддержка",
+  WAITER: "Официант",
   CLIENT: "Клиент",
 };
 
@@ -58,6 +59,7 @@ export const STAFF_ROLE_RU: Record<string, string> = {
   ADMIN: "Администратор",
   MANAGER: "Менеджер",
   SUPPORT: "Поддержка",
+  WAITER: "Официант",
 };
 
 export const SUBSCRIPTION_STATUS_RU: Record<string, string> = {

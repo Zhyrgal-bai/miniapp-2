@@ -5,12 +5,14 @@ export const STAFF_ROLE_RU: Record<string, string> = {
   ADMIN: "Администратор",
   MANAGER: "Менеджер",
   SUPPORT: "Поддержка",
+  WAITER: "Официант",
 };
 
 export const INVITE_STAFF_ROLES: BusinessStaffRole[] = [
   BusinessStaffRole.ADMIN,
   BusinessStaffRole.MANAGER,
   BusinessStaffRole.SUPPORT,
+  BusinessStaffRole.WAITER,
 ];
 
 export function normalizeTelegramUsername(raw: string): string {
@@ -44,6 +46,7 @@ export function parseStaffRole(raw: unknown): BusinessStaffRole | null {
   if (u === "ADMIN") return BusinessStaffRole.ADMIN;
   if (u === "MANAGER") return BusinessStaffRole.MANAGER;
   if (u === "SUPPORT") return BusinessStaffRole.SUPPORT;
+  if (u === "WAITER") return BusinessStaffRole.WAITER;
   return null;
 }
 

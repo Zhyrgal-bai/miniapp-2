@@ -4,6 +4,7 @@ import { adminNavKeyFromPath, type AdminNavKey } from "./adminHashRoute";
 import {
   MERCHANT_PERM,
   hasMerchantPermission,
+  isWaiterRole,
   type MerchantPermissionId,
 } from "../../permissions/merchantPermissions";
 import { AdminNotificationBell } from "./AdminNotificationBell";
@@ -15,6 +16,7 @@ type NavItem = {
   label: string;
   icon: string;
   ownerOnly?: boolean;
+  venueOnly?: boolean;
   permission?: MerchantPermissionId;
 };
 
@@ -32,6 +34,38 @@ const navAll: NavItem[] = [
     label: "Оформление",
     icon: "🎨",
     permission: MERCHANT_PERM.designEdit,
+  },
+  {
+    href: "#/admin/floor",
+    match: "floor",
+    label: "Зал live",
+    icon: "🪑",
+    venueOnly: true,
+    permission: MERCHANT_PERM.floorManage,
+  },
+  {
+    href: "#/admin/kitchen",
+    match: "kitchen",
+    label: "Kitchen",
+    icon: "👨‍🍳",
+    venueOnly: true,
+    permission: MERCHANT_PERM.kitchenView,
+  },
+  {
+    href: "#/admin/tables",
+    match: "tables",
+    label: "Столики",
+    icon: "🍽",
+    venueOnly: true,
+    permission: MERCHANT_PERM.settingsManage,
+  },
+  {
+    href: "#/admin/reservations",
+    match: "reservations",
+    label: "Брони",
+    icon: "📅",
+    venueOnly: true,
+    permission: MERCHANT_PERM.settingsManage,
   },
   {
     href: "#/admin/users",
@@ -93,6 +127,8 @@ type AdminLayoutProps = {
   /** Права с GET /api/me (для фильтра пунктов меню). */
   merchantPermissions: string[] | null;
   merchantRole?: string | null;
+  /** coffee / fastfood — показывать «Столики». */
+  showVenueTablesNav?: boolean;
 };
 
 export default function AdminLayout({
@@ -102,6 +138,7 @@ export default function AdminLayout({
   showOwnerNav = false,
   merchantPermissions,
   merchantRole = null,
+  showVenueTablesNav = false,
 }: AdminLayoutProps) {
   const active = adminNavKeyFromPath(path);
 
@@ -109,13 +146,23 @@ export default function AdminLayout({
     () =>
       navAll.filter((item) => {
         if (item.ownerOnly && !showOwnerNav) return false;
+        if (item.venueOnly && !showVenueTablesNav) return false;
+        if (
+          isWaiterRole(merchantRole) &&
+          item.match !== "floor" &&
+          item.match !== "kitchen" &&
+          item.match !== "orders" &&
+          item.match !== "reservations"
+        ) {
+          return false;
+        }
         return hasMerchantPermission(
           merchantPermissions,
           item.permission,
           merchantRole,
         );
       }),
-    [showOwnerNav, merchantPermissions, merchantRole],
+    [showOwnerNav, showVenueTablesNav, merchantPermissions, merchantRole],
   );
 
   return (

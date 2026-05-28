@@ -19,6 +19,7 @@ import { isOutOfStock } from "../utils/product";
 import { useStorefrontPayload } from "../components/storefront/runtime/StorefrontPayloadContext";
 import { formatOrderLineSummary } from "@repo-shared/businessCommerce";
 import { cartLineIdentityKey } from "../commerce/cartLineIdentity";
+import { readTableSession } from "../utils/tableSessionStorage";
 
 type Props = {
   onBack?: () => void;
@@ -87,6 +88,7 @@ function orderErrorMessage(err: unknown): string {
 }
 
 export default function CheckoutPage({ onBack }: Props) {
+  const tableSession = readTableSession();
   const { businessId } = useShop();
   const { payload } = useStorefrontPayload();
   const businessType = payload?.businessType ?? null;
@@ -467,6 +469,9 @@ export default function CheckoutPage({ onBack }: Props) {
         paymentUrl?: string | null;
       }>("/orders", {
         ...tenantParams,
+        ...(readTableSession()?.tableSessionId != null
+          ? { tableSessionId: readTableSession()!.tableSessionId }
+          : {}),
         ...(Number.isFinite(userId) ? { userId } : {}),
         user: {
           telegramId: Number.isFinite(Number(tg?.id)) ? Number(tg?.id) : 0,
@@ -598,6 +603,11 @@ export default function CheckoutPage({ onBack }: Props) {
         </button>
       )}
 
+      {tableSession ? (
+        <p className="checkout-table-banner" role="status">
+          🍽 Заказ к столу: <strong>{tableSession.tableName}</strong>
+        </p>
+      ) : null}
       <h2 className="checkout-page-title">{t("checkout.title")}</h2>
 
       {checkoutError != null && (

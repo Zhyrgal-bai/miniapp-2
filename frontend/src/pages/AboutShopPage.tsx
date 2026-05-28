@@ -1,6 +1,9 @@
 import type { ReactElement } from "react";
 import "../components/ui/FAQPage.css";
 import { useStorefrontPayload } from "../components/storefront/runtime/StorefrontPayloadContext";
+import { businessTypeSupportsTableReservations } from "@repo-shared/tableReservation";
+import { TableBookingCta } from "../components/tableBooking/TableBookingCta";
+import "../components/tableBooking/tableBooking.css";
 
 export default function AboutShopPage(): ReactElement {
   const { payload } = useStorefrontPayload();
@@ -18,6 +21,7 @@ export default function AboutShopPage(): ReactElement {
     payload?.storeName && payload.storeName.trim() !== ""
       ? payload.storeName.trim()
       : readTxt("aboutShopNameFallback", "Наш магазин");
+  const showTableBooking = businessTypeSupportsTableReservations(payload?.businessType);
 
   return (
     <div className="faq faq-page about-shop-page">
@@ -27,6 +31,13 @@ export default function AboutShopPage(): ReactElement {
           <h2 className="faq-page__card-title">{storeName}</h2>
           <p className="faq-page__card-body">{lead}</p>
         </section>
+        {showTableBooking ? (
+          <section className="faq-page__card faq-page__card--flush">
+            <TableBookingCta
+              onPress={() => window.dispatchEvent(new CustomEvent("sf:openTableBooking"))}
+            />
+          </section>
+        ) : null}
       </div>
     </div>
   );

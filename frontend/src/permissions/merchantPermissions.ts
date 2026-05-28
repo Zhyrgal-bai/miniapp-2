@@ -6,6 +6,8 @@ export const MERCHANT_PERM = {
   designEdit: "design.edit",
   settingsManage: "settings.manage",
   supportManage: "support.manage",
+  floorManage: "floor.manage",
+  kitchenView: "kitchen.view",
 } as const;
 
 export type MerchantPermissionId =
@@ -18,7 +20,14 @@ export const ALL_MERCHANT_PERMISSION_IDS: MerchantPermissionId[] = [
   MERCHANT_PERM.designEdit,
   MERCHANT_PERM.settingsManage,
   MERCHANT_PERM.supportManage,
+  MERCHANT_PERM.floorManage,
+  MERCHANT_PERM.kitchenView,
 ];
+
+/** Waiter role: floor + table orders only in UI (server still uses permissions). */
+export function isWaiterRole(merchantRole: string | null | undefined): boolean {
+  return String(merchantRole ?? "").toUpperCase() === "WAITER";
+}
 
 export function hasMerchantPermission(
   effective: string[] | null | undefined,

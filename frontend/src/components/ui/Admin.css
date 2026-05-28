@@ -323,6 +323,74 @@
   color: #fff;
 }
 
+.admin-variant-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-variant-editor__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-variant-option-row {
+  display: grid;
+  grid-template-columns: 28px 1fr minmax(88px, 110px) 36px;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-variant-option-row__index {
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b7280;
+  text-align: center;
+}
+
+.admin-variant-option-row__label {
+  min-width: 0;
+}
+
+.admin-variant-option-row__stock {
+  width: 100%;
+}
+
+.admin-variant-option-row__remove {
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.2);
+  color: #e5e7eb;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.admin-variant-option-row__remove:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.admin-variant-editor__add {
+  align-self: flex-start;
+}
+
+.admin-variant-editor--matrix .admin-variant {
+  margin-bottom: 10px;
+}
+
+.admin-variant-editor--matrix .admin-variant summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.admin-variant-editor--matrix .admin-variant summary::-webkit-details-marker {
+  display: none;
+}
+
 .admin-stock-block {
   display: flex;
   flex-direction: column;

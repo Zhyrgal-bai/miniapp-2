@@ -1,6 +1,5 @@
 import type { BusinessType } from "@prisma/client";
 import { inventoryVariantKey } from "./inventory.js";
-import { verticalProfileFor } from "./businessCommerce.js";
 import type { PublicProductSize, PublicProductVariant } from "./productDto.js";
 
 export type ProductStockRow = {
@@ -84,7 +83,6 @@ export function resolvePublicVariants(input: {
   stockRows: ProductStockRow[];
 }): PublicProductVariant[] {
   const stockMap = stockMapFromRows(input.stockRows);
-  const profile = verticalProfileFor(input.businessType ?? null);
 
   if (input.catalogShapes.length > 0) {
     const out: PublicProductVariant[] = [];
@@ -121,21 +119,6 @@ export function resolvePublicVariants(input: {
       color,
       sizes,
     }));
-  }
-
-  if (
-    profile.inventoryMode !== "metadata_only" &&
-    profile.defaultPrimaryValues.length > 0
-  ) {
-    return [
-      {
-        color: "default",
-        sizes: profile.defaultPrimaryValues.map((size) => ({
-          size,
-          stock: 0,
-        })),
-      },
-    ];
   }
 
   return [];

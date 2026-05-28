@@ -55,7 +55,8 @@ export function isMerchantStaffRole(role: BusinessStaffRole): boolean {
     role === BusinessStaffRole.OWNER ||
     role === BusinessStaffRole.ADMIN ||
     role === BusinessStaffRole.MANAGER ||
-    role === BusinessStaffRole.SUPPORT
+    role === BusinessStaffRole.SUPPORT ||
+    role === BusinessStaffRole.WAITER
   );
 }
 

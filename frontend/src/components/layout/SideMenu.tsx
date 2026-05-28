@@ -17,6 +17,7 @@ import { useTheme } from "../../context/ThemeContext";
 import { ru } from "../../i18n/ru";
 import "./app-shell.css";
 import { useStorefrontPayload } from "../storefront/runtime/StorefrontPayloadContext";
+import { businessTypeSupportsTableReservations } from "@repo-shared/tableReservation";
 
 type AppNavPage =
   | "home"
@@ -26,7 +27,8 @@ type AppNavPage =
   | "faq"
   | "about-shop"
   | "my-orders"
-  | "support";
+  | "support"
+  | "table-booking";
 
 type AdminSection =
   | "orders"
@@ -51,6 +53,7 @@ type SideMenuProps = {
   /** Центр поддержки (чат по заказу), не FAQ. */
   onNavToSupport: () => void;
   onNavToFaq: () => void;
+  onNavToTableBooking: () => void;
   onNavToAdmin: (section: AdminSection) => void;
 };
 
@@ -108,8 +111,11 @@ export default function SideMenu({
   onNavToMyOrders,
   onNavToSupport,
   onNavToFaq,
+  onNavToTableBooking,
   onNavToAdmin,
 }: SideMenuProps) {
+  const { payload } = useStorefrontPayload();
+  const showTableBooking = businessTypeSupportsTableReservations(payload?.businessType);
   const hash = useSyncExternalStore(subscribeHash, readHash, () => "");
   const user = useMemo(() => getTelegramUser(), []);
   const admin = useAdminPanelVisible();
@@ -127,7 +133,6 @@ export default function SideMenu({
     [merchantPermissions, merchantRole],
   );
   const adminActive = activeAdminSection(hash);
-  const { payload } = useStorefrontPayload();
   const { theme } = useTheme();
   const txt = payload?.storefrontTextConfig ?? {};
   const readTxt = (k: string, fb: string) => {
@@ -258,6 +263,22 @@ export default function SideMenu({
                   </span>
                   {readTxt("menuCartLabel", ru.menu.cart)}
                 </button>
+
+                {showTableBooking ? (
+                  <button
+                    type="button"
+                    className={`app-drawer__link${currentPage === "table-booking" ? " app-drawer__link--active" : ""}`}
+                    onClick={() => {
+                      onNavToTableBooking();
+                      onClose();
+                    }}
+                  >
+                    <span className="app-drawer__link-icon" aria-hidden>
+                      🍽
+                    </span>
+                    Забронировать столик
+                  </button>
+                ) : null}
 
                 <button
                   type="button"

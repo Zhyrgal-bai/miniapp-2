@@ -41,10 +41,7 @@ export const clothingTemplate: BusinessTemplateConfig = {
     brands: { type: "multiselect", label: "Бренды", required: false, values: ["Demo", "Nike", "Adidas"] },
     collections: { type: "multiselect", label: "Коллекции", required: false, values: ["Summer", "Winter", "Basic"] },
   },
-  orderOptionsSchema: {
-    size: { type: "select", label: "Размер", required: true, values: ["S", "M", "L", "XL"] },
-    color: { type: "text", label: "Цвет", required: true, maxLen: 40 },
-  },
+  orderOptionsSchema: {},
   merchantConfig: {
     sections: [
       { key: "sizeTable", title: "Таблица размеров", enabled: true },

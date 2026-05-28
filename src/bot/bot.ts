@@ -378,7 +378,8 @@ function isMerchantBotRole(
     roles === BusinessStaffRole.OWNER ||
     roles === BusinessStaffRole.ADMIN ||
     roles === BusinessStaffRole.MANAGER ||
-    roles === BusinessStaffRole.SUPPORT
+    roles === BusinessStaffRole.SUPPORT ||
+    roles === BusinessStaffRole.WAITER
   );
 }
 

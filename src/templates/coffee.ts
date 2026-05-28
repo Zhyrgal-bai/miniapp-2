@@ -26,7 +26,6 @@ export const coffeeTemplate: BusinessTemplateConfig = {
     { key: "drinks", name: "Напитки" },
   ],
   productSchema: {
-    volume: { type: "select", label: "Объём", required: true, values: ["250ml", "350ml", "450ml"] },
     hotOrCold: { type: "select", label: "Горячее/Холодное", required: true, values: ["hot", "ice"] },
     sugar: { type: "select", label: "Сахар", required: false, values: ["no", "less", "normal"], default: "normal" },
     syrups: { type: "multiselect", label: "Сиропы", required: false, values: ["vanilla", "caramel", "hazelnut"] },
@@ -37,7 +36,6 @@ export const coffeeTemplate: BusinessTemplateConfig = {
     deliveryEnabled: { type: "boolean", label: "Доставка включена", required: false, default: true },
   },
   orderOptionsSchema: {
-    volume: { type: "select", label: "Объём", required: true, values: ["250ml", "350ml", "450ml"] },
     hotOrCold: { type: "select", label: "Горячее/Холодное", required: true, values: ["hot", "ice"] },
     sugar: { type: "select", label: "Сахар", required: false, values: ["no", "less", "normal"], default: "normal" },
     syrups: { type: "multiselect", label: "Сиропы", required: false, values: ["vanilla", "caramel", "hazelnut"] },

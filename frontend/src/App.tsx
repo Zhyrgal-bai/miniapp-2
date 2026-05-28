@@ -1,4 +1,10 @@
 ﻿import HomePage from "./pages/HomePage";
+import TableBookingPage from "./pages/TableBookingPage";
+import {
+  readTableQrFromLocation,
+  writeTableSession,
+} from "./utils/tableSessionStorage";
+import { joinTableQr } from "./services/venueApi";
 import CartPage from "./pages/CartPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import AdminApp from "./pages/admin/AdminApp";
@@ -60,7 +66,8 @@ type AppNavPage =
   | "faq"
   | "about-shop"
   | "my-orders"
-  | "support";
+  | "support"
+  | "table-booking";
 
 function myOrdersNeedAttention(rows: MyOrderRow[]): boolean {
   return rows.some((o) => {
@@ -102,6 +109,29 @@ export default function App() {
   useEffect(() => {
     void refreshAdminGate(businessId ?? undefined);
   }, [businessId, refreshAdminGate]);
+
+  useEffect(() => {
+    const qr = readTableQrFromLocation();
+    if (!qr) return;
+    void (async () => {
+      try {
+        const joined = await joinTableQr(qr);
+        writeTableSession({
+          businessId: joined.businessId,
+          tableSessionId: joined.tableSessionId,
+          tableName: joined.tableName,
+          qrToken: qr,
+        });
+        if (typeof window !== "undefined") {
+          const u = new URL(window.location.href);
+          u.searchParams.delete("tableQr");
+          window.history.replaceState({}, "", u.pathname + u.search);
+        }
+      } catch {
+        /* ignore invalid QR */
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     resetBodyScrollLock();
@@ -443,6 +473,16 @@ export default function App() {
       window.removeEventListener("sf:openSupport", onOpenSupport as EventListener);
   }, [commitPage]);
 
+  useEffect(() => {
+    const onOpenBooking = () => {
+      commitPage("table-booking");
+      setIsMenuOpen(false);
+    };
+    window.addEventListener("sf:openTableBooking", onOpenBooking as EventListener);
+    return () =>
+      window.removeEventListener("sf:openTableBooking", onOpenBooking as EventListener);
+  }, [commitPage]);
+
   const handleNav = (target: AppNavPage) => {
     commitPage(target);
     setIsMenuOpen(false);
@@ -459,6 +499,10 @@ export default function App() {
       return;
     }
     if (page === "cart") {
+      commitPage("home");
+      return;
+    }
+    if (page === "table-booking") {
       commitPage("home");
       return;
     }
@@ -647,6 +691,7 @@ export default function App() {
         onNavToMyOrders={() => handleNav("my-orders")}
         onNavToSupport={() => handleNav("support")}
         onNavToFaq={() => handleNav("faq")}
+        onNavToTableBooking={() => handleNav("table-booking")}
         onNavToAdmin={goAdminSection}
       />
 
@@ -658,6 +703,9 @@ export default function App() {
       <div className="content app__content">
         <div className="sf-commerce-shell" data-sf-shell={commerceShellMode}>
           {page === "home" && <HomePage />}
+          {page === "table-booking" && (
+            <TableBookingPage onBack={() => commitPage("home")} />
+          )}
           {page === "faq" && <FAQ />}
           {page === "about-shop" && <AboutShopPage />}
           {page === "my-orders" && (
@@ -696,6 +744,7 @@ export default function App() {
           !productSheetOpen &&
           page !== "support" &&
           page !== "checkout" &&
+          page !== "table-booking" &&
           !(page === "home" && totalQuantity > 0)
         }
         totalQuantity={totalQuantity}

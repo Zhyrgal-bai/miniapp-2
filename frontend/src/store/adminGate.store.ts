@@ -69,7 +69,8 @@ export const useAdminGateStore = create<AdminGateState>((set) => ({
         j.role === "OWNER" ||
         j.role === "ADMIN" ||
         j.role === "MANAGER" ||
-        j.role === "SUPPORT";
+        j.role === "SUPPORT" ||
+        j.role === "WAITER";
       const r = typeof j.role === "string" ? j.role : null;
       const perms = Array.isArray(j.permissions)
         ? j.permissions.filter((p): p is string => typeof p === "string")

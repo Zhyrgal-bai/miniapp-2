@@ -29,7 +29,6 @@ export const fastfoodTemplate: BusinessTemplateConfig = {
     spicy: { type: "select", label: "Острота", required: false, values: ["no", "mild", "hot"], default: "no" },
     combo: { type: "boolean", label: "Комбо", required: false, default: false },
     addons: { type: "multiselect", label: "Добавки", required: false, values: ["cheese", "bacon", "sauce"] },
-    size: { type: "select", label: "Размер", required: false, values: ["S", "M", "L"], default: "M" },
   },
   merchantSettingsSchema: {
     deliveryZones: { type: "text", label: "Зоны доставки (описание)", required: false, maxLen: 2048 },
@@ -40,7 +39,6 @@ export const fastfoodTemplate: BusinessTemplateConfig = {
     spicy: { type: "select", label: "Острота", required: false, values: ["no", "mild", "hot"], default: "no" },
     combo: { type: "boolean", label: "Комбо", required: false, default: false },
     addons: { type: "multiselect", label: "Добавки", required: false, values: ["cheese", "bacon", "sauce"] },
-    size: { type: "select", label: "Размер", required: false, values: ["S", "M", "L"], default: "M" },
   },
   merchantConfig: {
     sections: [

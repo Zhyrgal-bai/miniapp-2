@@ -37,6 +37,9 @@ import {
 } from "./StorefrontIdentityBand";
 import { trackStoreView } from "../../services/storefrontAnalytics";
 import { enrichProductsFromCatalog } from "../../utils/enrichProductsFromCatalog";
+import { businessTypeSupportsTableReservations } from "@repo-shared/tableReservation";
+import { TableBookingCta } from "../tableBooking/TableBookingCta";
+import "../tableBooking/tableBooking.css";
 
 type StorefrontKitId = "minimal" | "luxury" | "fashion" | "neon" | "default";
 
@@ -125,6 +128,12 @@ export function StorefrontRenderer(props: {
     },
     [props.payload.storefrontCardConfig, cardViewportTier, props.payload.businessType],
   );
+
+  const showTableBooking = businessTypeSupportsTableReservations(props.payload.businessType);
+
+  const openTableBooking = useCallback(() => {
+    window.dispatchEvent(new CustomEvent("sf:openTableBooking"));
+  }, []);
 
   const filterByCategory = useCallback(
     (list: Product[]) => {
@@ -270,6 +279,11 @@ export function StorefrontRenderer(props: {
                 textConfig={identityTextCfg}
                 styleConfig={styleCfg}
               />
+            </div>
+          ) : null}
+          {showTableBooking ? (
+            <div className="sf-feed__chunk sf-feed__chunk--booking-cta sf-section--padded">
+              <TableBookingCta onPress={openTableBooking} />
             </div>
           ) : null}
           {sections.map((s) => {

@@ -271,6 +271,10 @@ import { requireTelegramAuth } from "../middleware/requireTelegramAuth.js";
 import { verifiedTelegramGate } from "../middleware/privilegedRoutes.js";
 import { isStorefrontClosedForCustomers } from "./subscriptionAccess.js";
 import { attachSupportRoutes } from "./supportRoutes.js";
+import { attachDiningTableRoutes } from "./diningTableRoutes.js";
+import { attachTableReservationRoutes } from "./tableReservationRoutes.js";
+import { startTableReservationScheduler } from "./tableReservationScheduler.js";
+import { attachVenueOperationsRoutes } from "./venueOperationsRoutes.js";
 
 const __serverDir = path.dirname(fileURLToPath(import.meta.url));
 const FRONTEND_DIST = path.resolve(__serverDir, "../../frontend/dist");
@@ -2571,6 +2575,7 @@ function businessIdFromNonApiHint(req: Request): number | null {
 
 type MerchantStaffContext = {
   businessId: number;
+  staffId: number;
   role: BusinessStaffRole;
   effectivePermissions: MerchantPermissionId[];
 };
@@ -2657,6 +2662,7 @@ async function requireMerchantStaff(
 
   return {
     businessId,
+    staffId: staffRecord.id,
     role: staffRecord.role,
     effectivePermissions,
   };
@@ -4452,6 +4458,18 @@ attachSupportRoutes(app, {
   supportLimiter,
 });
 
+attachDiningTableRoutes(app, { requireMerchantStaff });
+
+attachTableReservationRoutes(app, {
+  requireMerchantStaff,
+  telegramIdFromRequest: verifiedTelegramIdFromRequest,
+});
+
+attachVenueOperationsRoutes(app, {
+  requireMerchantStaff,
+  telegramIdFromRequest: verifiedTelegramIdFromRequest,
+});
+
 // ================== LIST ORDERS (admin, Prisma) ==================
 app.get("/orders", async (req: Request, res: Response) => {
   try {
@@ -4872,6 +4890,12 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
         itemsValidated.map((it) => it.optionsValidated),
       );
 
+      const rawTableSessionId = (body as { tableSessionId?: unknown }).tableSessionId;
+      const tableSessionIdParsed =
+        rawTableSessionId != null && Number.isFinite(Number(rawTableSessionId))
+          ? Math.floor(Number(rawTableSessionId))
+          : null;
+
       const order = await runCheckoutStep(
         "order_created",
         businessId,
@@ -4890,6 +4914,8 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
               lng: orderLng,
               paymentMethod,
               paymentId: paymentMethod === "finik" ? null : paymentId,
+              tableSessionId: tableSessionIdParsed,
+              prepStatus: tableSessionIdParsed != null ? "PREPARING" : "NONE",
               items: {
                 create: itemCreates,
               },
@@ -4965,6 +4991,20 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
       orderId: order.id,
       ...(corrId ? { correlationId: corrId } : {}),
     });
+
+    const rawSession = (body as { tableSessionId?: unknown }).tableSessionId;
+    const parsedSession =
+      rawSession != null && Number.isFinite(Number(rawSession))
+        ? Math.floor(Number(rawSession))
+        : null;
+    if (parsedSession != null && parsedSession > 0) {
+      try {
+        const { attachOrderToSession } = await import("./venueOperationsService.js");
+        await attachOrderToSession(tenantBusinessId, order.id, parsedSession);
+      } catch (venueErr) {
+        console.error("attachOrderToSession after checkout:", venueErr);
+      }
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (msg.startsWith("PRICE:")) {
@@ -5568,6 +5608,11 @@ void (async () => {
       startStaleOrderCleanupScheduler();
     } catch (e) {
       console.error("startStaleOrderCleanupScheduler:", e);
+    }
+    try {
+      startTableReservationScheduler();
+    } catch (e) {
+      console.error("startTableReservationScheduler:", e);
     }
   });
 })();

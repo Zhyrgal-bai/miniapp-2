@@ -32,7 +32,7 @@ export const VERTICAL_PROFILES: Record<BusinessType, VerticalCommerceProfile> = 
     showFashionVariantMatrix: true,
     showOrderOptionsOnStorefront: false,
     variantEditor: "clothing_matrix",
-    defaultPrimaryValues: ["S", "M", "L", "XL"],
+    defaultPrimaryValues: [],
     cardPlaceholder: "Выберите размер и цвет",
   },
   coffee: {
@@ -45,7 +45,7 @@ export const VERTICAL_PROFILES: Record<BusinessType, VerticalCommerceProfile> = 
     showFashionVariantMatrix: false,
     showOrderOptionsOnStorefront: true,
     variantEditor: "tier_stock",
-    defaultPrimaryValues: ["250ml", "350ml", "450ml"],
+    defaultPrimaryValues: [],
     cardPlaceholder: "350 мл • горячий",
   },
   flowers: {
@@ -58,7 +58,7 @@ export const VERTICAL_PROFILES: Record<BusinessType, VerticalCommerceProfile> = 
     showFashionVariantMatrix: false,
     showOrderOptionsOnStorefront: true,
     variantEditor: "bouquet_tiers",
-    defaultPrimaryValues: ["3", "5", "7", "11", "21", "51", "101"],
+    defaultPrimaryValues: [],
     cardPlaceholder: "21 роза",
   },
   fastfood: {
@@ -71,7 +71,7 @@ export const VERTICAL_PROFILES: Record<BusinessType, VerticalCommerceProfile> = 
     showFashionVariantMatrix: false,
     showOrderOptionsOnStorefront: true,
     variantEditor: "tier_stock",
-    defaultPrimaryValues: ["S", "M", "L"],
+    defaultPrimaryValues: [],
     cardPlaceholder: "Средняя порция",
   },
 };

@@ -32,6 +32,7 @@ enum BusinessStaffRole {
   ADMIN
   MANAGER
   SUPPORT
+  WAITER
 }
 
 /// Optional: explicit plan for Stripe/billing integrations.
@@ -143,6 +144,9 @@ model Business {
   refundRequests  RefundRequest[]
   productStocks   ProductStock[]
   stockMovements  StockMovement[]
+  diningTables    DiningTable[]
+  tableReservations TableReservation[]
+  tableSessions   TableSession[]
   actionCooldowns ActionCooldown[]
 
   storefrontEvents StorefrontEvent[]
@@ -309,6 +313,8 @@ model BusinessStaff {
 
   invitedByUserId Int?
   invitedBy       User? @relation("StaffInvitedBy", fields: [invitedByUserId], references: [id], onDelete: SetNull)
+
+  tableSessionsWaited TableSession[] @relation("SessionWaiter")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -546,6 +552,11 @@ model Order {
   buyerUserId Int?
   buyerUser   User?   @relation("OrderBuyer", fields: [buyerUserId], references: [id], onDelete: SetNull)
 
+  tableSessionId Int?
+  tableSession   TableSession? @relation(fields: [tableSessionId], references: [id], onDelete: SetNull)
+
+  prepStatus OrderPrepStatus @default(NONE)
+
   items            OrderItem[]
   supportTickets   SupportTicket[]
   returnRequests   ReturnRequest[]
@@ -559,6 +570,8 @@ model Order {
   @@index([businessId, status])
   @@index([businessId, orderNumber])
   @@index([buyerUserId])
+  @@index([tableSessionId])
+  @@index([businessId, prepStatus])
 }
 
 /// Per-tenant daily order sequence (resets each calendar day in ORDER_DAY_TZ).
@@ -1023,6 +1036,165 @@ model StockMovement {
   @@index([businessId, createdAt])
   @@index([productStockId])
   @@index([orderId])
+}
+
+/// Phase 2 foundation: merchant-defined tables for coffee / fastfood reservations.
+enum DiningTableStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+  SOON_OCCUPIED
+}
+
+enum DiningTableShape {
+  SQUARE
+  RECTANGLE
+  CIRCLE
+  VIP
+}
+
+enum TableReservationStatus {
+  PENDING
+  CONFIRMED
+  ARRIVED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+/// Live operational floor state (Phase 5).
+enum TableLiveStatus {
+  FREE
+  RESERVED
+  ARRIVED
+  ORDERING
+  EATING
+  PAYMENT
+  CLEANING
+}
+
+enum TableSessionStatus {
+  ACTIVE
+  PAYMENT_REQUESTED
+  CLOSED
+}
+
+enum OrderPrepStatus {
+  NONE
+  PREPARING
+  READY
+  SERVED
+}
+
+model DiningTable {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  name  String
+  seats Int    @default(2)
+
+  shape       DiningTableShape @default(RECTANGLE)
+  description String          @default("")
+
+  /// Visual map layout (normalized 0–1 coordinates).
+  posX   Float @default(0)
+  posY   Float @default(0)
+  width  Float @default(0.12)
+  height Float @default(0.12)
+
+  status    DiningTableStatus @default(AVAILABLE)
+  liveStatus TableLiveStatus @default(FREE)
+  sortOrder Int               @default(0)
+  isActive  Boolean           @default(true)
+
+  /// QR entry token for customer table ordering.
+  qrToken String @unique @default(cuid())
+
+  activeSessionId Int? @unique
+  activeSession   TableSession? @relation("TableActiveSession", fields: [activeSessionId], references: [id], onDelete: SetNull)
+
+  reservations TableReservation[]
+  sessions     TableSession[] @relation("TableSessions")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, isActive])
+  @@index([businessId, liveStatus])
+}
+
+model TableSession {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  tableId Int
+  table   DiningTable @relation("TableSessions", fields: [tableId], references: [id], onDelete: Cascade)
+
+  reservationId Int?
+  reservation   TableReservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+
+  waiterStaffId Int?
+  waiter        BusinessStaff? @relation("SessionWaiter", fields: [waiterStaffId], references: [id], onDelete: SetNull)
+
+  partySize Int?
+  seatedAt  DateTime @default(now())
+  closedAt  DateTime?
+
+  status TableSessionStatus @default(ACTIVE)
+  paymentRequestedAt DateTime?
+
+  /// Future: split bill lines per guest.
+  splitBillMeta Json? @default("{}")
+
+  orders Order[]
+  activeOnTable DiningTable? @relation("TableActiveSession")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, status])
+  @@index([tableId, status])
+}
+
+model TableReservation {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  tableId Int
+  table   DiningTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
+  reservedAt DateTime
+  partySize  Int?
+  guestName  String?
+  guestPhone String?
+  guestNote  String?
+
+  /// Slot length for overlap checks (default 90 min).
+  durationMinutes Int @default(90)
+
+  /// Telegram user id for guest notifications.
+  guestTelegramId String?
+
+  status TableReservationStatus @default(PENDING)
+
+  sessions TableSession[]
+
+  reminderSentAt DateTime?
+  cancelledAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, reservedAt])
+  @@index([tableId, reservedAt])
+  @@index([businessId, status])
+  @@index([guestTelegramId])
 }
 
 /// Anti-abuse cooldowns (checkout spam, support flood).
