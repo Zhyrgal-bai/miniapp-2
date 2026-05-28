@@ -257,6 +257,17 @@
   font-size: 13px;
 }
 
+.table-booking-error-banner {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fecaca;
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .table-booking-submit {
   margin-top: 4px;
   border: 0;

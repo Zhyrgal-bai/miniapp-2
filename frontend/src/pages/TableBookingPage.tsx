@@ -47,7 +47,20 @@ export default function TableBookingPage({ onBack }: Props): ReactElement {
     setError(null);
     try {
       const data = await fetchCustomerDiningTables(businessId);
-      setTables(data.tables);
+      if (import.meta.env.DEV) {
+        console.info("[TableBooking] dining-tables response", {
+          businessId,
+          supported: data.supported,
+          count: data.tables?.length ?? 0,
+          tables: data.tables,
+        });
+      }
+      if (!data.supported) {
+        setError("Бронирование столиков недоступно для этого магазина.");
+        setTables([]);
+        return;
+      }
+      setTables(Array.isArray(data.tables) ? data.tables : []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось загрузить карту");
     } finally {
@@ -150,7 +163,21 @@ export default function TableBookingPage({ onBack }: Props): ReactElement {
 
       {loading ? <p className="table-booking-muted">Загрузка карты…</p> : null}
 
-      {!loading ? <CustomerTableMap tables={tables} selectedId={selected?.id ?? null} onSelect={onSelectTable} /> : null}
+      {error && !modalOpen ? (
+        <div className="table-booking-error-banner" role="alert">
+          {error}
+        </div>
+      ) : null}
+
+      {!loading && tables.length === 0 && !error ? (
+        <p className="table-booking-muted">
+          Столики ещё не настроены. Добавьте их в админке → «Столики».
+        </p>
+      ) : null}
+
+      {!loading && tables.length > 0 ? (
+        <CustomerTableMap tables={tables} selectedId={selected?.id ?? null} onSelect={onSelectTable} />
+      ) : null}
 
       {success ? (
         <div className="table-booking-success" role="status">

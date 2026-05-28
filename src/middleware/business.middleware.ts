@@ -13,6 +13,7 @@ import { acceptPendingStaffInvitesForUser } from "../server/businessStaffService
 import { parseTelegramWebAppUserFromInitData } from "../server/telegramWebAppInitData.js";
 import { syncTelegramUserProfile } from "../server/telegramUserSync.js";
 import { API_ERR_STORE_UNAVAILABLE } from "../shared/apiClientMessages.js";
+import { isPublicStorefrontBookingPath } from "../shared/storefrontPublicPaths.js";
 
 declare global {
   namespace Express {
@@ -108,6 +109,15 @@ export async function businessMiddleware(
     (p) => req.path === p || req.path.startsWith(`${p}/`),
   );
   if (skipPath) {
+    next();
+    return;
+  }
+
+  const path =
+    typeof req.path === "string" && req.path !== ""
+      ? req.path
+      : new URL(req.url, "http://localhost").pathname;
+  if (isPublicStorefrontBookingPath(path)) {
     next();
     return;
   }

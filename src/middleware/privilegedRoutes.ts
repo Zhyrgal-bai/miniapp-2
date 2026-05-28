@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { requireVerifiedTelegram } from "./verifiedTelegramAuth.js";
+import { storefrontBookingRequiresVerifiedTelegram } from "../shared/storefrontPublicPaths.js";
 
 const MERCHANT_WRITE_PREFIXES = [
   "/products",
@@ -47,6 +48,10 @@ export function routeRequiresVerifiedTelegram(req: Request): boolean {
     method === "GET" &&
     (path === "/my-businesses" || path === "/api/my-businesses")
   ) {
+    return true;
+  }
+
+  if (storefrontBookingRequiresVerifiedTelegram(method, path)) {
     return true;
   }
 

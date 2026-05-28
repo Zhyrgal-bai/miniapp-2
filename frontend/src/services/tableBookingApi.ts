@@ -10,7 +10,17 @@ export type CustomerDiningTableDto = {
   posY: number;
   width: number;
   height: number;
-  status: "AVAILABLE" | "OCCUPIED" | "RESERVED" | "SOON_OCCUPIED";
+  status:
+    | "FREE"
+    | "RESERVED"
+    | "ARRIVED"
+    | "ORDERING"
+    | "EATING"
+    | "PAYMENT"
+    | "CLEANING"
+    | "AVAILABLE"
+    | "OCCUPIED"
+    | "SOON_OCCUPIED";
   bookable: boolean;
   nextReservation: { reservedAt: string } | null;
 };

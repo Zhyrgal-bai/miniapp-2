@@ -1,4 +1,4 @@
-import type { DiningTableStatus, TableReservationStatus } from "@prisma/client";
+import type { DiningTableStatus, TableLiveStatus, TableReservationStatus } from "@prisma/client";
 import { prisma } from "./db.js";
 import {
   ACTIVE_RESERVATION_STATUSES,
@@ -112,6 +112,15 @@ export function computeDisplayStatus(
 
 export function isTableBookable(displayStatus: DiningTableStatus): boolean {
   return displayStatus === "AVAILABLE" || displayStatus === "SOON_OCCUPIED";
+}
+
+/** Customer map: bookable when table is not actively dining / payment / cleaning. */
+export function isTableBookableLive(liveStatus: TableLiveStatus): boolean {
+  return (
+    liveStatus === "FREE" ||
+    liveStatus === "RESERVED" ||
+    liveStatus === "ARRIVED"
+  );
 }
 
 export async function loadActiveReservations(

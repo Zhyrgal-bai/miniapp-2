@@ -1,4 +1,5 @@
 import axios, { AxiosHeaders } from "axios";
+import { isPublicStorefrontBookingPath } from "@repo-shared/storefrontPublicPaths";
 import { formatHttpStatusError } from "../utils/adminApiError";
 import { getBusinessIdNumber } from "../utils/storeParams";
 import { telegramWebAppInitDataHeader } from "../utils/telegramInitDataHeader";
@@ -118,7 +119,7 @@ function isPlatformAdminPath(pathname: string): boolean {
 function isPublicStorefrontPath(pathname: string): boolean {
   if (/^\/api\/storefront\/by-slug\/[^/]+$/i.test(pathname)) return true;
   if (/^\/api\/storefront\/\d+$/i.test(pathname)) return true;
-  return false;
+  return isPublicStorefrontBookingPath(pathname);
 }
 
 export function isTenantScopedPath(pathname: string): boolean {

@@ -1,4 +1,5 @@
 import type { CustomerDiningTableDto } from "../../services/tableBookingApi";
+import "../venue/liveFloor.css";
 
 type Props = {
   tables: CustomerDiningTableDto[];
@@ -6,10 +7,27 @@ type Props = {
   onSelect: (table: CustomerDiningTableDto) => void;
 };
 
-export function CustomerTableMap({ tables, selectedId, onSelect }: Props) {
-  const statusClass = (status: string) =>
-    `table-map-chip--status-${status.toLowerCase()}`;
+/** Map live + legacy dining statuses to CSS modifiers. */
+function statusClass(status: string): string {
+  const s = status.toUpperCase();
+  const liveMap: Record<string, string> = {
+    FREE: "live-free",
+    RESERVED: "live-reserved",
+    ARRIVED: "live-arrived",
+    ORDERING: "live-ordering",
+    EATING: "live-eating",
+    PAYMENT: "live-payment",
+    CLEANING: "live-cleaning",
+    AVAILABLE: "live-free",
+    SOON_OCCUPIED: "live-reserved",
+    OCCUPIED: "live-eating",
+  };
+  const key = liveMap[s];
+  if (key) return `table-map-chip--${key}`;
+  return `table-map-chip--status-${status.toLowerCase()}`;
+}
 
+export function CustomerTableMap({ tables, selectedId, onSelect }: Props) {
   return (
     <div className="table-map-shell table-map-shell--booking" role="presentation">
       <div className="table-map-grid" aria-hidden />

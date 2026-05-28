@@ -11,11 +11,11 @@ import {
   PatchTableReservationSchema,
   TableSlotsQuerySchema,
 } from "../shared/tableReservationSchema.js";
+import type { TableLiveStatus } from "@prisma/client";
 import {
-  computeDisplayStatus,
   filterAvailableSlots,
   hasReservationConflict,
-  isTableBookable,
+  isTableBookableLive,
   loadActiveReservations,
   parseReservedAtIso,
   syncDiningTableStatuses,
@@ -68,8 +68,8 @@ function tablePublicDto(
     width: number;
     height: number;
     status: string;
+    liveStatus: TableLiveStatus;
   },
-  displayStatus: string,
   bookable: boolean,
   nextReservation: { reservedAt: Date } | null,
 ) {
@@ -82,7 +82,7 @@ function tablePublicDto(
     posY: row.posY,
     width: row.width,
     height: row.height,
-    status: displayStatus,
+    status: row.liveStatus,
     bookable,
     nextReservation: nextReservation
       ? { reservedAt: nextReservation.reservedAt.toISOString() }
@@ -130,6 +130,7 @@ export function attachTableReservationRoutes(app: Express, deps: Deps): void {
         return;
       }
       if (!(await assertVenueBusiness(businessId))) {
+        console.warn("[storefront/dining-tables] venue not supported", { businessId });
         res.json({ supported: false, tables: [] });
         return;
       }
@@ -138,7 +139,31 @@ export function attachTableReservationRoutes(app: Express, deps: Deps): void {
         where: { businessId, isActive: true },
         orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
       });
-      const reservations = await loadActiveReservations(businessId);
+
+      let reservations: Awaited<ReturnType<typeof loadActiveReservations>> = [];
+      try {
+        reservations = await loadActiveReservations(businessId);
+      } catch (resErr) {
+        console.error(
+          "[storefront/dining-tables] loadActiveReservations failed — falling back to PENDING/CONFIRMED only:",
+          resErr,
+        );
+        reservations = await prisma.tableReservation.findMany({
+          where: {
+            businessId,
+            status: { in: ["PENDING", "CONFIRMED"] },
+          },
+          select: {
+            id: true,
+            tableId: true,
+            reservedAt: true,
+            durationMinutes: true,
+            status: true,
+          },
+          orderBy: { reservedAt: "asc" },
+        });
+      }
+
       const byTable = new Map<number, typeof reservations>();
       for (const r of reservations) {
         const list = byTable.get(r.tableId) ?? [];
@@ -147,14 +172,30 @@ export function attachTableReservationRoutes(app: Express, deps: Deps): void {
       }
       const now = new Date();
 
+      const payload = tables.map((t) => {
+        const tableRes = byTable.get(t.id) ?? [];
+        const next = tableRes.find((r) => r.reservedAt >= now) ?? null;
+        const bookable = isTableBookableLive(t.liveStatus);
+        return tablePublicDto(t, bookable, next);
+      });
+
+      console.info("[storefront/dining-tables]", {
+        businessId,
+        tableCount: payload.length,
+        tableIds: payload.map((x) => x.id),
+        statuses: payload.map((x) => ({ id: x.id, status: x.status, bookable: x.bookable })),
+        coords: payload.map((x) => ({
+          id: x.id,
+          posX: x.posX,
+          posY: x.posY,
+          width: x.width,
+          height: x.height,
+        })),
+      });
+
       res.json({
         supported: true,
-        tables: tables.map((t) => {
-          const tableRes = byTable.get(t.id) ?? [];
-          const display = computeDisplayStatus(t.status, tableRes, now);
-          const next = tableRes.find((r) => r.reservedAt >= now) ?? null;
-          return tablePublicDto(t, display, isTableBookable(display), next);
-        }),
+        tables: payload,
       });
     } catch (e) {
       console.error("GET storefront dining-tables:", e);
