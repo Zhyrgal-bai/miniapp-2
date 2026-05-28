@@ -2,6 +2,15 @@ import type { StorefrontStyleConfig } from "./schema.js";
 
 export type StorefrontKitId = "minimal" | "luxury" | "fashion" | "neon" | "default";
 
+const DEFAULT_HERO_SHOWCASE = {
+  autoMove: true,
+  direction: "left" as const,
+  speed: "medium" as const,
+  pauseOnTouch: true,
+  pauseOnHover: true,
+  infiniteLoop: true,
+};
+
 export function kitFromTemplateId(templateId: string | null | undefined): StorefrontKitId {
   const t = typeof templateId === "string" ? templateId.trim().toLowerCase() : "";
   if (t === "minimal" || t === "light") return "minimal";
@@ -39,6 +48,7 @@ export const STOREFRONT_STYLE_PRESETS: Record<Exclude<StorefrontKitId, "default"
       shadow: false,
       alignment: "center",
       ctaPosition: "below",
+      showcase: DEFAULT_HERO_SHOWCASE,
     },
     catalog: { gridBoost: "bold" },
     catalogFooter: { enabled: false, title: "Акции", slides: [] },
@@ -70,6 +80,7 @@ export const STOREFRONT_STYLE_PRESETS: Record<Exclude<StorefrontKitId, "default"
       shadow: true,
       alignment: "center",
       ctaPosition: "overlay",
+      showcase: DEFAULT_HERO_SHOWCASE,
     },
     catalog: { gridBoost: "bold" },
     catalogFooter: { enabled: false, title: "Акции", slides: [] },
@@ -101,6 +112,7 @@ export const STOREFRONT_STYLE_PRESETS: Record<Exclude<StorefrontKitId, "default"
       shadow: false,
       alignment: "left",
       ctaPosition: "below",
+      showcase: DEFAULT_HERO_SHOWCASE,
     },
     catalog: { gridBoost: "bold" },
     catalogFooter: { enabled: false, title: "Акции", slides: [] },
@@ -132,6 +144,7 @@ export const STOREFRONT_STYLE_PRESETS: Record<Exclude<StorefrontKitId, "default"
       shadow: true,
       alignment: "left",
       ctaPosition: "overlay",
+      showcase: DEFAULT_HERO_SHOWCASE,
     },
     catalog: { gridBoost: "bold" },
     catalogFooter: { enabled: false, title: "Акции", slides: [] },

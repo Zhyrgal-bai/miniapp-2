@@ -29,6 +29,7 @@
 .sf-commerce-feed .product-card,
 .sf-hero__cta,
 .sf-cine-hero__cta,
+.sf-showcase__cta,
 .sf-cine-promo__cta,
 .sf-chip--filter,
 .sf-pds-footer__cta,
@@ -40,6 +41,8 @@
 .sf-commerce-feed .product-card:active,
 .sf-hero__cta:active,
 .sf-cine-hero__cta:active,
+.sf-showcase__cta:active,
+.sf-showcase__card:active,
 .sf-cine-promo__cta:active,
 .sf-chip--filter:active,
 .sf-pds-footer__cta:active {

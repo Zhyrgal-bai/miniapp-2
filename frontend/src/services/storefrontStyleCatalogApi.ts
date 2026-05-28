@@ -8,10 +8,20 @@ export type CatalogFooterSlideInput = {
   caption?: string;
 };
 
+export type HeroShowcasePatchInput = {
+  autoMove?: boolean;
+  direction?: "left" | "right";
+  speed?: "slow" | "medium" | "fast";
+  pauseOnTouch?: boolean;
+  pauseOnHover?: boolean;
+  infiniteLoop?: boolean;
+};
+
 export async function putStorefrontStyleCatalogPatch(
   businessId: number,
   body: {
     catalog?: { gridBoost?: "normal" | "bold" };
+    hero?: { showcase?: HeroShowcasePatchInput };
     catalogFooter?: {
       enabled?: boolean;
       title?: string;

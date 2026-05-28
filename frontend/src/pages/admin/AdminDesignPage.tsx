@@ -17,6 +17,12 @@ import { storeBrandInitials } from "../../components/layout/storeBrandHeaderUtil
 import { formatAdminApiError } from "../../utils/adminApiError";
 import type { Product } from "../../types";
 import { buildFooterSliderSlidesFromProducts } from "../../components/storefront/sections/CatalogFooterSlider";
+import {
+  DEFAULT_HERO_SHOWCASE,
+  parseHeroShowcaseSettings,
+  type HeroShowcaseDirection,
+  type HeroShowcaseSpeed,
+} from "../../storefront/heroShowcaseSettings";
 import { ru } from "../../i18n/ru";
 
 const TEMPLATE_LABELS: Record<StoreTemplateId, string> = {
@@ -59,6 +65,17 @@ export default function AdminDesignPage(): ReactElement {
   const [footerSliderEnabled, setFooterSliderEnabled] = useState(false);
   const [footerSliderTitle, setFooterSliderTitle] = useState("Букеты");
   const [catalogGridBoost, setCatalogGridBoost] = useState<"normal" | "bold">("bold");
+
+  const [showcaseAutoMove, setShowcaseAutoMove] = useState(DEFAULT_HERO_SHOWCASE.autoMove);
+  const [showcaseDirection, setShowcaseDirection] = useState<HeroShowcaseDirection>(
+    DEFAULT_HERO_SHOWCASE.direction,
+  );
+  const [showcaseSpeed, setShowcaseSpeed] = useState<HeroShowcaseSpeed>(DEFAULT_HERO_SHOWCASE.speed);
+  const [showcasePauseTouch, setShowcasePauseTouch] = useState(DEFAULT_HERO_SHOWCASE.pauseOnTouch);
+  const [showcasePauseHover, setShowcasePauseHover] = useState(DEFAULT_HERO_SHOWCASE.pauseOnHover);
+  const [showcaseInfiniteLoop, setShowcaseInfiniteLoop] = useState(
+    DEFAULT_HERO_SHOWCASE.infiniteLoop,
+  );
   const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
 
   const [saving, setSaving] = useState(false);
@@ -110,6 +127,16 @@ export default function AdminDesignPage(): ReactElement {
     if (cat && typeof cat === "object" && "gridBoost" in cat) {
       const gb = (cat as { gridBoost?: string }).gridBoost;
       setCatalogGridBoost(gb === "normal" ? "normal" : "bold");
+    }
+    const hero = o.hero;
+    if (hero && typeof hero === "object") {
+      const sc = parseHeroShowcaseSettings(hero as Record<string, unknown>);
+      setShowcaseAutoMove(sc.autoMove);
+      setShowcaseDirection(sc.direction);
+      setShowcaseSpeed(sc.speed);
+      setShowcasePauseTouch(sc.pauseOnTouch);
+      setShowcasePauseHover(sc.pauseOnHover);
+      setShowcaseInfiniteLoop(sc.infiniteLoop);
     }
   }, [storefrontPayload?.storefrontStyleConfig]);
 
@@ -216,6 +243,16 @@ export default function AdminDesignPage(): ReactElement {
       });
       await putStorefrontStyleCatalogPatch(businessId, {
         catalog: { gridBoost: catalogGridBoost },
+        hero: {
+          showcase: {
+            autoMove: showcaseAutoMove,
+            direction: showcaseDirection,
+            speed: showcaseSpeed,
+            pauseOnTouch: showcasePauseTouch,
+            pauseOnHover: showcasePauseHover,
+            infiniteLoop: showcaseInfiniteLoop,
+          },
+        },
         catalogFooter: {
           enabled: footerSliderEnabled,
           title: footerSliderTitle.trim() === "" ? "Букеты" : footerSliderTitle.trim(),
@@ -460,6 +497,74 @@ export default function AdminDesignPage(): ReactElement {
               placeholder="Например: доставка цветов за 2 часа"
             />
           </label>
+        </div>
+
+        <p className="admin-theme-subtitle">Главный showcase-слайдер</p>
+        <p className="admin-dash-page__subtitle" style={{ marginBottom: 10 }}>
+          Плавная бесконечная лента баннеров в hero. Без stories-полосок — только premium rail.
+        </p>
+        <div className="admin-theme-banner" style={{ marginBottom: 14 }}>
+          <label className="admin-theme-toggle">
+            <input
+              type="checkbox"
+              checked={showcaseAutoMove}
+              onChange={(e) => setShowcaseAutoMove(e.target.checked)}
+            />
+            Автодвижение ленты
+          </label>
+          <label className="admin-theme-toggle">
+            <input
+              type="checkbox"
+              checked={showcaseInfiniteLoop}
+              onChange={(e) => setShowcaseInfiniteLoop(e.target.checked)}
+            />
+            Бесконечный цикл
+          </label>
+          <label className="admin-theme-toggle">
+            <input
+              type="checkbox"
+              checked={showcasePauseTouch}
+              onChange={(e) => setShowcasePauseTouch(e.target.checked)}
+            />
+            Пауза при касании
+          </label>
+          <label className="admin-theme-toggle">
+            <input
+              type="checkbox"
+              checked={showcasePauseHover}
+              onChange={(e) => setShowcasePauseHover(e.target.checked)}
+            />
+            Пауза при наведении (desktop)
+          </label>
+          <p className="admin-theme-subtitle admin-theme-hint--tight" style={{ marginTop: 10 }}>
+            Направление
+          </p>
+          <div className="admin-theme-layout-switch" style={{ marginBottom: 10 }}>
+            {(["left", "right"] as const).map((d) => (
+              <button
+                key={d}
+                type="button"
+                className={`admin-theme-layout-switch__btn${showcaseDirection === d ? " admin-theme-layout-switch__btn--on" : ""}`}
+                onClick={() => setShowcaseDirection(d)}
+              >
+                {d === "left" ? "Влево ←" : "Вправо →"}
+              </button>
+            ))}
+          </div>
+          <p className="admin-theme-subtitle admin-theme-hint--tight">Скорость</p>
+          <div className="admin-theme-layout-switch">
+            {(["slow", "medium", "fast"] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                className={`admin-theme-layout-switch__btn${showcaseSpeed === s ? " admin-theme-layout-switch__btn--on" : ""}`}
+                onClick={() => setShowcaseSpeed(s)}
+                disabled={!showcaseAutoMove}
+              >
+                {s === "slow" ? "Медленно" : s === "medium" ? "Средне" : "Быстро"}
+              </button>
+            ))}
+          </div>
         </div>
 
         <p className="admin-theme-subtitle">Каталог и низ витрины</p>

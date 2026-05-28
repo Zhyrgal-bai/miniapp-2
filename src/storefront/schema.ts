@@ -202,6 +202,14 @@ export type StorefrontStyleConfig = {
     shadow: boolean;
     alignment: "left" | "center";
     ctaPosition: "below" | "overlay" | "hidden";
+    showcase: {
+      autoMove: boolean;
+      direction: "left" | "right";
+      speed: "slow" | "medium" | "fast";
+      pauseOnTouch: boolean;
+      pauseOnHover: boolean;
+      infiniteLoop: boolean;
+    };
   };
   catalog: {
     gridBoost: "normal" | "bold";
@@ -581,6 +589,23 @@ const StorefrontStyleConfigSchema = z
         shadow: z.boolean().default(false),
         alignment: z.enum(["left", "center"]).default("center"),
         ctaPosition: z.enum(["below", "overlay", "hidden"]).default("below"),
+        showcase: z
+          .object({
+            autoMove: z.boolean().default(true),
+            direction: z.enum(["left", "right"]).default("left"),
+            speed: z.enum(["slow", "medium", "fast"]).default("medium"),
+            pauseOnTouch: z.boolean().default(true),
+            pauseOnHover: z.boolean().default(true),
+            infiniteLoop: z.boolean().default(true),
+          })
+          .default({
+            autoMove: true,
+            direction: "left",
+            speed: "medium",
+            pauseOnTouch: true,
+            pauseOnHover: true,
+            infiniteLoop: true,
+          }),
       })
       .default({
         layout: "centered",
@@ -591,6 +616,14 @@ const StorefrontStyleConfigSchema = z
         shadow: false,
         alignment: "center",
         ctaPosition: "below",
+        showcase: {
+          autoMove: true,
+          direction: "left",
+          speed: "medium",
+          pauseOnTouch: true,
+          pauseOnHover: true,
+          infiniteLoop: true,
+        },
       }),
     catalog: z
       .object({
@@ -663,16 +696,38 @@ const StorefrontStyleConfigSchema = z
       shadow: false,
       alignment: "center",
       ctaPosition: "below",
+      showcase: {
+        autoMove: true,
+        direction: "left",
+        speed: "medium",
+        pauseOnTouch: true,
+        pauseOnHover: true,
+        infiniteLoop: true,
+      },
     },
     catalog: { gridBoost: "bold" },
     catalogFooter: { enabled: false, title: "Акции", slides: [] },
   });
+
+const HeroShowcasePatchSchema = z.object({
+  autoMove: z.boolean().optional(),
+  direction: z.enum(["left", "right"]).optional(),
+  speed: z.enum(["slow", "medium", "fast"]).optional(),
+  pauseOnTouch: z.boolean().optional(),
+  pauseOnHover: z.boolean().optional(),
+  infiniteLoop: z.boolean().optional(),
+});
 
 export const StorefrontStyleCatalogPatchSchema = z
   .object({
     catalog: z
       .object({
         gridBoost: z.enum(["normal", "bold"]).optional(),
+      })
+      .optional(),
+    hero: z
+      .object({
+        showcase: HeroShowcasePatchSchema.optional(),
       })
       .optional(),
     catalogFooter: z
@@ -741,6 +796,26 @@ export function applyStorefrontStyleCatalogPatch(
         enabled: patch.catalogFooter.enabled !== undefined ? patch.catalogFooter.enabled : cf.enabled,
         slides:
           patch.catalogFooter.slides !== undefined ? patch.catalogFooter.slides : cf.slides,
+      },
+    };
+  }
+  if (patch.hero?.showcase) {
+    const sc = base.hero.showcase;
+    const p = patch.hero.showcase;
+    next = {
+      ...next,
+      hero: {
+        ...base.hero,
+        showcase: {
+          ...sc,
+          ...p,
+          autoMove: p.autoMove !== undefined ? p.autoMove : sc.autoMove,
+          direction: p.direction !== undefined ? p.direction : sc.direction,
+          speed: p.speed !== undefined ? p.speed : sc.speed,
+          pauseOnTouch: p.pauseOnTouch !== undefined ? p.pauseOnTouch : sc.pauseOnTouch,
+          pauseOnHover: p.pauseOnHover !== undefined ? p.pauseOnHover : sc.pauseOnHover,
+          infiniteLoop: p.infiniteLoop !== undefined ? p.infiniteLoop : sc.infiniteLoop,
+        },
       },
     };
   }

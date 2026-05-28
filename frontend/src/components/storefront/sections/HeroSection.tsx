@@ -4,10 +4,11 @@ import {
   formatFeaturedPromoLine,
   type FeaturedPromo,
 } from "../../../storefront/featuredPromo";
+import { parseHeroShowcaseSettings } from "../../../storefront/heroShowcaseSettings";
 import {
-  CinematicHeroSlider,
-  type CinematicHeroSlide,
-} from "./CinematicHeroSlider";
+  ShowcaseMarqueeHero,
+  type ShowcaseMarqueeSlide,
+} from "./ShowcaseMarqueeHero";
 
 export type HeroCtaPayload = {
   kind: "scrollToSection" | "openCategory" | "openProduct" | "url" | "none";
@@ -102,13 +103,7 @@ export function HeroSection(props: {
   const defaultCta = readTextConfigString(textConfig, "heroDefaultCta").trim();
   const defaultKicker = readTextConfigString(textConfig, "heroDefaultKicker").trim();
 
-  const autoplayMs = useMemo(() => {
-    if (effectiveSlides.length <= 1) return 0;
-    const raw = (hs as { autoplayIntervalMs?: unknown }).autoplayIntervalMs;
-    if (typeof raw === "number" && Number.isFinite(raw) && raw >= 2500) return Math.min(raw, 60_000);
-    if ((hs as { autoplay?: unknown }).autoplay === true) return 5500;
-    return effectiveSlides.length > 1 ? 5500 : 0;
-  }, [effectiveSlides.length, hs]);
+  const showcaseSettings = useMemo(() => parseHeroShowcaseSettings(hs), [hs]);
 
   const heroPreset =
     readString(config, "heroPreset").trim() || readString(hs, "heroPreset").trim();
@@ -120,7 +115,7 @@ export function HeroSection(props: {
         ? "compact"
         : "";
 
-  const cinematicSlides = useMemo((): CinematicHeroSlide[] => {
+  const showcaseSlides = useMemo((): ShowcaseMarqueeSlide[] => {
     return effectiveSlides.filter(slideHasContent).map((slide, idx) => {
       const title =
         readString(slide, "title").trim() !== "" ? readString(slide, "title") : defaultTitle;
@@ -192,12 +187,12 @@ export function HeroSection(props: {
     [onHeroCta],
   );
 
-  if (!hasMeaningfulSlide || cinematicSlides.length === 0) return null;
+  if (!hasMeaningfulSlide || showcaseSlides.length === 0) return null;
 
   return (
-    <CinematicHeroSlider
-      slides={cinematicSlides}
-      autoplayMs={autoplayMs}
+    <ShowcaseMarqueeHero
+      slides={showcaseSlides}
+      showcase={showcaseSettings}
       heightMode={heightMode}
       heroPreset={heroPreset}
       ctaPosition={ctaPosition}
