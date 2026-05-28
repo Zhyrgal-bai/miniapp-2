@@ -33,8 +33,6 @@ type HeaderProps = {
   storeName?: string;
   /** Логотип магазина (theme.logoUrl). */
   logoUrl?: string | null;
-  /** Слоган под названием в шапке. */
-  subtitle?: string | null;
   /** Premium identity header (витрина). */
   storeBrandMode?: boolean;
   /** Показать блок «Магазин» (OWNER/ADMIN). */
@@ -59,7 +57,6 @@ export default function Header({
   title,
   storeName,
   logoUrl,
-  subtitle,
   storeBrandMode = false,
   isMerchantStaff = false,
   accountMenu,
@@ -73,7 +70,6 @@ export default function Header({
   const displayNameRaw = (storeName ?? title)?.trim() || "";
   const centerTitle = displayNameRaw !== "" ? displayNameRaw : APP_NAME;
   const shopLine = displayNameRaw || null;
-  const tagline = subtitle?.trim() || null;
   const logoSrc =
     logoUrl != null && logoUrl.trim() !== ""
       ? buildCloudinaryResponsiveUrl(logoUrl.trim(), "thumbnail")
@@ -370,23 +366,20 @@ export default function Header({
       <header className="app-header app-header--store-brand">
         {sheetPortal}
         <div className="app-header__brand-card">
-          <div className="app-header__brand-main">
+          <div className="app-header__brand-slot app-header__brand-slot--left">
+            {burgerButton}
+          </div>
+          <div className="app-header__brand-slot app-header__brand-slot--center">
             <div className="app-header__store-logo" aria-hidden={logoSrc !== ""}>
               {logoSrc !== "" ? (
-                <img src={logoSrc} alt="" width={44} height={44} />
+                <img src={logoSrc} alt="" width={40} height={40} />
               ) : (
                 <span className="app-header__store-logo-fallback">{storeInitials}</span>
               )}
             </div>
-            <div className="app-header__store-copy">
-              <h1 className="app-header__store-name">{centerTitle}</h1>
-              {tagline ? (
-                <p className="app-header__store-tagline">{tagline}</p>
-              ) : null}
-            </div>
+            <h1 className="app-header__store-name">{centerTitle}</h1>
           </div>
-          <div className="app-header__actions">
-            {burgerButton}
+          <div className="app-header__brand-slot app-header__brand-slot--right">
             {userButton}
           </div>
         </div>

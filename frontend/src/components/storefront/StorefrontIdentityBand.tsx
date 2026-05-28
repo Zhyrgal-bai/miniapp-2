@@ -3,6 +3,38 @@ function readTextValue(cfg: Record<string, unknown> | undefined, key: string): s
   return typeof v === "string" ? v.trim() : "";
 }
 
+export function resolveIdentityTrustPills(
+  textConfig: Record<string, unknown> | undefined,
+): string[] {
+  return resolvePills(textConfig);
+}
+
+export function hasIdentityBandExtras(
+  textConfig: Record<string, unknown> | undefined,
+  styleConfig: Record<string, unknown> | undefined,
+): boolean {
+  const personality =
+    readTextValue(textConfig, "brandPersonality") ||
+    (typeof styleConfig?.brand === "object" && styleConfig.brand != null
+      ? readTextValue(styleConfig.brand as Record<string, unknown>, "personality")
+      : "");
+  return personality !== "" || resolvePills(textConfig).length > 0;
+}
+
+/** Skip redundant identity card when premium header already shows name + tagline. */
+export function shouldRenderIdentityBand(
+  storeName: string,
+  textConfig: Record<string, unknown> | undefined,
+  styleConfig: Record<string, unknown> | undefined,
+  options?: { headerBrandActive?: boolean },
+): boolean {
+  const extras = hasIdentityBandExtras(textConfig, styleConfig);
+  if (options?.headerBrandActive && !extras) return false;
+  if (storeName !== "" || extras) return true;
+  const keys = ["brandTagline", "brandPersonality", "brandTrust1", "brandTrust2", "brandTrust3", "heroDefaultSubtitle"];
+  return keys.some((k) => readTextValue(textConfig, k) !== "");
+}
+
 function resolvePills(textConfig: Record<string, unknown> | undefined): string[] {
   const explicit = textConfig?.brandTrustPills;
   if (Array.isArray(explicit)) {

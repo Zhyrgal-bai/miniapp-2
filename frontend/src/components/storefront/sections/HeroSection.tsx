@@ -114,7 +114,11 @@ export function HeroSection(props: {
     readString(config, "heroPreset").trim() || readString(hs, "heroPreset").trim();
   const heightModeRaw = readString(hs, "heightMode").trim().toLowerCase();
   const heightMode: "tall" | "compact" | "" =
-    heightModeRaw === "tall" ? "tall" : heightModeRaw === "compact" ? "compact" : "";
+    heightModeRaw === "tall"
+      ? "tall"
+      : heightModeRaw === "compact" || heightModeRaw === ""
+        ? "compact"
+        : "";
 
   const cinematicSlides = useMemo((): CinematicHeroSlide[] => {
     return effectiveSlides.filter(slideHasContent).map((slide, idx) => {

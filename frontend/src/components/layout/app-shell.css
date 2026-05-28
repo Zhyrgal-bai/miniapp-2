@@ -113,12 +113,22 @@
   --app-header-approx: 76px;
 }
 
+.sf-app[data-sf-store-brand="1"] {
+  --app-header-approx: 52px;
+}
+
+.sf-app[data-sf-store-brand="1"] .app__content {
+  padding-top: calc(
+    var(--app-header-approx) + env(safe-area-inset-top, 0px) + 2px
+  );
+}
+
 .sf-app .app-header--store-brand {
   display: block;
-  padding-top: max(8px, env(safe-area-inset-top, 0px));
-  padding-bottom: 10px;
-  padding-left: max(12px, env(safe-area-inset-left, 0px));
-  padding-right: max(12px, env(safe-area-inset-right, 0px));
+  padding-top: max(6px, env(safe-area-inset-top, 0px));
+  padding-bottom: 6px;
+  padding-left: max(10px, env(safe-area-inset-left, 0px));
+  padding-right: max(10px, env(safe-area-inset-right, 0px));
   min-height: calc(var(--app-header-approx) + env(safe-area-inset-top, 0px));
   background: transparent;
   border-bottom: none;
@@ -128,12 +138,12 @@
 }
 
 .sf-app .app-header__brand-card {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(44px, auto) minmax(0, 1fr) minmax(44px, auto);
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 16px;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 14px;
   border: 1px solid color-mix(in srgb, var(--sf-color-primary) 28%, transparent);
   background: linear-gradient(
     145deg,
@@ -164,21 +174,34 @@
   pointer-events: none;
 }
 
-.sf-app .app-header__brand-main {
+.sf-app .app-header__brand-slot {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
   min-width: 0;
-  flex: 1;
+}
+
+.sf-app .app-header__brand-slot--left {
+  justify-content: flex-start;
+}
+
+.sf-app .app-header__brand-slot--center {
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 4px;
+}
+
+.sf-app .app-header__brand-slot--right {
+  justify-content: flex-end;
 }
 
 .sf-app .app-header__store-logo {
   position: relative;
   flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--sf-color-primary) 35%, transparent);
   background: color-mix(in srgb, var(--sf-color-surface) 88%, transparent);
@@ -211,40 +234,25 @@
   );
 }
 
-.sf-app .app-header__store-copy {
-  min-width: 0;
-}
-
 .sf-app .app-header__store-name {
   margin: 0;
   font-family: var(--sf-font-heading);
-  font-size: 1.05rem;
+  font-size: 1rem;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.15;
   letter-spacing: -0.02em;
   color: var(--sf-color-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: center;
+  min-width: 0;
+  flex: 1 1 auto;
+  max-width: 100%;
 }
 
-.sf-app .app-header__store-tagline {
-  margin: 0.2rem 0 0;
-  font-size: 0.6875rem;
-  line-height: 1.35;
-  font-weight: 500;
-  color: var(--sf-color-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sf-app .app-header__actions {
-  position: relative;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.sf-app .app-header--store-brand .app-header__store-tagline {
+  display: none;
 }
 
 .sf-app .app-header--store-brand .app-header__burger {
@@ -264,6 +272,22 @@
 .sf-app[data-sf-store-brand="1"] .sf-identity-band__name,
 .sf-app[data-sf-store-brand="1"] .sf-identity-band__tagline {
   display: none;
+}
+
+/* Header + hero: one visual system, minimal dead zone */
+.sf-app[data-sf-store-brand="1"] .sf-cine-hero-section.sf-section--padded {
+  padding-top: 2px;
+  padding-bottom: 0;
+}
+
+.sf-app[data-sf-store-brand="1"] .sf-cine-hero {
+  box-shadow:
+    0 12px 32px color-mix(in srgb, #000 16%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--sf-color-border, #555) 22%, transparent);
+}
+
+.sf-app[data-sf-store-brand="1"] .sf-feed__chunk--stack:first-child .sf-cine-hero-section {
+  margin-top: 0;
 }
 
 .sf-app .app-header__logo {
@@ -914,6 +938,18 @@
   .sf-app {
     --app-header-approx: 68px;
     --app-header-pad-x: 12px;
+  }
+
+  .sf-app[data-sf-store-brand="1"] {
+    --app-header-approx: 50px;
+  }
+
+  .sf-app .app-header__brand-slot--center {
+    gap: 6px;
+  }
+
+  .sf-app .app-header__store-name {
+    font-size: 0.9375rem;
   }
 
   .sf-app .app-header__store-name {

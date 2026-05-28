@@ -83,16 +83,6 @@ export default function App() {
   const { theme, templateId } = useTheme();
   const { payload, loading: storefrontLoading, error: storefrontError, refresh: refreshStorefront } = useStorefrontPayload();
 
-  const headerSubtitle = useMemo(() => {
-    const txt = payload?.storefrontTextConfig;
-    if (txt && typeof txt === "object") {
-      const tag = (txt as Record<string, unknown>).brandTagline;
-      if (typeof tag === "string" && tag.trim() !== "") return tag.trim();
-    }
-    const bannerSub = theme.banner.subtitle?.trim();
-    return bannerSub !== "" ? bannerSub : null;
-  }, [payload?.storefrontTextConfig, theme.banner.subtitle]);
-
   const storeDisplayName = payload?.storeName?.trim() || "";
   const storeBrandHeader = storeDisplayName !== "";
   const [page, setPage] = useState<AppNavPage>(initialPageFromPath);
@@ -623,7 +613,6 @@ export default function App() {
         title={storeDisplayName || undefined}
         storeName={storeDisplayName || undefined}
         logoUrl={theme.logoUrl}
-        subtitle={headerSubtitle}
         storeBrandMode={storeBrandHeader}
         isMerchantStaff={adminAllowed}
         accountMenu={{

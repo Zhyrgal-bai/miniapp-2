@@ -31,7 +31,10 @@ import {
   type StorefrontCardViewportTier,
 } from "../../storefront/catalogCardPresets";
 import { StorefrontFeed } from "./StorefrontFeed";
-import { StorefrontIdentityBand } from "./StorefrontIdentityBand";
+import {
+  shouldRenderIdentityBand,
+  StorefrontIdentityBand,
+} from "./StorefrontIdentityBand";
 import { trackStoreView } from "../../services/storefrontAnalytics";
 import { enrichProductsFromCatalog } from "../../utils/enrichProductsFromCatalog";
 
@@ -237,20 +240,17 @@ export function StorefrontRenderer(props: {
   }, [styleCfg, catalog]);
 
   const identityTextCfg = props.payload.storefrontTextConfig ?? undefined;
-  const showIdentityBand = useMemo(() => {
-    const storeName = String(props.payload.storeName ?? "").trim();
-    const cfg = identityTextCfg as Record<string, unknown> | undefined;
-    const keys = [
-      "brandTagline",
-      "brandPersonality",
-      "brandTrust1",
-      "brandTrust2",
-      "brandTrust3",
-      "heroDefaultSubtitle",
-    ];
-    const hasTextHints = keys.some((k) => typeof cfg?.[k] === "string" && String(cfg[k]).trim() !== "");
-    return storeName !== "" || hasTextHints;
-  }, [props.payload.storeName, identityTextCfg]);
+  const storeBrandHeaderActive = Boolean(String(props.payload.storeName ?? "").trim());
+  const showIdentityBand = useMemo(
+    () =>
+      shouldRenderIdentityBand(
+        String(props.payload.storeName ?? "").trim(),
+        identityTextCfg as Record<string, unknown> | undefined,
+        styleCfg,
+        { headerBrandActive: storeBrandHeaderActive },
+      ),
+    [props.payload.storeName, identityTextCfg, styleCfg, storeBrandHeaderActive],
+  );
 
   return (
     <ThemeVarsProvider theme={theme}>

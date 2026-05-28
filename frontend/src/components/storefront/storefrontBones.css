@@ -81,7 +81,12 @@
 }
 
 .sf-root .sf-section--padded {
-  padding: 10px var(--sf-mobile-pad, 12px) !important;
+  padding: 8px var(--sf-mobile-pad, 12px) !important;
+}
+
+.sf-root .sf-cine-hero-section.sf-section--padded {
+  padding-top: 4px !important;
+  padding-bottom: 2px !important;
 }
 
 /* ── Product grid (bones loads last: enforce rhythm + merchant --sf-grid-gap floor) ── */
