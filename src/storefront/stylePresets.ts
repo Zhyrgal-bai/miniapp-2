@@ -11,6 +11,14 @@ const DEFAULT_HERO_SHOWCASE = {
   infiniteLoop: true,
 };
 
+const DEFAULT_CATALOG_FOOTER_RAIL = {
+  autoMove: true,
+  direction: "left" as const,
+  speed: "medium" as const,
+  pauseOnTouch: true,
+  infiniteLoop: true,
+};
+
 export function kitFromTemplateId(templateId: string | null | undefined): StorefrontKitId {
   const t = typeof templateId === "string" ? templateId.trim().toLowerCase() : "";
   if (t === "minimal" || t === "light") return "minimal";
@@ -51,7 +59,12 @@ export const STOREFRONT_STYLE_PRESETS: Record<Exclude<StorefrontKitId, "default"
       showcase: DEFAULT_HERO_SHOWCASE,
     },
     catalog: { gridBoost: "bold" },
-    catalogFooter: { enabled: false, title: "Акции", slides: [] },
+    catalogFooter: {
+      enabled: false,
+      title: "Акции",
+      slides: [],
+      rail: DEFAULT_CATALOG_FOOTER_RAIL,
+    },
   },
   luxury: {
     layout: { density: "comfortable", sectionSpacing: 20, productGap: 12, mobilePadding: 14, contentWidth: "narrow" },
@@ -83,7 +96,12 @@ export const STOREFRONT_STYLE_PRESETS: Record<Exclude<StorefrontKitId, "default"
       showcase: DEFAULT_HERO_SHOWCASE,
     },
     catalog: { gridBoost: "bold" },
-    catalogFooter: { enabled: false, title: "Акции", slides: [] },
+    catalogFooter: {
+      enabled: false,
+      title: "Акции",
+      slides: [],
+      rail: DEFAULT_CATALOG_FOOTER_RAIL,
+    },
   },
   fashion: {
     layout: { density: "normal", sectionSpacing: 18, productGap: 10, mobilePadding: 12, contentWidth: "full" },
@@ -115,7 +133,12 @@ export const STOREFRONT_STYLE_PRESETS: Record<Exclude<StorefrontKitId, "default"
       showcase: DEFAULT_HERO_SHOWCASE,
     },
     catalog: { gridBoost: "bold" },
-    catalogFooter: { enabled: false, title: "Акции", slides: [] },
+    catalogFooter: {
+      enabled: false,
+      title: "Акции",
+      slides: [],
+      rail: DEFAULT_CATALOG_FOOTER_RAIL,
+    },
   },
   neon: {
     layout: { density: "compact", sectionSpacing: 14, productGap: 8, mobilePadding: 10, contentWidth: "full" },
@@ -147,7 +170,12 @@ export const STOREFRONT_STYLE_PRESETS: Record<Exclude<StorefrontKitId, "default"
       showcase: DEFAULT_HERO_SHOWCASE,
     },
     catalog: { gridBoost: "bold" },
-    catalogFooter: { enabled: false, title: "Акции", slides: [] },
+    catalogFooter: {
+      enabled: false,
+      title: "Акции",
+      slides: [],
+      rail: DEFAULT_CATALOG_FOOTER_RAIL,
+    },
   },
 };
 

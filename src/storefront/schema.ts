@@ -218,6 +218,13 @@ export type StorefrontStyleConfig = {
     enabled: boolean;
     title: string;
     slides: CatalogFooterSlide[];
+    rail: {
+      autoMove: boolean;
+      direction: "left" | "right";
+      speed: "slow" | "medium" | "fast";
+      pauseOnTouch: boolean;
+      infiniteLoop: boolean;
+    };
   };
 };
 
@@ -635,8 +642,34 @@ const StorefrontStyleConfigSchema = z
         enabled: z.boolean().default(false),
         title: z.string().trim().max(80).optional().default("Акции"),
         slides: z.array(CatalogFooterSlideSchema).max(10).default([]),
+        rail: z
+          .object({
+            autoMove: z.boolean().default(true),
+            direction: z.enum(["left", "right"]).default("left"),
+            speed: z.enum(["slow", "medium", "fast"]).default("medium"),
+            pauseOnTouch: z.boolean().default(true),
+            infiniteLoop: z.boolean().default(true),
+          })
+          .default({
+            autoMove: true,
+            direction: "left",
+            speed: "medium",
+            pauseOnTouch: true,
+            infiniteLoop: true,
+          }),
       })
-      .default({ enabled: false, title: "Акции", slides: [] }),
+      .default({
+        enabled: false,
+        title: "Акции",
+        slides: [],
+        rail: {
+          autoMove: true,
+          direction: "left",
+          speed: "medium",
+          pauseOnTouch: true,
+          infiniteLoop: true,
+        },
+      }),
   })
   .default({
     layout: {
@@ -706,8 +739,27 @@ const StorefrontStyleConfigSchema = z
       },
     },
     catalog: { gridBoost: "bold" },
-    catalogFooter: { enabled: false, title: "Акции", slides: [] },
+    catalogFooter: {
+      enabled: false,
+      title: "Акции",
+      slides: [],
+      rail: {
+        autoMove: true,
+        direction: "left",
+        speed: "medium",
+        pauseOnTouch: true,
+        infiniteLoop: true,
+      },
+    },
   });
+
+const CatalogFooterRailPatchSchema = z.object({
+  autoMove: z.boolean().optional(),
+  direction: z.enum(["left", "right"]).optional(),
+  speed: z.enum(["slow", "medium", "fast"]).optional(),
+  pauseOnTouch: z.boolean().optional(),
+  infiniteLoop: z.boolean().optional(),
+});
 
 const HeroShowcasePatchSchema = z.object({
   autoMove: z.boolean().optional(),
@@ -735,13 +787,15 @@ export const StorefrontStyleCatalogPatchSchema = z
         enabled: z.boolean().optional(),
         title: z.string().trim().max(80).optional(),
         slides: z.array(CatalogFooterSlideSchema).max(10).optional(),
+        rail: CatalogFooterRailPatchSchema.optional(),
       })
       .optional(),
   })
   .strict()
-  .refine((v) => v.catalog !== undefined || v.catalogFooter !== undefined, {
-    message: "Нужен catalog или catalogFooter",
-  });
+  .refine(
+    (v) => v.catalog !== undefined || v.catalogFooter !== undefined || v.hero !== undefined,
+    { message: "Нужен catalog, catalogFooter или hero" },
+  );
 
 export type StorefrontStyleCatalogPatch = z.infer<typeof StorefrontStyleCatalogPatchSchema>;
 
@@ -787,6 +841,8 @@ export function applyStorefrontStyleCatalogPatch(
   }
   if (patch.catalogFooter) {
     const cf = base.catalogFooter;
+    const railBase = cf.rail;
+    const railPatch = patch.catalogFooter.rail;
     next = {
       ...next,
       catalogFooter: {
@@ -796,6 +852,24 @@ export function applyStorefrontStyleCatalogPatch(
         enabled: patch.catalogFooter.enabled !== undefined ? patch.catalogFooter.enabled : cf.enabled,
         slides:
           patch.catalogFooter.slides !== undefined ? patch.catalogFooter.slides : cf.slides,
+        rail: railPatch
+          ? {
+              ...railBase,
+              ...railPatch,
+              autoMove: railPatch.autoMove !== undefined ? railPatch.autoMove : railBase.autoMove,
+              direction:
+                railPatch.direction !== undefined ? railPatch.direction : railBase.direction,
+              speed: railPatch.speed !== undefined ? railPatch.speed : railBase.speed,
+              pauseOnTouch:
+                railPatch.pauseOnTouch !== undefined
+                  ? railPatch.pauseOnTouch
+                  : railBase.pauseOnTouch,
+              infiniteLoop:
+                railPatch.infiniteLoop !== undefined
+                  ? railPatch.infiniteLoop
+                  : railBase.infiniteLoop,
+            }
+          : railBase,
       },
     };
   }
