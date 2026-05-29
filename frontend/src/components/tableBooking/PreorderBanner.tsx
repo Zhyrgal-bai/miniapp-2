@@ -1,7 +1,7 @@
 import type { ReactElement } from "react";
-import { usePreorderMode } from "../context/PreorderContext";
-import { formatPreorderWhen } from "../utils/reservationPreorderStorage";
-import "../components/tableBooking/tableBooking.css";
+import { usePreorderMode } from "../../context/PreorderContext";
+import { formatPreorderWhen } from "../../utils/reservationPreorderStorage";
+import "./tableBooking.css";
 
 export function PreorderBanner(): ReactElement | null {
   const { context, error, loading } = usePreorderMode();

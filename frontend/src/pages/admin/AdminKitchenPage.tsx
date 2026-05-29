@@ -17,15 +17,6 @@ const COLS: { prep: OrderPrepStatus; title: string }[] = [
   { prep: "SERVED", title: "Выдано" },
 ];
 
-function formatWhen(iso: string): string {
-  return new Date(iso).toLocaleString("ru-RU", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("ru-RU", {
     hour: "2-digit",
