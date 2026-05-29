@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import type { Prisma, TableReservationStatus } from "@prisma/client";
+import type { Prisma, TableReservationStatus, ReservationDepositStatus } from "@prisma/client";
 import { prisma } from "./db.js";
 import {
   MERCHANT_PERM,
@@ -21,9 +21,23 @@ import {
   syncDiningTableStatuses,
 } from "./tableReservationService.js";
 import {
+  confirmTableReservationById,
+} from "./tableReservationApproval.js";
+import {
+  assertReservationPreorderEligible,
+  cancelUnpaidPreordersForReservation,
+  loadReservationPreorderSummaries,
+  type ReservationPreorderSummary,
+} from "./tableReservationPreorder.js";
+import {
+  notifyOwnerNewReservation,
   notifyReservationCancelled,
-  notifyReservationConfirmed,
 } from "./tableReservationNotify.js";
+import {
+  reservationDepositDtoFields,
+  startReservationDepositPayment,
+  syncGuestReservationDepositPayment,
+} from "./tableReservationDeposit.js";
 
 type Deps = {
   requireMerchantStaff: (
@@ -90,19 +104,43 @@ function tablePublicDto(
   };
 }
 
-function reservationDto(row: {
-  id: number;
-  tableId: number;
-  reservedAt: Date;
-  partySize: number | null;
-  guestName: string | null;
-  guestPhone: string | null;
-  guestNote: string | null;
-  status: TableReservationStatus;
-  durationMinutes: number;
-  createdAt: Date;
-  table?: { name: string; seats: number };
-}) {
+function reservationDto(
+  row: {
+    id: number;
+    tableId: number;
+    reservedAt: Date;
+    partySize: number | null;
+    guestName: string | null;
+    guestPhone: string | null;
+    guestNote: string | null;
+    status: TableReservationStatus;
+    durationMinutes: number;
+    createdAt: Date;
+    depositStatus?: ReservationDepositStatus;
+    depositAmount?: number | null;
+    depositPaidAt?: Date | null;
+    depositDueAt?: Date | null;
+    table?: { name: string; seats: number };
+  },
+  extra?: { preorderSummary?: ReservationPreorderSummary },
+) {
+  const depositFields =
+    row.depositStatus != null
+      ? reservationDepositDtoFields({
+          depositStatus: row.depositStatus,
+          depositAmount: row.depositAmount ?? null,
+          depositPaidAt: row.depositPaidAt ?? null,
+          depositDueAt: row.depositDueAt ?? null,
+        })
+      : {
+          depositStatus: "NONE" as const,
+          depositAmount: null,
+          depositPaidAt: null,
+          depositDueAt: null,
+          depositLabel: "Не требуется",
+          canPayDeposit: false,
+        };
+
   return {
     id: row.id,
     tableId: row.tableId,
@@ -116,6 +154,10 @@ function reservationDto(row: {
     status: row.status,
     durationMinutes: row.durationMinutes,
     createdAt: row.createdAt.toISOString(),
+    hasPreorder: extra?.preorderSummary?.hasPaidPreorder ?? false,
+    preorderStatus: extra?.preorderSummary?.guestStatus ?? "none",
+    preorderLabel: extra?.preorderSummary?.label ?? "Нет предзаказа",
+    ...depositFields,
   };
 }
 
@@ -196,6 +238,7 @@ export function attachTableReservationRoutes(app: Express, deps: Deps): void {
       res.json({
         supported: true,
         tables: payload,
+        hasBookableTables: payload.some((t) => t.bookable),
       });
     } catch (e) {
       console.error("GET storefront dining-tables:", e);
@@ -337,25 +380,214 @@ export function attachTableReservationRoutes(app: Express, deps: Deps): void {
             guestNote: parsed.data.guestNote ?? null,
             durationMinutes,
             guestTelegramId: telegramId,
-            status: "CONFIRMED",
+            status: "PENDING",
           },
           include: { table: { select: { name: true, seats: true } } },
         });
 
         await syncDiningTableStatuses(businessId);
 
-        void notifyReservationConfirmed({
+        void notifyOwnerNewReservation({
+          reservationId: created.id,
           businessId,
           businessName: business?.name ?? "Кафе",
-          guestTelegramId: telegramId,
+          guestName: parsed.data.guestName,
+          guestPhone: parsed.data.guestPhone,
           tableName: table.name,
-          reservedAt,
           partySize: parsed.data.partySize,
+          reservedAt,
+          guestNote: parsed.data.guestNote ?? null,
         });
 
         res.status(201).json({ reservation: reservationDto(created) });
       } catch (e) {
         console.error("POST table-reservations:", e);
+        res.status(500).json({ error: "Ошибка сервера" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/storefront/:businessId/table-reservations/mine",
+    async (req: Request, res: Response) => {
+      try {
+        const businessId = parseBusinessId(req.params.businessId);
+        if (businessId == null) {
+          res.status(400).json({ error: "Некорректный магазин" });
+          return;
+        }
+        const telegramId = telegramIdFromRequest(req);
+        if (!telegramId) {
+          res.status(401).json({ error: "Откройте Mini App через Telegram" });
+          return;
+        }
+        if (!(await assertVenueBusiness(businessId))) {
+          res.json({ supported: false, reservations: [] });
+          return;
+        }
+
+        const rows = await prisma.tableReservation.findMany({
+          where: { businessId, guestTelegramId: telegramId },
+          include: { table: { select: { name: true, seats: true } } },
+          orderBy: { reservedAt: "desc" },
+          take: 30,
+        });
+
+        const summaries = await loadReservationPreorderSummaries(rows.map((r) => r.id));
+
+        res.json({
+          supported: true,
+          reservations: rows.map((r) => {
+            const summary = summaries.get(r.id);
+            return reservationDto(r, summary ? { preorderSummary: summary } : undefined);
+          }),
+        });
+      } catch (e) {
+        console.error("GET table-reservations/mine:", e);
+        res.status(500).json({ error: "Ошибка сервера" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/storefront/:businessId/table-reservations/:id/preorder-context",
+    async (req: Request, res: Response) => {
+      try {
+        const businessId = parseBusinessId(req.params.businessId);
+        const reservationId = parseReservationId(req.params.id);
+        if (businessId == null || reservationId == null) {
+          res.status(400).json({ error: "Некорректные параметры" });
+          return;
+        }
+        const telegramId = telegramIdFromRequest(req);
+        if (!telegramId) {
+          res.status(401).json({ error: "Откройте Mini App через Telegram" });
+          return;
+        }
+        if (!(await assertVenueBusiness(businessId))) {
+          res.status(403).json({ error: VENUE_DENIED });
+          return;
+        }
+
+        const check = await assertReservationPreorderEligible({
+          businessId,
+          reservationId,
+          guestTelegramId: telegramId,
+        });
+        if (!check.ok) {
+          res.status(check.status).json({ error: check.error });
+          return;
+        }
+
+        res.json({
+          reservation: {
+            id: check.reservation.id,
+            tableName: check.reservation.tableName,
+            reservedAt: check.reservation.reservedAt.toISOString(),
+            partySize: check.reservation.partySize,
+            status: check.reservation.status,
+            hasPreorder: check.reservation.hasPreorder,
+            preorderStatus: check.reservation.preorderGuestStatus,
+            preorderLabel: check.reservation.preorderLabel,
+          },
+        });
+      } catch (e) {
+        console.error("GET table-reservations/preorder-context:", e);
+        res.status(500).json({ error: "Ошибка сервера" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/storefront/:businessId/table-reservations/:id/deposit/pay",
+    async (req: Request, res: Response) => {
+      try {
+        const businessId = parseBusinessId(req.params.businessId);
+        const reservationId = parseReservationId(req.params.id);
+        if (businessId == null || reservationId == null) {
+          res.status(400).json({ error: "Некорректные параметры" });
+          return;
+        }
+        const telegramId = telegramIdFromRequest(req);
+        if (!telegramId) {
+          res.status(401).json({ error: "Откройте Mini App через Telegram" });
+          return;
+        }
+        if (!(await assertVenueBusiness(businessId))) {
+          res.status(403).json({ error: VENUE_DENIED });
+          return;
+        }
+
+        const result = await startReservationDepositPayment({
+          businessId,
+          reservationId,
+          guestTelegramId: telegramId,
+        });
+        if (!result.ok) {
+          res.status(result.status).json({ error: result.error });
+          return;
+        }
+
+        res.json({
+          paymentUrl: result.paymentUrl,
+          paymentId: result.paymentId,
+          amountSom: result.amountSom,
+        });
+      } catch (e) {
+        console.error("POST table-reservations/deposit/pay:", e);
+        res.status(500).json({ error: "Ошибка сервера" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/storefront/:businessId/table-reservations/:id/deposit/sync",
+    async (req: Request, res: Response) => {
+      try {
+        const businessId = parseBusinessId(req.params.businessId);
+        const reservationId = parseReservationId(req.params.id);
+        if (businessId == null || reservationId == null) {
+          res.status(400).json({ error: "Некорректные параметры" });
+          return;
+        }
+        const telegramId = telegramIdFromRequest(req);
+        if (!telegramId) {
+          res.status(401).json({ error: "Откройте Mini App через Telegram" });
+          return;
+        }
+        if (!(await assertVenueBusiness(businessId))) {
+          res.status(403).json({ error: VENUE_DENIED });
+          return;
+        }
+
+        const result = await syncGuestReservationDepositPayment({
+          businessId,
+          reservationId,
+          guestTelegramId: telegramId,
+        });
+        if (!result.ok) {
+          res.status(result.status).json({ error: result.error });
+          return;
+        }
+
+        const row = await prisma.tableReservation.findUnique({
+          where: { id: reservationId },
+          include: { table: { select: { name: true, seats: true } } },
+        });
+        const summaries = await loadReservationPreorderSummaries([reservationId]);
+
+        res.json({
+          paymentState: result.paymentState,
+          duplicate: "duplicate" in result ? result.duplicate : undefined,
+          reservation: row
+            ? reservationDto(row, (() => {
+                const summary = summaries.get(reservationId);
+                return summary ? { preorderSummary: summary } : undefined;
+              })())
+            : null,
+        });
+      } catch (e) {
+        console.error("POST table-reservations/deposit/sync:", e);
         res.status(500).json({ error: "Ошибка сервера" });
       }
     },
@@ -408,9 +640,14 @@ export function attachTableReservationRoutes(app: Express, deps: Deps): void {
         take: 100,
       });
 
+      const summaries = await loadReservationPreorderSummaries(rows.map((r) => r.id));
+
       res.json({
         supported: true,
-        reservations: rows.map(reservationDto),
+        reservations: rows.map((r) => {
+          const summary = summaries.get(r.id);
+          return reservationDto(r, summary ? { preorderSummary: summary } : undefined);
+        }),
       });
     } catch (e) {
       console.error("GET merchant table-reservations:", e);
@@ -454,6 +691,40 @@ export function attachTableReservationRoutes(app: Express, deps: Deps): void {
         }
 
         const nextStatus = parsed.data.status;
+
+        if (nextStatus === "CONFIRMED" && existing.status === "PENDING") {
+          const result = await confirmTableReservationById(id);
+          if (!result.ok) {
+            const code =
+              result.error === "NOT_FOUND"
+                ? 404
+                : result.error === "WRONG_STATUS"
+                  ? 409
+                  : 500;
+            res.status(code).json({
+              error:
+                result.error === "WRONG_STATUS"
+                  ? "Бронь уже обработана"
+                  : result.error === "NOT_FOUND"
+                    ? "Бронь не найдена"
+                    : "Ошибка сервера",
+            });
+            return;
+          }
+          const updated = await prisma.tableReservation.findUnique({
+            where: { id },
+            include: { table: { select: { name: true, seats: true } } },
+          });
+          const summaries = await loadReservationPreorderSummaries([id]);
+          res.json({
+            reservation: reservationDto(updated!, (() => {
+              const summary = summaries.get(id);
+              return summary ? { preorderSummary: summary } : undefined;
+            })()),
+          });
+          return;
+        }
+
         const data: {
           status: TableReservationStatus;
           cancelledAt?: Date;
@@ -470,6 +741,10 @@ export function attachTableReservationRoutes(app: Express, deps: Deps): void {
 
         await syncDiningTableStatuses(merchant.businessId);
 
+        if (nextStatus === "CANCELLED" || nextStatus === "NO_SHOW") {
+          await cancelUnpaidPreordersForReservation(id, merchant.businessId);
+        }
+
         if (
           (nextStatus === "CANCELLED" || nextStatus === "NO_SHOW") &&
           existing.guestTelegramId
@@ -483,18 +758,21 @@ export function attachTableReservationRoutes(app: Express, deps: Deps): void {
           });
         }
 
-        if (nextStatus === "CONFIRMED" && existing.guestTelegramId) {
-          void notifyReservationConfirmed({
-            businessId: merchant.businessId,
-            businessName: existing.business.name,
-            guestTelegramId: existing.guestTelegramId,
-            tableName: existing.table.name,
-            reservedAt: existing.reservedAt,
-            partySize: existing.partySize ?? 1,
-          });
+        if (
+          nextStatus === "CONFIRMED" &&
+          existing.status !== "PENDING" &&
+          existing.guestTelegramId
+        ) {
+          // Re-confirm path: handled by confirmTableReservationById on PENDING only.
         }
 
-        res.json({ reservation: reservationDto(updated) });
+        const summaries = await loadReservationPreorderSummaries([id]);
+        res.json({
+          reservation: reservationDto(updated, (() => {
+            const summary = summaries.get(id);
+            return summary ? { preorderSummary: summary } : undefined;
+          })()),
+        });
       } catch (e) {
         console.error("PATCH table-reservations:", e);
         res.status(500).json({ error: "Ошибка сервера" });

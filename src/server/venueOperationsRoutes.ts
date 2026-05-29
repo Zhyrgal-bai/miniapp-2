@@ -224,12 +224,32 @@ export function attachVenueOperationsRoutes(app: Express, deps: Deps): void {
       if (!merchant) return;
       const orderId = parseId(req.params.id);
       const prepStatus = String((req.body as { prepStatus?: string }).prepStatus ?? "").toUpperCase();
-      const allowed: OrderPrepStatus[] = ["PREPARING", "READY", "SERVED", "NONE"];
+      const allowed: OrderPrepStatus[] = [
+        "SCHEDULED",
+        "READY_FOR_PREP",
+        "PREPARING",
+        "READY",
+        "SERVED",
+        "NONE",
+      ];
       if (orderId == null || !allowed.includes(prepStatus as OrderPrepStatus)) {
         res.status(400).json({ error: "Некорректные данные" });
         return;
       }
-      await setOrderPrepStatus(merchant.businessId, orderId, prepStatus as OrderPrepStatus);
+      try {
+        await setOrderPrepStatus(merchant.businessId, orderId, prepStatus as OrderPrepStatus);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg === "ORDER_NOT_FOUND") {
+          res.status(404).json({ error: "Заказ не найден" });
+          return;
+        }
+        if (msg === "INVALID_PREP_TRANSITION") {
+          res.status(409).json({ error: "Недопустимый переход статуса" });
+          return;
+        }
+        throw e;
+      }
       res.json({ ok: true });
     } catch (e) {
       console.error("PATCH order prep:", e);

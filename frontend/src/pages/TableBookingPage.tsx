@@ -4,13 +4,27 @@ import { useStorefrontPayload } from "../components/storefront/runtime/Storefron
 import { businessTypeSupportsTableReservations } from "@repo-shared/tableReservation";
 import { CustomerTableMap } from "../components/tableBooking/CustomerTableMap";
 import { TableBookingModal } from "../components/tableBooking/TableBookingModal";
+import { WaitlistJoinModal } from "../components/tableBooking/WaitlistJoinModal";
 import {
   createTableReservation,
   fetchCustomerDiningTables,
+  fetchMyTableReservations,
   fetchTableSlots,
+  payReservationDeposit,
+  syncReservationDeposit,
   type CustomerDiningTableDto,
+  type TableReservationDto,
   type TableSlotDto,
 } from "../services/tableBookingApi";
+import { RESERVATION_STATUS_LABELS, type TableReservationStatus } from "@repo-shared/tableReservation";
+import { waitlistStatusLabel, type WaitlistEntryStatus } from "@repo-shared/waitlist";
+import {
+  acceptWaitlistInvite,
+  fetchMyWaitlistEntries,
+  joinWaitlist,
+  type WaitlistEntryDto,
+} from "../services/waitlistApi";
+import { openTelegramExternalLink } from "../utils/telegramWebAppBootstrap";
 import { getTelegramUser } from "../utils/telegram";
 import "../pages/admin/adminTables.css";
 import "../components/tableBooking/tableBooking.css";
@@ -40,6 +54,63 @@ export default function TableBookingPage({ onBack }: Props): ReactElement {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [myReservations, setMyReservations] = useState<TableReservationDto[]>([]);
+  const [myLoading, setMyLoading] = useState(false);
+  const [depositPayingId, setDepositPayingId] = useState<number | null>(null);
+  const [hasBookableTables, setHasBookableTables] = useState(true);
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
+  const [waitlistSaving, setWaitlistSaving] = useState(false);
+  const [waitlistError, setWaitlistError] = useState<string | null>(null);
+  const [myWaitlist, setMyWaitlist] = useState<WaitlistEntryDto[]>([]);
+  const [waitlistPosition, setWaitlistPosition] = useState(0);
+
+  const loadMyWaitlist = useCallback(async () => {
+    if (businessId == null) return;
+    try {
+      const data = await fetchMyWaitlistEntries(businessId);
+      setMyWaitlist(Array.isArray(data.entries) ? data.entries : []);
+      setWaitlistPosition(data.queuePosition ?? 0);
+    } catch {
+      setMyWaitlist([]);
+      setWaitlistPosition(0);
+    }
+  }, [businessId]);
+
+  const loadMyReservations = useCallback(async () => {
+    if (businessId == null) return;
+    setMyLoading(true);
+    try {
+      const data = await fetchMyTableReservations(businessId);
+      setMyReservations(Array.isArray(data.reservations) ? data.reservations : []);
+    } catch {
+      setMyReservations([]);
+    } finally {
+      setMyLoading(false);
+    }
+  }, [businessId]);
+
+  const onPayDeposit = async (reservationId: number) => {
+    if (businessId == null) return;
+    setDepositPayingId(reservationId);
+    setError(null);
+    try {
+      const { paymentUrl } = await payReservationDeposit(businessId, reservationId);
+      openTelegramExternalLink(paymentUrl);
+      window.setTimeout(() => {
+        void syncReservationDeposit(businessId, reservationId)
+          .then(() => loadMyReservations())
+          .catch(() => undefined);
+      }, 4000);
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === "object" && "response" in e
+          ? String((e as { response?: { data?: { error?: string } } }).response?.data?.error ?? "")
+          : "";
+      setError(msg || (e instanceof Error ? e.message : "Не удалось оплатить депозит"));
+    } finally {
+      setDepositPayingId(null);
+    }
+  };
 
   const loadTables = useCallback(async () => {
     if (businessId == null) return;
@@ -61,6 +132,10 @@ export default function TableBookingPage({ onBack }: Props): ReactElement {
         return;
       }
       setTables(Array.isArray(data.tables) ? data.tables : []);
+      const bookable =
+        data.hasBookableTables ??
+        (Array.isArray(data.tables) ? data.tables.some((t) => t.bookable) : false);
+      setHasBookableTables(bookable);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось загрузить карту");
     } finally {
@@ -70,7 +145,15 @@ export default function TableBookingPage({ onBack }: Props): ReactElement {
 
   useEffect(() => {
     void loadTables();
-  }, [loadTables]);
+    void loadMyReservations();
+    void loadMyWaitlist();
+  }, [loadTables, loadMyReservations, loadMyWaitlist]);
+
+  useEffect(() => {
+    const onPreorderDone = () => void loadMyReservations();
+    window.addEventListener("sf:preorderCompleted", onPreorderDone);
+    return () => window.removeEventListener("sf:preorderCompleted", onPreorderDone);
+  }, [loadMyReservations]);
 
   const loadSlots = useCallback(async () => {
     if (businessId == null || !selected) return;
@@ -119,8 +202,9 @@ export default function TableBookingPage({ onBack }: Props): ReactElement {
         ...form,
       });
       setModalOpen(false);
-      setSuccess("Бронь подтверждена! Сообщение придёт в Telegram.");
+      setSuccess("Заявка отправлена! Ожидайте подтверждения в Telegram.");
       void loadTables();
+      void loadMyReservations();
     } catch (e: unknown) {
       const msg =
         e && typeof e === "object" && "response" in e
@@ -129,6 +213,49 @@ export default function TableBookingPage({ onBack }: Props): ReactElement {
       setError(msg || (e instanceof Error ? e.message : "Не удалось забронировать"));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const onJoinWaitlist = async (form: {
+    partySize: number;
+    guestName: string;
+    guestPhone: string;
+    guestNote: string;
+    preferredAt?: string;
+  }) => {
+    if (businessId == null) return;
+    setWaitlistSaving(true);
+    setWaitlistError(null);
+    try {
+      await joinWaitlist(businessId, form);
+      setWaitlistOpen(false);
+      setSuccess("Вы в очереди! Мы напишем в Telegram, когда освободится стол.");
+      void loadMyWaitlist();
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === "object" && "response" in e
+          ? String((e as { response?: { data?: { error?: string } } }).response?.data?.error ?? "")
+          : "";
+      setWaitlistError(msg || (e instanceof Error ? e.message : "Не удалось встать в очередь"));
+    } finally {
+      setWaitlistSaving(false);
+    }
+  };
+
+  const onAcceptWaitlist = async (entryId: number) => {
+    if (businessId == null) return;
+    try {
+      await acceptWaitlistInvite(businessId, entryId);
+      setSuccess("Столик забронирован! Ждём вас.");
+      void loadMyWaitlist();
+      void loadMyReservations();
+      void loadTables();
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === "object" && "response" in e
+          ? String((e as { response?: { data?: { error?: string } } }).response?.data?.error ?? "")
+          : "";
+      setError(msg || (e instanceof Error ? e.message : "Не удалось принять приглашение"));
     }
   };
 
@@ -154,6 +281,101 @@ export default function TableBookingPage({ onBack }: Props): ReactElement {
           Выберите стол на схеме зала {storeName !== "Кафе" ? `«${storeName}»` : ""}
         </p>
       </header>
+
+      <section className="table-booking-my" aria-labelledby="table-booking-my-title">
+        <h2 id="table-booking-my-title" className="table-booking-my__title">
+          Мои брони
+        </h2>
+        {myLoading ? <p className="table-booking-muted">Загрузка…</p> : null}
+        {!myLoading && myReservations.length === 0 ? (
+          <p className="table-booking-muted">У вас пока нет броней в этом магазине.</p>
+        ) : null}
+        {!myLoading && myReservations.length > 0 ? (
+          <ul className="table-booking-my__list">
+            {myReservations.map((r) => {
+              const when = new Date(r.reservedAt).toLocaleString("ru-RU", {
+                day: "numeric",
+                month: "short",
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+              const statusLabel =
+                RESERVATION_STATUS_LABELS[r.status as TableReservationStatus] ?? r.status;
+              return (
+                <li key={r.id} className="table-booking-my__card">
+                  <p className="table-booking-my__table">
+                    {r.tableName ?? `Стол #${r.tableId}`} · {when}
+                  </p>
+                  <p className="table-booking-my__status">{statusLabel}</p>
+                  <p className="table-booking-my__preorder">
+                    Предзаказ: {r.preorderLabel ?? (r.hasPreorder ? "Предзаказ создан" : "Нет предзаказа")}
+                  </p>
+                  <p className="table-booking-my__deposit">
+                    Депозит: {r.depositLabel ?? "Не требуется"}
+                    {r.depositAmount != null && r.depositStatus === "DEPOSIT_PENDING"
+                      ? ` · ${r.depositAmount} сом`
+                      : ""}
+                  </p>
+                  {r.canPayDeposit ? (
+                    <button
+                      type="button"
+                      className="table-booking-my__deposit-btn"
+                      disabled={depositPayingId === r.id}
+                      onClick={() => void onPayDeposit(r.id)}
+                    >
+                      {depositPayingId === r.id ? "Открываем оплату…" : "💳 Оплатить депозит"}
+                    </button>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+      </section>
+
+      {myWaitlist.length > 0 ? (
+        <section className="table-booking-my" aria-labelledby="table-booking-waitlist-title">
+          <h2 id="table-booking-waitlist-title" className="table-booking-my__title">
+            Моя очередь
+          </h2>
+          <ul className="table-booking-my__list">
+            {myWaitlist.map((w) => (
+              <li key={w.id} className="table-booking-my__card">
+                <p className="table-booking-my__table">
+                  {w.partySize} гостей
+                  {w.tableName ? ` · ${w.tableName}` : ""}
+                </p>
+                <p className="table-booking-my__status">
+                  {waitlistStatusLabel(w.status as WaitlistEntryStatus)}
+                  {w.status === "WAITING" && waitlistPosition > 0
+                    ? ` · место ${waitlistPosition}`
+                    : ""}
+                </p>
+                {w.status === "INVITED" ? (
+                  <button
+                    type="button"
+                    className="table-booking-my__deposit-btn"
+                    onClick={() => void onAcceptWaitlist(w.id)}
+                  >
+                    ✅ Забрать столик
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {!loading && tables.length > 0 && !hasBookableTables && myWaitlist.length === 0 ? (
+        <div className="table-booking-waitlist-cta">
+          <p className="table-booking-waitlist-cta__text">
+            Сейчас все столики заняты. Встаньте в очередь — мы сообщим в Telegram.
+          </p>
+          <button type="button" onClick={() => setWaitlistOpen(true)}>
+            📋 Встать в очередь
+          </button>
+        </div>
+      ) : null}
 
       <div className="table-booking-legend">
         <span className="table-booking-legend__item table-booking-legend__item--free">Свободен</span>
@@ -197,6 +419,17 @@ export default function TableBookingPage({ onBack }: Props): ReactElement {
         error={error}
         onClose={() => setModalOpen(false)}
         onSubmit={onSubmit}
+      />
+
+      <WaitlistJoinModal
+        open={waitlistOpen}
+        saving={waitlistSaving}
+        error={waitlistError}
+        onClose={() => {
+          setWaitlistOpen(false);
+          setWaitlistError(null);
+        }}
+        onSubmit={onJoinWaitlist}
       />
     </div>
   );

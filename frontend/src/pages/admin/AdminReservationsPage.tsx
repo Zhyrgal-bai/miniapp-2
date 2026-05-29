@@ -135,6 +135,15 @@ export default function AdminReservationsPage(): ReactElement {
               {r.guestNote ? (
                 <p className="reservations-admin-card__note">{r.guestNote}</p>
               ) : null}
+              <p className="reservations-admin-card__preorder">
+                Предзаказ: {r.preorderLabel ?? (r.hasPreorder ? "Оплачен" : "Нет")}
+              </p>
+              <p className="reservations-admin-card__deposit">
+                Депозит: {r.depositLabel ?? "Не требуется"}
+                {r.depositAmount != null && r.depositStatus !== "NONE"
+                  ? ` · ${r.depositAmount} сом`
+                  : ""}
+              </p>
               <span className={`reservations-admin-card__status status-${r.status.toLowerCase()}`}>
                 {RESERVATION_STATUS_LABELS[r.status as TableReservationStatus] ?? r.status}
               </span>

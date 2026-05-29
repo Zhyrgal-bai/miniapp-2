@@ -13,6 +13,7 @@ export type FloorTableDto = {
   height: number;
   liveStatus: string;
   qrToken: string;
+  waitlistNext: { guestName: string; partySize: number } | null;
   session: {
     id: number;
     partySize: number | null;
@@ -53,13 +54,40 @@ export type KitchenOrderRow = {
   tableSession: { table: { name: string } } | null;
 };
 
+export type KitchenPreorderRow = {
+  id: number;
+  orderNumber: string | null;
+  prepStatus: string;
+  status: string;
+  total: number;
+  createdAt: string;
+  customerName: string;
+  kitchenPrepAt: string | null;
+  startsInLabel: string | null;
+  items: Array<{ name: string; quantity: number }>;
+  reservation: {
+    id: number;
+    reservedAt: string;
+    guestName: string | null;
+    partySize: number | null;
+    tableName: string;
+  } | null;
+};
+
 export async function fetchVenueFloor(businessId: number): Promise<FloorSnapshot> {
   const url = new URL(apiAbsoluteUrl("/api/merchant/venue/floor"));
   url.searchParams.set("shop", String(businessId));
   return adminFetchJson(url.toString(), { method: "GET", businessId, json: false });
 }
 
-export async function fetchVenueKitchen(businessId: number): Promise<{ orders: KitchenOrderRow[] }> {
+export async function fetchVenueKitchen(
+  businessId: number,
+): Promise<{
+  orders: KitchenOrderRow[];
+  preordersScheduled: KitchenPreorderRow[];
+  preordersActive: KitchenPreorderRow[];
+  preorders?: KitchenPreorderRow[];
+}> {
   const url = new URL(apiAbsoluteUrl("/api/merchant/venue/kitchen"));
   url.searchParams.set("shop", String(businessId));
   return adminFetchJson(url.toString(), { method: "GET", businessId, json: false });

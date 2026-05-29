@@ -47,6 +47,22 @@ const COLUMN_PROBES: Array<{ key: string; sql: Prisma.Sql }> = [
     key: "Order.orderNumber",
     sql: Prisma.sql`SELECT "orderNumber" FROM "Order" LIMIT 0`,
   },
+  {
+    key: "Order.reservationId",
+    sql: Prisma.sql`SELECT "reservationId" FROM "Order" LIMIT 0`,
+  },
+  {
+    key: "Order.preorderStatus",
+    sql: Prisma.sql`SELECT "preorderStatus" FROM "Order" LIMIT 0`,
+  },
+  {
+    key: "Order.kitchenPrepAt",
+    sql: Prisma.sql`SELECT "kitchenPrepAt" FROM "Order" LIMIT 0`,
+  },
+  {
+    key: "Product.preparationMinutes",
+    sql: Prisma.sql`SELECT "preparationMinutes" FROM "Product" LIMIT 0`,
+  },
 ];
 
 /** Verify checkout-critical tables/columns exist (production migration drift). */

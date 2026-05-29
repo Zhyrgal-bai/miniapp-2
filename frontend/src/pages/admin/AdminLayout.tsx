@@ -68,6 +68,14 @@ const navAll: NavItem[] = [
     permission: MERCHANT_PERM.settingsManage,
   },
   {
+    href: "#/admin/waitlist",
+    match: "waitlist",
+    label: "Очередь",
+    icon: "📋",
+    venueOnly: true,
+    permission: MERCHANT_PERM.settingsManage,
+  },
+  {
     href: "#/admin/users",
     match: "users",
     label: "Команда",

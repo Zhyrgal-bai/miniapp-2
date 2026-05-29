@@ -146,6 +146,7 @@ model Business {
   stockMovements  StockMovement[]
   diningTables    DiningTable[]
   tableReservations TableReservation[]
+  waitlistEntries WaitlistEntry[]
   tableSessions   TableSession[]
   actionCooldowns ActionCooldown[]
 
@@ -415,6 +416,9 @@ model Product {
 
   attributes Json? @default("{}")
 
+  /// Kitchen prep duration in minutes (Phase 6D reservation preorders).
+  preparationMinutes Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -555,6 +559,16 @@ model Order {
   tableSessionId Int?
   tableSession   TableSession? @relation(fields: [tableSessionId], references: [id], onDelete: SetNull)
 
+  /// Preorder linked to a confirmed table reservation (Phase 6B).
+  reservationId Int?
+  reservation   TableReservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+
+  /// Set when reservationId is present — payment gate before kitchen (Phase 6C).
+  preorderStatus ReservationPreorderStatus?
+
+  /// When kitchen should start reservation preorder prep (Phase 6D).
+  kitchenPrepAt DateTime?
+
   prepStatus OrderPrepStatus @default(NONE)
 
   items            OrderItem[]
@@ -571,7 +585,12 @@ model Order {
   @@index([businessId, orderNumber])
   @@index([buyerUserId])
   @@index([tableSessionId])
+  @@index([reservationId])
+  @@index([businessId, reservationId])
   @@index([businessId, prepStatus])
+  @@index([businessId, preorderStatus])
+  @@index([kitchenPrepAt])
+  @@index([businessId, prepStatus, kitchenPrepAt])
 }
 
 /// Per-tenant daily order sequence (resets each calendar day in ORDER_DAY_TZ).
@@ -1062,6 +1081,66 @@ enum TableReservationStatus {
   NO_SHOW
 }
 
+/// Reservation deposit lifecycle (Phase 6E).
+enum ReservationDepositStatus {
+  NONE
+  DEPOSIT_PENDING
+  DEPOSIT_PAID
+  DEPOSIT_EXPIRED
+}
+
+/// Waitlist queue lifecycle (Phase 6F).
+enum WaitlistEntryStatus {
+  WAITING
+  INVITED
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  SEATED
+  CANCELLED
+}
+
+model WaitlistEntry {
+  id Int @id @default(autoincrement())
+
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  partySize Int
+  guestName String
+  guestPhone String
+  guestNote String?
+
+  /// Desired arrival time (optional).
+  preferredAt DateTime?
+
+  guestTelegramId String?
+
+  status WaitlistEntryStatus @default(WAITING)
+
+  invitedAt       DateTime?
+  inviteExpiresAt DateTime?
+
+  assignedTableId Int?
+  assignedTable   DiningTable? @relation(fields: [assignedTableId], references: [id], onDelete: SetNull)
+
+  reservationId Int? @unique
+  reservation   TableReservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+
+  seatedAt   DateTime?
+  declinedAt DateTime?
+  expiredAt  DateTime?
+  cancelledAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId, status, createdAt])
+  @@index([businessId, status])
+  @@index([assignedTableId, status])
+  @@index([guestTelegramId])
+}
+
 /// Live operational floor state (Phase 5).
 enum TableLiveStatus {
   FREE
@@ -1081,9 +1160,19 @@ enum TableSessionStatus {
 
 enum OrderPrepStatus {
   NONE
+  SCHEDULED
+  READY_FOR_PREP
   PREPARING
   READY
   SERVED
+}
+
+/// Reservation preorder payment lifecycle (Phase 6C).
+enum ReservationPreorderStatus {
+  PREORDER_DRAFT
+  PREORDER_PAYMENT_PENDING
+  PREORDER_PAID
+  PREORDER_CANCELLED
 }
 
 model DiningTable {
@@ -1116,6 +1205,7 @@ model DiningTable {
   activeSession   TableSession? @relation("TableActiveSession", fields: [activeSessionId], references: [id], onDelete: SetNull)
 
   reservations TableReservation[]
+  waitlistEntries WaitlistEntry[]
   sessions     TableSession[] @relation("TableSessions")
 
   createdAt DateTime @default(now())
@@ -1183,7 +1273,16 @@ model TableReservation {
 
   status TableReservationStatus @default(PENDING)
 
+  /// Phase 6E: reservation deposit (coffee / fastfood).
+  depositStatus    ReservationDepositStatus @default(NONE)
+  depositAmount    Int?
+  depositPaidAt    DateTime?
+  depositPaymentId String?
+  depositDueAt     DateTime?
+
   sessions TableSession[]
+  orders   Order[]
+  waitlistEntry WaitlistEntry?
 
   reminderSentAt DateTime?
   cancelledAt    DateTime?
@@ -1195,6 +1294,7 @@ model TableReservation {
   @@index([tableId, reservedAt])
   @@index([businessId, status])
   @@index([guestTelegramId])
+  @@index([depositStatus, depositDueAt])
 }
 
 /// Anti-abuse cooldowns (checkout spam, support flood).

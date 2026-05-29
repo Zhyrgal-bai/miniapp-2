@@ -137,3 +137,12 @@
   font-size: 11px;
   color: #94a3b8;
 }
+
+.table-map-chip__waitlist {
+  display: block;
+  margin-top: 2px;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.2;
+  opacity: 0.95;
+}

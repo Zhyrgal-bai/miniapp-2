@@ -22,6 +22,8 @@ import {
   handleRegistrationSuperAdminCallback,
   tryHandleRegistrationSuperAdminCommand,
 } from "./registrationBotAdminPanel.js";
+import { handleTableReservationCallback } from "./tableReservationCallbacks.js";
+import { handleWaitlistCallback } from "./waitlistCallbacks.js";
 import {
   getDynamicOwnerBot,
   getDynamicTokenForBusiness,
@@ -681,6 +683,14 @@ export function attachBotHandlers(tgBot: Telegraf, role: BotHandlerRole): void {
       }
 
       if (await handleRegistrationCallbacks(ctx)) {
+        return;
+      }
+
+      if (await handleTableReservationCallback(ctx)) {
+        return;
+      }
+
+      if (await handleWaitlistCallback(ctx)) {
         return;
       }
 

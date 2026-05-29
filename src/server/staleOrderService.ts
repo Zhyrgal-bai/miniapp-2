@@ -21,7 +21,7 @@ export async function releaseStaleUnpaidOrders(input?: {
       status: { in: UNPAID_STATUSES },
       createdAt: { lt: cutoff },
     },
-    select: { id: true, businessId: true, status: true },
+    select: { id: true, businessId: true, status: true, reservationId: true },
     take: 100,
   });
 
@@ -32,7 +32,12 @@ export async function releaseStaleUnpaidOrders(input?: {
       await releaseOrderStock(tx, order.businessId, order.id, lines);
       await tx.order.update({
         where: { id: order.id },
-        data: { status: "CANCELLED" },
+        data: {
+          status: "CANCELLED",
+          ...(order.reservationId != null
+            ? { preorderStatus: "PREORDER_CANCELLED" }
+            : {}),
+        },
       });
     });
     released += 1;

@@ -337,3 +337,115 @@
   color: #a78bfa;
   font-size: 18px;
 }
+
+.preorder-banner {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%);
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  color: #e2e8f0;
+}
+
+.preorder-banner--loading {
+  opacity: 0.85;
+}
+
+.preorder-banner--error {
+  background: #450a0a;
+  border-color: #f87171;
+  color: #fecaca;
+}
+
+.preorder-banner__title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.preorder-banner__meta {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #cbd5e1;
+}
+
+.table-booking-my {
+  margin-bottom: 16px;
+}
+
+.table-booking-my__title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.table-booking-my__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.table-booking-my__card {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.table-booking-my__table {
+  margin: 0 0 4px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.table-booking-my__status,
+.table-booking-my__preorder,
+.table-booking-my__deposit {
+  margin: 0;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.table-booking-my__deposit-btn {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.table-booking-my__deposit-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.table-booking-waitlist-cta {
+  margin: 12px 0 16px;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.35);
+}
+
+.table-booking-waitlist-cta__text {
+  margin: 0 0 10px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.table-booking-waitlist-cta button {
+  padding: 10px 14px;
+  border: none;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}

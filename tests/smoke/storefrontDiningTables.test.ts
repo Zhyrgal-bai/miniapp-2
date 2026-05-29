@@ -3,6 +3,7 @@ import {
   isPublicStorefrontBookingPath,
   normalizeStorefrontApiPath,
   storefrontBookingRequiresVerifiedTelegram,
+  storefrontReservationGuestRequiresVerifiedTelegram,
 } from "../../src/shared/storefrontPublicPaths.js";
 import { routeRequiresVerifiedTelegram } from "../../src/middleware/privilegedRoutes.js";
 
@@ -72,5 +73,20 @@ describe("public storefront table booking paths", () => {
       url: "/api/storefront/99/table-reservations",
     } as import("express").Request;
     expect(routeRequiresVerifiedTelegram(req)).toBe(true);
+  });
+
+  it("requires verified telegram for guest reservation GET APIs", () => {
+    expect(
+      storefrontReservationGuestRequiresVerifiedTelegram(
+        "GET",
+        "/storefront/1/table-reservations/mine",
+      ),
+    ).toBe(true);
+    expect(
+      storefrontReservationGuestRequiresVerifiedTelegram(
+        "GET",
+        "/storefront/1/table-reservations/42/preorder-context",
+      ),
+    ).toBe(true);
   });
 });

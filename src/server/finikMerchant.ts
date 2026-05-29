@@ -225,6 +225,99 @@ export async function createFinikSaasSubscriptionSession(
   }
 }
 
+/** Reservation deposit payment (Phase 6E). */
+export async function createFinikReservationDepositSession(
+  business: {
+    id: number;
+    finikApiKey: string | null;
+    finikSecret: string | null;
+  },
+  input: { reservationId: number; amountSom: number; currency?: string },
+): Promise<
+  | { ok: true; paymentId: string; paymentUrl: string }
+  | { ok: false; error: string }
+> {
+  const { reservationDepositExternalId } = await import(
+    "../shared/reservationDeposit.js"
+  );
+  const ext = reservationDepositExternalId(input.reservationId);
+
+  const useMock =
+    process.env.FINIK_USE_MOCK === "1" ||
+    process.env.FINIK_USE_MOCK === "true" ||
+    !business.finikApiKey?.trim() ||
+    !business.finikSecret?.trim();
+
+  if (useMock) {
+    const paymentId = `finik_dep_${Date.now()}_${input.reservationId}`;
+    const paymentUrl = `https://pay.finik.kg/?amount=${input.amountSom}&orderId=${encodeURIComponent(paymentId)}`;
+    return { ok: true, paymentId, paymentUrl };
+  }
+
+  const origin = publicApiOrigin();
+  if (!origin) {
+    return {
+      ok: false,
+      error: "Сервер: задайте API_URL (публичный URL) для callback Finik",
+    };
+  }
+
+  const callbackUrl = `${origin}/finik/webhook/${business.id}`;
+  const url = `${finikApiBase()}${finikCreatePaymentsPath()}`;
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${business.finikApiKey!.trim()}`,
+        "X-Api-Secret": business.finikSecret!.trim(),
+      },
+      body: JSON.stringify({
+        amount: input.amountSom,
+        currency: input.currency ?? "KGS",
+        order_id: ext,
+        external_id: ext,
+        callback_url: callbackUrl,
+        return_url: callbackUrl,
+      }),
+    });
+
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) {
+      console.error("Finik deposit payment HTTP", res.status, json);
+      return {
+        ok: false,
+        error: "Finik API отклонил запрос (проверьте ключи и URL API)",
+      };
+    }
+
+    const paymentId =
+      (typeof json.payment_id === "string" && json.payment_id) ||
+      (typeof json.id === "string" && json.id) ||
+      (typeof json.paymentId === "string" && json.paymentId) ||
+      "";
+    const paymentUrl =
+      (typeof json.payment_url === "string" && json.payment_url) ||
+      (typeof json.url === "string" && json.url) ||
+      (typeof json.checkout_url === "string" && json.checkout_url) ||
+      "";
+
+    if (!paymentId || !paymentUrl) {
+      console.error("Finik deposit payment: unexpected body", json);
+      return {
+        ok: false,
+        error: "Finik: неверный ответ API (ожидаются payment id и url)",
+      };
+    }
+
+    return { ok: true, paymentId, paymentUrl };
+  } catch (e) {
+    console.error("Finik deposit payment fetch:", e);
+    return { ok: false, error: "Ошибка сети при обращении к Finik" };
+  }
+}
+
 function finikGetPaymentPath(paymentId: string): string {
   const template = (
     process.env.FINIK_API_GET_PAYMENT_PATH || "/payments/{id}"
@@ -326,6 +419,7 @@ type FinikOrderRow = {
   status: string;
   paymentId: string | null;
   paymentMethod: string | null;
+  reservationId: number | null;
   buyerUser: { telegramId: string } | null;
 };
 
@@ -371,15 +465,22 @@ async function applyFinikPaymentSuccess(
   const { onOrderPaidConfirmed } = await import("./orderInventoryHooks.js");
   await onOrderPaidConfirmed(order.id);
 
-  void notifyAfterOrderStatusChangeFromApi({
-    id: updated.id,
-    orderNumber: updated.orderNumber,
-    businessId: updated.businessId,
-    status: updated.status,
-    total: updated.total,
-    buyerUser: updated.buyerUser,
-    paymentMethod: updated.paymentMethod,
-  });
+  if (order.reservationId != null) {
+    const { scheduleReservationPreorderAfterPayment } = await import(
+      "./reservationPreorderKitchenScheduler.js"
+    );
+    await scheduleReservationPreorderAfterPayment(order.id);
+  } else {
+    void notifyAfterOrderStatusChangeFromApi({
+      id: updated.id,
+      orderNumber: updated.orderNumber,
+      businessId: updated.businessId,
+      status: updated.status,
+      total: updated.total,
+      buyerUser: updated.buyerUser,
+      paymentMethod: updated.paymentMethod,
+    });
+  }
 
   return {
     ok: true,
@@ -391,6 +492,7 @@ async function applyFinikPaymentSuccess(
       status: updated.status,
       paymentId: updated.paymentId,
       paymentMethod: updated.paymentMethod,
+      reservationId: order.reservationId,
       buyerUser: updated.buyerUser,
     },
   };
@@ -440,6 +542,138 @@ async function fetchFinikPaymentStatus(
     console.error("Finik get payment fetch:", e);
     return { ok: false, error: "Ошибка сети при запросе статуса Finik" };
   }
+}
+
+export type SyncFinikReservationDepositResult =
+  | {
+      ok: true;
+      paymentState: "paid" | "pending" | "failed";
+      duplicate?: boolean;
+    }
+  | { ok: false; statusCode: number; error: string };
+
+export async function syncFinikReservationDepositPayment(
+  reservationId: number,
+  businessId: number,
+  paymentId: string,
+): Promise<SyncFinikReservationDepositResult> {
+  const reservation = await prisma.tableReservation.findFirst({
+    where: { id: reservationId, businessId },
+    select: { id: true, depositStatus: true, depositAmount: true },
+  });
+  if (!reservation) {
+    return { ok: false, statusCode: 404, error: "Бронь не найдена" };
+  }
+  if (reservation.depositStatus === "DEPOSIT_PAID") {
+    return { ok: true, paymentState: "paid", duplicate: true };
+  }
+  if (reservation.depositStatus !== "DEPOSIT_PENDING") {
+    return { ok: false, statusCode: 409, error: "Депозит не ожидает оплаты" };
+  }
+
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { finikApiKey: true, finikSecret: true },
+  });
+  if (!business) {
+    return { ok: false, statusCode: 404, error: "Магазин не найден" };
+  }
+
+  const remote = await fetchFinikPaymentStatus(business, paymentId);
+  if (!remote.ok) {
+    return { ok: false, statusCode: 502, error: remote.error };
+  }
+
+  if (FINIK_FAILED_STATUSES.has(remote.status)) {
+    return { ok: true, paymentState: "failed" };
+  }
+  if (!FINIK_SUCCESS_STATUSES.has(remote.status)) {
+    return { ok: true, paymentState: "pending" };
+  }
+
+  if (
+    remote.amount != null &&
+    reservation.depositAmount != null &&
+    Math.round(remote.amount) !== reservation.depositAmount
+  ) {
+    return { ok: false, statusCode: 400, error: "Amount mismatch" };
+  }
+
+  const { applyReservationDepositPaid } = await import(
+    "./tableReservationDeposit.js"
+  );
+  const applied = await applyReservationDepositPaid(reservationId, paymentId);
+  if (!applied.ok) {
+    return { ok: false, statusCode: applied.statusCode, error: applied.error };
+  }
+
+  return {
+    ok: true,
+    paymentState: "paid",
+    duplicate: applied.duplicate,
+  };
+}
+
+async function tryApplyFinikReservationDepositWebhook(input: {
+  businessId: number;
+  paymentId: string;
+  externalId: string | null;
+  amount: number | null;
+}): Promise<
+  | { handled: true; duplicate: boolean; reservationId: number }
+  | { handled: false }
+> {
+  const { parseReservationDepositExternalId } = await import(
+    "../shared/reservationDeposit.js"
+  );
+  const { applyReservationDepositPaid } = await import(
+    "./tableReservationDeposit.js"
+  );
+
+  let reservationId = parseReservationDepositExternalId(input.externalId);
+  if (reservationId == null) {
+    const byPayment = await prisma.tableReservation.findFirst({
+      where: {
+        businessId: input.businessId,
+        depositPaymentId: input.paymentId,
+      },
+      select: { id: true, depositAmount: true },
+    });
+    if (!byPayment) return { handled: false };
+    reservationId = byPayment.id;
+    if (
+      input.amount != null &&
+      byPayment.depositAmount != null &&
+      Math.round(input.amount) !== byPayment.depositAmount
+    ) {
+      throw new Error("DEPOSIT_AMOUNT_MISMATCH");
+    }
+  } else {
+    const row = await prisma.tableReservation.findFirst({
+      where: { id: reservationId, businessId: input.businessId },
+      select: { depositAmount: true },
+    });
+    if (!row) return { handled: false };
+    if (
+      input.amount != null &&
+      row.depositAmount != null &&
+      Math.round(input.amount) !== row.depositAmount
+    ) {
+      throw new Error("DEPOSIT_AMOUNT_MISMATCH");
+    }
+  }
+
+  const applied = await applyReservationDepositPaid(reservationId, input.paymentId);
+  if (!applied.ok) {
+    if (applied.error === "Reservation not found") return { handled: false };
+    throw new Error(applied.error);
+  }
+
+  return {
+    handled: true,
+    duplicate: applied.duplicate,
+    reservationId,
+  };
 }
 
 export type SyncFinikOrderPaymentResult =
@@ -509,6 +743,7 @@ export async function syncFinikOrderPayment(
       status: order.status,
       paymentId: order.paymentId,
       paymentMethod: order.paymentMethod,
+      reservationId: order.reservationId,
       buyerUser: order.buyerUser,
     },
     { expectedAmount: remote.amount ?? order.total }
@@ -623,7 +858,7 @@ async function handleFinikWebhookForBusiness(
     if (FINIK_FAILED_STATUSES.has(parsed.status)) {
       const order = await prisma.order.findFirst({
         where: { paymentId: parsed.paymentId, businessId },
-        select: { id: true, status: true },
+        select: { id: true, status: true, reservationId: true },
       });
       if (order) {
         const cur = String(order.status ?? "").toUpperCase();
@@ -635,7 +870,12 @@ async function handleFinikWebhookForBusiness(
             await releaseOrderStock(tx, businessId, order.id, lines);
             await tx.order.update({
               where: { id: order.id },
-              data: { status: "CANCELLED" },
+              data: {
+                status: "CANCELLED",
+                ...(order.reservationId != null
+                  ? { preorderStatus: "PREORDER_CANCELLED" }
+                  : {}),
+              },
             });
           });
           logPaymentFailure({
@@ -661,6 +901,37 @@ async function handleFinikWebhookForBusiness(
     if (!FINIK_SUCCESS_STATUSES.has(parsed.status)) {
       res.json({ ok: true, ignored: true, paymentState: "pending" });
       return;
+    }
+
+    try {
+      const depositApplied = await tryApplyFinikReservationDepositWebhook({
+        businessId,
+        paymentId: parsed.paymentId,
+        externalId: parsed.externalId,
+        amount: parsed.amount,
+      });
+      if (depositApplied.handled) {
+        logWebhookProcessed({
+          provider: "finik",
+          businessId,
+          paymentId: parsed.paymentId,
+          outcome: depositApplied.duplicate ? "duplicate" : "success",
+        });
+        res.json({ ok: true, duplicate: depositApplied.duplicate, kind: "deposit" });
+        return;
+      }
+    } catch (depErr) {
+      const msg = depErr instanceof Error ? depErr.message : String(depErr);
+      if (msg === "DEPOSIT_AMOUNT_MISMATCH") {
+        logPaymentFailure({
+          businessId,
+          paymentId: parsed.paymentId,
+          reason: "deposit_amount_mismatch",
+        });
+        res.status(400).json({ error: "Amount mismatch" });
+        return;
+      }
+      throw depErr;
     }
 
     const order = await prisma.order.findFirst({
@@ -697,6 +968,7 @@ async function handleFinikWebhookForBusiness(
         status: order.status,
         paymentId: order.paymentId,
         paymentMethod: order.paymentMethod,
+        reservationId: order.reservationId,
         buyerUser: order.buyerUser,
       },
       { expectedAmount: parsed.amount ?? order.total }
@@ -766,11 +1038,19 @@ export function mountFinikWebhookRoutes(app: Express): void {
         where: { paymentId },
         select: { businessId: true },
       });
-      if (!order) {
-        res.status(404).json({ error: "Order not found" });
+      if (order) {
+        await handleFinikWebhookForBusiness(order.businessId, req, res);
         return;
       }
-      await handleFinikWebhookForBusiness(order.businessId, req, res);
+      const reservation = await prisma.tableReservation.findFirst({
+        where: { depositPaymentId: paymentId },
+        select: { businessId: true },
+      });
+      if (!reservation) {
+        res.status(404).json({ error: "Payment not found" });
+        return;
+      }
+      await handleFinikWebhookForBusiness(reservation.businessId, req, res);
     } catch (e) {
       console.error("FINIK WEBHOOK LEGACY:", e);
       res.status(500).json({ error: "Webhook error" });

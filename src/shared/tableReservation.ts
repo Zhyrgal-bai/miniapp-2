@@ -1,8 +1,7 @@
 /**
- * Table reservation foundation (Phase 2–4).
+ * Table reservation foundation (Phase 2–6E).
  *
- * Future hooks (not implemented): depositPaymentId, waiterStaffId, qrTableToken,
- * liveOccupancyPercent on DiningTable / Business.merchantConfig.
+ * Reservation deposit: depositAmount, depositPaidAt, depositPaymentId on TableReservation.
  */
 
 export type DiningTableStatus =

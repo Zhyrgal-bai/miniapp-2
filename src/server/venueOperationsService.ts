@@ -2,6 +2,13 @@ import type { OrderPrepStatus, Prisma, TableLiveStatus } from "@prisma/client";
 import { prisma } from "./db.js";
 import { publishVenueUpdate } from "./venueRealtime.js";
 import { businessTypeSupportsTableReservations } from "../shared/tableReservation.js";
+import {
+  KITCHEN_ACTIVE_PREP_STATUSES,
+  KITCHEN_PREORDER_ACTIVE_PREP_STATUSES,
+  KITCHEN_SCHEDULED_PREP_STATUSES,
+} from "../shared/venueOperations.js";
+import { formatMinutesUntil } from "./reservationPreorderKitchenScheduler.js";
+import { loadWaitlistNextByTable } from "./tableReservationWaitlistService.js";
 
 export async function assertVenueBusiness(businessId: number): Promise<boolean> {
   const b = await prisma.business.findUnique({
@@ -59,6 +66,8 @@ export async function buildFloorSnapshot(businessId: number) {
     },
   });
 
+  const waitlistNext = await loadWaitlistNextByTable(businessId);
+
   return {
     at: now.toISOString(),
     tables: tables.map((t) => ({
@@ -72,6 +81,7 @@ export async function buildFloorSnapshot(businessId: number) {
       height: t.height,
       liveStatus: t.liveStatus,
       qrToken: t.qrToken,
+      waitlistNext: waitlistNext.get(t.id) ?? null,
       session: t.activeSession
         ? {
             id: t.activeSession.id,
@@ -129,6 +139,15 @@ export async function openTableSession(input: {
     return created;
   });
 
+  if (input.reservationId != null) {
+    const { markWaitlistSeatedForReservation } = await import(
+      "./tableReservationWaitlistService.js"
+    );
+    void markWaitlistSeatedForReservation(input.reservationId).catch((e) =>
+      console.error("markWaitlistSeatedForReservation:", e),
+    );
+  }
+
   publishVenueUpdate(input.businessId, "floor");
   publishVenueUpdate(input.businessId, "session");
   return { sessionId: session.id };
@@ -144,6 +163,15 @@ export async function setTableLiveStatus(
     data: { liveStatus, status: legacyStatusFromLive(liveStatus) },
   });
   publishVenueUpdate(businessId, "floor");
+
+  if (liveStatus === "FREE") {
+    const { tryInviteWaitlistForTable } = await import(
+      "./tableReservationWaitlistService.js"
+    );
+    void tryInviteWaitlistForTable(businessId, tableId).catch((e) =>
+      console.error("tryInviteWaitlistForTable:", e),
+    );
+  }
 }
 
 function legacyStatusFromLive(live: TableLiveStatus): "AVAILABLE" | "OCCUPIED" | "RESERVED" | "SOON_OCCUPIED" {
@@ -235,6 +263,36 @@ export async function setOrderPrepStatus(
   orderId: number,
   prepStatus: OrderPrepStatus,
 ): Promise<void> {
+  const existing = await prisma.order.findFirst({
+    where: { id: orderId, businessId },
+    select: { prepStatus: true, reservationId: true, tableSessionId: true },
+  });
+  if (!existing) {
+    throw new Error("ORDER_NOT_FOUND");
+  }
+
+  if (existing.reservationId != null) {
+    const allowed: OrderPrepStatus[] = [
+      "READY_FOR_PREP",
+      "PREPARING",
+      "READY",
+      "SERVED",
+    ];
+    if (!allowed.includes(prepStatus)) {
+      throw new Error("INVALID_PREP_TRANSITION");
+    }
+    const cur = existing.prepStatus;
+    const valid =
+      (cur === "READY_FOR_PREP" && prepStatus === "PREPARING") ||
+      (cur === "PREPARING" && prepStatus === "READY") ||
+      (cur === "READY" && prepStatus === "SERVED");
+    if (!valid) {
+      throw new Error("INVALID_PREP_TRANSITION");
+    }
+  } else if (!KITCHEN_ACTIVE_PREP_STATUSES.includes(prepStatus) && prepStatus !== "NONE") {
+    throw new Error("INVALID_PREP_TRANSITION");
+  }
+
   const order = await prisma.order.update({
     where: { id: orderId, businessId },
     data: { prepStatus },
@@ -261,6 +319,7 @@ export async function buildKitchenBoard(businessId: number) {
   const orders = await prisma.order.findMany({
     where: {
       businessId,
+      reservationId: null,
       prepStatus: { in: ["PREPARING", "READY", "SERVED"] },
       status: { notIn: ["CANCELLED"] },
       createdAt: { gte: new Date(Date.now() - 12 * 60 * 60_000) },
@@ -280,7 +339,102 @@ export async function buildKitchenBoard(businessId: number) {
     },
   });
 
-  return { at: new Date().toISOString(), orders };
+  const preorderSelect = {
+    id: true,
+    orderNumber: true,
+    prepStatus: true,
+    status: true,
+    total: true,
+    createdAt: true,
+    name: true,
+    kitchenPrepAt: true,
+    items: { select: { name: true, quantity: true } },
+    reservation: {
+      select: {
+        id: true,
+        reservedAt: true,
+        partySize: true,
+        guestName: true,
+        table: { select: { name: true } },
+      },
+    },
+  } as const;
+
+  const mapPreorder = (o: {
+    id: number;
+    orderNumber: string | null;
+    prepStatus: OrderPrepStatus;
+    status: string;
+    total: number;
+    createdAt: Date;
+    name: string;
+    kitchenPrepAt: Date | null;
+    items: Array<{ name: string; quantity: number }>;
+    reservation: {
+      id: number;
+      reservedAt: Date;
+      partySize: number | null;
+      guestName: string | null;
+      table: { name: string };
+    } | null;
+  }) => ({
+    id: o.id,
+    orderNumber: o.orderNumber,
+    prepStatus: o.prepStatus,
+    status: o.status,
+    total: o.total,
+    createdAt: o.createdAt.toISOString(),
+    customerName: o.name,
+    kitchenPrepAt: o.kitchenPrepAt?.toISOString() ?? null,
+    startsInLabel: o.kitchenPrepAt
+      ? formatMinutesUntil(o.kitchenPrepAt.toISOString())
+      : null,
+    items: o.items.map((it) => ({ name: it.name, quantity: it.quantity })),
+    reservation: o.reservation
+      ? {
+          id: o.reservation.id,
+          reservedAt: o.reservation.reservedAt.toISOString(),
+          guestName: o.reservation.guestName,
+          partySize: o.reservation.partySize,
+          tableName: o.reservation.table.name,
+        }
+      : null,
+  });
+
+  const preordersScheduled = await prisma.order.findMany({
+    where: {
+      businessId,
+      reservationId: { not: null },
+      preorderStatus: "PREORDER_PAID",
+      prepStatus: { in: KITCHEN_SCHEDULED_PREP_STATUSES },
+      status: { notIn: ["CANCELLED"] },
+    },
+    orderBy: { kitchenPrepAt: "asc" },
+    take: 50,
+    select: preorderSelect,
+  });
+
+  const preordersActive = await prisma.order.findMany({
+    where: {
+      businessId,
+      reservationId: { not: null },
+      preorderStatus: "PREORDER_PAID",
+      prepStatus: { in: KITCHEN_PREORDER_ACTIVE_PREP_STATUSES },
+      status: { notIn: ["CANCELLED"] },
+    },
+    orderBy: { createdAt: "asc" },
+    take: 50,
+    select: preorderSelect,
+  });
+
+  return {
+    at: new Date().toISOString(),
+    orders,
+    preordersScheduled: preordersScheduled.map(mapPreorder),
+    preordersActive: preordersActive.map(mapPreorder),
+    /** @deprecated use preordersActive */
+    preorders: preordersActive.map(mapPreorder),
+  };
 }
 
 export async function resolveTableQrToken(token: string) {

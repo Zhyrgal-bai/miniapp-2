@@ -34,6 +34,8 @@ export const coffeeTemplate: BusinessTemplateConfig = {
     cookTimeMinutes: { type: "number", label: "Время готовки (мин)", required: false, min: 0, max: 180 },
     hasTables: { type: "boolean", label: "Есть столики", required: false, default: true },
     deliveryEnabled: { type: "boolean", label: "Доставка включена", required: false, default: true },
+    reservationDepositEnabled: { type: "boolean", label: "Требовать депозит за бронь", required: false, default: false },
+    reservationDepositAmountSom: { type: "number", label: "Сумма депозита (сом)", required: false, min: 1, max: 100000, default: 500 },
   },
   orderOptionsSchema: {
     hotOrCold: { type: "select", label: "Горячее/Холодное", required: true, values: ["hot", "ice"] },
@@ -45,6 +47,7 @@ export const coffeeTemplate: BusinessTemplateConfig = {
       { key: "cookTime", title: "Время готовки", enabled: true },
       { key: "tables", title: "Столики", enabled: true },
       { key: "delivery", title: "Доставка", enabled: true },
+      { key: "reservationBooking", title: "Настройки бронирования", enabled: true },
     ],
   },
   demoProducts: [

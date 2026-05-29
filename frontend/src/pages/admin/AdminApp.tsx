@@ -11,6 +11,7 @@ import AdminSupportPage from "./AdminSupportPage";
 import AdminPromosPage from "./AdminPromosPage";
 import AdminTablesPage from "./AdminTablesPage";
 import AdminReservationsPage from "./AdminReservationsPage";
+import AdminWaitlistPage from "./AdminWaitlistPage";
 import AdminFloorPage from "./AdminFloorPage";
 import AdminKitchenPage from "./AdminKitchenPage";
 import { useShop } from "../../context/ShopContext";
@@ -44,6 +45,7 @@ const NAV_REQUIRES: Partial<Record<AdminNavKey, MerchantPermissionId>> = {
   floor: MERCHANT_PERM.floorManage,
   kitchen: MERCHANT_PERM.kitchenView,
   reservations: MERCHANT_PERM.settingsManage,
+  waitlist: MERCHANT_PERM.settingsManage,
 };
 
 const ROUTE_ORDER: { key: AdminNavKey; hash: string }[] = [
@@ -140,6 +142,7 @@ export default function AdminApp({ onExit }: AdminAppProps) {
     if (
       !path.includes("/admin/tables") &&
       !path.includes("/admin/reservations") &&
+      !path.includes("/admin/waitlist") &&
       !path.includes("/admin/floor") &&
       !path.includes("/admin/kitchen")
     ) {
@@ -228,6 +231,9 @@ export default function AdminApp({ onExit }: AdminAppProps) {
     }
     if (path.includes("/admin/reservations")) {
       return <AdminReservationsPage key="reservations" />;
+    }
+    if (path.includes("/admin/waitlist")) {
+      return <AdminWaitlistPage key="waitlist" />;
     }
     if (path.includes("/admin/promos")) {
       return <AdminPromosPage key="promos" />;

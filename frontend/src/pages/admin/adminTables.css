@@ -78,14 +78,6 @@
   text-align: center;
 }
 
-.table-map-chip--editable {
-  touch-action: none;
-  z-index: 2;
-}
-
-.table-map-chip--editable.is-selected {
-  z-index: 5;
-}
 
 .table-map-grid {
   position: absolute;
@@ -109,10 +101,29 @@
   border: 2px solid transparent;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
   cursor: grab;
-  transition: box-shadow 0.2s ease, transform 0.15s ease;
   min-width: 52px;
   min-height: 48px;
   text-align: center;
+  will-change: transform;
+}
+
+.table-map-chip--editable {
+  touch-action: none;
+  z-index: 2;
+  transition: box-shadow 0.15s ease, outline 0.15s ease;
+}
+
+.table-map-chip--editable.is-selected {
+  z-index: 5;
+}
+
+.table-map-chip.is-dragging {
+  z-index: 30;
+  cursor: grabbing;
+  transition: none;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
+  outline: 2px solid rgba(34, 197, 94, 0.85);
+  outline-offset: 1px;
 }
 
 .table-map-shell--preview .table-map-chip {

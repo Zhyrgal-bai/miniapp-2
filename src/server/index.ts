@@ -273,7 +273,9 @@ import { isStorefrontClosedForCustomers } from "./subscriptionAccess.js";
 import { attachSupportRoutes } from "./supportRoutes.js";
 import { attachDiningTableRoutes } from "./diningTableRoutes.js";
 import { attachTableReservationRoutes } from "./tableReservationRoutes.js";
+import { attachWaitlistRoutes } from "./waitlistRoutes.js";
 import { startTableReservationScheduler } from "./tableReservationScheduler.js";
+import { resolveCheckoutReservationId, markReservationPreorderPaymentPending } from "./tableReservationPreorder.js";
 import { attachVenueOperationsRoutes } from "./venueOperationsRoutes.js";
 
 const __serverDir = path.dirname(fileURLToPath(import.meta.url));
@@ -4465,6 +4467,11 @@ attachTableReservationRoutes(app, {
   telegramIdFromRequest: verifiedTelegramIdFromRequest,
 });
 
+attachWaitlistRoutes(app, {
+  requireMerchantStaff,
+  telegramIdFromRequest: verifiedTelegramIdFromRequest,
+});
+
 attachVenueOperationsRoutes(app, {
   requireMerchantStaff,
   telegramIdFromRequest: verifiedTelegramIdFromRequest,
@@ -4743,6 +4750,36 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
     });
   }
 
+  let reservationIdForOrder: number | null = null;
+  try {
+    const rawTableSessionBody = (body as { tableSessionId?: unknown }).tableSessionId;
+    const hasTableSession =
+      rawTableSessionBody != null && Number.isFinite(Number(rawTableSessionBody));
+    reservationIdForOrder = await resolveCheckoutReservationId({
+      businessId: tenantBusinessId,
+      reservationId: (body as { reservationId?: unknown }).reservationId,
+      guestTelegramId: verifiedTg,
+      hasTableSession,
+    });
+  } catch (resErr) {
+    const msg = resErr instanceof Error ? resErr.message : String(resErr);
+    if (msg === "RESERVATION_SESSION_CONFLICT") {
+      return res.status(400).json({
+        error: "Нельзя оформить предзаказ к брони и заказ за столом одновременно",
+      });
+    }
+    if (msg === "INVALID_RESERVATION") {
+      return res.status(400).json({ error: "Некорректная бронь" });
+    }
+    if (msg.startsWith("RESERVATION:")) {
+      const parts = msg.split(":");
+      const status = Number(parts[1]) || 400;
+      const errorText = parts.slice(2).join(":") || "Бронь недоступна";
+      return res.status(status).json({ error: errorText });
+    }
+    throw resErr;
+  }
+
   let order: {
     id: number;
     businessId: number;
@@ -4915,6 +4952,9 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
               paymentMethod,
               paymentId: paymentMethod === "finik" ? null : paymentId,
               tableSessionId: tableSessionIdParsed,
+              reservationId: reservationIdForOrder,
+              preorderStatus:
+                reservationIdForOrder != null ? "PREORDER_DRAFT" : null,
               prepStatus: tableSessionIdParsed != null ? "PREPARING" : "NONE",
               items: {
                 create: itemCreates,
@@ -5084,7 +5124,12 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
         await onOrderStatusChanged(order.id, "NEW", "CANCELLED");
         await prisma.order.update({
           where: { id: order.id },
-          data: { status: "CANCELLED" },
+          data: {
+            status: "CANCELLED",
+            ...(reservationIdForOrder != null
+              ? { preorderStatus: "PREORDER_CANCELLED" }
+              : {}),
+          },
         });
         return res.status(502).json({ error: finik.error });
       }
@@ -5101,8 +5146,12 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
         data: { paymentId: finik.paymentId },
         include: { items: true },
       });
+      if (reservationIdForOrder != null) {
+        await markReservationPreorderPaymentPending(order.id);
+      }
     }
 
+    const isUnpaidReservationPreorder = reservationIdForOrder != null;
     const address =
       orderForResponse.address?.trim() ||
       (addressSanitized !== "" ? addressSanitized : "—");
@@ -5119,23 +5168,26 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
           0,
         )
       : 0;
-    void notifyAdminNewOrderTelegram({
-      orderId: orderForResponse.id,
-      orderNumber: orderForResponse.orderNumber,
-      businessId: orderForResponse.businessId,
-      customerName: displayName,
-      phone,
-      total: orderForResponse.total,
-      itemCount: itemCount > 0 ? itemCount : 1,
-    });
 
-    void createMerchantNotification({
-      businessId: orderForResponse.businessId,
-      kind: "ORDER_NEW",
-      title: `Новый заказ ${orderDisplayLabel(orderForResponse)}`,
-      body: `${displayName} · ${orderForResponse.total} сом`,
-      href: "#/admin/orders",
-    });
+    if (!isUnpaidReservationPreorder) {
+      void notifyAdminNewOrderTelegram({
+        orderId: orderForResponse.id,
+        orderNumber: orderForResponse.orderNumber,
+        businessId: orderForResponse.businessId,
+        customerName: displayName,
+        phone,
+        total: orderForResponse.total,
+        itemCount: itemCount > 0 ? itemCount : 1,
+      });
+
+      void createMerchantNotification({
+        businessId: orderForResponse.businessId,
+        kind: "ORDER_NEW",
+        title: `Новый заказ ${orderDisplayLabel(orderForResponse)}`,
+        body: `${displayName} · ${orderForResponse.total} сом`,
+        href: "#/admin/orders",
+      });
+    }
 
     if (promoRaw) {
       try {
@@ -5272,6 +5324,7 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       attributes?: unknown;
       variants?: unknown;
       discountPercent?: unknown;
+      preparationMinutes?: unknown;
       isSale?: unknown;
       isNew?: unknown;
       isPopular?: unknown;
@@ -5292,6 +5345,7 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       attributes,
       variants,
       discountPercent,
+      preparationMinutes,
       isSale,
       isNew,
       isPopular,
@@ -5307,6 +5361,7 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       attributes === undefined &&
       variants === undefined &&
       discountPercent === undefined &&
+      preparationMinutes === undefined &&
       isSale === undefined &&
       isNew === undefined &&
       isPopular === undefined
@@ -5322,6 +5377,7 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       description?: string | null;
       categoryId?: number;
       attributes?: Record<string, unknown>;
+      preparationMinutes?: number | null;
     } = {};
 
     if (name !== undefined) scalar.name = String(name);
@@ -5360,6 +5416,17 @@ app.put("/products/:id", async (req: Request, res: Response) => {
     }
     if (description !== undefined) {
       scalar.description = description === null ? null : String(description);
+    }
+    if (preparationMinutes !== undefined) {
+      if (preparationMinutes === null || preparationMinutes === "") {
+        scalar.preparationMinutes = null;
+      } else {
+        const m = Number(preparationMinutes);
+        if (!Number.isFinite(m) || m < 1) {
+          return res.status(400).json({ error: "Неверное время приготовления" });
+        }
+        scalar.preparationMinutes = Math.round(m);
+      }
     }
 
     const exists = await prisma.product.findUnique({ where: { id } });

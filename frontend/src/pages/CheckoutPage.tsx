@@ -20,6 +20,7 @@ import { useStorefrontPayload } from "../components/storefront/runtime/Storefron
 import { formatOrderLineSummary } from "@repo-shared/businessCommerce";
 import { cartLineIdentityKey } from "../commerce/cartLineIdentity";
 import { readTableSession } from "../utils/tableSessionStorage";
+import { readPreorderContext, clearPreorderContext } from "../utils/reservationPreorderStorage";
 
 type Props = {
   onBack?: () => void;
@@ -94,6 +95,8 @@ export default function CheckoutPage({ onBack }: Props) {
   const businessType = payload?.businessType ?? null;
   const items = useCartStore((state) => state.items);
   const clearCart = useCartStore((state) => state.clearCart);
+  const reservationId = useCartStore((state) => state.reservationId);
+  const setReservationId = useCartStore((state) => state.setReservationId);
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -463,6 +466,10 @@ export default function CheckoutPage({ onBack }: Props) {
     try {
       const tenantParams =
         businessId != null ? { businessId, shop: String(businessId) } : {};
+      const preorderCtx = readPreorderContext();
+      const checkoutReservationId =
+        reservationId ?? preorderCtx?.reservationId ?? null;
+
       const { data } = await api.post<{
         id: number;
         businessId?: number;
@@ -471,6 +478,9 @@ export default function CheckoutPage({ onBack }: Props) {
         ...tenantParams,
         ...(readTableSession()?.tableSessionId != null
           ? { tableSessionId: readTableSession()!.tableSessionId }
+          : {}),
+        ...(checkoutReservationId != null
+          ? { reservationId: checkoutReservationId }
           : {}),
         ...(Number.isFinite(userId) ? { userId } : {}),
         user: {
@@ -543,6 +553,9 @@ export default function CheckoutPage({ onBack }: Props) {
   useEffect(() => {
     const onPaid = () => {
       clearCart();
+      clearPreorderContext();
+      setReservationId(null);
+      window.dispatchEvent(new CustomEvent("sf:preorderCompleted"));
       setName("");
       setPhone("");
       setPhoneFromSavedOrder(false);
@@ -559,7 +572,7 @@ export default function CheckoutPage({ onBack }: Props) {
     window.addEventListener("sf:finikPaymentPaid", onPaid as EventListener);
     return () =>
       window.removeEventListener("sf:finikPaymentPaid", onPaid as EventListener);
-  }, [clearCart]);
+  }, [clearCart, setReservationId]);
 
   useEffect(() => {
     const onVis = () => {

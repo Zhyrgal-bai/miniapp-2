@@ -69,6 +69,13 @@
   font-style: italic;
 }
 
+.reservations-admin-card__preorder,
+.reservations-admin-card__deposit {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
 .reservations-admin-card__status {
   display: inline-block;
   margin-top: 8px;

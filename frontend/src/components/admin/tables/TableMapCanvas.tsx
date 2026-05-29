@@ -1,13 +1,15 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
+  useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import type { DiningTableDto } from "../../../services/diningTablesApi";
-import { clamp01 } from "./tableMapUtils";
+import { clamp01, snapLayoutCoord } from "./tableMapUtils";
 
-type DragKind = "move" | "resize" | null;
+type DragKind = "move" | "resize";
 
 type Props = {
   tables: DiningTableDto[];
@@ -25,46 +27,76 @@ export function TableMapCanvas({
   onPatchTable,
 }: Props) {
   const shellRef = useRef<HTMLDivElement>(null);
+  const chipRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const [draggingId, setDraggingId] = useState<number | null>(null);
   const dragRef = useRef<{
     kind: DragKind;
     tableId: number;
-    startX: number;
-    startY: number;
+    startClientX: number;
+    startClientY: number;
     origin: DiningTableDto;
-    moved: boolean;
   } | null>(null);
-  const rafRef = useRef<number | null>(null);
-  const pendingPatchRef = useRef<{ id: number; patch: Partial<DiningTableDto> } | null>(
-    null,
-  );
 
   const readNorm = useCallback((clientX: number, clientY: number) => {
     const el = shellRef.current;
-    if (!el) return { x: 0, y: 0 };
+    if (!el) return { x: 0, y: 0, w: 1, h: 1 };
     const r = el.getBoundingClientRect();
-    if (r.width <= 0 || r.height <= 0) return { x: 0, y: 0 };
+    if (r.width <= 0 || r.height <= 0) return { x: 0, y: 0, w: 1, h: 1 };
     return {
       x: clamp01((clientX - r.left) / r.width),
       y: clamp01((clientY - r.top) / r.height),
+      w: r.width,
+      h: r.height,
     };
   }, []);
 
-  const flushPatch = useCallback(() => {
-    rafRef.current = null;
-    const pending = pendingPatchRef.current;
-    if (!pending) return;
-    pendingPatchRef.current = null;
-    onPatchTable(pending.id, pending.patch);
-  }, [onPatchTable]);
+  const resetChipStyles = useCallback((tableId: number, kind: DragKind) => {
+    const chip = chipRefs.current.get(tableId);
+    if (!chip) return;
+    chip.style.transform = "";
+    if (kind === "resize") {
+      chip.style.width = "";
+      chip.style.height = "";
+    }
+  }, []);
 
-  const schedulePatch = useCallback(
-    (id: number, patch: Partial<DiningTableDto>) => {
-      pendingPatchRef.current = { id, patch };
-      if (rafRef.current != null) return;
-      rafRef.current = window.requestAnimationFrame(flushPatch);
-    },
-    [flushPatch],
-  );
+  const commitDrag = useCallback(() => {
+    const drag = dragRef.current;
+    if (!drag) return;
+
+    const chip = chipRefs.current.get(drag.tableId);
+    const shell = shellRef.current;
+    if (!chip || !shell) return;
+
+    const o = drag.origin;
+    let patch: Partial<DiningTableDto> = {};
+
+    if (drag.kind === "move") {
+      const tr = chip.style.transform;
+      const match = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(tr);
+      const dxPx = match ? Number(match[1]) : 0;
+      const dyPx = match ? Number(match[2]) : 0;
+      const { w, h } = readNorm(drag.startClientX, drag.startClientY);
+      patch = {
+        posX: snapLayoutCoord(clamp01(Math.min(o.posX + dxPx / w, 1 - o.width))),
+        posY: snapLayoutCoord(clamp01(Math.min(o.posY + dyPx / h, 1 - o.height))),
+      };
+    } else {
+      const wStr = chip.style.width;
+      const hStr = chip.style.height;
+      const width =
+        wStr.endsWith("%") ? clamp01(Number.parseFloat(wStr) / 100) : o.width;
+      const height =
+        hStr.endsWith("%") ? clamp01(Number.parseFloat(hStr) / 100) : o.height;
+      patch = {
+        width: snapLayoutCoord(Math.max(0.08, width)),
+        height: snapLayoutCoord(Math.max(0.08, height)),
+      };
+    }
+
+    resetChipStyles(drag.tableId, drag.kind);
+    onPatchTable(drag.tableId, patch);
+  }, [onPatchTable, readNorm, resetChipStyles]);
 
   const onPointerMove = useCallback(
     (e: PointerEvent) => {
@@ -72,59 +104,43 @@ export function TableMapCanvas({
       if (!drag || mode !== "editor") return;
       e.preventDefault();
 
-      const { x, y } = readNorm(e.clientX, e.clientY);
-      const dx = x - drag.startX;
-      const dy = y - drag.startY;
-      if (Math.abs(dx) > 0.002 || Math.abs(dy) > 0.002) {
-        drag.moved = true;
-      }
+      const chip = chipRefs.current.get(drag.tableId);
+      if (!chip) return;
+
+      const dxPx = e.clientX - drag.startClientX;
+      const dyPx = e.clientY - drag.startClientY;
       const o = drag.origin;
 
       if (drag.kind === "move") {
-        const w = o.width;
-        const h = o.height;
-        schedulePatch(drag.tableId, {
-          posX: clamp01(Math.min(o.posX + dx, 1 - w)),
-          posY: clamp01(Math.min(o.posY + dy, 1 - h)),
-        });
-      } else if (drag.kind === "resize") {
-        schedulePatch(drag.tableId, {
-          width: clamp01(Math.max(0.08, Math.min(0.92, o.width + dx))),
-          height: clamp01(Math.max(0.08, Math.min(0.92, o.height + dy))),
-        });
+        chip.style.transform = `translate(${dxPx}px, ${dyPx}px)`;
+      } else {
+        const start = readNorm(drag.startClientX, drag.startClientY);
+        const dxNorm = (e.clientX - drag.startClientX) / start.w;
+        const dyNorm = (e.clientY - drag.startClientY) / start.h;
+        chip.style.width = `${clamp01(Math.max(0.08, Math.min(0.92, o.width + dxNorm))) * 100}%`;
+        chip.style.height = `${clamp01(Math.max(0.08, Math.min(0.92, o.height + dyNorm))) * 100}%`;
       }
     },
-    [mode, readNorm, schedulePatch],
+    [mode, readNorm],
   );
 
   const endDrag = useCallback(() => {
-    if (rafRef.current != null) {
-      window.cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
+    if (dragRef.current) {
+      commitDrag();
     }
-    flushPatch();
     dragRef.current = null;
+    setDraggingId(null);
     window.removeEventListener("pointermove", onPointerMove);
     window.removeEventListener("pointerup", endDrag);
     window.removeEventListener("pointercancel", endDrag);
-  }, [flushPatch, onPointerMove]);
+  }, [commitDrag, onPointerMove]);
 
   useEffect(() => () => endDrag(), [endDrag]);
-
-  const capturePointer = (e: ReactPointerEvent, chip: HTMLElement) => {
-    if (typeof chip.setPointerCapture === "function") {
-      try {
-        chip.setPointerCapture(e.pointerId);
-      } catch {
-        /* ignore — window listeners still work */
-      }
-    }
-  };
 
   const startDrag = (
     e: ReactPointerEvent,
     table: DiningTableDto,
-    kind: Exclude<DragKind, null>,
+    kind: DragKind,
   ) => {
     if (mode !== "editor") return;
     e.stopPropagation();
@@ -134,21 +150,39 @@ export function TableMapCanvas({
     if (!(chip instanceof HTMLElement)) return;
 
     onSelect(table.id);
+    setDraggingId(table.id);
 
-    const { x, y } = readNorm(e.clientX, e.clientY);
     dragRef.current = {
       kind,
       tableId: table.id,
-      startX: x,
-      startY: y,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
       origin: { ...table },
-      moved: false,
     };
-    capturePointer(e, chip);
+
+    if (typeof chip.setPointerCapture === "function") {
+      try {
+        chip.setPointerCapture(e.pointerId);
+      } catch {
+        /* window listeners handle move */
+      }
+    }
+
     window.addEventListener("pointermove", onPointerMove, { passive: false });
     window.addEventListener("pointerup", endDrag);
     window.addEventListener("pointercancel", endDrag);
   };
+
+  const orderedTables = useMemo(() => {
+    return [...tables].sort((a, b) => {
+      const rank = (id: number) => {
+        if (id === draggingId) return 2;
+        if (id === selectedId) return 1;
+        return 0;
+      };
+      return rank(a.id) - rank(b.id);
+    });
+  }, [tables, draggingId, selectedId]);
 
   const statusClass = (status: string) =>
     `table-map-chip--status-${status.toLowerCase()}`;
@@ -166,19 +200,25 @@ export function TableMapCanvas({
       <div className="table-map-grid" aria-hidden />
       {mode === "editor" ? (
         <p className="table-map-editor-hint">
-          Тяните стол для перемещения. Угол справа снизу — размер.
+          Тяните стол — двигается сразу. Отпустите — прилипнет к сетке. Угол — размер.
         </p>
       ) : null}
-      {tables.map((table) => {
+      {orderedTables.map((table) => {
         const selected = selectedId === table.id;
+        const dragging = draggingId === table.id;
         return (
           <div
             key={table.id}
+            ref={(el) => {
+              if (el) chipRefs.current.set(table.id, el);
+              else chipRefs.current.delete(table.id);
+            }}
             className={[
               "table-map-chip",
               `table-map-chip--shape-${table.shape.toLowerCase()}`,
               statusClass(table.status),
               selected ? "is-selected" : "",
+              dragging ? "is-dragging" : "",
               mode === "editor" ? "table-map-chip--editable" : "",
             ]
               .filter(Boolean)
@@ -199,7 +239,7 @@ export function TableMapCanvas({
             <span className="table-map-chip__seats">{table.seats} мест</span>
             {mode === "editor" ? (
               <span
-                className={`table-map-resize${selected ? " is-active" : ""}`}
+                className={`table-map-resize${selected || dragging ? " is-active" : ""}`}
                 role="presentation"
                 aria-label="Изменить размер"
                 onPointerDown={(e) => startDrag(e, table, "resize")}

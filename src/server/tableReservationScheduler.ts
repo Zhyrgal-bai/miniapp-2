@@ -2,6 +2,9 @@ import { prisma } from "./db.js";
 import { REMINDER_LEAD_MINUTES } from "../shared/tableReservation.js";
 import { notifyReservationReminder } from "./tableReservationNotify.js";
 import { syncDiningTableStatuses } from "./tableReservationService.js";
+import { runReservationPreorderKitchenSchedulerOnce } from "./reservationPreorderKitchenScheduler.js";
+import { expireStaleReservationDepositesOnce } from "./tableReservationDeposit.js";
+import { expireStaleWaitlistInvitesOnce } from "./tableReservationWaitlistService.js";
 
 const TICK_MS = 5 * 60 * 1000;
 
@@ -55,6 +58,33 @@ export async function runTableReservationMaintenanceOnce(): Promise<void> {
     } catch (e) {
       console.error("syncDiningTableStatuses:", row.businessId, e);
     }
+  }
+
+  try {
+    const expiredDeposits = await expireStaleReservationDepositesOnce(now);
+    if (expiredDeposits > 0) {
+      console.log(`reservationDeposit: expired ${expiredDeposits} unpaid deposits`);
+    }
+  } catch (e) {
+    console.error("expireStaleReservationDeposites:", e);
+  }
+
+  try {
+    const expiredWaitlist = await expireStaleWaitlistInvitesOnce(now);
+    if (expiredWaitlist > 0) {
+      console.log(`waitlist: expired ${expiredWaitlist} invites`);
+    }
+  } catch (e) {
+    console.error("expireStaleWaitlistInvites:", e);
+  }
+
+  try {
+    const promoted = await runReservationPreorderKitchenSchedulerOnce(now);
+    if (promoted > 0) {
+      console.log(`reservationPreorderKitchen: promoted ${promoted} to READY_FOR_PREP`);
+    }
+  } catch (e) {
+    console.error("reservationPreorderKitchenScheduler:", e);
   }
 }
 

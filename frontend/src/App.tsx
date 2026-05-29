@@ -43,6 +43,8 @@ import {
   type AdminSupportTabIntent,
 } from "./utils/accountMenuStorage";
 import SideMenu from "./components/layout/SideMenu";
+import { PreorderProvider } from "./context/PreorderContext";
+import { PreorderBanner } from "./components/tableBooking/PreorderBanner";
 import PaymentProcessingBanner from "./components/checkout/PaymentProcessingBanner";
 import ToastHost from "./components/ui/ToastHost";
 import FloatingCart from "./components/layout/FloatingCart";
@@ -648,6 +650,7 @@ export default function App() {
   }
 
   const content = (
+    <PreorderProvider businessId={businessId}>
     <div className={`app${storeBrandHeader ? " app--store-brand" : ""}`}>
       <Header
         menuOpen={isMenuOpen}
@@ -702,6 +705,9 @@ export default function App() {
 
       <div className="content app__content">
         <div className="sf-commerce-shell" data-sf-shell={commerceShellMode}>
+          {(page === "home" || page === "cart" || page === "checkout") && (
+            <PreorderBanner />
+          )}
           {page === "home" && <HomePage />}
           {page === "table-booking" && (
             <TableBookingPage onBack={() => commitPage("home")} />
@@ -759,6 +765,7 @@ export default function App() {
       />
       <ToastHost />
     </div>
+    </PreorderProvider>
   );
   return (
     <ThemeVarsProvider theme={theme}>

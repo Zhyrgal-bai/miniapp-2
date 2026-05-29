@@ -34,6 +34,8 @@ export const fastfoodTemplate: BusinessTemplateConfig = {
     deliveryZones: { type: "text", label: "Зоны доставки (описание)", required: false, maxLen: 2048 },
     kitchen: { type: "text", label: "Кухня", required: false, maxLen: 280 },
     comboEnabled: { type: "boolean", label: "Комбо включено", required: false, default: true },
+    reservationDepositEnabled: { type: "boolean", label: "Требовать депозит за бронь", required: false, default: false },
+    reservationDepositAmountSom: { type: "number", label: "Сумма депозита (сом)", required: false, min: 1, max: 100000, default: 500 },
   },
   orderOptionsSchema: {
     spicy: { type: "select", label: "Острота", required: false, values: ["no", "mild", "hot"], default: "no" },
@@ -45,6 +47,7 @@ export const fastfoodTemplate: BusinessTemplateConfig = {
       { key: "deliveryZones", title: "Зоны доставки", enabled: true },
       { key: "kitchen", title: "Кухня", enabled: true },
       { key: "comboSettings", title: "Комбо", enabled: true },
+      { key: "reservationBooking", title: "Настройки бронирования", enabled: true },
     ],
   },
   demoProducts: [

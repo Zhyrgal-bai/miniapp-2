@@ -55,6 +55,11 @@ export function LiveFloorMap({ tables, selectedId, onSelect }: Props) {
             {table.session && mins > 0 ? (
               <span className="table-map-chip__timer">{mins} мин</span>
             ) : null}
+            {table.waitlistNext ? (
+              <span className="table-map-chip__waitlist">
+                {table.waitlistNext.guestName} · {table.waitlistNext.partySize} г.
+              </span>
+            ) : null}
           </button>
         );
       })}

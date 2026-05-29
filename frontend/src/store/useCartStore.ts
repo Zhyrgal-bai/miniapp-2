@@ -14,8 +14,10 @@ export type CartItem = CartLineStorage & {
 
 type CartStore = {
   tenantShopId: string | null;
+  reservationId: number | null;
 
   syncTenantShopId: (shopId: string | null) => void;
+  setReservationId: (id: number | null) => void;
   items: CartItem[];
 
   addItem: (item: CartItem) => void;
@@ -29,15 +31,20 @@ export { cartLineIdentityKey, cartLinesEqual };
 
 export const useCartStore = create<CartStore>((set, get) => ({
   tenantShopId: null,
+  reservationId: null,
 
   syncTenantShopId: (shopId) =>
     set((state) => ({
       tenantShopId: shopId,
+      reservationId:
+        state.tenantShopId === shopId ? state.reservationId : null,
       items:
         state.tenantShopId === shopId || state.items.length === 0
           ? state.items
           : [],
     })),
+
+  setReservationId: (id) => set({ reservationId: id }),
 
   items: [],
 

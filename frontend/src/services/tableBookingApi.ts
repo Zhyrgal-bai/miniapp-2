@@ -44,6 +44,15 @@ export type TableReservationDto = {
   status: string;
   durationMinutes: number;
   createdAt: string;
+  hasPreorder?: boolean;
+  preorderStatus?: "none" | "pending" | "paid";
+  preorderLabel?: string;
+  depositStatus?: string;
+  depositAmount?: number | null;
+  depositPaidAt?: string | null;
+  depositDueAt?: string | null;
+  depositLabel?: string;
+  canPayDeposit?: boolean;
 };
 
 function bookingHeaders(): Record<string, string> {
@@ -55,7 +64,7 @@ function bookingHeaders(): Record<string, string> {
 
 export async function fetchCustomerDiningTables(
   businessId: number,
-): Promise<{ supported: boolean; tables: CustomerDiningTableDto[] }> {
+): Promise<{ supported: boolean; tables: CustomerDiningTableDto[]; hasBookableTables?: boolean }> {
   const url = apiAbsoluteUrl(`/api/storefront/${businessId}/dining-tables`);
   const res = await api.get(url, { headers: bookingHeaders() });
   return res.data;
@@ -86,6 +95,60 @@ export async function createTableReservation(
 ): Promise<{ reservation: TableReservationDto }> {
   const url = apiAbsoluteUrl(`/api/storefront/${businessId}/table-reservations`);
   const res = await api.post(url, body, { headers: bookingHeaders() });
+  return res.data;
+}
+
+export async function fetchMyTableReservations(
+  businessId: number,
+): Promise<{ supported: boolean; reservations: TableReservationDto[] }> {
+  const url = apiAbsoluteUrl(`/api/storefront/${businessId}/table-reservations/mine`);
+  const res = await api.get(url, { headers: bookingHeaders() });
+  return res.data;
+}
+
+export async function payReservationDeposit(
+  businessId: number,
+  reservationId: number,
+): Promise<{ paymentUrl: string; paymentId: string; amountSom: number }> {
+  const url = apiAbsoluteUrl(
+    `/api/storefront/${businessId}/table-reservations/${reservationId}/deposit/pay`,
+  );
+  const res = await api.post(url, {}, { headers: bookingHeaders() });
+  return res.data;
+}
+
+export async function syncReservationDeposit(
+  businessId: number,
+  reservationId: number,
+): Promise<{
+  paymentState: "paid" | "pending" | "failed";
+  duplicate?: boolean;
+  reservation: TableReservationDto | null;
+}> {
+  const url = apiAbsoluteUrl(
+    `/api/storefront/${businessId}/table-reservations/${reservationId}/deposit/sync`,
+  );
+  const res = await api.post(url, {}, { headers: bookingHeaders() });
+  return res.data;
+}
+
+export async function fetchReservationPreorderContext(
+  businessId: number,
+  reservationId: number,
+): Promise<{
+  reservation: {
+    id: number;
+    tableName: string;
+    reservedAt: string;
+    partySize: number | null;
+    status: string;
+    hasPreorder: boolean;
+  };
+}> {
+  const url = apiAbsoluteUrl(
+    `/api/storefront/${businessId}/table-reservations/${reservationId}/preorder-context`,
+  );
+  const res = await api.get(url, { headers: bookingHeaders() });
   return res.data;
 }
 

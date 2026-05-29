@@ -16,7 +16,24 @@ export function isPublicStorefrontBookingPath(pathname: string): boolean {
   const p = normalizeStorefrontApiPath(pathname);
   if (/^\/storefront\/\d+\/dining-tables/i.test(p)) return true;
   if (/^\/storefront\/\d+\/table-reservations/i.test(p)) return true;
+  if (/^\/storefront\/\d+\/waitlist/i.test(p)) return true;
   if (/^\/storefront\/table-qr\//i.test(p)) return true;
+  return false;
+}
+
+/** Guest reservation APIs that require verified Telegram initData. */
+export function storefrontReservationGuestRequiresVerifiedTelegram(
+  method: string,
+  pathname: string,
+): boolean {
+  const p = normalizeStorefrontApiPath(pathname);
+  const m = method.toUpperCase();
+  if (m !== "GET") return false;
+  if (/^\/storefront\/\d+\/table-reservations\/mine$/i.test(p)) return true;
+  if (/^\/storefront\/\d+\/table-reservations\/\d+\/preorder-context$/i.test(p)) {
+    return true;
+  }
+  if (/^\/storefront\/\d+\/waitlist\/mine$/i.test(p)) return true;
   return false;
 }
 
@@ -28,6 +45,15 @@ export function storefrontBookingRequiresVerifiedTelegram(
   const p = normalizeStorefrontApiPath(pathname);
   const m = method.toUpperCase();
   if (m === "POST" && /^\/storefront\/\d+\/table-reservations$/i.test(p)) {
+    return true;
+  }
+  if (
+    m === "POST" &&
+    /^\/storefront\/\d+\/table-reservations\/\d+\/deposit\/(pay|sync)$/i.test(p)
+  ) {
+    return true;
+  }
+  if (m === "POST" && /^\/storefront\/\d+\/waitlist(\/|$)/i.test(p)) {
     return true;
   }
   if (p.startsWith("/storefront/table-qr/")) return true;

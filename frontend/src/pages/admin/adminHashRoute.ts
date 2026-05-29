@@ -19,6 +19,7 @@ export type AdminNavKey =
   | "floor"
   | "kitchen"
   | "reservations"
+  | "waitlist"
   | "promos"
   | "support";
 
@@ -33,6 +34,7 @@ export function adminNavKeyFromPath(path: string): AdminNavKey {
   if (path.includes("/admin/floor")) return "floor";
   if (path.includes("/admin/kitchen")) return "kitchen";
   if (path.includes("/admin/reservations")) return "reservations";
+  if (path.includes("/admin/waitlist")) return "waitlist";
   if (path.includes("/admin/promos")) return "promos";
   if (path.includes("/admin/support")) return "support";
   return "orders";

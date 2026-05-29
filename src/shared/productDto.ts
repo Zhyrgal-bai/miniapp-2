@@ -28,6 +28,7 @@ export type PublicProduct = {
   description?: string | null;
   categoryId?: number | null;
   discountPercent?: number | null;
+  preparationMinutes?: number | null;
   attributes?: Record<string, unknown>;
   variants: PublicProductVariant[];
   totalAvailable: number;
@@ -43,6 +44,7 @@ type DbProductLike = {
   description?: string | null;
   categoryId?: number | null;
   discountPercent?: number | null;
+  preparationMinutes?: number | null;
   attributes?: unknown;
 };
 
@@ -111,6 +113,9 @@ export function toPublicProduct(
       const fromAttrs = discountPercentFromAttributes(attrs);
       return fromAttrs > 0 ? fromAttrs : null;
     })(),
+    ...(raw.preparationMinutes != null && Number.isFinite(raw.preparationMinutes)
+      ? { preparationMinutes: Math.max(1, Math.round(raw.preparationMinutes)) }
+      : {}),
     attributes: stripVariantsFromAttributes(attrs),
     variants,
     totalAvailable,

@@ -4,6 +4,11 @@ export function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));
 }
 
+/** Snap layout coords to the visible 12% grid (optional on drag end). */
+export function snapLayoutCoord(n: number, step = 0.04): number {
+  return clamp01(Math.round(n / step) * step);
+}
+
 export function statusLabelRu(status: DiningTableStatus): string {
   switch (status) {
     case "AVAILABLE":
