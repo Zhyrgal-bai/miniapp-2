@@ -57,7 +57,7 @@ export async function buildPlatformOpsSummary(): Promise<PlatformOpsSummary> {
         trialEndsAt: true,
         subscriptionEndsAt: true,
         finikApiKey: true,
-        finikSecret: true,
+        finikAccountId: true,
       },
     }),
     prisma.order.count({ where: { createdAt: { gte: since24h } } }),
@@ -95,7 +95,7 @@ export async function buildPlatformOpsSummary(): Promise<PlatformOpsSummary> {
   for (const b of businesses) {
     if (isSubscriptionFullyExpired(b, now)) subscriptionExpired += 1;
     const finikOk =
-      Boolean(b.finikApiKey?.trim()) && Boolean(b.finikSecret?.trim());
+      Boolean(b.finikApiKey?.trim()) && Boolean(b.finikAccountId?.trim());
     if (!finikOk) finikNotConfigured += 1;
   }
 

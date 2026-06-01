@@ -240,6 +240,11 @@ import {
   syncFinikOrderPayment,
 } from "./finikMerchant.js";
 import {
+  FINIK_LEGACY_HTTP_UNAVAILABLE_ERROR,
+  isFinikCredentialsReady,
+  isFinikLegacyHttpReady,
+} from "../shared/finikReady.js";
+import {
   mountSubscriptionFinikPaymentRoutes,
   createSubscriptionFinikPaymentSession,
 } from "./subscriptionFinikPayments.js";
@@ -1012,6 +1017,7 @@ app.post("/api/platform/store-settings", async (req: Request, res: Response) => 
     const settingsBody: PlatformStoreSettingsUpdateBody = {
       storeName: raw.storeName,
       finikApiKey: raw.finikApiKey,
+      finikAccountId: raw.finikAccountId,
       newBotToken: raw.newBotToken,
       merchantConfig: raw.merchantConfig,
     };
@@ -1043,6 +1049,7 @@ app.post("/api/platform/update-finik", async (req: Request, res: Response) => {
     const reqBody = req.body as {
       businessId?: unknown;
       finikApiKey?: unknown;
+      finikAccountId?: unknown;
       finikSecret?: unknown;
     };
     const rawBid = reqBody.businessId;
@@ -1060,6 +1067,7 @@ app.post("/api/platform/update-finik", async (req: Request, res: Response) => {
       telegramId,
       businessId,
       finikApiKey: reqBody.finikApiKey,
+      finikAccountId: reqBody.finikAccountId,
       finikSecret: reqBody.finikSecret,
     });
     if (!out.ok) {
@@ -1071,6 +1079,8 @@ app.post("/api/platform/update-finik", async (req: Request, res: Response) => {
       finikConfigured: out.finikConfigured,
       finikReady: out.finikReady,
       finikHasApiKey: out.finikHasApiKey,
+      finikHasAccountId: out.finikHasAccountId,
+      finikLegacyHttpReady: out.finikLegacyHttpReady,
       finikHasSecret: out.finikHasSecret,
       finikWebhookUrl: out.finikWebhookUrl,
     });
@@ -1131,6 +1141,7 @@ app.post(
       botToken: shaped.data.botToken,
       phone: shaped.data.phone,
       finikApiKey: shaped.data.finikApiKey,
+      finikAccountId: shaped.data.finikAccountId,
       businessType: shaped.data.businessType,
       ownerUsername: shaped.data.ownerUsername,
       telegramId: authTid,
@@ -5275,10 +5286,31 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
     if (paymentMethod === "finik") {
       const business = await prisma.business.findUnique({
         where: { id: order.businessId },
-        select: { id: true, finikApiKey: true, finikSecret: true },
+        select: {
+          id: true,
+          finikApiKey: true,
+          finikAccountId: true,
+          finikSecret: true,
+        },
       });
       if (!business) {
         return res.status(500).json({ error: "Магазин не найден" });
+      }
+      if (
+        isFinikCredentialsReady(business.finikApiKey, business.finikAccountId) &&
+        !isFinikLegacyHttpReady(business.finikApiKey, business.finikSecret)
+      ) {
+        await onOrderStatusChanged(order.id, "NEW", "CANCELLED");
+        await prisma.order.update({
+          where: { id: order.id },
+          data: {
+            status: "CANCELLED",
+            ...(reservationIdForOrder != null
+              ? { preorderStatus: "PREORDER_CANCELLED" }
+              : {}),
+          },
+        });
+        return res.status(503).json({ error: FINIK_LEGACY_HTTP_UNAVAILABLE_ERROR });
       }
       const finik = await runCheckoutStep(
         "payment_session",

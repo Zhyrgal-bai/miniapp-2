@@ -5,6 +5,11 @@ import {
   syncFinikReservationDepositPayment,
 } from "./finikMerchant.js";
 import {
+  FINIK_LEGACY_HTTP_UNAVAILABLE_ERROR,
+  isFinikCredentialsReady,
+  isFinikLegacyHttpReady,
+} from "../shared/finikReady.js";
+import {
   DEPOSIT_PAYMENT_TIMEOUT_MINUTES,
   parseReservationDepositSettings,
   reservationDepositExternalId,
@@ -152,10 +157,22 @@ export async function startReservationDepositPayment(input: {
 
   const business = await prisma.business.findUnique({
     where: { id: input.businessId },
-    select: { id: true, finikApiKey: true, finikSecret: true },
+    select: {
+      id: true,
+      finikApiKey: true,
+      finikAccountId: true,
+      finikSecret: true,
+    },
   });
   if (!business) {
     return { ok: false, status: 404, error: "Магазин не найден" };
+  }
+
+  if (
+    isFinikCredentialsReady(business.finikApiKey, business.finikAccountId) &&
+    !isFinikLegacyHttpReady(business.finikApiKey, business.finikSecret)
+  ) {
+    return { ok: false, status: 503, error: FINIK_LEGACY_HTTP_UNAVAILABLE_ERROR };
   }
 
   const finik = await createFinikReservationDepositSession(business, {

@@ -1,7 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import {
   AdminActionType,
-  BillingPlan,
   MembershipRole,
   RegistrationStatus,
   SubscriptionStatus,
@@ -15,14 +14,22 @@ import {
 import { applyBusinessTemplate } from "./applyBusinessTemplate.js";
 import { prisma } from "./db.js";
 import {
-  encryptedBotTokenRow,
   plainBotTokenFromStored,
   hashBotTokenSha256Hex,
 } from "./businessBotToken.js";
 import { isEncryptedTokenFormat } from "./botTokenCrypto.js";
 import { isPlatformOperator } from "./adminAuth.js";
-import { createOwnerStaffRow } from "./businessStaffAccess.js";
 import { mapRowsWithWebhook } from "./platformMyBusinesses.js";
+import { provisionMerchantStoreInTx } from "./merchantProvision.js";
+import {
+  finikRegistrationComplete,
+  finikRegistrationAdminLine,
+} from "../shared/finikRegistration.js";
+import {
+  finikHasAccountId,
+  finikHasApiKey,
+  isFinikCredentialsReady,
+} from "../shared/finikReady.js";
 
 function buildApproveUserNotifyMessage(merchantBotUsername: string | null): string {
   let text =
@@ -109,90 +116,6 @@ async function notifyRegistrationApprovedUser(
   }
 }
 
-function normalizeStoreName(raw: string): string {
-  return raw.replace(/\s+/g, " ").trim();
-}
-
-/** Копия логики из `saasRegistration.provisionMerchantStoreInTx`. */
-async function provisionMerchantStoreInTx(
-  tx: Prisma.TransactionClient,
-  params: {
-    name: string;
-    botToken: string;
-    telegramId: string;
-    slugSuffix: string;
-    finikApiKey?: string | null;
-    businessType?: string;
-  },
-): Promise<number> {
-  const slug = `shop-${params.slugSuffix}`;
-  const botTok = params.botToken.trim();
-  const tokenFields = encryptedBotTokenRow(botTok);
-  const finikTrimmed = params.finikApiKey?.trim();
-  const useFinik = finikTrimmed != null && finikTrimmed.length > 0;
-
-  const ownerUser = await tx.user.upsert({
-    where: { telegramId: params.telegramId },
-    update: { name: normalizeStoreName(params.name) },
-    create: {
-      telegramId: params.telegramId,
-      name: normalizeStoreName(params.name),
-    },
-    select: { id: true, hasUsedTrial: true },
-  });
-
-  const giveTrial = !ownerUser.hasUsedTrial;
-  const trialEnd = giveTrial
-    ? new Date(Date.now() + 10 * 24 * 60 * 60 * 1000)
-    : null;
-
-  const business = await tx.business.create({
-    data: {
-      name: params.name.trim(),
-      slug,
-      botToken: tokenFields.botToken,
-      botTokenHash: tokenFields.botTokenHash,
-      finikApiKey: useFinik ? finikTrimmed! : null,
-      businessType:
-        params.businessType === "coffee" ||
-        params.businessType === "fastfood" ||
-        params.businessType === "flowers"
-          ? (params.businessType as any)
-          : ("clothing" as any),
-      // Без trial витрина для покупателей закрыта, пока не оплачена подписка (canAcceptCustomerOrders).
-      isActive: giveTrial,
-      isBlocked: false,
-      subscriptionStatus: giveTrial
-        ? SubscriptionStatus.TRIALING
-        : SubscriptionStatus.EXPIRED,
-      billingPlan: BillingPlan.FREE,
-      trialEndsAt: trialEnd,
-      subscriptionEndsAt: null,
-    } as any,
-  });
-
-  if (giveTrial) {
-    await tx.user.update({
-      where: { id: ownerUser.id },
-      data: { hasUsedTrial: true },
-    });
-  }
-
-  await tx.settings.create({
-    data: {
-      businessId: business.id,
-      paymentProvider: useFinik ? "finik" : null,
-    },
-  });
-
-  await createOwnerStaffRow(tx, {
-    businessId: business.id,
-    userId: ownerUser.id,
-  });
-
-  return business.id;
-}
-
 /**
  * Доступ к REST `/api/platform/admin/*`: после `requireTelegramAuth` (WebApp initData)
  * telegram id проверяется по `PLATFORM_OPERATOR_IDS` (fallback: `ADMIN_IDS`).
@@ -216,6 +139,10 @@ export type PlatformAdminRequestRow = {
   ownerUsername: string | null;
   businessType: string;
   botUsername: string | null;
+  finikHasApiKey: boolean;
+  finikHasAccountId: boolean;
+  finikRegistrationComplete: boolean;
+  finikAdminLine: string;
 };
 
 export async function listPendingRegistrationRequestsForAdmin(): Promise<
@@ -234,6 +161,8 @@ export async function listPendingRegistrationRequestsForAdmin(): Promise<
       ownerUsername: true,
       businessType: true,
       botUsername: true,
+      finikApiKey: true,
+      finikAccountId: true,
     },
   });
   return rows.map((r) => ({
@@ -246,6 +175,10 @@ export async function listPendingRegistrationRequestsForAdmin(): Promise<
     ownerUsername: r.ownerUsername,
     businessType: r.businessType,
     botUsername: r.botUsername,
+    finikHasApiKey: finikHasApiKey(r.finikApiKey),
+    finikHasAccountId: finikHasAccountId(r.finikAccountId),
+    finikRegistrationComplete: finikRegistrationComplete(r),
+    finikAdminLine: finikRegistrationAdminLine(r),
   }));
 }
 
@@ -303,6 +236,7 @@ export async function approveRegistrationRequestById(
         telegramId: row.telegramId,
         slugSuffix: `${requestId}-${Date.now().toString(36)}`,
         finikApiKey: row.finikApiKey,
+        finikAccountId: row.finikAccountId,
         businessType: (row as any).businessType,
       });
 
@@ -481,6 +415,9 @@ export type PlatformAdminBusinessRow = {
   trialEndsAt: string | null;
   webhookStatus: "OK" | "ERROR";
   webhookUrl: string | null;
+  finikReady: boolean;
+  finikHasApiKey: boolean;
+  finikHasAccountId: boolean;
 };
 
 export async function listBusinessesForPlatformAdmin(
@@ -514,6 +451,8 @@ export async function listBusinessesForPlatformAdmin(
       subscriptionEndsAt: true,
       trialEndsAt: true,
       botToken: true,
+      finikApiKey: true,
+      finikAccountId: true,
     },
   });
 
@@ -521,6 +460,10 @@ export async function listBusinessesForPlatformAdmin(
   const byId = new Map(rows.map((r) => [r.id, r]));
   return probed.map((p) => {
     const r = byId.get(p.id);
+    const finikReady = isFinikCredentialsReady(
+      r?.finikApiKey,
+      r?.finikAccountId,
+    );
     return {
       id: p.id,
       name: p.name,
@@ -533,6 +476,9 @@ export async function listBusinessesForPlatformAdmin(
       trialEndsAt: r?.trialEndsAt?.toISOString() ?? null,
       webhookStatus: p.webhookStatus,
       webhookUrl: p.webhookUrl,
+      finikReady,
+      finikHasApiKey: finikHasApiKey(r?.finikApiKey),
+      finikHasAccountId: finikHasAccountId(r?.finikAccountId),
     };
   });
 }

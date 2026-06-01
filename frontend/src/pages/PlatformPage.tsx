@@ -150,6 +150,7 @@ export default function PlatformPage() {
   );
   const [settingsName, setSettingsName] = useState("");
   const [finikKeyDraft, setFinikKeyDraft] = useState("");
+  const [finikAccountIdDraft, setFinikAccountIdDraft] = useState("");
   const [finikSecretDraft, setFinikSecretDraft] = useState("");
   const [finikSaving, setFinikSaving] = useState(false);
   const [finikMsg, setFinikMsg] = useState<string | null>(null);
@@ -963,7 +964,10 @@ export default function PlatformPage() {
         telegramId: merchantTelegramId,
         businessId: settingsBusinessId,
         finikApiKey: finikKeyDraft.trim(),
-        finikSecret: finikSecretDraft.trim(),
+        finikAccountId: finikAccountIdDraft.trim(),
+        ...(finikSecretDraft.trim() !== ""
+          ? { finikSecret: finikSecretDraft.trim() }
+          : {}),
       });
       if (settingsSnap != null) {
         setSettingsSnap({
@@ -971,11 +975,14 @@ export default function PlatformPage() {
           finikConfigured: out.finikReady,
           finikReady: out.finikReady,
           finikHasApiKey: out.finikHasApiKey,
+          finikHasAccountId: out.finikHasAccountId,
+          finikLegacyHttpReady: out.finikLegacyHttpReady,
           finikHasSecret: out.finikHasSecret,
           finikWebhookUrl: out.finikWebhookUrl,
         });
       }
       setFinikKeyDraft("");
+      setFinikAccountIdDraft("");
       setFinikSecretDraft("");
       setFinikMsg(
         out.finikReady
@@ -1548,6 +1555,13 @@ export default function PlatformPage() {
                               {req.botUsername}
                             </div>
                           ) : null}
+                          <div>
+                            <span className="text-slate-500">Finik: </span>
+                            {req.finikAdminLine ?? "—"}
+                            {req.finikHasApiKey && !req.finikRegistrationComplete
+                              ? " (нужен Account ID)"
+                              : null}
+                          </div>
                         </dl>
                       </li>
                     ))}
@@ -2275,8 +2289,9 @@ export default function PlatformPage() {
                     )}
                   </div>
                   <p className="mp-settings-section__desc">
-                    Для оплаты заказов в витрине нужны API Key и Secret из
-                    личного кабинета Finik, затем webhook URL в Finik.
+                    Для готовности Finik нужны API Key и Account ID из
+                    личного кабинета Finik, затем webhook URL в Finik. Secret —
+                    только для текущего legacy HTTP до обновления API.
                   </p>
                   <div className="mp-finik-status-row">
                     <span className="mp-settings-key-chip">
@@ -2284,13 +2299,17 @@ export default function PlatformPage() {
                       {settingsSnap?.finikHasApiKey ? "сохранён" : "не задан"}
                     </span>
                     <span className="mp-settings-key-chip">
-                      Secret:{" "}
-                      {settingsSnap?.finikHasSecret ? "сохранён" : "не задан"}
+                      Account ID:{" "}
+                      {settingsSnap?.finikHasAccountId ? "сохранён" : "не задан"}
+                    </span>
+                    <span className="mp-settings-key-chip">
+                      Legacy HTTP:{" "}
+                      {settingsSnap?.finikLegacyHttpReady ? "готов" : "нет Secret"}
                     </span>
                   </div>
                   <ol className="mp-finik-steps">
                     <li>
-                      Скопируйте API Key и Secret в{" "}
+                      Скопируйте API Key и Account ID в{" "}
                       <a
                         href="https://finik.kg"
                         target="_blank"
@@ -2335,10 +2354,36 @@ export default function PlatformPage() {
                   </div>
                   <div className="mp-settings-field">
                     <label
+                      htmlFor="platform-settings-finik-account"
+                      className="mp-settings-field__label"
+                    >
+                      Account ID Finik
+                    </label>
+                    <input
+                      id="platform-settings-finik-account"
+                      type="text"
+                      autoComplete="off"
+                      disabled={settingsSnap == null || finikSaving}
+                      value={finikAccountIdDraft}
+                      onChange={(e) => {
+                        setFinikAccountIdDraft(e.target.value);
+                        setFinikErr(null);
+                        setFinikMsg(null);
+                      }}
+                      placeholder={
+                        settingsSnap?.finikHasAccountId
+                          ? "Новый Account ID (оставьте пустым, чтобы не менять)"
+                          : "Вставьте Account ID"
+                      }
+                      className={`${archa.input} font-mono`}
+                    />
+                  </div>
+                  <div className="mp-settings-field">
+                    <label
                       htmlFor="platform-settings-finik-secret"
                       className="mp-settings-field__label"
                     >
-                      Secret Finik
+                      Secret Finik (legacy, опционально)
                     </label>
                     <input
                       id="platform-settings-finik-secret"
@@ -2359,7 +2404,8 @@ export default function PlatformPage() {
                       className={`${archa.input} font-mono`}
                     />
                     <p className="mp-settings-field__hint">
-                      Чтобы отключить Finik, очистите оба поля и сохраните.
+                      Чтобы отключить Finik, очистите API Key и Account ID и
+                      сохраните.
                     </p>
                   </div>
                   <div className="mp-finik-webhook">

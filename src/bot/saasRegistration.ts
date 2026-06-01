@@ -1,27 +1,26 @@
 import type { Context } from "telegraf";
 import { session } from "telegraf";
 import type { Telegraf } from "telegraf";
+import { Prisma, RegistrationStatus } from "@prisma/client";
 import {
-  BillingPlan,
-  Prisma,
-  RegistrationStatus,
-  SubscriptionStatus,
-} from "@prisma/client";
-import { createOwnerStaffRow } from "../server/businessStaffAccess.js";
-import {
-  encryptedBotTokenRow,
   hashBotTokenSha256Hex,
   plainBotTokenFromStored,
 } from "../server/businessBotToken.js";
+import { provisionMerchantStoreInTx } from "../server/merchantProvision.js";
 import { applyBusinessTemplate } from "../server/applyBusinessTemplate.js";
 import { isEncryptedTokenFormat } from "../server/botTokenCrypto.js";
 import { platformOperatorIdsFromEnv } from "../server/adminAuth.js";
 import { logPrismaError, prisma } from "../server/db.js";
 import {
+  isValidFinikAccountId,
   isValidFinikApiKey,
   isValidStoreName,
   validateKgPhone,
 } from "./saasRegistrationValidation.js";
+import {
+  finikRegistrationAdminLine,
+  isFinikSkipInput,
+} from "../shared/finikRegistration.js";
 import {
   MSG_BOT_ALREADY_REGISTERED,
   precheckBotTokenBeforeRegistrationPersist,
@@ -47,7 +46,7 @@ const SUCCESS_REQUEST_SUBMITTED =
  * Telegraf 4: `import { session } from "telegraf"` (не `telegraf/session`).
  */
 export type RegistrationSessionState = {
-  step?: "businessType" | "name" | "token" | "phone" | "finik";
+  step?: "businessType" | "name" | "token" | "phone" | "finikApiKey" | "finikAccountId";
   /** ms epoch — только для потоков вроде «добавить магазин» из inline */
   lastAttemptAt?: number;
   data: {
@@ -56,6 +55,7 @@ export type RegistrationSessionState = {
     token?: string;
     phone?: string;
     finikApiKey?: string;
+    finikAccountId?: string;
   };
   /** Скрытая панель /admin (только ADMIN_IDS + пароль), регистрационный бот */
   adminPanel?: {
@@ -510,88 +510,6 @@ function isBusinessType(v: unknown): v is BusinessType {
   return v === "clothing" || v === "coffee" || v === "fastfood" || v === "flowers";
 }
 
-function isFinikSkipInput(raw: string): boolean {
-  const t = raw.trim();
-  if (t === "-") return true;
-  const low = t.toLowerCase();
-  return low === "skip" || low === "нет";
-}
-
-/** Business + Settings + OWNER membership (после approve админом). */
-async function provisionMerchantStoreInTx(
-  tx: Prisma.TransactionClient,
-  params: {
-    name: string;
-    botToken: string;
-    telegramId: string;
-    slugSuffix: string;
-    finikApiKey?: string | null;
-    businessType: BusinessType;
-  },
-): Promise<number> {
-  const slug = `shop-${params.slugSuffix}`;
-  const botTok = params.botToken.trim();
-  const tokRow = encryptedBotTokenRow(botTok);
-  const finikTrimmed = params.finikApiKey?.trim();
-  const useFinik = finikTrimmed != null && finikTrimmed.length > 0;
-
-  const ownerUser = await tx.user.upsert({
-    where: { telegramId: params.telegramId },
-    update: { name: normalizeStoreName(params.name) },
-    create: {
-      telegramId: params.telegramId,
-      name: normalizeStoreName(params.name),
-    },
-    select: { id: true, hasUsedTrial: true },
-  });
-
-  const giveTrial = !ownerUser.hasUsedTrial;
-  const trialEnd = giveTrial
-    ? new Date(Date.now() + 10 * 24 * 60 * 60 * 1000)
-    : null;
-
-  const business = await tx.business.create({
-    data: {
-      name: params.name.trim(),
-      slug,
-      botToken: tokRow.botToken,
-      botTokenHash: tokRow.botTokenHash,
-      finikApiKey: useFinik ? finikTrimmed! : null,
-      businessType: params.businessType,
-      // Витрина должна быть включена сразу после approve; доступ может ограничиваться подпиской.
-      isActive: giveTrial,
-      isBlocked: false,
-      subscriptionStatus: giveTrial
-        ? SubscriptionStatus.TRIALING
-        : SubscriptionStatus.EXPIRED,
-      billingPlan: BillingPlan.FREE,
-      trialEndsAt: trialEnd,
-      subscriptionEndsAt: null,
-    } as any,
-  });
-
-  if (giveTrial) {
-    await tx.user.update({
-      where: { id: ownerUser.id },
-      data: { hasUsedTrial: true },
-    });
-  }
-
-  await tx.settings.create({
-    data: {
-      businessId: business.id,
-      paymentProvider: useFinik ? "finik" : null,
-    },
-  });
-
-  await createOwnerStaffRow(tx, {
-    businessId: business.id,
-    userId: ownerUser.id,
-  });
-
-  return business.id;
-}
-
 /** Память сессии + сброс перед /start. Должно идти до `tgBot.start` и до SaaS-хвоста. */
 export function attachSaasRegistrationSessionBootstrap(
   bot: Telegraf,
@@ -817,147 +735,187 @@ export async function registrationFlow(
       return true;
     }
     sess.data.phone = phone;
-    sess.step = "finik";
+    sess.step = "finikApiKey";
     await ctx.reply(
-      "Введите API ключ Finik (онлайн ККМ).\n\nЧтобы пропустить, отправьте: `-` или `skip` или `нет`.",
+      "Введите API Key Finik (онлайн ККМ).\n\nЧтобы пропустить Finik, отправьте: `-` или `skip` или `нет`.",
       wizardExtra(ctx),
     );
     return true;
   }
 
-  if (sess.step === "finik") {
+  if (sess.step === "finikApiKey") {
     const finikInput = trimmedInput.trim();
-    const useFinik = !isFinikSkipInput(finikInput);
-    if (useFinik && !isValidFinikApiKey(finikInput)) {
+    if (isFinikSkipInput(finikInput)) {
+      delete sess.data.finikApiKey;
+      delete sess.data.finikAccountId;
+      return submitRegistrationFromBotSession(ctx, sess, _bot);
+    }
+    if (!isValidFinikApiKey(finikInput)) {
       await ctx.reply(
-        "Введите корректный API-ключ Finik (от 4 до 2048 символов, без переносов строк).",
+        "Введите корректный API Key Finik (от 4 до 2048 символов, без переносов строк).",
         wizardExtra(ctx),
       );
       return true;
     }
-
-    const name = sess.data.name ?? "";
-    const token = sess.data.token ?? "";
-    const phone = sess.data.phone ?? "";
-    const businessType = sess.data.businessType;
-
-    try {
-      const tid = telegramIdString(ctx);
-
-      const duplicatePending = await prisma.registrationRequest.findFirst({
-        where: {
-          telegramId: tid,
-          status: RegistrationStatus.PENDING,
-        },
-        select: { id: true },
-      });
-      if (duplicatePending) {
-        await ctx.reply(
-          "У вас уже есть заявка на рассмотрении — ответ придёт здесь после проверки.",
-          { reply_markup: { remove_keyboard: true } },
-        );
-        resetRegistrationWizardFields(ctx);
-        logSaas("rejected_attempt", {
-          reason: "duplicate_pending_at_submit",
-          telegramUserId: telegramIdString(ctx),
-        });
-        return true;
-      }
-
-      if (businessType == null || !isBusinessType(businessType) || name === "" || token === "") {
-        resetRegistrationWizardFields(ctx);
-        await ctx.reply(
-          "Шаги сбросились. Нажмите /start и заново укажите данные магазина.",
-          { reply_markup: { remove_keyboard: true } },
-        );
-        logSaas("rejected_attempt", {
-          reason: "stale_session_submit",
-          telegramUserId: telegramIdString(ctx),
-        });
-        return true;
-      }
-
-      const finalGate = await precheckBotTokenBeforeRegistrationPersist(token);
-      if (!finalGate.ok) {
-        await ctx.reply(finalGate.error, wizardExtra(ctx));
-        logSaas("rejected_attempt", {
-          reason: "token_conflict_before_insert",
-          telegramUserId: tid,
-        });
-        return true;
-      }
-
-      const row = await prisma.registrationRequest.create({
-        data: {
-          name,
-          botToken: token,
-          phone,
-          finikApiKey: useFinik ? finikInput.trim() : null,
-          businessType,
-          telegramId: tid,
-          status: RegistrationStatus.PENDING,
-        } as any,
-      });
-
-      resetRegistrationWizardFields(ctx);
-      logSaas("registration_completed", {
-        telegramUserId: tid,
-        requestId: row.id,
-      });
-
-      await ctx.reply(SUCCESS_REQUEST_SUBMITTED, {
-        reply_markup: { remove_keyboard: true },
-      });
-
-      const admins = adminTelegramNumericIds();
-      if (admins.length === 0) {
-        console.warn(
-          "[saasRegistration] ADMIN_IDS пуст — заявке в Telegram некому нажать «Одобрить».",
-        );
-        return true;
-      }
-
-      const lines = [
-        "📩 Новая заявка на магазин",
-        `ID заявки: #${row.id}`,
-        `Название: ${row.name}`,
-        `Телефон: ${row.phone}`,
-        `Telegram пользователя (id): ${row.telegramId}`,
-        `Finik ККМ: ${useFinik ? "да" : "нет"}`,
-      ];
-
-      for (const aid of admins) {
-        await _bot.telegram
-          .sendMessage(aid, lines.join("\n"), {
-            reply_markup: registrationMarkup(row.id),
-          })
-          .catch((e: unknown) => {
-            console.error("[saasRegistration] notify admin:", aid, e);
-          });
-      }
-      return true;
-    } catch (e: unknown) {
-      console.error("registration save:", e);
-      logSaas("rejected_attempt", {
-        reason: "save_error",
-        telegramUserId: telegramIdString(ctx),
-      });
-      if (
-        e instanceof Prisma.PrismaClientKnownRequestError &&
-        e.code === "P2002"
-      ) {
-        await ctx.reply(MSG_BOT_ALREADY_REGISTERED, wizardExtra(ctx));
-        return true;
-      }
-      await ctx.reply(
-        "Сейчас не получилось завершить регистрацию. Попробуйте через минуту или нажмите /start снова.",
-        wizardExtra(ctx),
-      );
-    }
+    sess.data.finikApiKey = finikInput.trim();
+    sess.step = "finikAccountId";
+    await ctx.reply(
+      "Введите Account ID Finik (выдаётся вместе с API Key).\n\nЧтобы отменить Finik и начать заново, отправьте `/start`.",
+      wizardExtra(ctx),
+    );
     return true;
   }
 
+  if (sess.step === "finikAccountId") {
+    const accountInput = trimmedInput.trim();
+    if (isFinikSkipInput(accountInput)) {
+      await ctx.reply(
+        "Account ID обязателен, если указан API Key. Введите Account ID или нажмите /start и пропустите Finik на шаге API Key.",
+        wizardExtra(ctx),
+      );
+      return true;
+    }
+    if (!isValidFinikAccountId(accountInput)) {
+      await ctx.reply(
+        "Введите корректный Account ID Finik (от 2 до 256 символов, без переносов строк).",
+        wizardExtra(ctx),
+      );
+      return true;
+    }
+    sess.data.finikAccountId = accountInput.trim();
+    return submitRegistrationFromBotSession(ctx, sess, _bot);
+  }
+
   return false;
+}
+
+async function submitRegistrationFromBotSession(
+  ctx: Context,
+  sess: RegistrationSessionState,
+  tgBot: Telegraf,
+): Promise<boolean> {
+  const name = sess.data.name ?? "";
+  const token = sess.data.token ?? "";
+  const phone = sess.data.phone ?? "";
+  const businessType = sess.data.businessType;
+  const finikApiKey = sess.data.finikApiKey ?? null;
+  const finikAccountId = sess.data.finikAccountId ?? null;
+
+  try {
+    const tid = telegramIdString(ctx);
+
+    const duplicatePending = await prisma.registrationRequest.findFirst({
+      where: {
+        telegramId: tid,
+        status: RegistrationStatus.PENDING,
+      },
+      select: { id: true },
+    });
+    if (duplicatePending) {
+      await ctx.reply(
+        "У вас уже есть заявка на рассмотрении — ответ придёт здесь после проверки.",
+        { reply_markup: { remove_keyboard: true } },
+      );
+      resetRegistrationWizardFields(ctx);
+      logSaas("rejected_attempt", {
+        reason: "duplicate_pending_at_submit",
+        telegramUserId: telegramIdString(ctx),
+      });
+      return true;
+    }
+
+    if (businessType == null || !isBusinessType(businessType) || name === "" || token === "") {
+      resetRegistrationWizardFields(ctx);
+      await ctx.reply(
+        "Шаги сбросились. Нажмите /start и заново укажите данные магазина.",
+        { reply_markup: { remove_keyboard: true } },
+      );
+      logSaas("rejected_attempt", {
+        reason: "stale_session_submit",
+        telegramUserId: telegramIdString(ctx),
+      });
+      return true;
+    }
+
+    const finalGate = await precheckBotTokenBeforeRegistrationPersist(token);
+    if (!finalGate.ok) {
+      await ctx.reply(finalGate.error, wizardExtra(ctx));
+      logSaas("rejected_attempt", {
+        reason: "token_conflict_before_insert",
+        telegramUserId: tid,
+      });
+      return true;
+    }
+
+    const row = await prisma.registrationRequest.create({
+      data: {
+        name,
+        botToken: token,
+        phone,
+        finikApiKey,
+        finikAccountId,
+        businessType,
+        telegramId: tid,
+        status: RegistrationStatus.PENDING,
+      } as any,
+    });
+
+    resetRegistrationWizardFields(ctx);
+    logSaas("registration_completed", {
+      telegramUserId: tid,
+      requestId: row.id,
+    });
+
+    await ctx.reply(SUCCESS_REQUEST_SUBMITTED, {
+      reply_markup: { remove_keyboard: true },
+    });
+
+    const admins = adminTelegramNumericIds();
+    if (admins.length === 0) {
+      console.warn(
+        "[saasRegistration] ADMIN_IDS пуст — заявке в Telegram некому нажать «Одобрить».",
+      );
+      return true;
+    }
+
+    const lines = [
+      "📩 Новая заявка на магазин",
+      `ID заявки: #${row.id}`,
+      `Название: ${row.name}`,
+      `Телефон: ${row.phone}`,
+      `Telegram пользователя (id): ${row.telegramId}`,
+      `Finik: ${finikRegistrationAdminLine(row)}`,
+    ];
+
+    for (const aid of admins) {
+      await tgBot.telegram
+        .sendMessage(aid, lines.join("\n"), {
+          reply_markup: registrationMarkup(row.id),
+        })
+        .catch((e: unknown) => {
+          console.error("[saasRegistration] notify admin:", aid, e);
+        });
+    }
+    return true;
+  } catch (e: unknown) {
+    console.error("registration save:", e);
+    logSaas("rejected_attempt", {
+      reason: "save_error",
+      telegramUserId: telegramIdString(ctx),
+    });
+    if (
+      e instanceof Prisma.PrismaClientKnownRequestError &&
+      e.code === "P2002"
+    ) {
+      await ctx.reply(MSG_BOT_ALREADY_REGISTERED, wizardExtra(ctx));
+      return true;
+    }
+    await ctx.reply(
+      "Сейчас не получилось завершить регистрацию. Попробуйте через минуту или нажмите /start снова.",
+      wizardExtra(ctx),
+    );
+    return true;
+  }
 }
 
 /**
@@ -1235,6 +1193,7 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
         telegramId: row.telegramId,
         slugSuffix: `${requestId}-${Date.now().toString(36)}`,
         finikApiKey: row.finikApiKey,
+        finikAccountId: row.finikAccountId,
         businessType: (row as any).businessType,
       });
 

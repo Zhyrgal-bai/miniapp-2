@@ -12,10 +12,17 @@ import {
 import { correlationIdFromRequest } from "../middleware/correlationId.js";
 import {
   buildFinikWebhookUrl,
+  finikHasAccountId,
+  finikHasApiKey,
+  finikHasSecret,
+  finikUseMockForBusiness,
   isFinikCredentialsReady,
-  isFinikUseMockEnabled,
+  isFinikLegacyHttpReady,
 } from "../shared/finikReady.js";
-import { getPlatformFinikCredentials } from "../shared/platformFinik.js";
+import {
+  getPlatformFinikCredentials,
+  platformFinikUseMockForCreate,
+} from "../shared/platformFinik.js";
 
 /** Base URL для REST Finik (укажите реальный домен вашего аккаунта разработчика). */
 function finikApiBase(): string {
@@ -52,6 +59,7 @@ export async function createFinikMerchantSession(
   business: {
     id: number;
     finikApiKey: string | null;
+    finikAccountId: string | null;
     finikSecret: string | null;
   },
   input: { orderId: number; amount: number; currency?: string }
@@ -59,11 +67,7 @@ export async function createFinikMerchantSession(
   | { ok: true; paymentId: string; paymentUrl: string }
   | { ok: false; error: string }
 > {
-  const useMock =
-    process.env.FINIK_USE_MOCK === "1" ||
-    process.env.FINIK_USE_MOCK === "true" ||
-    !business.finikApiKey?.trim() ||
-    !business.finikSecret?.trim();
+  const useMock = finikUseMockForBusiness(business);
 
   if (useMock) {
     const paymentId = `finik_${Date.now()}_${input.orderId}`;
@@ -142,6 +146,7 @@ export async function createFinikSaasSubscriptionSession(
   business: {
     id: number;
     finikApiKey: string | null;
+    finikAccountId: string | null;
     finikSecret: string | null;
   },
   input: {
@@ -154,11 +159,7 @@ export async function createFinikSaasSubscriptionSession(
   | { ok: true; paymentId: string; paymentUrl: string }
   | { ok: false; error: string }
 > {
-  const useMock =
-    process.env.FINIK_USE_MOCK === "1" ||
-    process.env.FINIK_USE_MOCK === "true" ||
-    !business.finikApiKey?.trim() ||
-    !business.finikSecret?.trim();
+  const useMock = finikUseMockForBusiness(business);
 
   if (useMock) {
     const paymentId = `finik_sub_${Date.now()}_${input.subscriptionPaymentRowId}`;
@@ -244,13 +245,20 @@ export async function createFinikPlatformSubscriptionSession(input: {
   | { ok: false; error: string }
 > {
   const platform = getPlatformFinikCredentials();
-  const useMock =
-    isFinikUseMockEnabled() || platform == null;
+  const useMock = platformFinikUseMockForCreate();
 
   if (useMock) {
     const paymentId = `finik_platform_sub_${Date.now()}_${input.subscriptionPaymentRowId}`;
     const paymentUrl = `https://pay.finik.kg/?amount=${input.amountSom}&orderId=${encodeURIComponent(paymentId)}`;
     return { ok: true, paymentId, paymentUrl };
+  }
+
+  if (!platform) {
+    return {
+      ok: false,
+      error:
+        "Finik платформы: legacy HTTP не настроен (нужны PLATFORM_FINIK_API_KEY и PLATFORM_FINIK_SECRET до миграции API)",
+    };
   }
 
   const origin = publicApiOrigin();
@@ -323,6 +331,7 @@ export async function createFinikReservationDepositSession(
   business: {
     id: number;
     finikApiKey: string | null;
+    finikAccountId: string | null;
     finikSecret: string | null;
   },
   input: { reservationId: number; amountSom: number; currency?: string },
@@ -335,11 +344,7 @@ export async function createFinikReservationDepositSession(
   );
   const ext = reservationDepositExternalId(input.reservationId);
 
-  const useMock =
-    process.env.FINIK_USE_MOCK === "1" ||
-    process.env.FINIK_USE_MOCK === "true" ||
-    !business.finikApiKey?.trim() ||
-    !business.finikSecret?.trim();
+  const useMock = finikUseMockForBusiness(business);
 
   if (useMock) {
     const paymentId = `finik_dep_${Date.now()}_${input.reservationId}`;
@@ -421,14 +426,10 @@ function finikGetPaymentPath(paymentId: string): string {
 
 function finikUseMock(business: {
   finikApiKey: string | null;
+  finikAccountId: string | null;
   finikSecret: string | null;
 }): boolean {
-  return (
-    process.env.FINIK_USE_MOCK === "1" ||
-    process.env.FINIK_USE_MOCK === "true" ||
-    !business.finikApiKey?.trim() ||
-    !business.finikSecret?.trim()
-  );
+  return finikUseMockForBusiness(business);
 }
 
 const FINIK_SUCCESS_STATUSES = new Set([
@@ -594,6 +595,7 @@ async function applyFinikPaymentSuccess(
 async function fetchFinikPaymentStatus(
   business: {
     finikApiKey: string | null;
+    finikAccountId: string | null;
     finikSecret: string | null;
   },
   paymentId: string
@@ -666,7 +668,7 @@ export async function syncFinikReservationDepositPayment(
 
   const business = await prisma.business.findUnique({
     where: { id: businessId },
-    select: { finikApiKey: true, finikSecret: true },
+    select: { finikApiKey: true, finikAccountId: true, finikSecret: true },
   });
   if (!business) {
     return { ok: false, statusCode: 404, error: "Магазин не найден" };
@@ -809,7 +811,7 @@ export async function syncFinikOrderPayment(
 
   const business = await prisma.business.findUnique({
     where: { id: businessId },
-    select: { finikApiKey: true, finikSecret: true },
+    select: { finikApiKey: true, finikAccountId: true, finikSecret: true },
   });
   if (!business) {
     return { ok: false, statusCode: 404, error: "Магазин не найден" };
@@ -1170,6 +1172,7 @@ export function mountFinikSettingsRoutes(app: Express): void {
         select: {
           id: true,
           finikApiKey: true,
+          finikAccountId: true,
           finikSecret: true,
         },
       });
@@ -1198,10 +1201,16 @@ export function mountFinikSettingsRoutes(app: Express): void {
         return;
       }
 
+      const ready = isFinikCredentialsReady(b.finikApiKey, b.finikAccountId);
+      const legacyHttpReady = isFinikLegacyHttpReady(b.finikApiKey, b.finikSecret);
       res.json({
         businessId: b.id,
-        finikConfigured: isFinikCredentialsReady(b.finikApiKey, b.finikSecret),
-        finikReady: isFinikCredentialsReady(b.finikApiKey, b.finikSecret),
+        finikConfigured: ready,
+        finikReady: ready,
+        finikHasApiKey: finikHasApiKey(b.finikApiKey),
+        finikHasAccountId: finikHasAccountId(b.finikAccountId),
+        finikLegacyHttpReady: legacyHttpReady,
+        finikHasSecret: finikHasSecret(b.finikSecret),
         webhookUrl: buildFinikWebhookUrl(publicApiOrigin(), b.id),
       });
     } catch (e) {
@@ -1241,6 +1250,8 @@ export function mountFinikSettingsRoutes(app: Express): void {
 
       const finikApiKey =
         typeof body.finikApiKey === "string" ? body.finikApiKey.trim() : "";
+      const finikAccountId =
+        typeof body.finikAccountId === "string" ? body.finikAccountId.trim() : "";
       const finikSecret =
         typeof body.finikSecret === "string" ? body.finikSecret.trim() : "";
 
@@ -1248,15 +1259,20 @@ export function mountFinikSettingsRoutes(app: Express): void {
         where: { id: businessId },
         data: {
           finikApiKey: finikApiKey === "" ? null : finikApiKey,
+          finikAccountId: finikAccountId === "" ? null : finikAccountId,
           finikSecret: finikSecret === "" ? null : finikSecret,
         },
       });
 
+      const ready = isFinikCredentialsReady(
+        finikApiKey === "" ? null : finikApiKey,
+        finikAccountId === "" ? null : finikAccountId,
+      );
       res.json({
         ok: true,
         businessId,
-        finikConfigured: isFinikCredentialsReady(finikApiKey, finikSecret),
-        finikReady: isFinikCredentialsReady(finikApiKey, finikSecret),
+        finikConfigured: ready,
+        finikReady: ready,
         webhookUrl: buildFinikWebhookUrl(publicApiOrigin(), businessId),
       });
     } catch (e) {

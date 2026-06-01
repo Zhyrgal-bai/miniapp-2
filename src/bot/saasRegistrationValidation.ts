@@ -29,7 +29,14 @@ export function isValidFinikApiKey(raw: string): boolean {
   return !/[\r\n\0]/.test(t);
 }
 
-/** Secret Finik (вебхук / API): те же ограничения, что у API key. */
+/** Secret Finik (legacy HTTP / HMAC): те же ограничения, что у API key. */
 export function isValidFinikSecret(raw: string): boolean {
   return isValidFinikApiKey(raw);
+}
+
+/** Account ID Finik. */
+export function isValidFinikAccountId(raw: string): boolean {
+  const t = String(raw ?? "").trim();
+  if (t.length < 2 || t.length > 256) return false;
+  return !/[\r\n\0]/.test(t);
 }

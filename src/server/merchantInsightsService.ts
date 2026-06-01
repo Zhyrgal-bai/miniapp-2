@@ -1,6 +1,7 @@
 import type { OrderStatus } from "@prisma/client";
 import { buildMerchantAnalytics } from "./merchantAnalyticsService.js";
 import { prisma } from "./db.js";
+import { isFinikCredentialsReady } from "../shared/finikReady.js";
 
 export type MerchantInsightSeverity = "info" | "success" | "warning";
 
@@ -134,11 +135,12 @@ export async function buildMerchantInsights(input: {
     where: { id: bid },
     select: {
       finikApiKey: true,
+      finikAccountId: true,
       storefrontPublishedAt: true,
       categories: { select: { id: true }, take: 1 },
     },
   });
-  if (biz && !biz.finikApiKey) {
+  if (biz && !isFinikCredentialsReady(biz.finikApiKey, biz.finikAccountId)) {
     insights.push({
       code: "onboarding.finik",
       severity: "info",

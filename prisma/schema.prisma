@@ -67,6 +67,8 @@ model Business {
 
   /// Finik: ключи мерчанта — средства идут клиенту (не на платформу). Не выдавать клиентскому UI в GET.
   finikApiKey  String?
+  /// Finik Account ID (официальный идентификатор счёта мерчанта).
+  finikAccountId String?
   finikSecret String?
 
   isActive Boolean @default(true)
@@ -802,8 +804,9 @@ model RegistrationRequest {
   botToken   String
   phone      String
 
-  /// Finik (онлайн ККМ), подставляется в Business.finikApiKey после approve.
+  /// Finik (онлайн ККМ), подставляется в Business после approve.
   finikApiKey String?
+  finikAccountId String?
 
   businessType BusinessType
 

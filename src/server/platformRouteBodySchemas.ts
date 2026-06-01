@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isValidBotTokenShape } from "../bot/saasRegistrationValidation.js";
+import { parseFinikRegistrationFields } from "../shared/finikRegistration.js";
 import { cleanInput, validateKgPhone } from "./orderInputSanitize.js";
 import {
   PLATFORM_STORE_NAME_MAX,
@@ -31,6 +32,7 @@ export const platformRegisterRequestShape = z
     phone: z.string(),
     telegramId: z.union([z.string(), z.number()]).optional(),
     finikApiKey: z.string().optional(),
+    finikAccountId: z.string().optional(),
     businessType: z.enum(["clothing", "coffee", "fastfood", "flowers"]),
     ownerUsername: z.string().optional(),
   })
@@ -64,6 +66,17 @@ export const platformRegisterRequestShape = z
         code: z.ZodIssueCode.custom,
         message: "Неверный номер телефона (ожидается KG: +996… или 0…)",
         path: ["phone"],
+      });
+    }
+    const finik = parseFinikRegistrationFields({
+      finikApiKey: val.finikApiKey ?? null,
+      finikAccountId: val.finikAccountId ?? null,
+    });
+    if (!finik.ok) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: finik.error,
+        path: ["finikAccountId"],
       });
     }
   });

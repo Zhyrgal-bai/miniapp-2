@@ -16,8 +16,10 @@ import {
 import { platformMerchantIsStoreOwner } from "./platformMerchantAccess.js";
 import {
   getPlatformFinikCredentials,
+  isPlatformFinikLegacyHttpReady,
   isPlatformFinikReady,
 } from "../shared/platformFinik.js";
+import { FINIK_LEGACY_HTTP_UNAVAILABLE_ERROR } from "../shared/finikReady.js";
 import {
   SAAS_SUBSCRIPTION_PLANS,
   type SaasSubscriptionPlanDays,
@@ -173,7 +175,11 @@ export async function buildMerchantSubscriptionPanel(input: {
       isBlocked: b.isBlocked,
       isActive: b.isActive,
       platformFinikReady: isPlatformFinikReady(),
-      canPay: isOwner && isPlatformFinikReady() && !b.isBlocked,
+      canPay:
+        isOwner &&
+        isPlatformFinikReady() &&
+        isPlatformFinikLegacyHttpReady() &&
+        !b.isBlocked,
       isOwner,
       plans: SAAS_SUBSCRIPTION_PLANS,
     },
@@ -215,6 +221,14 @@ export async function createPlatformSubscriptionPaymentSession(input: {
       statusCode: 503,
       error:
         "Онлайн-оплата временно недоступна. Обратитесь в поддержку платформы.",
+    };
+  }
+
+  if (!isPlatformFinikLegacyHttpReady()) {
+    return {
+      ok: false,
+      statusCode: 503,
+      error: FINIK_LEGACY_HTTP_UNAVAILABLE_ERROR,
     };
   }
 

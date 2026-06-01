@@ -12,6 +12,10 @@ export type PlatformAdminRequestDTO = {
   ownerUsername: string | null;
   businessType: string;
   botUsername: string | null;
+  finikHasApiKey: boolean;
+  finikHasAccountId: boolean;
+  finikRegistrationComplete: boolean;
+  finikAdminLine: string;
 };
 
 export type PlatformAdminBusinessDTO = {
@@ -26,6 +30,9 @@ export type PlatformAdminBusinessDTO = {
   trialEndsAt: string | null;
   webhookStatus: "OK" | "ERROR";
   webhookUrl: string | null;
+  finikReady: boolean;
+  finikHasApiKey: boolean;
+  finikHasAccountId: boolean;
 };
 
 type AdminCallOptions = {
@@ -167,6 +174,9 @@ export async function fetchPlatformAdminBusinesses(params: {
       typeof row.webhookUrl === "string" && row.webhookUrl.trim() !== ""
         ? row.webhookUrl.trim()
         : null,
+    finikReady: Boolean(row.finikReady),
+    finikHasApiKey: Boolean(row.finikHasApiKey),
+    finikHasAccountId: Boolean(row.finikHasAccountId),
   })) as PlatformAdminBusinessDTO[];
 }
 

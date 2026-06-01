@@ -251,6 +251,8 @@ export type PlatformStoreSettingsDTO = {
   finikConfigured: boolean;
   finikReady: boolean;
   finikHasApiKey: boolean;
+  finikHasAccountId: boolean;
+  finikLegacyHttpReady: boolean;
   finikHasSecret: boolean;
   finikWebhookUrl: string | null;
   pendingBotTokenChange: boolean;
@@ -277,6 +279,8 @@ export async function fetchPlatformStoreSettings(params: {
     finikConfigured?: boolean;
     finikReady?: boolean;
     finikHasApiKey?: boolean;
+    finikHasAccountId?: boolean;
+    finikLegacyHttpReady?: boolean;
     finikHasSecret?: boolean;
     finikWebhookUrl?: string | null;
     pendingBotTokenChange?: boolean;
@@ -307,7 +311,9 @@ export async function fetchPlatformStoreSettings(params: {
     finikConfigured: finikReady,
     finikReady,
     finikHasApiKey: Boolean(j.finikHasApiKey ?? finikReady),
-    finikHasSecret: Boolean(j.finikHasSecret ?? finikReady),
+    finikHasAccountId: Boolean(j.finikHasAccountId),
+    finikLegacyHttpReady: Boolean(j.finikLegacyHttpReady),
+    finikHasSecret: Boolean(j.finikHasSecret),
     finikWebhookUrl:
       typeof j.finikWebhookUrl === "string" && j.finikWebhookUrl.trim() !== ""
         ? j.finikWebhookUrl.trim()
@@ -413,6 +419,8 @@ export async function savePlatformStoreSettings(payload: {
     finikConfigured?: boolean;
     finikReady?: boolean;
     finikHasApiKey?: boolean;
+    finikHasAccountId?: boolean;
+    finikLegacyHttpReady?: boolean;
     finikHasSecret?: boolean;
     finikWebhookUrl?: string | null;
     pendingBotTokenChange?: boolean;
@@ -450,6 +458,8 @@ export type PlatformFinikSaveResult = {
   finikConfigured: boolean;
   finikReady: boolean;
   finikHasApiKey: boolean;
+  finikHasAccountId: boolean;
+  finikLegacyHttpReady: boolean;
   finikHasSecret: boolean;
   finikWebhookUrl: string | null;
 };
@@ -458,7 +468,8 @@ export async function postPlatformUpdateFinik(payload: {
   telegramId: number;
   businessId: number;
   finikApiKey: string;
-  finikSecret: string;
+  finikAccountId: string;
+  finikSecret?: string;
 }): Promise<PlatformFinikSaveResult> {
   void payload.telegramId;
   const j = await adminFetchJson<{
@@ -467,6 +478,8 @@ export async function postPlatformUpdateFinik(payload: {
     finikConfigured?: boolean;
     finikReady?: boolean;
     finikHasApiKey?: boolean;
+    finikHasAccountId?: boolean;
+    finikLegacyHttpReady?: boolean;
     finikHasSecret?: boolean;
     finikWebhookUrl?: string | null;
   }>(apiAbsoluteUrl("/api/platform/update-finik"), {
@@ -475,7 +488,10 @@ export async function postPlatformUpdateFinik(payload: {
     body: JSON.stringify({
       businessId: payload.businessId,
       finikApiKey: payload.finikApiKey,
-      finikSecret: payload.finikSecret,
+      finikAccountId: payload.finikAccountId,
+      ...(payload.finikSecret !== undefined && payload.finikSecret !== ""
+        ? { finikSecret: payload.finikSecret }
+        : {}),
     }),
   });
   if (j.ok !== true) {
@@ -490,6 +506,8 @@ export async function postPlatformUpdateFinik(payload: {
     finikConfigured: finikReady,
     finikReady,
     finikHasApiKey: Boolean(j.finikHasApiKey),
+    finikHasAccountId: Boolean(j.finikHasAccountId),
+    finikLegacyHttpReady: Boolean(j.finikLegacyHttpReady),
     finikHasSecret: Boolean(j.finikHasSecret),
     finikWebhookUrl:
       typeof j.finikWebhookUrl === "string" && j.finikWebhookUrl.trim() !== ""
@@ -505,18 +523,27 @@ export async function submitPlatformRegisterRequest(payload: {
   telegramId: number;
   businessType: "clothing" | "coffee" | "fastfood" | "flowers";
   ownerUsername?: string;
+  finikApiKey?: string;
+  finikAccountId?: string;
 }): Promise<void> {
   void payload.telegramId;
+  const body: Record<string, unknown> = {
+    storeName: payload.storeName,
+    botToken: payload.botToken,
+    phone: payload.phone,
+    telegramId: payload.telegramId,
+    businessType: payload.businessType,
+    ownerUsername: payload.ownerUsername,
+  };
+  if (payload.finikApiKey != null && payload.finikApiKey.trim() !== "") {
+    body.finikApiKey = payload.finikApiKey.trim();
+  }
+  if (payload.finikAccountId != null && payload.finikAccountId.trim() !== "") {
+    body.finikAccountId = payload.finikAccountId.trim();
+  }
   await adminFetchVoid(apiAbsoluteUrl("/api/platform/register-request"), {
     method: "POST",
-    body: JSON.stringify({
-      storeName: payload.storeName,
-      botToken: payload.botToken,
-      phone: payload.phone,
-      telegramId: payload.telegramId,
-      businessType: payload.businessType,
-      ownerUsername: payload.ownerUsername,
-    }),
+    body: JSON.stringify(body),
   });
 }
 

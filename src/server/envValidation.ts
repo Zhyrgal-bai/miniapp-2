@@ -85,10 +85,10 @@ export function validateEnvironment(): EnvValidationResult {
       );
     }
     const platformFinikKey = process.env.PLATFORM_FINIK_API_KEY?.trim();
-    const platformFinikSecret = process.env.PLATFORM_FINIK_SECRET?.trim();
-    if (!platformFinikKey || !platformFinikSecret) {
+    const platformFinikAccountId = process.env.PLATFORM_FINIK_ACCOUNT_ID?.trim();
+    if (!platformFinikKey || !platformFinikAccountId) {
       warnings.push(
-        "PLATFORM_FINIK_API_KEY / PLATFORM_FINIK_SECRET not set — merchant self-service subscription pay disabled",
+        "PLATFORM_FINIK_API_KEY / PLATFORM_FINIK_ACCOUNT_ID not set — merchant self-service subscription pay disabled",
       );
     }
     if (!hasHttpsUrl("FRONT_URL") && !hasHttpsUrl("MINI_APP_URL")) {

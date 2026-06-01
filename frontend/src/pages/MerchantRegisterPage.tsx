@@ -33,9 +33,11 @@ const STEP_LABELS = [
   "Название",
   "Токен бота",
   "Телефон",
+  "Finik",
   "Проверка",
-  "Отправка",
 ];
+
+const TOTAL_STEPS = 6;
 
 function businessTypeLabel(id: BusinessType | ""): string {
   return BUSINESS_TYPES.find((b) => b.id === id)?.label ?? "—";
@@ -69,6 +71,8 @@ export default function MerchantRegisterPage() {
   const [storeName, setStoreName] = useState("");
   const [botToken, setBotToken] = useState("");
   const [phone, setPhone] = useState("");
+  const [finikApiKey, setFinikApiKey] = useState("");
+  const [finikAccountId, setFinikAccountId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [gateLoading, setGateLoading] = useState(true);
@@ -157,22 +161,32 @@ export default function MerchantRegisterPage() {
     return typeof u === "string" ? u.trim().replace(/^@/, "") : undefined;
   }, []);
 
+  const finikPairError = useMemo(() => {
+    const key = finikApiKey.trim();
+    const account = finikAccountId.trim();
+    if (key === "" && account === "") return null;
+    if (key === "" && account !== "") return "Укажите API Key вместе с Account ID";
+    if (key !== "" && account === "") return "Укажите Account ID Finik";
+    if (key.length < 4) return "API Key слишком короткий";
+    if (account.length < 2) return "Account ID слишком короткий";
+    return null;
+  }, [finikApiKey, finikAccountId]);
+
   const canNext = useMemo(() => {
     if (step === 1) return businessType !== "";
     if (step === 2) return storeName.trim().length >= 2;
     if (step === 3) return botToken.trim().length > 10;
     if (step === 4) return phone.trim().length >= 9;
+    if (step === 5) return finikPairError == null;
     return true;
-  }, [step, businessType, storeName, botToken, phone]);
+  }, [step, businessType, storeName, botToken, phone, finikPairError]);
 
   const goNext = () => {
     if (!canNext) return;
     setSubmitError(null);
-    if (step < 5) {
+    if (step < TOTAL_STEPS) {
       setStep((s) => s + 1);
-      return;
     }
-    setStep(6);
   };
 
   const handleSubmit = async () => {
@@ -188,6 +202,8 @@ export default function MerchantRegisterPage() {
     setSubmitting(true);
     setSubmitError(null);
     try {
+      const key = finikApiKey.trim();
+      const account = finikAccountId.trim();
       await submitPlatformRegisterRequest({
         storeName: storeName.trim(),
         botToken: botToken.trim(),
@@ -195,6 +211,9 @@ export default function MerchantRegisterPage() {
         telegramId: uid,
         businessType,
         ownerUsername,
+        ...(key !== "" && account !== ""
+          ? { finikApiKey: key, finikAccountId: account }
+          : {}),
       });
       trackPlatformFunnel("register_submit");
       try {
@@ -205,7 +224,7 @@ export default function MerchantRegisterPage() {
       goMerchant();
     } catch (e) {
       setSubmitError(formatApiError(e));
-      setStep(5);
+      setStep(TOTAL_STEPS);
     } finally {
       setSubmitting(false);
     }
@@ -261,7 +280,8 @@ export default function MerchantRegisterPage() {
         <div className="mr__brand">
           <p className="mr__brand-name">ARCHA</p>
           <p className="mr__brand-sub">
-            Шаг {Math.min(step, 5)} из 5 · {STEP_LABELS[step - 1]}
+            Шаг {Math.min(step, TOTAL_STEPS)} из {TOTAL_STEPS} ·{" "}
+            {STEP_LABELS[step - 1]}
           </p>
         </div>
         <button
@@ -275,7 +295,7 @@ export default function MerchantRegisterPage() {
       </header>
 
       <div className="mr__progress" aria-hidden>
-        {[1, 2, 3, 4, 5].map((n) => (
+        {[1, 2, 3, 4, 5, 6].map((n) => (
           <span
             key={n}
             className={`mr__progress-dot${n <= step ? " mr__progress-dot--active" : ""}`}
@@ -376,7 +396,52 @@ export default function MerchantRegisterPage() {
             </>
           ) : null}
 
-          {step >= 5 ? (
+          {step === 5 ? (
+            <>
+              <div className="mr__card-head">
+                <h1 className="mr__title">Finik (опционально)</h1>
+                <p className="mr__subtitle">
+                  API Key и Account ID можно указать сейчас или после одобрения в
+                  настройках магазина
+                </p>
+              </div>
+              <div className="mr__field">
+                <label className="mr__label" htmlFor="mr-finik-key">
+                  API Key
+                </label>
+                <input
+                  id="mr-finik-key"
+                  type="password"
+                  autoComplete="off"
+                  placeholder="Оставьте пустым, чтобы пропустить"
+                  value={finikApiKey}
+                  onChange={(e) => setFinikApiKey(e.target.value)}
+                  className="mr__input mr__input--mono"
+                />
+              </div>
+              <div className="mr__field mr__field--solo">
+                <label className="mr__label" htmlFor="mr-finik-account">
+                  Account ID
+                </label>
+                <input
+                  id="mr-finik-account"
+                  type="text"
+                  autoComplete="off"
+                  placeholder="Оставьте пустым, чтобы пропустить"
+                  value={finikAccountId}
+                  onChange={(e) => setFinikAccountId(e.target.value)}
+                  className="mr__input mr__input--mono"
+                />
+              </div>
+              {finikPairError ? (
+                <p className="mr__err" role="alert">
+                  {finikPairError}
+                </p>
+              ) : null}
+            </>
+          ) : null}
+
+          {step >= 6 ? (
             <>
               <div className="mr__card-head">
                 <h1 className="mr__title">Проверьте заявку</h1>
@@ -401,6 +466,14 @@ export default function MerchantRegisterPage() {
                   <dt>Телефон</dt>
                   <dd>{phone.trim()}</dd>
                 </div>
+                <div className="mr__review-row">
+                  <dt>Finik</dt>
+                  <dd>
+                    {finikApiKey.trim() !== "" && finikAccountId.trim() !== ""
+                      ? "API Key + Account ID"
+                      : "не подключён"}
+                  </dd>
+                </div>
                 {ownerUsername ? (
                   <div className="mr__review-row">
                     <dt>Telegram</dt>
@@ -418,7 +491,7 @@ export default function MerchantRegisterPage() {
           ) : null}
 
           <div className="mr__submit-wrap">
-            {step < 5 ? (
+            {step < TOTAL_STEPS ? (
               <button
                 type="button"
                 disabled={!canNext}

@@ -73,7 +73,7 @@ export function buildLaunchWizardPayload(input: {
       id: "finik",
       label: "Finik готов",
       done: input.finikReady,
-      hint: "Сохраните API Key и Secret, скопируйте webhook в кабинет Finik.",
+      hint: "Сохраните API Key и Account ID, скопируйте webhook в кабинет Finik.",
     },
     {
       id: "product",
@@ -133,6 +133,7 @@ export async function buildMerchantGrowth(
           subscriptionEndsAt: true,
           botToken: true,
           finikApiKey: true,
+          finikAccountId: true,
           finikSecret: true,
           storefrontPublishedAt: true,
           storefrontPublishedConfig: true,
@@ -156,7 +157,7 @@ export async function buildMerchantGrowth(
     ]);
 
   const published = Boolean(biz?.storefrontPublishedAt);
-  const finik = isFinikCredentialsReady(biz?.finikApiKey, biz?.finikSecret);
+  const finik = isFinikCredentialsReady(biz?.finikApiKey, biz?.finikAccountId);
   const config =
     biz?.storefrontPublishedConfig ?? biz?.storefrontDraftConfig ?? {};
   const hero = hasHeroOrBanner(config);
@@ -205,7 +206,7 @@ export async function buildMerchantGrowth(
     },
     {
       id: "finik",
-      label: "Finik готов (API Key + Secret)",
+      label: "Finik готов (API Key + Account ID)",
       done: finik,
       weight: 15,
       href: "/admin/settings",

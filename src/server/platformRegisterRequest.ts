@@ -1,6 +1,7 @@
 import { RegistrationStatus } from "@prisma/client";
 import { prisma } from "./db.js";
 import { cleanInput, validateKgPhone } from "./orderInputSanitize.js";
+import { parseFinikRegistrationFields } from "../shared/finikRegistration.js";
 import {
   fetchTelegramBotGetMe,
   MSG_BOT_ALREADY_REGISTERED,
@@ -18,6 +19,7 @@ export type PlatformRegisterBody = {
   businessType?: unknown;
   ownerUsername?: unknown;
   finikApiKey?: unknown;
+  finikAccountId?: unknown;
 };
 
 export type PlatformRegisterResult =
@@ -80,13 +82,14 @@ export async function validateAndPersistPlatformRegistration(
     };
   }
 
-  const finikRaw =
-    typeof (body as { finikApiKey?: unknown }).finikApiKey === "string"
-      ? (body as { finikApiKey: string }).finikApiKey.trim()
-      : "";
-  let finikApiKeyToStore: string | null = null;
-  if (finikRaw !== "") {
-    finikApiKeyToStore = finikRaw;
+  const finikParsed = parseFinikRegistrationFields({
+    finikApiKey:
+      typeof body.finikApiKey === "string" ? body.finikApiKey : null,
+    finikAccountId:
+      typeof body.finikAccountId === "string" ? body.finikAccountId : null,
+  });
+  if (!finikParsed.ok) {
+    return { ok: false, statusCode: 400, error: finikParsed.error };
   }
 
   const telegramId = normalizeTelegramId(body.telegramId);
@@ -137,7 +140,9 @@ export async function validateAndPersistPlatformRegistration(
         name: storeRaw,
         botToken,
         phone,
-        finikApiKey: finikApiKeyToStore,
+        finikApiKey: finikParsed.ok && !finikParsed.skip ? finikParsed.finikApiKey : null,
+        finikAccountId:
+          finikParsed.ok && !finikParsed.skip ? finikParsed.finikAccountId : null,
         businessType,
         telegramId,
         ownerUsername,
