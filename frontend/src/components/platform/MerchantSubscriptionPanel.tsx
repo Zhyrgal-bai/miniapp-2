@@ -99,8 +99,7 @@ export function MerchantSubscriptionPanel({
   };
 
   const endIso = panel != null ? primaryEndIso(panel) : null;
-  const daysLabel =
-    panel?.daysLeft != null ? formatDaysRemaining(panel.daysLeft) : null;
+  const daysLabel = formatDaysRemaining(endIso);
 
   const showRenew =
     panel != null &&
