@@ -5,6 +5,10 @@ frontend/dist
 # Keep environment variables out of version control
 .env
 
+# Finik RSA keys (generate with scripts/generate-finik-keys.js)
+finik_private.pem
+finik_public.pem
+
 /generated/prisma
 
 .vercel
