@@ -1,4 +1,11 @@
 import { prisma } from "./db.js";
+import { plainBotTokenFromStored } from "./businessBotToken.js";
+import { isSubscriptionActive } from "./subscriptionAccess.js";
+import {
+  classifyWebhookOkError,
+  fetchTelegramWebhookInfo,
+} from "./platformTelegramWebhook.js";
+import { isFinikCredentialsReady } from "../shared/finikReady.js";
 
 export type GrowthChecklistItem = {
   id: string;
@@ -8,12 +15,95 @@ export type GrowthChecklistItem = {
   href?: string;
 };
 
+/** Шаги запуска после approve (Block 3) — тот же endpoint store-readiness. */
+export type LaunchWizardStepId =
+  | "subscription"
+  | "telegram_bot"
+  | "finik"
+  | "product"
+  | "storefront"
+  | "test_order";
+
+export type LaunchWizardStep = {
+  id: LaunchWizardStepId;
+  label: string;
+  done: boolean;
+  hint: string;
+};
+
+export type LaunchWizardPayload = {
+  complete: boolean;
+  completedCount: number;
+  totalSteps: number;
+  /** Индекс первого незавершённого шага (для UI), -1 если всё готово. */
+  currentStepIndex: number;
+  steps: LaunchWizardStep[];
+};
+
 export type MerchantGrowthPayload = {
   score: number;
   maxScore: number;
   checklist: GrowthChecklistItem[];
   recommendations: string[];
+  launchWizard: LaunchWizardPayload;
 };
+
+export function buildLaunchWizardPayload(input: {
+  subscriptionActive: boolean;
+  botConnected: boolean;
+  finikReady: boolean;
+  hasProduct: boolean;
+  storefrontPublished: boolean;
+  hasTestOrder: boolean;
+}): LaunchWizardPayload {
+  const steps: LaunchWizardStep[] = [
+    {
+      id: "subscription",
+      label: "Подписка активна",
+      done: input.subscriptionActive,
+      hint: "Оплатите или дождитесь trial — без подписки витрина закрыта.",
+    },
+    {
+      id: "telegram_bot",
+      label: "Telegram Bot подключён",
+      done: input.botConnected,
+      hint: "Укажите токен бота и проверьте webhook в настройках.",
+    },
+    {
+      id: "finik",
+      label: "Finik готов",
+      done: input.finikReady,
+      hint: "Сохраните API Key и Secret, скопируйте webhook в кабинет Finik.",
+    },
+    {
+      id: "product",
+      label: "Добавлен товар",
+      done: input.hasProduct,
+      hint: "Создайте хотя бы один товар в каталоге.",
+    },
+    {
+      id: "storefront",
+      label: "Проверена витрина",
+      done: input.storefrontPublished,
+      hint: "Опубликуйте витрину в разделе оформления.",
+    },
+    {
+      id: "test_order",
+      label: "Выполнен тестовый заказ",
+      done: input.hasTestOrder,
+      hint: "Откройте витрину и оформите пробный заказ от имени покупателя.",
+    },
+  ];
+  const completedCount = steps.filter((s) => s.done).length;
+  const currentStepIndex = steps.findIndex((s) => !s.done);
+  return {
+    complete: completedCount === steps.length,
+    completedCount,
+    totalSteps: steps.length,
+    currentStepIndex,
+    steps,
+  };
+}
 
 function hasHeroOrBanner(config: unknown): boolean {
   if (!config || typeof config !== "object") return false;
@@ -36,7 +126,14 @@ export async function buildMerchantGrowth(
       prisma.business.findUnique({
         where: { id: bid },
         select: {
+          isActive: true,
+          isBlocked: true,
+          subscriptionStatus: true,
+          trialEndsAt: true,
+          subscriptionEndsAt: true,
+          botToken: true,
           finikApiKey: true,
+          finikSecret: true,
           storefrontPublishedAt: true,
           storefrontPublishedConfig: true,
           storefrontDraftConfig: true,
@@ -59,13 +156,37 @@ export async function buildMerchantGrowth(
     ]);
 
   const published = Boolean(biz?.storefrontPublishedAt);
-  const finik = Boolean(biz?.finikApiKey?.trim());
+  const finik = isFinikCredentialsReady(biz?.finikApiKey, biz?.finikSecret);
   const config =
     biz?.storefrontPublishedConfig ?? biz?.storefrontDraftConfig ?? {};
   const hero = hasHeroOrBanner(config);
   const fiveProducts = productCount >= 5;
   const hasCategories = categoryCount > 0;
   const firstOrder = orderCount > 0;
+  const hasProduct = productCount >= 1;
+
+  const subscriptionActive =
+    biz != null && isSubscriptionActive(biz);
+  const botToken = plainBotTokenFromStored(biz?.botToken ?? null);
+  const webhookInfo =
+    botToken.length > 0
+      ? await fetchTelegramWebhookInfo(botToken)
+      : {
+          telegramApiOk: false,
+          webhookUrl: null,
+          lastErrorMessage: "Токен бота не задан",
+        };
+  const botConnected =
+    botToken.length > 0 && classifyWebhookOkError(webhookInfo) === "OK";
+
+  const launchWizard = buildLaunchWizardPayload({
+    subscriptionActive,
+    botConnected,
+    finikReady: finik,
+    hasProduct,
+    storefrontPublished: published,
+    hasTestOrder: firstOrder,
+  });
 
   const checklist: GrowthChecklistItem[] = [
     {
@@ -84,7 +205,7 @@ export async function buildMerchantGrowth(
     },
     {
       id: "finik",
-      label: "Finik подключён",
+      label: "Finik готов (API Key + Secret)",
       done: finik,
       weight: 15,
       href: "/admin/settings",
@@ -130,5 +251,5 @@ export async function buildMerchantGrowth(
     .slice(0, 3)
     .map((i) => i.label);
 
-  return { score, maxScore, checklist, recommendations };
+  return { score, maxScore, checklist, recommendations, launchWizard };
 }

@@ -15,14 +15,16 @@ import {
   businessTypeLabel,
   formatDaysRemaining,
   formatRuDateShort,
+  merchantAdminNavigateTarget,
   miniAppOpenUrl,
   subscriptionBadge,
 } from "./platform/platformUi";
 import {
-  formatSaasPriceSom,
-  SAAS_SUBSCRIPTION_PLANS,
-  saasPricePerDayLabel,
-} from "@repo-shared/saasSubscriptionPricing";
+  LaunchWizard,
+  type LaunchWizardAction,
+} from "../components/platform/LaunchWizard";
+import { MerchantBotRecovery } from "../components/platform/MerchantBotRecovery";
+import { MerchantSubscriptionPanel } from "../components/platform/MerchantSubscriptionPanel";
 import {
   fetchPlatformAdminBusinesses,
   fetchPlatformAdminRequests,
@@ -45,8 +47,8 @@ import {
   postOperatorReauth,
   postOperatorUnlock,
   postPlatformCheckWebhook,
-  postPlatformSubscriptionPaymentCreate,
   postPlatformUpdateFinik,
+  postMerchantBotToken,
   savePlatformStoreSettings,
   fetchStoreReadiness,
   postPlatformFeedback,
@@ -147,16 +149,21 @@ export default function PlatformPage() {
     null,
   );
   const [settingsName, setSettingsName] = useState("");
-  const [finikDraft, setFinikDraft] = useState("");
+  const [finikKeyDraft, setFinikKeyDraft] = useState("");
+  const [finikSecretDraft, setFinikSecretDraft] = useState("");
   const [finikSaving, setFinikSaving] = useState(false);
   const [finikMsg, setFinikMsg] = useState<string | null>(null);
   const [finikErr, setFinikErr] = useState<string | null>(null);
+  const [finikWebhookCopied, setFinikWebhookCopied] = useState(false);
   const [settingsNewToken, setSettingsNewToken] = useState("");
+  const [botTokenSaving, setBotTokenSaving] = useState(false);
+  const [botRecoveryRefresh, setBotRecoveryRefresh] = useState(0);
   const [merchantConfigDraft, setMerchantConfigDraft] = useState<
     Record<string, unknown>
   >({});
 
   const [readiness, setReadiness] = useState<StoreReadinessPayload | null>(null);
+  const [readinessRefreshing, setReadinessRefreshing] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
   const [feedbackBusy, setFeedbackBusy] = useState(false);
   const [feedbackOk, setFeedbackOk] = useState<string | null>(null);
@@ -192,10 +199,10 @@ export default function PlatformPage() {
   const [operatorUnlockError, setOperatorUnlockError] = useState<string | null>(
     null,
   );
-  const [payPlanBusy, setPayPlanBusy] = useState<30 | 90 | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const storesSectionRef = useRef<HTMLElement>(null);
   const helpSectionRef = useRef<HTMLElement>(null);
+  const subscriptionSectionRef = useRef<HTMLElement>(null);
 
   const loadBusinesses = useCallback(async () => {
     setLoading(true);
@@ -363,6 +370,23 @@ export default function PlatformPage() {
     if (onboardingStep === 3) trackPlatformFunnel("onboarding_step_3");
   }, [onboardingStep]);
 
+  const reloadReadiness = useCallback(async (businessId?: number) => {
+    const bid = businessId ?? businesses[0]?.id;
+    if (bid == null || bid <= 0) {
+      setReadiness(null);
+      return;
+    }
+    setReadinessRefreshing(true);
+    try {
+      const r = await fetchStoreReadiness(bid);
+      setReadiness(r);
+    } catch {
+      setReadiness(null);
+    } finally {
+      setReadinessRefreshing(false);
+    }
+  }, [businesses]);
+
   useEffect(() => {
     const first = businesses[0];
     if (first == null || first.id <= 0) {
@@ -397,10 +421,12 @@ export default function PlatformPage() {
       setSettingsErr(null);
       setSettingsOkMsg(null);
       setSettingsName("");
-      setFinikDraft("");
+      setFinikKeyDraft("");
+      setFinikSecretDraft("");
       setFinikSaving(false);
       setFinikMsg(null);
       setFinikErr(null);
+      setFinikWebhookCopied(false);
       setSettingsNewToken("");
       return;
     }
@@ -423,9 +449,11 @@ export default function PlatformPage() {
         setSettingsSnap(s);
         setSettingsName(s.name);
         setMerchantConfigDraft(s.merchantConfig ?? {});
-        setFinikDraft("");
+        setFinikKeyDraft("");
+        setFinikSecretDraft("");
         setFinikMsg(null);
         setFinikErr(null);
+        setFinikWebhookCopied(false);
         setSettingsNewToken("");
       } catch (e) {
         if (!cancelled) {
@@ -657,39 +685,6 @@ export default function PlatformPage() {
     }
   };
 
-  const handleClientSubscriptionPay = async (plan: 30 | 90) => {
-    if (!Number.isFinite(merchantTelegramId) || settingsBusinessId == null) {
-      setFinikErr("Нет данных для оплаты.");
-      return;
-    }
-    if (isPlatformAdmin) return;
-    setPayPlanBusy(plan);
-    setFinikErr(null);
-    setError(null);
-    try {
-      const out = await postPlatformSubscriptionPaymentCreate({
-        telegramId: merchantTelegramId,
-        businessId: settingsBusinessId,
-        plan,
-      });
-      if ("finikConfigured" in out && out.finikConfigured === false) {
-        setFinikErr(out.message);
-        return;
-      }
-      if ("paymentUrl" in out) {
-        const tg = getTelegramWebApp() as
-          | { openLink?: (url: string) => void }
-          | undefined;
-        tg?.openLink?.(out.paymentUrl);
-        setFinikMsg("Откроется страница оплаты Finik");
-      }
-    } catch (e) {
-      setFinikErr(formatAdminApiError(e));
-    } finally {
-      setPayPlanBusy(null);
-    }
-  };
-
   const handleOperatorUnlock = async (ev: React.FormEvent) => {
     ev.preventDefault();
     if (!Number.isFinite(merchantTelegramId) || merchantTelegramId <= 0) {
@@ -912,6 +907,49 @@ export default function PlatformPage() {
     setSettingsBusinessId(null);
   };
 
+  const handleSaveBotToken = async () => {
+    if (
+      !Number.isFinite(merchantTelegramId) ||
+      settingsBusinessId == null ||
+      settingsSnap == null
+    ) {
+      setSettingsErr("Сначала дождитесь загрузки настроек.");
+      return;
+    }
+    const newTok = settingsNewToken.replace(/\s/g, "").trim();
+    if (newTok === "") {
+      setSettingsErr("Вставьте новый токен из @BotFather.");
+      return;
+    }
+    setBotTokenSaving(true);
+    setSettingsErr(null);
+    setSettingsOkMsg(null);
+    try {
+      const out = await postMerchantBotToken({
+        telegramId: merchantTelegramId,
+        businessId: settingsBusinessId,
+        newBotToken: newTok,
+      });
+      setSettingsNewToken("");
+      setSettingsSnap({
+        ...settingsSnap,
+        pendingBotTokenChange: false,
+      });
+      setSettingsOkMsg(
+        out.botStatus?.status === "connected"
+          ? `Токен сохранён${out.botUsername ? ` (@${out.botUsername})` : ""}. Бот подключён.`
+          : `Токен сохранён. ${out.botStatus?.label ?? "Проверьте статус бота на главной."}`,
+      );
+      setBotRecoveryRefresh((n) => n + 1);
+      void loadBusinesses();
+      void reloadReadiness(settingsBusinessId);
+    } catch (e) {
+      setSettingsErr(formatAdminApiError(e));
+    } finally {
+      setBotTokenSaving(false);
+    }
+  };
+
   const handleSaveFinik = async () => {
     if (!Number.isFinite(merchantTelegramId) || settingsBusinessId == null) {
       setFinikErr("Нет данных пользователя Telegram.");
@@ -924,24 +962,49 @@ export default function PlatformPage() {
       const out = await postPlatformUpdateFinik({
         telegramId: merchantTelegramId,
         businessId: settingsBusinessId,
-        finikApiKey: finikDraft.trim(),
+        finikApiKey: finikKeyDraft.trim(),
+        finikSecret: finikSecretDraft.trim(),
       });
       if (settingsSnap != null) {
         setSettingsSnap({
           ...settingsSnap,
-          finikConfigured: out.finikConfigured,
+          finikConfigured: out.finikReady,
+          finikReady: out.finikReady,
+          finikHasApiKey: out.finikHasApiKey,
+          finikHasSecret: out.finikHasSecret,
+          finikWebhookUrl: out.finikWebhookUrl,
         });
       }
-      setFinikDraft("");
+      setFinikKeyDraft("");
+      setFinikSecretDraft("");
       setFinikMsg(
-        out.finikConfigured
-          ? "Finik сохранён. Ключ не отображается повторно."
+        out.finikReady
+          ? "Finik готов к приёму оплат. Ключи на сервере не отображаются повторно."
           : "Finik отключён.",
       );
+      void reloadReadiness(settingsBusinessId);
     } catch (e) {
       setFinikErr(formatAdminApiError(e));
     } finally {
       setFinikSaving(false);
+    }
+  };
+
+  const handleCopyFinikWebhook = async () => {
+    const url = settingsSnap?.finikWebhookUrl?.trim();
+    if (!url) {
+      setFinikErr(
+        "Webhook URL недоступен. Проверьте API_URL на сервере платформы.",
+      );
+      return;
+    }
+    setFinikErr(null);
+    try {
+      await navigator.clipboard.writeText(url);
+      setFinikWebhookCopied(true);
+      window.setTimeout(() => setFinikWebhookCopied(false), 2500);
+    } catch {
+      setFinikErr("Не удалось скопировать. Выделите URL и скопируйте вручную.");
     }
   };
 
@@ -970,7 +1033,7 @@ export default function PlatformPage() {
       businessId: settingsBusinessId,
     };
     if (nameChanged) payload.storeName = trimmedName;
-    if (newTok !== "") payload.newBotToken = newTok;
+    if (newTok !== "" && isPlatformAdmin) payload.newBotToken = newTok;
     if (
       isPlatformAdmin &&
       Object.keys(settingsSnap.merchantSettingsSchema ?? {}).length > 0
@@ -993,33 +1056,36 @@ export default function PlatformPage() {
     try {
       const out = await savePlatformStoreSettings(payload);
       setSettingsSnap({
-        businessId: settingsBusinessId,
+        ...settingsSnap,
         name: out.name,
         finikConfigured: out.finikConfigured,
+        finikReady: out.finikConfigured,
         pendingBotTokenChange: out.pendingBotTokenChange,
-        businessType: settingsSnap.businessType,
         merchantConfig:
           isPlatformAdmin &&
           Object.keys(settingsSnap.merchantSettingsSchema ?? {}).length > 0
             ? merchantConfigDraft
             : settingsSnap.merchantConfig,
-        merchantSettingsSchema: settingsSnap.merchantSettingsSchema,
-        subscriptionStatus: settingsSnap.subscriptionStatus,
-        subscriptionEndsAt: settingsSnap.subscriptionEndsAt,
-        trialEndsAt: settingsSnap.trialEndsAt,
       });
       setSettingsName(out.name);
       setSettingsNewToken("");
       setSettingsOkMsg(
-        out.botTokenChangeRequestId != null
-          ? "Заявка на смену токена отправлена администратору на подтверждение."
-          : "Сохранено.",
+        out.botTokenApplied
+          ? `Токен бота сохранён${out.botUsername ? ` (@${out.botUsername})` : ""}. Webhook переподключён.`
+          : out.botTokenChangeRequestId != null
+            ? "Заявка на смену токена отправлена администратору на подтверждение."
+            : "Сохранено.",
       );
+      if (out.botTokenApplied) {
+        setBotRecoveryRefresh((n) => n + 1);
+      }
       setBusinesses((prev) =>
         prev.map((row) =>
           row.id === settingsBusinessId ? { ...row, name: out.name } : row,
         ),
       );
+      void loadBusinesses();
+      void reloadReadiness(settingsBusinessId);
     } catch (e) {
       setSettingsErr(formatAdminApiError(e));
     } finally {
@@ -1051,6 +1117,13 @@ export default function PlatformPage() {
     helpSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
+  const scrollToSubscription = useCallback(() => {
+    subscriptionSectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }, []);
+
   const closeMiniApp = useCallback(() => {
     try {
       (getTelegramWebApp() as { close?: () => void } | undefined)?.close?.();
@@ -1065,6 +1138,62 @@ export default function PlatformPage() {
     setSettingsOkMsg(null);
     setSettingsBusinessId(primaryBusiness.id);
   }, [primaryBusiness]);
+
+  const handleLaunchStepAction = useCallback(
+    (stepId: LaunchWizardAction) => {
+      const b = primaryBusiness;
+      if (b == null) return;
+      switch (stepId) {
+        case "subscription":
+          trackPlatformFunnel("settings_open", {
+            businessId: b.id,
+            meta: { launchStep: stepId, section: "subscription" },
+          });
+          scrollToSubscription();
+          break;
+        case "telegram_bot":
+        case "finik":
+          trackPlatformFunnel("settings_open", {
+            businessId: b.id,
+            meta: { launchStep: stepId },
+          });
+          openPrimarySettings();
+          break;
+        case "product":
+          trackPlatformFunnel("admin_open", {
+            businessId: b.id,
+            meta: { launchStep: stepId, section: "products" },
+          });
+          navigate(merchantAdminNavigateTarget(b, "products"));
+          break;
+        case "storefront":
+          trackPlatformFunnel("admin_open", {
+            businessId: b.id,
+            meta: { launchStep: stepId, section: "design" },
+          });
+          navigate(merchantAdminNavigateTarget(b, "design"));
+          break;
+        case "test_order":
+          if (b.subscriptionActive) {
+            trackPlatformFunnel("store_open", {
+              businessId: b.id,
+              meta: { launchStep: stepId, test: true },
+            });
+            openStorefront(b);
+          } else {
+            trackPlatformFunnel("settings_open", {
+              businessId: b.id,
+              meta: { launchStep: stepId, section: "subscription" },
+            });
+            scrollToSubscription();
+          }
+          break;
+        default:
+          break;
+      }
+    },
+    [primaryBusiness, openPrimarySettings, navigate, openStorefront, scrollToSubscription],
+  );
 
   const platformMenuItems = useMemo((): PlatformMenuItem[] => {
     const items: PlatformMenuItem[] = [
@@ -1094,7 +1223,7 @@ export default function PlatformPage() {
         label: "Подписка",
         icon: "⭐",
         onClick: () => {
-          if (primaryBusiness != null) openPrimarySettings();
+          if (primaryBusiness != null) scrollToSubscription();
           else scrollToStores();
         },
       },
@@ -1115,6 +1244,7 @@ export default function PlatformPage() {
     goToMerchantRegister,
     primaryBusiness,
     scrollToHelp,
+    scrollToSubscription,
     openPrimarySettings,
     closeMiniApp,
   ]);
@@ -1213,6 +1343,27 @@ export default function PlatformPage() {
           >
             {!loading && businesses.length > 0 && !isPlatformAdmin ? (
               <PlatformQuickActions actions={quickActions} />
+            ) : null}
+
+            {primaryBusiness != null &&
+            !primaryBusiness.subscriptionActive &&
+            !isPlatformAdmin &&
+            !loading ? (
+              <div className="mp-subscription-cta" role="alert">
+                <p className="mp-subscription-cta__title">
+                  Подписка истекла — магазин закрыт для покупателей
+                </p>
+                <p className="mp-subscription-cta__text">
+                  Новые заказы и витрина недоступны, пока вы не продлите подписку.
+                </p>
+                <button
+                  type="button"
+                  className="mp-subscription-cta__btn"
+                  onClick={() => scrollToSubscription()}
+                >
+                  Продлить подписку →
+                </button>
+              </div>
             ) : null}
 
         {successFlash ? (
@@ -1406,7 +1557,42 @@ export default function PlatformPage() {
             ) : null}
             {businesses.length > 0 ? (
               <>
-            {readiness ? (
+            {primaryBusiness != null && !isPlatformAdmin && !loading ? (
+              <MerchantBotRecovery
+                businessId={primaryBusiness.id}
+                refreshTrigger={botRecoveryRefresh}
+                onOpenSettings={openPrimarySettings}
+                onStatusChange={() => {
+                  void loadBusinesses();
+                  void reloadReadiness(primaryBusiness.id);
+                }}
+              />
+            ) : null}
+
+            {primaryBusiness != null &&
+            !isPlatformAdmin &&
+            !loading &&
+            Number.isFinite(merchantTelegramId) ? (
+              <MerchantSubscriptionPanel
+                businessId={primaryBusiness.id}
+                telegramId={merchantTelegramId}
+                sectionRef={subscriptionSectionRef}
+                onPaid={() => {
+                  void loadBusinesses();
+                  void reloadReadiness(primaryBusiness.id);
+                }}
+              />
+            ) : null}
+
+            {readiness?.launchWizard != null && !isPlatformAdmin ? (
+              <LaunchWizard
+                wizard={readiness.launchWizard}
+                readinessPct={readinessPct}
+                onStepAction={handleLaunchStepAction}
+                onRefresh={() => void reloadReadiness()}
+                refreshing={readinessRefreshing}
+              />
+            ) : readiness ? (
               <section className="mp-v2-section" aria-label="Готовность">
                 <h2 className="mp-v2-section-title">Готовность</h2>
                 <div className="mp-v2-card mp-v2-readiness" role="status">
@@ -1882,7 +2068,7 @@ export default function PlatformPage() {
                 onSubmit={(e) => void handleSaveSettings(e)}
               >
                 <div className="mp-settings-scroll">
-                {settingsSnap?.pendingBotTokenChange ? (
+                {settingsSnap?.pendingBotTokenChange && isPlatformAdmin ? (
                   <p className="mp-settings-alert mp-settings-alert--amber" role="status">
                     Ожидается подтверждение администратором смены токена бота.
                   </p>
@@ -2036,8 +2222,9 @@ export default function PlatformPage() {
                     </span>
                   </div>
                   <p className="mp-settings-section__desc">
-                    Смена токена требует подтверждения администратором. Текущий
-                    токен не отображается.
+                    {isPlatformAdmin
+                      ? "Смена токена создаёт заявку для оператора. Текущий токен не показывается."
+                      : "Вставьте новый токен из @BotFather — проверим Telegram, сохраним и переподключим webhook без ожидания поддержки."}
                   </p>
                   <div className="mp-settings-field">
                     <label
@@ -2050,60 +2237,149 @@ export default function PlatformPage() {
                       id="platform-settings-token"
                       type="password"
                       autoComplete="off"
-                      disabled={settingsSnap == null}
+                      disabled={settingsSnap == null || botTokenSaving}
                       value={settingsNewToken}
                       onChange={(e) => setSettingsNewToken(e.target.value)}
-                      placeholder="Вставьте новый токен"
+                      placeholder="123456789:AA…"
                       className={`${archa.input} font-mono`}
                     />
                   </div>
+                  {!isPlatformAdmin ? (
+                    <button
+                      type="button"
+                      className="mp-settings-btn-secondary"
+                      disabled={
+                        settingsSnap == null ||
+                        botTokenSaving ||
+                        settingsSaving ||
+                        settingsNewToken.trim() === ""
+                      }
+                      onClick={() => void handleSaveBotToken()}
+                    >
+                      {botTokenSaving ? "Сохранение…" : "Сохранить токен и подключить"}
+                    </button>
+                  ) : null}
                 </div>
 
                 <div className="mp-settings-section mp-settings-section--accent">
                   <div className="mp-settings-section__head">
                     <span className="mp-settings-section__title">Finik</span>
-                    {settingsSnap?.finikConfigured ? (
+                    {settingsSnap?.finikReady ? (
                       <span className="mp-settings-status-pill mp-settings-status-pill--ok">
-                        Подключён
+                        Готов к оплате
                       </span>
                     ) : (
                       <span className="mp-settings-status-pill mp-settings-status-pill--warn">
-                        Не подключён
+                        Не настроен
                       </span>
                     )}
                   </div>
                   <p className="mp-settings-section__desc">
-                    Платежи в витрине и продление подписки. Ключ на сервер не
-                    возвращается после сохранения.
+                    Для оплаты заказов в витрине нужны API Key и Secret из
+                    личного кабинета Finik, затем webhook URL в Finik.
                   </p>
-                  <div className="mp-settings-key-chip">
-                    API Key:{" "}
-                    {settingsSnap?.finikConfigured ? "••••••••••••" : "—"}
+                  <div className="mp-finik-status-row">
+                    <span className="mp-settings-key-chip">
+                      API Key:{" "}
+                      {settingsSnap?.finikHasApiKey ? "сохранён" : "не задан"}
+                    </span>
+                    <span className="mp-settings-key-chip">
+                      Secret:{" "}
+                      {settingsSnap?.finikHasSecret ? "сохранён" : "не задан"}
+                    </span>
                   </div>
+                  <ol className="mp-finik-steps">
+                    <li>
+                      Скопируйте API Key и Secret в{" "}
+                      <a
+                        href="https://finik.kg"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mp-finik-steps__link"
+                      >
+                        кабинете Finik
+                      </a>{" "}
+                      вашего магазина.
+                    </li>
+                    <li>Вставьте их ниже и нажмите «Сохранить Finik».</li>
+                    <li>
+                      Укажите Webhook URL в Finik (кнопка «Скопировать»).
+                    </li>
+                    <li>Сделайте тестовый заказ в Mini App магазина.</li>
+                  </ol>
                   <div className="mp-settings-field">
                     <label
-                      htmlFor="platform-settings-finik-draft"
+                      htmlFor="platform-settings-finik-key"
                       className="mp-settings-field__label"
                     >
-                      Новый API ключ Finik
+                      API Key Finik
                     </label>
                     <input
-                      id="platform-settings-finik-draft"
+                      id="platform-settings-finik-key"
                       type="password"
                       autoComplete="off"
                       disabled={settingsSnap == null || finikSaving}
-                      value={finikDraft}
+                      value={finikKeyDraft}
                       onChange={(e) => {
-                        setFinikDraft(e.target.value);
+                        setFinikKeyDraft(e.target.value);
                         setFinikErr(null);
                         setFinikMsg(null);
                       }}
-                      placeholder="Вставьте ключ"
+                      placeholder={
+                        settingsSnap?.finikHasApiKey
+                          ? "Новый ключ (оставьте пустым, чтобы не менять)"
+                          : "Вставьте API Key"
+                      }
+                      className={`${archa.input} font-mono`}
+                    />
+                  </div>
+                  <div className="mp-settings-field">
+                    <label
+                      htmlFor="platform-settings-finik-secret"
+                      className="mp-settings-field__label"
+                    >
+                      Secret Finik
+                    </label>
+                    <input
+                      id="platform-settings-finik-secret"
+                      type="password"
+                      autoComplete="off"
+                      disabled={settingsSnap == null || finikSaving}
+                      value={finikSecretDraft}
+                      onChange={(e) => {
+                        setFinikSecretDraft(e.target.value);
+                        setFinikErr(null);
+                        setFinikMsg(null);
+                      }}
+                      placeholder={
+                        settingsSnap?.finikHasSecret
+                          ? "Новый secret (оставьте пустым, чтобы не менять)"
+                          : "Вставьте Secret"
+                      }
                       className={`${archa.input} font-mono`}
                     />
                     <p className="mp-settings-field__hint">
-                      Оставьте поле пустым и сохраните, чтобы отключить Finik.
+                      Чтобы отключить Finik, очистите оба поля и сохраните.
                     </p>
+                  </div>
+                  <div className="mp-finik-webhook">
+                    <span className="mp-settings-field__label">Webhook URL</span>
+                    <div className="mp-finik-webhook__row">
+                      <code className="mp-finik-webhook__url">
+                        {settingsSnap?.finikWebhookUrl?.trim() ||
+                          "Задайте API_URL на сервере — URL появится после сохранения ключей."}
+                      </code>
+                      <button
+                        type="button"
+                        className="mp-settings-btn-secondary mp-finik-webhook__copy"
+                        disabled={
+                          !settingsSnap?.finikWebhookUrl?.trim() || finikSaving
+                        }
+                        onClick={() => void handleCopyFinikWebhook()}
+                      >
+                        {finikWebhookCopied ? "Скопировано" : "Скопировать"}
+                      </button>
+                    </div>
                   </div>
                   {finikErr ? (
                     <p className="mt-2 text-sm text-red-300" role="alert">
@@ -2123,86 +2399,29 @@ export default function PlatformPage() {
                     onClick={() => void handleSaveFinik()}
                     className="mp-settings-btn-secondary"
                   >
-                    {finikSaving ? "Сохранение…" : "Сохранить ключ Finik"}
+                    {finikSaving ? "Сохранение…" : "Сохранить Finik"}
                   </button>
                 </div>
 
                 {!isPlatformAdmin && settingsSnap != null ? (
-                  <div className="mp-settings-section mp-settings-section--accent">
+                  <div className="mp-settings-section">
                     <div className="mp-settings-section__head">
-                      <span className="mp-settings-section__title">
-                        Продление подписки
-                      </span>
+                      <span className="mp-settings-section__title">Подписка</span>
                     </div>
                     <p className="mp-settings-section__desc">
-                      Оплата откроется на странице Finik вашего магазина.
+                      Оплата и продление — в разделе «Подписка» на главной панели
+                      (Finik платформы).
                     </p>
-                    <div className="mp-plan-grid" role="group" aria-label="Тарифы подписки">
-                      {SAAS_SUBSCRIPTION_PLANS.map((plan) => {
-                        const busy = payPlanBusy === plan.days;
-                        const anyBusy = payPlanBusy !== null;
-                        const finikReady = settingsSnap.finikConfigured;
-                        return (
-                          <button
-                            key={plan.days}
-                            type="button"
-                            disabled={!finikReady || anyBusy}
-                            aria-busy={busy}
-                            onClick={() =>
-                              void handleClientSubscriptionPay(plan.days)
-                            }
-                            className={[
-                              "mp-plan-card",
-                              plan.featured ? "mp-plan-card--featured" : "",
-                              busy ? "mp-plan-card--busy" : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" ")}
-                          >
-                            <div className="min-w-0 flex-1">
-                              {plan.badge ? (
-                                <span className="mp-plan-card__badge">
-                                  {plan.badge}
-                                </span>
-                              ) : null}
-                              <div className="mp-plan-card__title">
-                                {plan.title}
-                              </div>
-                              <div className="mp-plan-card__subtitle">
-                                {plan.subtitle}
-                                <span className="text-[#64748b]">
-                                  {" "}
-                                  · {saasPricePerDayLabel(plan.amountSom, plan.days)}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="shrink-0 text-right">
-                              <div className="mp-plan-card__price">
-                                {formatSaasPriceSom(plan.amountSom)}
-                              </div>
-                              <div
-                                className={
-                                  busy
-                                    ? "mp-plan-card__cta"
-                                    : "mp-plan-card__cta mp-plan-card__cta--muted"
-                                }
-                              >
-                                {busy ? "Открываем оплату…" : "Оплатить →"}
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {!settingsSnap.finikConfigured ? (
-                      <p className="mp-settings-field__hint text-[#fcd34d]">
-                        Сначала подключите Finik выше и сохраните API-ключ.
-                      </p>
-                    ) : (
-                      <p className="mp-settings-field__hint">
-                        Нужны API key и secret в личном кабинете Finik магазина.
-                      </p>
-                    )}
+                    <button
+                      type="button"
+                      className="mp-settings-btn-secondary"
+                      onClick={() => {
+                        setSettingsBusinessId(null);
+                        scrollToSubscription();
+                      }}
+                    >
+                      Перейти к оплате подписки →
+                    </button>
                   </div>
                 ) : null}
                 </div>

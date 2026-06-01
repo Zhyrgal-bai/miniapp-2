@@ -31,7 +31,7 @@ import {
 } from "./platformMerchantChangeService.js";
 import {
   getPlatformStoreSettingsForMerchant,
-  updatePlatformFinikForMerchant,
+  savePlatformFinikForMerchant,
   updatePlatformStoreSettingsForMerchant,
   type PlatformStoreSettingsUpdateBody,
 } from "./platformMerchantStoreSettings.js";
@@ -39,10 +39,18 @@ import {
   formatZodApiError,
   platformCheckWebhookBodySchema,
   platformDeleteMyBusinessBodySchema,
+  platformMerchantBotRecoveryBodySchema,
+  platformMerchantBotTokenBodySchema,
   platformRegisterRequestShape,
   platformSubscriptionPaymentBodySchema,
   platformToggleBotBodySchema,
 } from "./platformRouteBodySchemas.js";
+import {
+  buildMerchantBotRecoveryStatus,
+  reconnectMerchantStoreBot,
+} from "./merchantBotRecoveryService.js";
+import { platformMerchantIsStoreOwner } from "./platformMerchantAccess.js";
+import { applyOwnerBotTokenSelfService } from "./platformMerchantChangeService.js";
 import { validateAndPersistPlatformRegistration } from "./platformRegisterRequest.js";
 import { getMerchantRegistrationStatus } from "./registrationStatusService.js";
 import {
@@ -235,6 +243,7 @@ import {
   mountSubscriptionFinikPaymentRoutes,
   createSubscriptionFinikPaymentSession,
 } from "./subscriptionFinikPayments.js";
+import { buildMerchantSubscriptionPanel } from "./platformSubscriptionBilling.js";
 import { relayDynamicStoreWebhook as relayDynamicTenantStoreWebhook } from "./storeTelegramWebhookRelay.js";
 import {
   isHexWebhookSlug,
@@ -269,7 +278,9 @@ import { jsonBodyLimits } from "../middleware/jsonBodyLimits.js";
 import { requireNonEmptyJsonBody } from "../middleware/requireNonEmptyJsonBody.js";
 import { requireTelegramAuth } from "../middleware/requireTelegramAuth.js";
 import { verifiedTelegramGate } from "../middleware/privilegedRoutes.js";
-import { isStorefrontClosedForCustomers } from "./subscriptionAccess.js";
+import { businessSubscriptionGateSelect } from "./subscriptionAccess.js";
+import { rejectUnlessCanAcceptCustomerOrders } from "./subscriptionCustomerGate.js";
+import { syncBusinessSubscriptionActivationState } from "./saasBillingService.js";
 import { attachSupportRoutes } from "./supportRoutes.js";
 import { attachDiningTableRoutes } from "./diningTableRoutes.js";
 import { attachTableReservationRoutes } from "./tableReservationRoutes.js";
@@ -501,10 +512,9 @@ app.get("/api/business/:businessId", async (req: Request, res: Response) => {
       res.status(404).json({ error: API_ERR_NOT_FOUND });
       return;
     }
-    // Публичная витрина/тема: доступность определяется флагами витрины.
-    // Подписка/триал — отдельная бизнес-логика (платформа/лимиты), не "hard-disable" theme fetch.
-    if (row.isBlocked || !row.isActive) {
-      res.status(403).json({ error: API_ERR_STORE_UNAVAILABLE });
+    if (
+      rejectUnlessCanAcceptCustomerOrders(res, row)
+    ) {
       return;
     }
     const settings = await prisma.settings.findUnique({
@@ -878,6 +888,35 @@ app.post(
   },
 );
 
+app.get("/api/platform/subscription", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromWebApp(req);
+    if (!telegramId) {
+      res.status(500).json({
+        error: "Внутренняя ошибка авторизации Mini App",
+      });
+      return;
+    }
+    const bid = Number((req.query as { businessId?: string }).businessId);
+    if (!Number.isInteger(bid) || bid <= 0) {
+      res.status(400).json({ error: "Нужен query businessId" });
+      return;
+    }
+    const out = await buildMerchantSubscriptionPanel({
+      telegramId,
+      businessId: bid,
+    });
+    if (!out.ok) {
+      res.status(out.statusCode).json({ error: out.error });
+      return;
+    }
+    res.json(out.panel);
+  } catch (e) {
+    console.error("GET /api/platform/subscription:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
 app.post(
   "/api/platform/subscription-payment/create",
   strictLimiter,
@@ -906,22 +945,12 @@ app.post(
         res.status(out.statusCode).json({ error: out.error });
         return;
       }
-      if ("finikConfigured" in out && out.finikConfigured === false) {
-        res.status(200).json({
-          finikConfigured: false,
-          useManualPaymentRequest: true,
-          message: out.message,
-        });
-        return;
-      }
-      if ("paymentUrl" in out) {
-        res.json({
-          paymentUrl: out.paymentUrl,
-          subscriptionPaymentId: out.subscriptionPaymentId,
-          planDays: out.planDays,
-          amountSom: out.amountSom,
-        });
-      }
+      res.json({
+        paymentUrl: out.paymentUrl,
+        subscriptionPaymentId: out.subscriptionPaymentId,
+        planDays: out.planDays,
+        amountSom: out.amountSom,
+      });
     } catch (e) {
       console.error("POST /api/platform/subscription-payment/create:", e);
       res.status(500).json({ error: "Ошибка сервера" });
@@ -1011,7 +1040,11 @@ app.post("/api/platform/update-finik", async (req: Request, res: Response) => {
       });
       return;
     }
-    const reqBody = req.body as { businessId?: unknown; finikApiKey?: unknown };
+    const reqBody = req.body as {
+      businessId?: unknown;
+      finikApiKey?: unknown;
+      finikSecret?: unknown;
+    };
     const rawBid = reqBody.businessId;
     const businessId =
       typeof rawBid === "number" && Number.isInteger(rawBid)
@@ -1023,16 +1056,24 @@ app.post("/api/platform/update-finik", async (req: Request, res: Response) => {
       res.status(400).json({ error: "Нужен корректный businessId" });
       return;
     }
-    const out = await updatePlatformFinikForMerchant({
+    const out = await savePlatformFinikForMerchant({
       telegramId,
       businessId,
       finikApiKey: reqBody.finikApiKey,
+      finikSecret: reqBody.finikSecret,
     });
     if (!out.ok) {
       res.status(out.statusCode).json({ error: out.error });
       return;
     }
-    res.json({ ok: true, finikConfigured: out.finikConfigured });
+    res.json({
+      ok: true,
+      finikConfigured: out.finikConfigured,
+      finikReady: out.finikReady,
+      finikHasApiKey: out.finikHasApiKey,
+      finikHasSecret: out.finikHasSecret,
+      finikWebhookUrl: out.finikWebhookUrl,
+    });
   } catch (e) {
     console.error("POST /api/platform/update-finik:", e);
     res.status(500).json({ error: "Ошибка сервера" });
@@ -1141,16 +1182,13 @@ app.get("/api/storefront/by-slug/:slug", async (req: Request, res: Response) => 
       where: {
         slug: { equals: slug, mode: "insensitive" },
       } as any,
-      select: { id: true, isActive: true, isBlocked: true } as any,
+      select: businessSubscriptionGateSelect as any,
     });
     if (!b) {
       res.status(404).json({ error: "Store not found" });
       return;
     }
-    if (!(b as any).isActive || (b as any).isBlocked) {
-      res.status(403).json({ error: API_ERR_STORE_UNAVAILABLE });
-      return;
-    }
+    if (rejectUnlessCanAcceptCustomerOrders(res, b as any)) return;
     await sendStorefrontPublicPayload(res, (b as any).id);
   } catch (e) {
     console.error("GET /api/storefront/by-slug/:slug:", e);
@@ -2684,24 +2722,12 @@ async function resolveCatalogBusinessId(
   }
   const business = await prisma.business.findUnique({
     where: { id: businessId },
-    select: {
-      id: true,
-      isActive: true,
-      isBlocked: true,
-      subscriptionStatus: true,
-      trialEndsAt: true,
-      subscriptionEndsAt: true,
-    },
+    select: businessSubscriptionGateSelect,
   });
-  if (!business) {
-    res.status(404).json({ error: PUBLIC_BUSINESS_MISSING_ERROR });
+  if (rejectUnlessCanAcceptCustomerOrders(res, business)) {
     return null;
   }
-  if (isStorefrontClosedForCustomers(business)) {
-    res.status(403).json({ error: PUBLIC_BUSINESS_UNAVAILABLE_ERROR });
-    return null;
-  }
-  return business.id;
+  return business!.id;
 }
 
 async function upsertBuyerUser(
@@ -3114,6 +3140,142 @@ app.get("/api/platform/store-readiness", async (req: Request, res: Response) => 
     res.status(500).json({ error: "Ошибка сервера" });
   }
 });
+
+async function requireMerchantBotRecoveryOwner(
+  req: Request,
+  res: Response,
+  businessId: number,
+): Promise<string | null> {
+  const telegramId = platformTelegramIdFromWebApp(req);
+  if (!telegramId) {
+    res.status(401).json({ error: "Unauthorized" });
+    return null;
+  }
+  if (!Number.isInteger(businessId) || businessId <= 0) {
+    res.status(400).json({ error: "Нужен businessId" });
+    return null;
+  }
+  const isOwner = await platformMerchantIsStoreOwner(telegramId, businessId);
+  if (!isOwner) {
+    res.status(403).json({
+      error: "Восстановление бота доступно только владельцу магазина",
+    });
+    return null;
+  }
+  return telegramId;
+}
+
+app.get("/api/platform/merchant-bot-status", async (req: Request, res: Response) => {
+  try {
+    const bidRaw = req.query.businessId;
+    const businessId = Number(
+      typeof bidRaw === "string" ? bidRaw : Array.isArray(bidRaw) ? bidRaw[0] : NaN,
+    );
+    if (!(await requireMerchantBotRecoveryOwner(req, res, businessId))) return;
+    const payload = await buildMerchantBotRecoveryStatus(businessId);
+    if (payload == null) {
+      res.status(404).json({ error: "Магазин не найден" });
+      return;
+    }
+    res.json(payload);
+  } catch (e) {
+    console.error("GET /api/platform/merchant-bot-status:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post(
+  "/api/platform/merchant-bot-check",
+  strictLimiter,
+  requireNonEmptyJsonBody,
+  async (req: Request, res: Response) => {
+    try {
+      const parsed = platformMerchantBotRecoveryBodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: formatZodApiError(parsed.error) });
+        return;
+      }
+      const { businessId } = parsed.data;
+      if (!(await requireMerchantBotRecoveryOwner(req, res, businessId))) return;
+      const payload = await buildMerchantBotRecoveryStatus(businessId);
+      if (payload == null) {
+        res.status(404).json({ error: "Магазин не найден" });
+        return;
+      }
+      res.json(payload);
+    } catch (e) {
+      console.error("POST /api/platform/merchant-bot-check:", e);
+      res.status(500).json({ error: "Ошибка сервера" });
+    }
+  },
+);
+
+app.post(
+  "/api/platform/merchant-bot-reconnect",
+  strictLimiter,
+  requireNonEmptyJsonBody,
+  async (req: Request, res: Response) => {
+    try {
+      const parsed = platformMerchantBotRecoveryBodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: formatZodApiError(parsed.error) });
+        return;
+      }
+      const { businessId } = parsed.data;
+      if (!(await requireMerchantBotRecoveryOwner(req, res, businessId))) return;
+      const out = await reconnectMerchantStoreBot(businessId);
+      if (!out.ok) {
+        res.status(out.statusCode).json({
+          error: out.error,
+          ...(out.status != null ? { status: out.status } : {}),
+        });
+        return;
+      }
+      res.json({ ok: true, status: out.status });
+    } catch (e) {
+      console.error("POST /api/platform/merchant-bot-reconnect:", e);
+      res.status(500).json({ error: "Ошибка сервера" });
+    }
+  },
+);
+
+app.post(
+  "/api/platform/merchant-bot-token",
+  strictLimiter,
+  requireNonEmptyJsonBody,
+  async (req: Request, res: Response) => {
+    try {
+      const telegramId = platformTelegramIdFromWebApp(req);
+      if (!telegramId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      const parsed = platformMerchantBotTokenBodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: formatZodApiError(parsed.error) });
+        return;
+      }
+      const { businessId, newBotToken } = parsed.data;
+      const out = await applyOwnerBotTokenSelfService({
+        businessId,
+        requesterTelegramId: telegramId,
+        newBotToken,
+      });
+      if (!out.ok) {
+        res.status(out.statusCode).json({ error: out.error });
+        return;
+      }
+      res.json({
+        ok: true,
+        botUsername: out.botUsername,
+        botStatus: out.botStatus,
+      });
+    } catch (e) {
+      console.error("POST /api/platform/merchant-bot-token:", e);
+      res.status(500).json({ error: "Ошибка сервера" });
+    }
+  },
+);
 
 app.post("/api/telemetry/client-error", async (req: Request, res: Response) => {
   try {
@@ -4691,10 +4853,18 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
   }
   const tenantBusinessId = probe.businessId;
 
+  await syncBusinessSubscriptionActivationState(tenantBusinessId);
   const biz = await prisma.business.findUnique({
     where: { id: tenantBusinessId },
+    select: {
+      ...businessSubscriptionGateSelect,
+      businessType: true,
+    },
   });
-  const businessType = (biz as any)?.businessType;
+  if (rejectUnlessCanAcceptCustomerOrders(res, biz)) {
+    return;
+  }
+  const businessType = biz!.businessType;
   if (typeof businessType !== "string" || businessType.trim() === "") {
     return res.status(500).json({ error: "Магазин без businessType" });
   }

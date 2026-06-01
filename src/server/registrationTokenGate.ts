@@ -39,16 +39,26 @@ export async function fetchTelegramBotGetMe(tokenTrimmed: string): Promise<{
 export async function botTokenBlockedForNewRegistration(
   tokenTrimmed: string,
 ): Promise<boolean> {
+  return botTokenUsedByOtherStore(tokenTrimmed, null);
+}
+
+/** Токен уже занят другим магазином, заявкой или pending сменой (кроме `exceptBusinessId`). */
+export async function botTokenUsedByOtherStore(
+  tokenTrimmed: string,
+  exceptBusinessId: number | null,
+): Promise<boolean> {
   const trimmed = tokenTrimmed.trim();
   const hash = hashBotTokenSha256Hex(trimmed);
-  const inBusiness =
-    hash !== ""
-      ? await prisma.business.findUnique({
-          where: { botTokenHash: hash },
-          select: { id: true },
-        })
-      : null;
-  if (inBusiness) return true;
+  if (hash !== "") {
+    const inBusiness = await prisma.business.findFirst({
+      where: {
+        botTokenHash: hash,
+        ...(exceptBusinessId != null ? { NOT: { id: exceptBusinessId } } : {}),
+      },
+      select: { id: true },
+    });
+    if (inBusiness) return true;
+  }
   const pendingReq = await prisma.registrationRequest.findFirst({
     where: {
       botToken: trimmed,
@@ -56,7 +66,17 @@ export async function botTokenBlockedForNewRegistration(
     },
     select: { id: true },
   });
-  return pendingReq != null;
+  if (pendingReq) return true;
+
+  const pendingChange = await prisma.merchantChangeRequest.findFirst({
+    where: {
+      newBotToken: trimmed,
+      status: "PENDING",
+      ...(exceptBusinessId != null ? { NOT: { businessId: exceptBusinessId } } : {}),
+    },
+    select: { id: true },
+  });
+  return pendingChange != null;
 }
 
 export type PrecheckBotRegistration =
@@ -81,4 +101,43 @@ export async function precheckBotTokenBeforeRegistrationPersist(
     return { ok: false, error: MSG_BOT_ALREADY_REGISTERED };
   }
   return { ok: true };
+}
+
+/**
+ * Проверки перед мгновенной сменой токена владельцем (формат, getMe, чужой магазин).
+ */
+export async function precheckBotTokenBeforeOwnerChange(
+  tokenRaw: string,
+  businessId: number,
+): Promise<
+  | { ok: true; username: string | null }
+  | { ok: false; error: string; statusCode: number }
+> {
+  if (!Number.isInteger(businessId) || businessId <= 0) {
+    return { ok: false, statusCode: 400, error: "Некорректный магазин" };
+  }
+  const tokenTrimmed = tokenRaw.replace(/\s/g, "").trim();
+  if (!isValidBotTokenShape(tokenTrimmed)) {
+    return {
+      ok: false,
+      statusCode: 400,
+      error: MSG_INVALID_BOT_TOKEN,
+    };
+  }
+  const me = await fetchTelegramBotGetMe(tokenTrimmed);
+  if (!me.ok) {
+    return {
+      ok: false,
+      statusCode: 400,
+      error: MSG_INVALID_BOT_TOKEN,
+    };
+  }
+  if (await botTokenUsedByOtherStore(tokenTrimmed, businessId)) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: MSG_BOT_ALREADY_REGISTERED,
+    };
+  }
+  return { ok: true, username: me.username };
 }

@@ -28,3 +28,8 @@ export function isValidFinikApiKey(raw: string): boolean {
   if (t.length < 4 || t.length > 2048) return false;
   return !/[\r\n\0]/.test(t);
 }
+
+/** Secret Finik (вебхук / API): те же ограничения, что у API key. */
+export function isValidFinikSecret(raw: string): boolean {
+  return isValidFinikApiKey(raw);
+}

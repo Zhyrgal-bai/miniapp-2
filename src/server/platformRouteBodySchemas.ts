@@ -74,6 +74,28 @@ export const platformCheckWebhookBodySchema = z.object({
   businessId: z.coerce.number().int().positive(),
 });
 
+export const platformMerchantBotRecoveryBodySchema = z.object({
+  businessId: z.coerce.number().int().positive(),
+});
+
+export const platformMerchantBotTokenBodySchema = z
+  .object({
+    businessId: z.coerce.number().int().positive(),
+    newBotToken: z
+      .string()
+      .transform((s) => s.replace(/\s/g, "").trim())
+      .pipe(z.string().min(1, "Укажите новый токен бота")),
+  })
+  .superRefine((val, ctx) => {
+    if (!isValidBotTokenShape(val.newBotToken)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Неверный формат botToken",
+        path: ["newBotToken"],
+      });
+    }
+  });
+
 export const platformToggleBotBodySchema = z.object({
   businessId: z.coerce.number().int().positive(),
   action: z.enum(["enable", "disable"]),

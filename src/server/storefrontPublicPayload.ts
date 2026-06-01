@@ -18,6 +18,7 @@ import {
 import { toPublicProduct } from "../shared/productDto.js";
 import { loadStockRowsByProductIds } from "./inventoryService.js";
 import { getFeaturedPromoForStorefront } from "./promoRepo.js";
+import { rejectUnlessCanAcceptCustomerOrders } from "./subscriptionCustomerGate.js";
 
 /** Public GET /api/storefront payload (shared by numeric id and slug routes). */
 export async function sendStorefrontPublicPayload(
@@ -47,10 +48,13 @@ export async function sendStorefrontPublicPayload(
       where: { id: businessId },
       select: {
         id: true,
-        name: true,
-        slug: true,
         isActive: true,
         isBlocked: true,
+        subscriptionStatus: true,
+        trialEndsAt: true,
+        subscriptionEndsAt: true,
+        name: true,
+        slug: true,
         businessType: true,
         templateId: true,
         themeConfig: true,
@@ -58,14 +62,9 @@ export async function sendStorefrontPublicPayload(
         storefrontPublishedConfig: true,
         storefrontConfigVersion: true,
         featureFlags: true,
-      } as any,
+      },
     });
-    if (!b) {
-      res.status(404).json({ error: API_ERR_BUSINESS_NOT_FOUND });
-      return;
-    }
-    if (!(b as any).isActive || (b as any).isBlocked) {
-      res.status(403).json({ error: API_ERR_STORE_UNAVAILABLE });
+    if (rejectUnlessCanAcceptCustomerOrders(res, b)) {
       return;
     }
 

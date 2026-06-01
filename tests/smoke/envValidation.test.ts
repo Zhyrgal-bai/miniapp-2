@@ -12,6 +12,7 @@ describe("production env validation", () => {
     process.env.OPERATOR_PASSWORD_HASH = "$2a$10$hash";
     process.env.SKIP_TELEGRAM_WEBAPP_AUTH = "1";
     process.env.TELEGRAM_INIT_DEBUG = "1";
+    process.env.FINIK_USE_MOCK = "1";
 
     const result = validateEnvironment();
     expect(result.ok).toBe(false);
@@ -19,6 +20,7 @@ describe("production env validation", () => {
     expect(result.errors.some((e) => e.includes("TELEGRAM_INIT_DEBUG"))).toBe(
       true,
     );
+    expect(result.errors.some((e) => e.includes("FINIK_USE_MOCK"))).toBe(true);
 
     Object.assign(process.env, prev);
   });
@@ -33,6 +35,7 @@ describe("production env validation", () => {
     process.env.OPERATOR_PASSWORD_HASH = "$2a$10$hash";
     delete process.env.SKIP_TELEGRAM_WEBAPP_AUTH;
     delete process.env.TELEGRAM_INIT_DEBUG;
+    delete process.env.FINIK_USE_MOCK;
 
     const result = validateEnvironment();
     expect(result.ok).toBe(true);

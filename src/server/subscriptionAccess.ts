@@ -1,4 +1,9 @@
 import { SubscriptionStatus } from "@prisma/client";
+import {
+  API_ERR_BUSINESS_NOT_FOUND,
+  API_ERR_STORE_SUBSCRIPTION_EXPIRED,
+  API_ERR_STORE_UNAVAILABLE,
+} from "../shared/apiClientMessages.js";
 
 /** Поля подписки для проверки доступа (без финансовых атрибутов витрины). */
 export type SubscriptionGateFields = {
@@ -8,6 +13,16 @@ export type SubscriptionGateFields = {
   trialEndsAt: Date | null;
   subscriptionEndsAt: Date | null;
 };
+
+/** Prisma select для проверок витрины / каталога / checkout. */
+export const businessSubscriptionGateSelect = {
+  id: true,
+  isActive: true,
+  isBlocked: true,
+  subscriptionStatus: true,
+  trialEndsAt: true,
+  subscriptionEndsAt: true,
+} as const;
 
 /**
  * Есть действующее оплатное окно или действующий trial (без учёта флагов isActive / isBlocked).
@@ -41,6 +56,29 @@ export function hasValidPaidOrTrialWindow(
   }
 }
 
+/**
+ * Магазин принимает заказы и открыт для покупателей (витрина, каталог, checkout).
+ */
+export function canAcceptCustomerOrders(
+  b: SubscriptionGateFields,
+  now = new Date(),
+): boolean {
+  return customerOrdersRejectionReason(b, now) === null;
+}
+
+/** Сообщение для 403/404 или null, если покупательские операции разрешены. */
+export function customerOrdersRejectionReason(
+  b: SubscriptionGateFields | null | undefined,
+  now = new Date(),
+): string | null {
+  if (b == null) return API_ERR_BUSINESS_NOT_FOUND;
+  if (b.isBlocked || !b.isActive) return API_ERR_STORE_UNAVAILABLE;
+  if (!hasValidPaidOrTrialWindow(b, now)) {
+    return API_ERR_STORE_SUBSCRIPTION_EXPIRED;
+  }
+  return null;
+}
+
 /** Магазин может работать для клиентов: не заблокирован, витрина включена, есть оплата/trial по срокам. */
 export function isSubscriptionActive(
   b: SubscriptionGateFields,
@@ -61,12 +99,11 @@ export function merchantStoreEntitled(
 }
 
 /**
- * Для клиента Mini App (?shop=/каталог): витрина «закрыта» только по флагам.
- * Истечение подписки не отключает публичный каталог/`/api/me` — это слой платформы/мерчанта отдельно.
+ * @deprecated Используйте !canAcceptCustomerOrders(b) с полями подписки.
  */
-export function isStorefrontClosedForCustomers(b: {
-  isActive: boolean;
-  isBlocked: boolean;
-}): boolean {
-  return b.isBlocked || !b.isActive;
+export function isStorefrontClosedForCustomers(
+  b: SubscriptionGateFields,
+  now = new Date(),
+): boolean {
+  return !canAcceptCustomerOrders(b, now);
 }

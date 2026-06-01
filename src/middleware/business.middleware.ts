@@ -6,7 +6,8 @@ import { resolveBusinessStaffRecord } from "../server/businessStaffBackfill.js";
 import {
   type SubscriptionGateFields,
   isSubscriptionActive,
-  isStorefrontClosedForCustomers,
+  canAcceptCustomerOrders,
+  customerOrdersRejectionReason,
 } from "../server/subscriptionAccess.js";
 import { verifiedTelegramIdFromRequest } from "./verifiedTelegramAuth.js";
 import { acceptPendingStaffInvitesForUser } from "../server/businessStaffService.js";
@@ -137,11 +138,6 @@ export async function businessMiddleware(
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
-      if (isStorefrontClosedForCustomers(business)) {
-        res.status(403).json({ error: API_ERR_STORE_UNAVAILABLE });
-        return;
-      }
-
       let userRow = await prisma.user.findUnique({ where: { telegramId } });
 
       const initDataRaw = trimmedHeader(req, "x-telegram-init-data");
@@ -167,6 +163,17 @@ export async function businessMiddleware(
         userRow == null
           ? null
           : await resolveBusinessStaffRecord(hinted, userRow.id);
+
+      if (
+        !canAcceptCustomerOrders(business) &&
+        staffRow == null
+      ) {
+        const err =
+          customerOrdersRejectionReason(business) ??
+          API_ERR_STORE_UNAVAILABLE;
+        res.status(403).json({ error: err });
+        return;
+      }
 
       req.businessId = hinted;
       req.tenantBusiness = business;
@@ -210,8 +217,10 @@ export async function businessMiddleware(
       res.status(401).json({ error: "Unauthorized" });
       return;
     }
-    if (isStorefrontClosedForCustomers(business)) {
-      res.status(403).json({ error: API_ERR_STORE_UNAVAILABLE });
+    if (!canAcceptCustomerOrders(business) && staff == null) {
+      const err =
+        customerOrdersRejectionReason(business) ?? API_ERR_STORE_UNAVAILABLE;
+      res.status(403).json({ error: err });
       return;
     }
 

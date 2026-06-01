@@ -1,22 +1,39 @@
 import { prisma } from "./db.js";
 import { merchantStoreEntitled } from "./subscriptionAccess.js";
-import { isValidFinikApiKey } from "../bot/saasRegistrationValidation.js";
+import {
+  isValidFinikApiKey,
+  isValidFinikSecret,
+} from "../bot/saasRegistrationValidation.js";
+import {
+  buildFinikWebhookUrl,
+  finikHasApiKey,
+  finikHasSecret,
+  isFinikCredentialsReady,
+} from "../shared/finikReady.js";
+import { publicApiOrigin } from "./finikMerchant.js";
 import { validateMerchantConfig } from "./templateValidation.js";
 import { platformMerchantCanAccessStoreSettings } from "./platformMerchantAccess.js";
 import { isPlatformAdminTelegramId } from "./platformAdminService.js";
 import { templateForBusinessType } from "../templates/index.js";
 import {
+  applyOwnerBotTokenSelfService,
   createMerchantBotTokenChangeRequest,
   MERCHANT_CHANGE_STATUS_PENDING,
   MERCHANT_CHANGE_TYPE_BOT_TOKEN,
 } from "./platformMerchantChangeService.js";
+import { platformMerchantIsStoreOwner } from "./platformMerchantAccess.js";
 import { PLATFORM_STORE_NAME_MAX, PLATFORM_STORE_NAME_MIN } from "./platformRegisterRequest.js";
 import { cleanInput } from "./orderInputSanitize.js";
 
 export type PlatformStoreSettingsDTO = {
   businessId: number;
   name: string;
+  /** @deprecated Используйте finikReady — оставлено для совместимости. */
   finikConfigured: boolean;
+  finikReady: boolean;
+  finikHasApiKey: boolean;
+  finikHasSecret: boolean;
+  finikWebhookUrl: string | null;
   pendingBotTokenChange: boolean;
   businessType: string;
   merchantConfig: Record<string, unknown>;
@@ -47,6 +64,7 @@ export async function getPlatformStoreSettingsForMerchant(input: {
       id: true,
       name: true,
       finikApiKey: true,
+      finikSecret: true,
       businessType: true,
       merchantConfig: true,
       subscriptionStatus: true,
@@ -67,15 +85,19 @@ export async function getPlatformStoreSettingsForMerchant(input: {
     select: { id: true },
   });
 
-  const finikConfigured =
-    typeof b.finikApiKey === "string" && b.finikApiKey.trim().length > 0;
+  const ready = isFinikCredentialsReady(b.finikApiKey, b.finikSecret);
+  const origin = publicApiOrigin();
 
   return {
     ok: true,
     settings: {
       businessId: b.id,
       name: b.name,
-      finikConfigured,
+      finikConfigured: ready,
+      finikReady: ready,
+      finikHasApiKey: finikHasApiKey(b.finikApiKey),
+      finikHasSecret: finikHasSecret(b.finikSecret),
+      finikWebhookUrl: buildFinikWebhookUrl(origin, b.id),
       pendingBotTokenChange: pending != null,
       businessType: String((b as any).businessType ?? ""),
       merchantConfig:
@@ -121,6 +143,8 @@ export async function updatePlatformStoreSettingsForMerchant(input: {
       finikConfigured: boolean;
       pendingBotTokenChange: boolean;
       botTokenChangeRequestId?: number;
+      botTokenApplied?: boolean;
+      botUsername?: string | null;
     }
   | { ok: false; statusCode: number; error: string }
 > {
@@ -195,7 +219,7 @@ export async function updatePlatformStoreSettingsForMerchant(input: {
     if (finikRaw.trim() === "") {
       await prisma.business.update({
         where: { id: input.businessId },
-        data: { finikApiKey: null },
+        data: { finikApiKey: null, finikSecret: null },
       });
       await prisma.settings.updateMany({
         where: { businessId: input.businessId },
@@ -210,6 +234,18 @@ export async function updatePlatformStoreSettingsForMerchant(input: {
         };
       }
       const trimmed = finikRaw.trim();
+      const existing = await prisma.business.findUnique({
+        where: { id: input.businessId },
+        select: { finikSecret: true },
+      });
+      if (!finikHasSecret(existing?.finikSecret)) {
+        return {
+          ok: false,
+          statusCode: 400,
+          error:
+            "Укажите Finik Secret в кабинете (/merchant → Finik). Одного API Key недостаточно.",
+        };
+      }
       await prisma.business.update({
         where: { id: input.businessId },
         data: { finikApiKey: trimmed },
@@ -245,18 +281,41 @@ export async function updatePlatformStoreSettingsForMerchant(input: {
   }
 
   let botTokenChangeRequestId: number | undefined;
+  let botTokenApplied = false;
+  let botUsername: string | null | undefined;
   if (hasTok) {
     const tok =
       typeof rawTok === "string" ? rawTok.replace(/\s/g, "").trim() : "";
-    const cr = await createMerchantBotTokenChangeRequest({
-      businessId: input.businessId,
-      requesterTelegramId: input.telegramId,
-      newBotToken: tok,
-    });
-    if (!cr.ok) {
-      return { ok: false, statusCode: cr.statusCode, error: cr.error };
+    const isOwner = await platformMerchantIsStoreOwner(
+      input.telegramId,
+      input.businessId,
+    );
+    if (isOwner && !isAdmin) {
+      const applied = await applyOwnerBotTokenSelfService({
+        businessId: input.businessId,
+        requesterTelegramId: input.telegramId,
+        newBotToken: tok,
+      });
+      if (!applied.ok) {
+        return {
+          ok: false,
+          statusCode: applied.statusCode,
+          error: applied.error,
+        };
+      }
+      botTokenApplied = true;
+      botUsername = applied.botUsername;
+    } else {
+      const cr = await createMerchantBotTokenChangeRequest({
+        businessId: input.businessId,
+        requesterTelegramId: input.telegramId,
+        newBotToken: tok,
+      });
+      if (!cr.ok) {
+        return { ok: false, statusCode: cr.statusCode, error: cr.error };
+      }
+      botTokenChangeRequestId = cr.id;
     }
-    botTokenChangeRequestId = cr.id;
   }
 
   const snap = await getPlatformStoreSettingsForMerchant({
@@ -273,16 +332,25 @@ export async function updatePlatformStoreSettingsForMerchant(input: {
     finikConfigured: snap.settings.finikConfigured,
     pendingBotTokenChange: snap.settings.pendingBotTokenChange,
     ...(botTokenChangeRequestId != null ? { botTokenChangeRequestId } : {}),
+    ...(botTokenApplied ? { botTokenApplied: true, botUsername: botUsername ?? null } : {}),
   };
 }
 
-/** Сохранение ключа Finik отдельно от остальных настроек (ключ не отдаём клиенту). */
-export async function updatePlatformFinikForMerchant(input: {
+/** Сохранение Finik API Key + Secret (значения не отдаём клиенту после сохранения). */
+export async function savePlatformFinikForMerchant(input: {
   telegramId: string;
   businessId: number;
-  finikApiKey: unknown;
+  finikApiKey?: unknown;
+  finikSecret?: unknown;
 }): Promise<
-  | { ok: true; finikConfigured: boolean }
+  | {
+      ok: true;
+      finikConfigured: boolean;
+      finikReady: boolean;
+      finikHasApiKey: boolean;
+      finikHasSecret: boolean;
+      finikWebhookUrl: string | null;
+    }
   | { ok: false; statusCode: number; error: string }
 > {
   const allowed = await platformMerchantCanAccessStoreSettings(
@@ -310,30 +378,96 @@ export async function updatePlatformFinikForMerchant(input: {
     }
   }
 
-  const raw = input.finikApiKey;
-  const finikRaw = typeof raw === "string" ? raw : "";
+  const keyProvided = input.finikApiKey !== undefined;
+  const secretProvided = input.finikSecret !== undefined;
+  if (!keyProvided && !secretProvided) {
+    return {
+      ok: false,
+      statusCode: 400,
+      error: "Укажите finikApiKey и/или finikSecret",
+    };
+  }
 
-  if (finikRaw.trim() === "") {
+  const existing = await prisma.business.findUnique({
+    where: { id: input.businessId },
+    select: { finikApiKey: true, finikSecret: true },
+  });
+  if (existing == null) {
+    return { ok: false, statusCode: 404, error: "Магазин не найден" };
+  }
+
+  const keyRaw = keyProvided
+    ? typeof input.finikApiKey === "string"
+      ? input.finikApiKey.trim()
+      : ""
+    : null;
+  const secretRaw = secretProvided
+    ? typeof input.finikSecret === "string"
+      ? input.finikSecret.trim()
+      : ""
+    : null;
+
+  const disconnect =
+    keyProvided &&
+    keyRaw === "" &&
+    (!secretProvided || secretRaw === "");
+
+  if (disconnect) {
     await prisma.business.update({
       where: { id: input.businessId },
-      data: { finikApiKey: null },
+      data: { finikApiKey: null, finikSecret: null },
     });
     await prisma.settings.updateMany({
       where: { businessId: input.businessId },
       data: { paymentProvider: null },
     });
   } else {
-    if (!isValidFinikApiKey(finikRaw)) {
+    let nextKey = existing.finikApiKey;
+    let nextSecret = existing.finikSecret;
+
+    if (keyProvided && keyRaw != null && keyRaw !== "") {
+      if (!isValidFinikApiKey(keyRaw)) {
+        return {
+          ok: false,
+          statusCode: 400,
+          error: "Некорректный API-ключ Finik",
+        };
+      }
+      nextKey = keyRaw;
+    }
+
+    if (secretProvided && secretRaw != null && secretRaw !== "") {
+      if (!isValidFinikSecret(secretRaw)) {
+        return {
+          ok: false,
+          statusCode: 400,
+          error: "Некорректный Finik Secret",
+        };
+      }
+      nextSecret = secretRaw;
+    }
+
+    if (!finikHasApiKey(nextKey)) {
       return {
         ok: false,
         statusCode: 400,
-        error: "Некорректный API-ключ Finik",
+        error: "Укажите API Key Finik",
       };
     }
-    const trimmed = finikRaw.trim();
+    if (!finikHasSecret(nextSecret)) {
+      return {
+        ok: false,
+        statusCode: 400,
+        error: "Укажите Secret Finik — без него оплата заказов не работает",
+      };
+    }
+
     await prisma.business.update({
       where: { id: input.businessId },
-      data: { finikApiKey: trimmed },
+      data: {
+        finikApiKey: nextKey,
+        finikSecret: nextSecret,
+      },
     });
     await prisma.settings.upsert({
       where: { businessId: input.businessId },
@@ -352,5 +486,33 @@ export async function updatePlatformFinikForMerchant(input: {
   if (!snap.ok) {
     return { ok: false, statusCode: snap.statusCode, error: snap.error };
   }
-  return { ok: true, finikConfigured: snap.settings.finikConfigured };
+  const s = snap.settings;
+  return {
+    ok: true,
+    finikConfigured: s.finikReady,
+    finikReady: s.finikReady,
+    finikHasApiKey: s.finikHasApiKey,
+    finikHasSecret: s.finikHasSecret,
+    finikWebhookUrl: s.finikWebhookUrl,
+  };
+}
+
+/** @deprecated Используйте savePlatformFinikForMerchant */
+export async function updatePlatformFinikForMerchant(input: {
+  telegramId: string;
+  businessId: number;
+  finikApiKey: unknown;
+}): Promise<
+  | { ok: true; finikConfigured: boolean }
+  | { ok: false; statusCode: number; error: string }
+> {
+  const raw = typeof input.finikApiKey === "string" ? input.finikApiKey : "";
+  const out = await savePlatformFinikForMerchant({
+    telegramId: input.telegramId,
+    businessId: input.businessId,
+    finikApiKey: raw,
+    ...(raw.trim() === "" ? { finikSecret: "" } : {}),
+  });
+  if (!out.ok) return out;
+  return { ok: true, finikConfigured: out.finikConfigured };
 }

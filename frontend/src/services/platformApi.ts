@@ -155,18 +155,12 @@ export async function postOperatorReauth(
   });
 }
 
-export type PlatformSubscriptionPaymentResult =
-  | {
-      finikConfigured: false;
-      useManualPaymentRequest: true;
-      message: string;
-    }
-  | {
-      paymentUrl: string;
-      subscriptionPaymentId: number;
-      planDays: 30 | 90;
-      amountSom: number;
-    };
+export type PlatformSubscriptionPaymentResult = {
+  paymentUrl: string;
+  subscriptionPaymentId: number;
+  planDays: 30 | 90;
+  amountSom: number;
+};
 
 export async function postPlatformSubscriptionPaymentCreate(params: {
   telegramId: number;
@@ -176,9 +170,6 @@ export async function postPlatformSubscriptionPaymentCreate(params: {
   void params.telegramId;
   const j = await adminFetchJson<{
     error?: string;
-    finikConfigured?: boolean;
-    useManualPaymentRequest?: boolean;
-    message?: string;
     paymentUrl?: string;
     subscriptionPaymentId?: number;
     planDays?: number;
@@ -191,17 +182,6 @@ export async function postPlatformSubscriptionPaymentCreate(params: {
       plan: params.plan,
     }),
   });
-  if (
-    j.finikConfigured === false &&
-    j.useManualPaymentRequest === true &&
-    typeof j.message === "string"
-  ) {
-    return {
-      finikConfigured: false,
-      useManualPaymentRequest: true,
-      message: j.message,
-    };
-  }
   if (
     typeof j.paymentUrl === "string" &&
     j.paymentUrl.trim() !== "" &&
@@ -219,10 +199,60 @@ export async function postPlatformSubscriptionPaymentCreate(params: {
   throw new Error(j.error ?? "Некорректный ответ сервера");
 }
 
+export type MerchantSubscriptionUiStatus = "ACTIVE" | "TRIAL" | "EXPIRED";
+
+export type MerchantSubscriptionPanelPayload = {
+  businessId: number;
+  displayStatus: MerchantSubscriptionUiStatus;
+  displayStatusLabel: string;
+  subscriptionStatus: string;
+  trialEndsAt: string | null;
+  subscriptionEndsAt: string | null;
+  daysLeft: number | null;
+  storeOpenForCustomers: boolean;
+  isBlocked: boolean;
+  isActive: boolean;
+  platformFinikReady: boolean;
+  canPay: boolean;
+  isOwner: boolean;
+  plans: Array<{
+    days: 30 | 90;
+    title: string;
+    subtitle: string;
+    amountSom: number;
+    badge?: string;
+    featured?: boolean;
+  }>;
+};
+
+export async function fetchMerchantSubscriptionPanel(
+  businessId: number,
+): Promise<MerchantSubscriptionPanelPayload> {
+  const url = new URL(apiAbsoluteUrl("/api/platform/subscription"));
+  url.searchParams.set("businessId", String(businessId));
+  const j = await adminFetchJson<MerchantSubscriptionPanelPayload>(
+    url.toString(),
+    { method: "GET", businessId, json: false },
+  );
+  if (
+    typeof j.businessId !== "number" ||
+    (j.displayStatus !== "ACTIVE" &&
+      j.displayStatus !== "TRIAL" &&
+      j.displayStatus !== "EXPIRED")
+  ) {
+    throw new Error("Некорректный ответ сервера");
+  }
+  return j;
+}
+
 export type PlatformStoreSettingsDTO = {
   businessId: number;
   name: string;
   finikConfigured: boolean;
+  finikReady: boolean;
+  finikHasApiKey: boolean;
+  finikHasSecret: boolean;
+  finikWebhookUrl: string | null;
   pendingBotTokenChange: boolean;
   businessType: string;
   merchantConfig: Record<string, unknown>;
@@ -245,6 +275,10 @@ export async function fetchPlatformStoreSettings(params: {
     businessId?: number;
     name?: string;
     finikConfigured?: boolean;
+    finikReady?: boolean;
+    finikHasApiKey?: boolean;
+    finikHasSecret?: boolean;
+    finikWebhookUrl?: string | null;
     pendingBotTokenChange?: boolean;
     businessType?: unknown;
     merchantConfig?: unknown;
@@ -263,10 +297,21 @@ export async function fetchPlatformStoreSettings(params: {
   if (bid <= 0) {
     throw new Error("Некорректный ответ сервера");
   }
+  const finikReady =
+    typeof j.finikReady === "boolean"
+      ? j.finikReady
+      : Boolean(j.finikConfigured);
   return {
     businessId: bid,
     name: String(j.name ?? ""),
-    finikConfigured: Boolean(j.finikConfigured),
+    finikConfigured: finikReady,
+    finikReady,
+    finikHasApiKey: Boolean(j.finikHasApiKey ?? finikReady),
+    finikHasSecret: Boolean(j.finikHasSecret ?? finikReady),
+    finikWebhookUrl:
+      typeof j.finikWebhookUrl === "string" && j.finikWebhookUrl.trim() !== ""
+        ? j.finikWebhookUrl.trim()
+        : null,
     pendingBotTokenChange: Boolean(j.pendingBotTokenChange),
     businessType: typeof j.businessType === "string" ? j.businessType : "",
     merchantConfig:
@@ -300,7 +345,50 @@ export type PlatformStoreSettingsSaveResult = {
   finikConfigured: boolean;
   pendingBotTokenChange: boolean;
   botTokenChangeRequestId?: number;
+  botTokenApplied?: boolean;
+  botUsername?: string | null;
 };
+
+export type MerchantBotTokenApplyResult = {
+  ok: true;
+  botUsername: string | null;
+  botStatus: MerchantBotRecoveryPayload | null;
+};
+
+export async function postMerchantBotToken(payload: {
+  telegramId: number;
+  businessId: number;
+  newBotToken: string;
+}): Promise<MerchantBotTokenApplyResult> {
+  void payload.telegramId;
+  const j = await adminFetchJson<{
+    ok?: boolean;
+    error?: string;
+    botUsername?: string | null;
+    botStatus?: unknown;
+  }>(apiAbsoluteUrl("/api/platform/merchant-bot-token"), {
+    method: "POST",
+    businessId: payload.businessId,
+    body: JSON.stringify({
+      businessId: payload.businessId,
+      newBotToken: payload.newBotToken,
+    }),
+  });
+  if (j.ok !== true) {
+    throw new Error(
+      typeof j.error === "string" && j.error.trim() !== ""
+        ? j.error
+        : "Не удалось сохранить токен",
+    );
+  }
+  const botStatus = parseMerchantBotRecoveryPayload(j.botStatus);
+  return {
+    ok: true,
+    botUsername:
+      typeof j.botUsername === "string" ? j.botUsername.trim() || null : null,
+    botStatus,
+  };
+}
 
 export async function savePlatformStoreSettings(payload: {
   telegramId: number;
@@ -323,8 +411,14 @@ export async function savePlatformStoreSettings(payload: {
     ok?: boolean;
     name?: string;
     finikConfigured?: boolean;
+    finikReady?: boolean;
+    finikHasApiKey?: boolean;
+    finikHasSecret?: boolean;
+    finikWebhookUrl?: string | null;
     pendingBotTokenChange?: boolean;
     botTokenChangeRequestId?: number;
+    botTokenApplied?: boolean;
+    botUsername?: string | null;
   }>(apiAbsoluteUrl("/api/platform/store-settings"), {
     method: "POST",
     businessId: payload.businessId,
@@ -341,31 +435,67 @@ export async function savePlatformStoreSettings(payload: {
     ...(typeof j.botTokenChangeRequestId === "number"
       ? { botTokenChangeRequestId: j.botTokenChangeRequestId }
       : {}),
+    ...(j.botTokenApplied === true
+      ? {
+          botTokenApplied: true,
+          botUsername:
+            typeof j.botUsername === "string" ? j.botUsername.trim() || null : null,
+        }
+      : {}),
   };
 }
+
+export type PlatformFinikSaveResult = {
+  ok: true;
+  finikConfigured: boolean;
+  finikReady: boolean;
+  finikHasApiKey: boolean;
+  finikHasSecret: boolean;
+  finikWebhookUrl: string | null;
+};
 
 export async function postPlatformUpdateFinik(payload: {
   telegramId: number;
   businessId: number;
   finikApiKey: string;
-}): Promise<{ ok: true; finikConfigured: boolean }> {
+  finikSecret: string;
+}): Promise<PlatformFinikSaveResult> {
   void payload.telegramId;
   const j = await adminFetchJson<{
     error?: string;
     ok?: boolean;
     finikConfigured?: boolean;
+    finikReady?: boolean;
+    finikHasApiKey?: boolean;
+    finikHasSecret?: boolean;
+    finikWebhookUrl?: string | null;
   }>(apiAbsoluteUrl("/api/platform/update-finik"), {
     method: "POST",
     businessId: payload.businessId,
     body: JSON.stringify({
       businessId: payload.businessId,
       finikApiKey: payload.finikApiKey,
+      finikSecret: payload.finikSecret,
     }),
   });
   if (j.ok !== true) {
     throw new Error(j.error ?? "Некорректный ответ сервера");
   }
-  return { ok: true, finikConfigured: Boolean(j.finikConfigured) };
+  const finikReady =
+    typeof j.finikReady === "boolean"
+      ? j.finikReady
+      : Boolean(j.finikConfigured);
+  return {
+    ok: true,
+    finikConfigured: finikReady,
+    finikReady,
+    finikHasApiKey: Boolean(j.finikHasApiKey),
+    finikHasSecret: Boolean(j.finikHasSecret),
+    finikWebhookUrl:
+      typeof j.finikWebhookUrl === "string" && j.finikWebhookUrl.trim() !== ""
+        ? j.finikWebhookUrl.trim()
+        : null,
+  };
 }
 
 export async function submitPlatformRegisterRequest(payload: {
@@ -458,6 +588,29 @@ export async function postPlatformToggleBot(params: {
   return { ok: j.ok, isActive: j.isActive };
 }
 
+export type LaunchWizardStepId =
+  | "subscription"
+  | "telegram_bot"
+  | "finik"
+  | "product"
+  | "storefront"
+  | "test_order";
+
+export type LaunchWizardStep = {
+  id: LaunchWizardStepId;
+  label: string;
+  done: boolean;
+  hint: string;
+};
+
+export type LaunchWizardPayload = {
+  complete: boolean;
+  completedCount: number;
+  totalSteps: number;
+  currentStepIndex: number;
+  steps: LaunchWizardStep[];
+};
+
 export type StoreReadinessPayload = {
   score: number;
   maxScore: number;
@@ -469,18 +622,191 @@ export type StoreReadinessPayload = {
     href?: string;
   }>;
   recommendations: string[];
+  launchWizard?: LaunchWizardPayload;
 };
+
+function parseLaunchWizard(raw: unknown): LaunchWizardPayload | undefined {
+  if (raw == null || typeof raw !== "object") return undefined;
+  const w = raw as Record<string, unknown>;
+  const stepsRaw = w.steps;
+  if (!Array.isArray(stepsRaw)) return undefined;
+  const ids = new Set<LaunchWizardStepId>([
+    "subscription",
+    "telegram_bot",
+    "finik",
+    "product",
+    "storefront",
+    "test_order",
+  ]);
+  const steps: LaunchWizardStep[] = [];
+  for (const row of stepsRaw) {
+    if (row == null || typeof row !== "object") continue;
+    const r = row as Record<string, unknown>;
+    const id = r.id;
+    if (typeof id !== "string" || !ids.has(id as LaunchWizardStepId)) continue;
+    steps.push({
+      id: id as LaunchWizardStepId,
+      label: typeof r.label === "string" ? r.label : "",
+      done: Boolean(r.done),
+      hint: typeof r.hint === "string" ? r.hint : "",
+    });
+  }
+  if (steps.length === 0) return undefined;
+  const completedCount =
+    typeof w.completedCount === "number"
+      ? w.completedCount
+      : steps.filter((s) => s.done).length;
+  const totalSteps =
+    typeof w.totalSteps === "number" ? w.totalSteps : steps.length;
+  const currentStepIndex =
+    typeof w.currentStepIndex === "number"
+      ? w.currentStepIndex
+      : steps.findIndex((s) => !s.done);
+  return {
+    complete: Boolean(w.complete),
+    completedCount,
+    totalSteps,
+    currentStepIndex,
+    steps,
+  };
+}
+
+export type MerchantBotStatusCode =
+  | "connected"
+  | "webhook_error"
+  | "token_error"
+  | "not_configured";
+
+export type MerchantBotRecoveryPayload = {
+  status: MerchantBotStatusCode;
+  label: string;
+  detail: string | null;
+  webhookUrl: string | null;
+  botUsername: string | null;
+  isActive: boolean;
+  isBlocked: boolean;
+  botInMemory: boolean;
+  publicApiConfigured: boolean;
+};
+
+function parseMerchantBotRecoveryPayload(
+  raw: unknown,
+): MerchantBotRecoveryPayload | null {
+  if (raw == null || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const status = r.status;
+  const codes: MerchantBotStatusCode[] = [
+    "connected",
+    "webhook_error",
+    "token_error",
+    "not_configured",
+  ];
+  if (typeof status !== "string" || !codes.includes(status as MerchantBotStatusCode)) {
+    return null;
+  }
+  return {
+    status: status as MerchantBotStatusCode,
+    label: typeof r.label === "string" ? r.label : "",
+    detail:
+      typeof r.detail === "string" && r.detail.trim() !== ""
+        ? r.detail.trim()
+        : null,
+    webhookUrl:
+      typeof r.webhookUrl === "string" && r.webhookUrl.trim() !== ""
+        ? r.webhookUrl.trim()
+        : null,
+    botUsername:
+      typeof r.botUsername === "string" && r.botUsername.trim() !== ""
+        ? r.botUsername.trim()
+        : null,
+    isActive: Boolean(r.isActive),
+    isBlocked: Boolean(r.isBlocked),
+    botInMemory: Boolean(r.botInMemory),
+    publicApiConfigured: Boolean(r.publicApiConfigured),
+  };
+}
+
+export async function fetchMerchantBotStatus(
+  businessId: number,
+): Promise<MerchantBotRecoveryPayload> {
+  const url = new URL(apiAbsoluteUrl("/api/platform/merchant-bot-status"));
+  url.searchParams.set("businessId", String(businessId));
+  const j = await adminFetchJson<unknown>(url.toString(), {
+    method: "GET",
+    businessId,
+    json: false,
+  });
+  const parsed = parseMerchantBotRecoveryPayload(j);
+  if (parsed == null) {
+    throw new Error("Некорректный ответ сервера");
+  }
+  return parsed;
+}
+
+export async function postMerchantBotCheck(
+  businessId: number,
+): Promise<MerchantBotRecoveryPayload> {
+  const j = await adminFetchJson<unknown>(
+    apiAbsoluteUrl("/api/platform/merchant-bot-check"),
+    {
+      method: "POST",
+      businessId,
+      body: JSON.stringify({ businessId }),
+    },
+  );
+  const parsed = parseMerchantBotRecoveryPayload(j);
+  if (parsed == null) {
+    throw new Error("Некорректный ответ сервера");
+  }
+  return parsed;
+}
+
+export async function postMerchantBotReconnect(
+  businessId: number,
+): Promise<MerchantBotRecoveryPayload> {
+  const j = await adminFetchJson<{ ok?: boolean; status?: unknown; error?: string }>(
+    apiAbsoluteUrl("/api/platform/merchant-bot-reconnect"),
+    {
+      method: "POST",
+      businessId,
+      body: JSON.stringify({ businessId }),
+    },
+  );
+  if (j.ok !== true) {
+    throw new Error(
+      typeof j.error === "string" && j.error.trim() !== ""
+        ? j.error
+        : "Не удалось переподключить бота",
+    );
+  }
+  const parsed = parseMerchantBotRecoveryPayload(j.status);
+  if (parsed == null) {
+    throw new Error("Некорректный ответ сервера");
+  }
+  return parsed;
+}
 
 export async function fetchStoreReadiness(
   businessId: number,
 ): Promise<StoreReadinessPayload> {
   const url = new URL(apiAbsoluteUrl("/api/platform/store-readiness"));
   url.searchParams.set("businessId", String(businessId));
-  return adminFetchJson<StoreReadinessPayload>(url.toString(), {
-    method: "GET",
-    businessId,
-    json: false,
-  });
+  const j = await adminFetchJson<StoreReadinessPayload & { launchWizard?: unknown }>(
+    url.toString(),
+    {
+      method: "GET",
+      businessId,
+      json: false,
+    },
+  );
+  const launchWizard = parseLaunchWizard(j.launchWizard);
+  return {
+    score: typeof j.score === "number" ? j.score : 0,
+    maxScore: typeof j.maxScore === "number" ? j.maxScore : 0,
+    checklist: Array.isArray(j.checklist) ? j.checklist : [],
+    recommendations: Array.isArray(j.recommendations) ? j.recommendations : [],
+    ...(launchWizard != null ? { launchWizard } : {}),
+  };
 }
 
 export async function postPlatformFeedback(input: {

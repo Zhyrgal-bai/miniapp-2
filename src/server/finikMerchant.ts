@@ -10,6 +10,12 @@ import {
   isFinikWebhookReplay,
 } from "./finikWebhookCrypto.js";
 import { correlationIdFromRequest } from "../middleware/correlationId.js";
+import {
+  buildFinikWebhookUrl,
+  isFinikCredentialsReady,
+  isFinikUseMockEnabled,
+} from "../shared/finikReady.js";
+import { getPlatformFinikCredentials } from "../shared/platformFinik.js";
 
 /** Base URL для REST Finik (укажите реальный домен вашего аккаунта разработчика). */
 function finikApiBase(): string {
@@ -221,6 +227,93 @@ export async function createFinikSaasSubscriptionSession(
     return { ok: true, paymentId, paymentUrl };
   } catch (e) {
     console.error("Finik subscription payment fetch:", e);
+    return { ok: false, error: "Ошибка сети при обращении к Finik" };
+  }
+}
+
+/**
+ * Платёж за SaaS-подписку через Finik **платформы** (не магазина).
+ * Webhook: `POST /api/platform/subscription-finik-webhook`.
+ */
+export async function createFinikPlatformSubscriptionSession(input: {
+  subscriptionPaymentRowId: number;
+  amountSom: number;
+  currency?: string;
+}): Promise<
+  | { ok: true; paymentId: string; paymentUrl: string }
+  | { ok: false; error: string }
+> {
+  const platform = getPlatformFinikCredentials();
+  const useMock =
+    isFinikUseMockEnabled() || platform == null;
+
+  if (useMock) {
+    const paymentId = `finik_platform_sub_${Date.now()}_${input.subscriptionPaymentRowId}`;
+    const paymentUrl = `https://pay.finik.kg/?amount=${input.amountSom}&orderId=${encodeURIComponent(paymentId)}`;
+    return { ok: true, paymentId, paymentUrl };
+  }
+
+  const origin = publicApiOrigin();
+  if (!origin) {
+    return {
+      ok: false,
+      error: "Сервер: задайте API_URL (публичный URL) для callback Finik",
+    };
+  }
+
+  const callbackUrl = `${origin}/api/platform/subscription-finik-webhook`;
+  const ext = `saas_sub:${input.subscriptionPaymentRowId}`;
+
+  const url = `${finikApiBase()}${finikCreatePaymentsPath()}`;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${platform.apiKey}`,
+        "X-Api-Secret": platform.secret,
+      },
+      body: JSON.stringify({
+        amount: input.amountSom,
+        currency: input.currency ?? "KGS",
+        order_id: ext,
+        external_id: ext,
+        callback_url: callbackUrl,
+        return_url: callbackUrl,
+      }),
+    });
+
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) {
+      console.error("Finik platform subscription HTTP", res.status, json);
+      return {
+        ok: false,
+        error: "Finik платформы отклонил запрос (проверьте PLATFORM_FINIK_* на сервере)",
+      };
+    }
+
+    const paymentId =
+      (typeof json.payment_id === "string" && json.payment_id) ||
+      (typeof json.id === "string" && json.id) ||
+      (typeof json.paymentId === "string" && json.paymentId) ||
+      "";
+    const paymentUrl =
+      (typeof json.payment_url === "string" && json.payment_url) ||
+      (typeof json.url === "string" && json.url) ||
+      (typeof json.checkout_url === "string" && json.checkout_url) ||
+      "";
+
+    if (!paymentId || !paymentUrl) {
+      console.error("Finik platform subscription: unexpected body", json);
+      return {
+        ok: false,
+        error: "Finik: неверный ответ API (ожидаются payment id и url)",
+      };
+    }
+
+    return { ok: true, paymentId, paymentUrl };
+  } catch (e) {
+    console.error("Finik platform subscription fetch:", e);
     return { ok: false, error: "Ошибка сети при обращении к Finik" };
   }
 }
@@ -1107,10 +1200,9 @@ export function mountFinikSettingsRoutes(app: Express): void {
 
       res.json({
         businessId: b.id,
-        finikConfigured: !!(b.finikApiKey?.trim() && b.finikSecret?.trim()),
-        webhookUrl: publicApiOrigin()
-          ? `${publicApiOrigin()}/finik/webhook/${b.id}`
-          : null,
+        finikConfigured: isFinikCredentialsReady(b.finikApiKey, b.finikSecret),
+        finikReady: isFinikCredentialsReady(b.finikApiKey, b.finikSecret),
+        webhookUrl: buildFinikWebhookUrl(publicApiOrigin(), b.id),
       });
     } catch (e) {
       console.error("GET /integrations/finik:", e);
@@ -1163,10 +1255,9 @@ export function mountFinikSettingsRoutes(app: Express): void {
       res.json({
         ok: true,
         businessId,
-        finikConfigured: !!(finikApiKey && finikSecret),
-        webhookUrl: publicApiOrigin()
-          ? `${publicApiOrigin()}/finik/webhook/${businessId}`
-          : null,
+        finikConfigured: isFinikCredentialsReady(finikApiKey, finikSecret),
+        finikReady: isFinikCredentialsReady(finikApiKey, finikSecret),
+        webhookUrl: buildFinikWebhookUrl(publicApiOrigin(), businessId),
       });
     } catch (e) {
       console.error("POST /integrations/finik:", e);

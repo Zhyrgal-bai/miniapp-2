@@ -9,7 +9,12 @@ import {
   initDynamicStoreBot,
   stopDynamicStoreBotInMemory,
 } from "../bot/dynamicBots.js";
-import { precheckBotTokenBeforeRegistrationPersist } from "./registrationTokenGate.js";
+import {
+  precheckBotTokenBeforeOwnerChange,
+  precheckBotTokenBeforeRegistrationPersist,
+} from "./registrationTokenGate.js";
+import { platformMerchantIsStoreOwner } from "./platformMerchantAccess.js";
+import { buildMerchantBotRecoveryStatus } from "./merchantBotRecoveryService.js";
 
 export const MERCHANT_CHANGE_TYPE_BOT_TOKEN = "BOT_TOKEN_CHANGE";
 export const MERCHANT_CHANGE_STATUS_PENDING = "PENDING";
@@ -187,6 +192,161 @@ export async function createMerchantBotTokenChangeRequest(input: {
   return { ok: true, id: row.id };
 }
 
+/** Записать токен в Business и переподключить webhook (общая логика approve / owner self-service). */
+export async function persistMerchantBotTokenAndReconnect(
+  businessId: number,
+  newTok: string,
+): Promise<
+  | { ok: true }
+  | { ok: false; statusCode: number; error: string }
+> {
+  const trimmed = newTok.replace(/\s/g, "").trim();
+  const conflict = await prisma.business.findFirst({
+    where: {
+      botTokenHash: hashBotTokenSha256Hex(trimmed),
+      NOT: { id: businessId },
+    },
+    select: { id: true },
+  });
+  if (conflict) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "Токен уже занят другим магазином",
+    };
+  }
+
+  await stopDynamicStoreBotInMemory(businessId);
+
+  try {
+    await prisma.business.update({
+      where: { id: businessId },
+      data: encryptedBotTokenRow(trimmed),
+    });
+  } catch (e) {
+    console.error("persistMerchantBotTokenAndReconnect update:", e);
+    return {
+      ok: false,
+      statusCode: 500,
+      error: "Не удалось обновить токен",
+    };
+  }
+
+  try {
+    await initDynamicStoreBot({
+      businessId,
+      botToken: trimmed,
+    });
+  } catch (e) {
+    console.error(
+      "persistMerchantBotTokenAndReconnect initDynamicStoreBot:",
+      businessId,
+      e,
+    );
+    const msg = e instanceof Error ? e.message : String(e);
+    return {
+      ok: false,
+      statusCode: 502,
+      error: `Токен сохранён, но не удалось переподключить бота: ${msg}`,
+    };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Мгновенная смена токена владельцем (OWNER) без заявки оператору.
+ */
+export async function applyOwnerBotTokenSelfService(input: {
+  businessId: number;
+  requesterTelegramId: string;
+  newBotToken: string;
+}): Promise<
+  | {
+      ok: true;
+      botUsername: string | null;
+      botStatus: Awaited<ReturnType<typeof buildMerchantBotRecoveryStatus>> | null;
+    }
+  | { ok: false; statusCode: number; error: string }
+> {
+  const tid = input.requesterTelegramId.trim();
+  if (!/^\d+$/.test(tid)) {
+    return { ok: false, statusCode: 400, error: "Некорректный пользователь" };
+  }
+  const isOwner = await platformMerchantIsStoreOwner(tid, input.businessId);
+  if (!isOwner) {
+    return {
+      ok: false,
+      statusCode: 403,
+      error: "Смена токена доступна только владельцу магазина",
+    };
+  }
+
+  const business = await prisma.business.findUnique({
+    where: { id: input.businessId },
+    select: { id: true, botToken: true, name: true, isBlocked: true },
+  });
+  if (business == null) {
+    return { ok: false, statusCode: 404, error: "Магазин не найден" };
+  }
+  if (business.isBlocked) {
+    return {
+      ok: false,
+      statusCode: 403,
+      error: "Магазин заблокирован оператором платформы",
+    };
+  }
+
+  const token = input.newBotToken.replace(/\s/g, "").trim();
+  if (token === "") {
+    return { ok: false, statusCode: 400, error: "Укажите новый токен бота" };
+  }
+  if (plainBotTokenFromStored(business.botToken) === token) {
+    return {
+      ok: false,
+      statusCode: 400,
+      error: "Новый токен совпадает с текущим",
+    };
+  }
+
+  const gate = await precheckBotTokenBeforeOwnerChange(token, input.businessId);
+  if (!gate.ok) {
+    return {
+      ok: false,
+      statusCode: gate.statusCode,
+      error: gate.error,
+    };
+  }
+
+  await prisma.merchantChangeRequest.updateMany({
+    where: {
+      businessId: input.businessId,
+      type: MERCHANT_CHANGE_TYPE_BOT_TOKEN,
+      status: MERCHANT_CHANGE_STATUS_PENDING,
+    },
+    data: { status: MERCHANT_CHANGE_STATUS_REJECTED },
+  });
+
+  const applied = await persistMerchantBotTokenAndReconnect(
+    input.businessId,
+    token,
+  );
+  if (!applied.ok) {
+    return {
+      ok: false,
+      statusCode: applied.statusCode,
+      error: applied.error,
+    };
+  }
+
+  const botStatus = await buildMerchantBotRecoveryStatus(input.businessId);
+  return {
+    ok: true,
+    botUsername: gate.username,
+    botStatus,
+  };
+}
+
 export async function approveMerchantBotTokenChangeById(
   requestId: number,
 ): Promise<
@@ -214,60 +374,32 @@ export async function approveMerchantBotTokenChangeById(
   }
 
   const newTok = row.newBotToken.trim();
-  const conflict = await prisma.business.findFirst({
-    where: {
-      botTokenHash: hashBotTokenSha256Hex(newTok),
-      NOT: { id: row.businessId },
-    },
-    select: { id: true },
+
+  const gate = await precheckBotTokenBeforeOwnerChange(newTok, row.businessId);
+  if (!gate.ok) {
+    return {
+      ok: false,
+      statusCode: gate.statusCode,
+      message: gate.error,
+    };
+  }
+
+  const applied = await persistMerchantBotTokenAndReconnect(
+    row.businessId,
+    newTok,
+  );
+  if (!applied.ok) {
+    return {
+      ok: false,
+      statusCode: applied.statusCode,
+      message: applied.error,
+    };
+  }
+
+  await prisma.merchantChangeRequest.update({
+    where: { id: requestId },
+    data: { status: MERCHANT_CHANGE_STATUS_APPROVED },
   });
-  if (conflict) {
-    return {
-      ok: false,
-      statusCode: 409,
-      message: "Токен уже занят другим магазином",
-    };
-  }
-
-  await stopDynamicStoreBotInMemory(row.businessId);
-
-  try {
-    await prisma.$transaction([
-      prisma.business.update({
-        where: { id: row.businessId },
-        data: encryptedBotTokenRow(newTok),
-      }),
-      prisma.merchantChangeRequest.update({
-        where: { id: requestId },
-        data: { status: MERCHANT_CHANGE_STATUS_APPROVED },
-      }),
-    ]);
-  } catch (e) {
-    console.error("approveMerchantBotTokenChangeById tx:", e);
-    return {
-      ok: false,
-      statusCode: 500,
-      message: "Не удалось обновить токен",
-    };
-  }
-
-  try {
-    await initDynamicStoreBot({
-      businessId: row.businessId,
-      botToken: newTok,
-    });
-  } catch (e) {
-    console.error(
-      "approveMerchantBotTokenChangeById initDynamicStoreBot:",
-      row.businessId,
-      e,
-    );
-    return {
-      ok: false,
-      statusCode: 500,
-      message: "Токен записан, но не удалось запустить бота — проверьте логи",
-    };
-  }
 
   void notifyRequesterBotTokenChangeOutcome({
     requesterTelegramId: row.requesterTelegramId,

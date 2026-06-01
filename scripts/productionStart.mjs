@@ -12,6 +12,8 @@ function sanitizeProductionEnv() {
   const forbidden = [
     ["TELEGRAM_INIT_DEBUG", "1"],
     ["SKIP_TELEGRAM_WEBAPP_AUTH", "1"],
+    ["FINIK_USE_MOCK", "1"],
+    ["FINIK_USE_MOCK", "true"],
   ];
   for (const [key, val] of forbidden) {
     if (process.env[key] === val) {

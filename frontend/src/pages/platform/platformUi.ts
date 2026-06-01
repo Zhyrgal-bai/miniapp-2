@@ -31,6 +31,26 @@ export function webhookUrlLine(b: PlatformMyBusinessDTO): string {
   return "URL вебхука не задан";
 }
 
+export type MerchantAdminSection = "products" | "design" | "orders";
+
+/** Открыть админку магазина с tenant в URL и hash-разделом. */
+export function merchantAdminNavigateTarget(
+  b: Pick<PlatformMyBusinessDTO, "id" | "slug">,
+  section: MerchantAdminSection,
+): string {
+  const s = typeof b.slug === "string" ? b.slug.trim() : "";
+  const base =
+    s !== ""
+      ? `/s/${encodeURIComponent(s)}`
+      : `/?shop=${encodeURIComponent(String(b.id))}`;
+  const hash: Record<MerchantAdminSection, string> = {
+    products: "#/admin/products",
+    design: "#/admin/design",
+    orders: "#/admin/orders",
+  };
+  return `${base}${hash[section]}`;
+}
+
 export function miniAppOpenUrl(b: Pick<PlatformMyBusinessDTO, "id" | "slug">): string {
   if (typeof window === "undefined") return "";
   const origin = window.location.origin.replace(/\/$/, "");

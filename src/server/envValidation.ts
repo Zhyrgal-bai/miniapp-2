@@ -73,9 +73,22 @@ export function validateEnvironment(): EnvValidationResult {
         "TELEGRAM_INIT_DEBUG=1 must not be enabled in production",
       );
     }
+    if (
+      process.env.FINIK_USE_MOCK === "1" ||
+      process.env.FINIK_USE_MOCK === "true"
+    ) {
+      errors.push("FINIK_USE_MOCK is forbidden in production");
+    }
     if (!hasHttpsUrl("API_URL") && !process.env.RENDER_EXTERNAL_URL?.trim()) {
       warnings.push(
         "API_URL or RENDER_EXTERNAL_URL should be set for webhooks and public links",
+      );
+    }
+    const platformFinikKey = process.env.PLATFORM_FINIK_API_KEY?.trim();
+    const platformFinikSecret = process.env.PLATFORM_FINIK_SECRET?.trim();
+    if (!platformFinikKey || !platformFinikSecret) {
+      warnings.push(
+        "PLATFORM_FINIK_API_KEY / PLATFORM_FINIK_SECRET not set — merchant self-service subscription pay disabled",
       );
     }
     if (!hasHttpsUrl("FRONT_URL") && !hasHttpsUrl("MINI_APP_URL")) {

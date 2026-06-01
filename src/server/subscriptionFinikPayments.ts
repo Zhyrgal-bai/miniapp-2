@@ -1,15 +1,15 @@
 import type { Express, Request, Response } from "express";
 import { plainBotTokenFromStored } from "./businessBotToken.js";
 import { prisma } from "./db.js";
-import {
-  createFinikSaasSubscriptionSession,
-  verifyFinikWebhookSignature,
-} from "./finikMerchant.js";
+import { verifyFinikWebhookSignature } from "./finikMerchant.js";
 import {
   extendBusinessSubscriptionAfterFinikPayment,
-  saasFinikSubscriptionPlanSpec,
 } from "./saasBillingService.js";
-import { platformMerchantOwnsBusiness } from "./platformMerchantAccess.js";
+import {
+  applyPlatformSubscriptionFinikWebhook,
+  createPlatformSubscriptionPaymentSession,
+  type CreatePlatformSubscriptionPaymentResult,
+} from "./platformSubscriptionBilling.js";
 
 function telegramIdFromTrustedHeader(req: Request): string | null {
   const rawXi = req.headers["x-telegram-id"];
@@ -103,113 +103,143 @@ async function sendOwnerPaymentSuccessNotice(
   }
 }
 
-/** Finik ключи есть на Business; секрет нужен для вебхука и создания платежа (как у заказов). */
-function businessFinikReady(finikApiKey: string | null, finikSecret: string | null): boolean {
-  const k = typeof finikApiKey === "string" ? finikApiKey.trim() : "";
-  const s = typeof finikSecret === "string" ? finikSecret.trim() : "";
-  if (process.env.FINIK_USE_MOCK === "1" || process.env.FINIK_USE_MOCK === "true") {
-    return true;
-  }
-  return k.length > 0 && s.length > 0;
-}
-
 export type CreateSubscriptionFinikSessionResult =
-  | {
-      ok: true;
-      paymentUrl: string;
-      subscriptionPaymentId: number;
-      planDays: 30 | 90;
-      amountSom: number;
-    }
-  | {
-      ok: true;
-      finikConfigured: false;
-      useManualPaymentRequest: true;
-      message: string;
-    }
-  | { ok: false; statusCode: number; error: string };
+  CreatePlatformSubscriptionPaymentResult;
 
 /**
- * Создание сессии оплаты подписки через Finik магазина (владелец/админ магазина).
- * Вызывается из legacy POST /api/payments/create и из POST /api/platform/subscription-payment/create.
+ * Создание сессии оплаты подписки через Finik **платформы**.
  */
 export async function createSubscriptionFinikPaymentSession(input: {
   telegramId: string;
   businessId: number;
   plan: 30 | 90;
 }): Promise<CreateSubscriptionFinikSessionResult> {
-  const { telegramId, businessId, plan } = input;
-  if (!Number.isInteger(businessId) || businessId <= 0) {
-    return { ok: false, statusCode: 400, error: "Нужен корректный businessId" };
+  return createPlatformSubscriptionPaymentSession(input);
+}
+
+/** Legacy: merchant Finik webhook (старые pending-платежи до platform billing). */
+async function handleLegacyMerchantSubscriptionWebhook(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const rawBody =
+    typeof req.body === "object" && req.body !== null
+      ? JSON.stringify(req.body)
+      : String(req.body ?? "");
+
+  const body = req.body as Record<string, unknown>;
+  const paymentId = extractPaymentId(body);
+
+  let subRow =
+    paymentId !== ""
+      ? await prisma.subscriptionFinikPayment.findFirst({
+          where: { finikPaymentId: paymentId },
+        })
+      : null;
+
+  if (subRow == null) {
+    const sid = parseSaasSubRowId(body);
+    if (sid != null) {
+      subRow = await prisma.subscriptionFinikPayment.findUnique({
+        where: { id: sid },
+      });
+    }
   }
 
-  const allowed = await platformMerchantOwnsBusiness(telegramId, businessId);
-  if (!allowed) {
-    return { ok: false, statusCode: 403, error: "Нет доступа к этому магазину" };
+  if (subRow == null) {
+    res.status(404).json({ error: "Subscription payment not found" });
+    return;
   }
 
   const business = await prisma.business.findUnique({
-    where: { id: businessId },
-    select: { id: true, finikApiKey: true, finikSecret: true, botToken: true },
+    where: { id: subRow.businessId },
   });
   if (business == null) {
-    return { ok: false, statusCode: 404, error: "Магазин не найден" };
+    res.status(404).json({ error: "Business not found" });
+    return;
   }
 
-  if (!businessFinikReady(business.finikApiKey, business.finikSecret)) {
-    return {
-      ok: true,
-      finikConfigured: false,
-      useManualPaymentRequest: true,
-      message:
-        "Онлайн-оплата Finik не настроена для магазина. Отправьте чек на проверку через бота (ручная заявка PaymentRequest).",
-    };
+  if (!verifyFinikWebhookSignature(business.finikSecret, req, rawBody)) {
+    res.status(403).json({ error: "Invalid signature" });
+    return;
   }
 
-  const spec = saasFinikSubscriptionPlanSpec(plan);
-
-  const row = await prisma.subscriptionFinikPayment.create({
-    data: {
-      businessId,
-      planDays: spec.days,
-      amountSom: spec.amountSom,
-      payerTelegramId: telegramId,
-      status: "pending",
-    },
-  });
-
-  const finik = await createFinikSaasSubscriptionSession(
-    {
-      id: business.id,
-      finikApiKey: business.finikApiKey,
-      finikSecret: business.finikSecret,
-    },
-    {
-      subscriptionPaymentRowId: row.id,
-      amountSom: spec.amountSom,
-    },
-  );
-
-  if (!finik.ok) {
+  if (paymentId !== "" && subRow.finikPaymentId == null) {
     await prisma.subscriptionFinikPayment.update({
-      where: { id: row.id },
-      data: { status: "failed" },
+      where: { id: subRow.id },
+      data: { finikPaymentId: paymentId },
     });
-    return { ok: false, statusCode: 502, error: finik.error };
   }
 
-  await prisma.subscriptionFinikPayment.update({
-    where: { id: row.id },
-    data: { finikPaymentId: finik.paymentId },
+  const statusRaw = body.status ?? body.payment_status ?? body.state;
+  const status = String(statusRaw ?? "").toLowerCase();
+  const successStatuses = new Set([
+    "success",
+    "paid",
+    "completed",
+    "succeeded",
+  ]);
+
+  if (!successStatuses.has(status)) {
+    res.json({ ok: true, ignored: true });
+    return;
+  }
+
+  if (subRow.status === "completed") {
+    res.json({ ok: true, duplicate: true });
+    return;
+  }
+
+  const outcome = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.subscriptionFinikPayment.updateMany({
+      where: { id: subRow!.id, status: "pending" },
+      data: { status: "completed" },
+    });
+    if (claimed.count !== 1) {
+      return { kind: "duplicate" as const };
+    }
+
+    const ext = await extendBusinessSubscriptionAfterFinikPayment(
+      subRow!.businessId,
+      subRow!.planDays,
+      new Date(),
+      tx,
+    );
+    return { kind: "applied" as const, ext };
   });
 
-  return {
-    ok: true,
-    paymentUrl: finik.paymentUrl,
-    subscriptionPaymentId: row.id,
-    planDays: spec.days as 30 | 90,
-    amountSom: spec.amountSom,
-  };
+  if (outcome.kind === "duplicate") {
+    res.json({ ok: true, duplicate: true });
+    return;
+  }
+
+  const ext = outcome.ext;
+  if (
+    ext?.shouldHydrateBot &&
+    ext.botToken != null &&
+    String(ext.botToken).trim() !== ""
+  ) {
+    const { initDynamicStoreBot } = await import("../bot/dynamicBots.js");
+    try {
+      await initDynamicStoreBot({
+        businessId: subRow.businessId,
+        botToken: String(ext.botToken).trim(),
+      });
+    } catch (e) {
+      console.error(
+        "subscriptionFinik webhook: hydrate bot failed",
+        subRow.businessId,
+        e,
+      );
+    }
+  }
+
+  const tok = plainBotTokenFromStored(business.botToken);
+  if (tok) {
+    void sendOwnerPaymentSuccessNotice(tok, subRow.payerTelegramId);
+  }
+
+  res.json({ ok: true });
 }
 
 export function mountSubscriptionFinikPaymentRoutes(app: Express): void {
@@ -252,22 +282,12 @@ export function mountSubscriptionFinikPaymentRoutes(app: Express): void {
         res.status(out.statusCode).json({ error: out.error });
         return;
       }
-      if ("finikConfigured" in out && out.finikConfigured === false) {
-        res.status(200).json({
-          finikConfigured: false,
-          useManualPaymentRequest: true,
-          message: out.message,
-        });
-        return;
-      }
-      if ("paymentUrl" in out) {
-        res.json({
-          paymentUrl: out.paymentUrl,
-          subscriptionPaymentId: out.subscriptionPaymentId,
-          planDays: out.planDays,
-          amountSom: out.amountSom,
-        });
-      }
+      res.json({
+        paymentUrl: out.paymentUrl,
+        subscriptionPaymentId: out.subscriptionPaymentId,
+        planDays: out.planDays,
+        amountSom: out.amountSom,
+      });
     } catch (e) {
       console.error("POST /api/payments/create:", e);
       res.status(500).json({ error: "Ошибка сервера" });
@@ -275,131 +295,43 @@ export function mountSubscriptionFinikPaymentRoutes(app: Express): void {
   });
 
   app.post(
-    "/api/payments/finik-webhook",
+    "/api/platform/subscription-finik-webhook",
     async (req: Request, res: Response) => {
       try {
         const rawBody =
           typeof req.body === "object" && req.body !== null
             ? JSON.stringify(req.body)
             : String(req.body ?? "");
-
         const body = req.body as Record<string, unknown>;
-        const paymentId = extractPaymentId(body);
-
-        let subRow =
-          paymentId !== ""
-            ? await prisma.subscriptionFinikPayment.findFirst({
-                where: { finikPaymentId: paymentId },
-              })
-            : null;
-
-        if (subRow == null) {
-          const sid = parseSaasSubRowId(body);
-          if (sid != null) {
-            subRow = await prisma.subscriptionFinikPayment.findUnique({
-              where: { id: sid },
-            });
-          }
-        }
-
-        if (subRow == null) {
-          res.status(404).json({ error: "Subscription payment not found" });
+        const out = await applyPlatformSubscriptionFinikWebhook(
+          req,
+          rawBody,
+          body,
+        );
+        if (!out.ok) {
+          res.status(out.statusCode).json({ error: out.error });
           return;
         }
-
-        const business = await prisma.business.findUnique({
-          where: { id: subRow.businessId },
+        res.json({
+          ok: true,
+          duplicate: out.duplicate,
+          ignored: out.ignored,
         });
-        if (business == null) {
-          res.status(404).json({ error: "Business not found" });
-          return;
-        }
+      } catch (e) {
+        console.error(
+          "POST /api/platform/subscription-finik-webhook:",
+          e,
+        );
+        res.status(500).json({ error: "Webhook error" });
+      }
+    },
+  );
 
-        if (
-          !verifyFinikWebhookSignature(business.finikSecret, req, rawBody)
-        ) {
-          res.status(403).json({ error: "Invalid signature" });
-          return;
-        }
-
-        if (paymentId !== "" && subRow.finikPaymentId == null) {
-          await prisma.subscriptionFinikPayment.update({
-            where: { id: subRow.id },
-            data: { finikPaymentId: paymentId },
-          });
-        }
-
-        const statusRaw = body.status ?? body.payment_status ?? body.state;
-        const status = String(statusRaw ?? "").toLowerCase();
-        const successStatuses = new Set([
-          "success",
-          "paid",
-          "completed",
-          "succeeded",
-        ]);
-
-        if (!successStatuses.has(status)) {
-          res.json({ ok: true, ignored: true });
-          return;
-        }
-
-        if (subRow.status === "completed") {
-          res.json({ ok: true, duplicate: true });
-          return;
-        }
-
-        const outcome = await prisma.$transaction(async (tx) => {
-          const claimed = await tx.subscriptionFinikPayment.updateMany({
-            where: { id: subRow.id, status: "pending" },
-            data: { status: "completed" },
-          });
-          if (claimed.count !== 1) {
-            return { kind: "duplicate" as const };
-          }
-
-          const ext = await extendBusinessSubscriptionAfterFinikPayment(
-            subRow.businessId,
-            subRow.planDays,
-            new Date(),
-            tx,
-          );
-          return { kind: "applied" as const, ext };
-        });
-
-        if (outcome.kind === "duplicate") {
-          res.json({ ok: true, duplicate: true });
-          return;
-        }
-
-        const ext = outcome.ext;
-        if (
-          ext?.shouldHydrateBot &&
-          ext.botToken != null &&
-          String(ext.botToken).trim() !== ""
-        ) {
-          const { initDynamicStoreBot } = await import(
-            "../bot/dynamicBots.js"
-          );
-          try {
-            await initDynamicStoreBot({
-              businessId: subRow.businessId,
-              botToken: String(ext.botToken).trim(),
-            });
-          } catch (e) {
-            console.error(
-              "subscriptionFinik webhook: hydrate bot failed",
-              subRow.businessId,
-              e,
-            );
-          }
-        }
-
-        const tok = plainBotTokenFromStored(business.botToken);
-        if (tok) {
-          void sendOwnerPaymentSuccessNotice(tok, subRow.payerTelegramId);
-        }
-
-        res.json({ ok: true });
+  app.post(
+    "/api/payments/finik-webhook",
+    async (req: Request, res: Response) => {
+      try {
+        await handleLegacyMerchantSubscriptionWebhook(req, res);
       } catch (e) {
         console.error("POST /api/payments/finik-webhook:", e);
         res.status(500).json({ error: "Webhook error" });

@@ -38,6 +38,10 @@ import {
   startReservationDepositPayment,
   syncGuestReservationDepositPayment,
 } from "./tableReservationDeposit.js";
+import {
+  businessSubscriptionGateSelect,
+  canAcceptCustomerOrders,
+} from "./subscriptionAccess.js";
 
 type Deps = {
   requireMerchantStaff: (
@@ -65,9 +69,12 @@ function parseReservationId(raw: string | string[] | undefined): number | null {
 async function assertVenueBusiness(businessId: number): Promise<boolean> {
   const b = await prisma.business.findUnique({
     where: { id: businessId },
-    select: { businessType: true, isActive: true, isBlocked: true },
+    select: {
+      ...businessSubscriptionGateSelect,
+      businessType: true,
+    },
   });
-  if (!b || !b.isActive || b.isBlocked) return false;
+  if (!b || !canAcceptCustomerOrders(b)) return false;
   return businessTypeSupportsTableReservations(b.businessType);
 }
 

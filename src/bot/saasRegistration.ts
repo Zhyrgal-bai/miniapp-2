@@ -559,7 +559,7 @@ async function provisionMerchantStoreInTx(
       finikApiKey: useFinik ? finikTrimmed! : null,
       businessType: params.businessType,
       // Витрина должна быть включена сразу после approve; доступ может ограничиваться подпиской.
-      isActive: true,
+      isActive: giveTrial,
       isBlocked: false,
       subscriptionStatus: giveTrial
         ? SubscriptionStatus.TRIALING

@@ -46,11 +46,10 @@ export async function syncBusinessSubscriptionActivationState(
 
   if (hasValidPaidOrTrialWindow(b, now)) return;
 
-  // Подписка истекла — фиксируем статус, но не выключаем витрину через isActive.
-  // Доступность витрины управляется isActive/isBlocked, подписка — отдельный слой.
   await prisma.business.update({
     where: { id: businessId },
     data: {
+      isActive: false,
       subscriptionStatus: SubscriptionStatus.EXPIRED,
       lastReminder3DaysAt: null,
       lastReminder1DayAt: null,
