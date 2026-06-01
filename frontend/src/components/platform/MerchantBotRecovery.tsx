@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   fetchMerchantBotStatus,
   postMerchantBotCheck,
@@ -35,13 +35,12 @@ export function MerchantBotRecovery({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const applyStatus = useCallback(
-    (s: MerchantBotRecoveryPayload) => {
-      setStatus(s);
-      onStatusChange?.(s);
-    },
-    [onStatusChange],
-  );
+  const onStatusChangeRef = useRef(onStatusChange);
+  onStatusChangeRef.current = onStatusChange;
+
+  const notifyParent = useCallback((s: MerchantBotRecoveryPayload) => {
+    onStatusChangeRef.current?.(s);
+  }, []);
 
   const loadStatus = useCallback(async () => {
     if (businessId <= 0) return;
@@ -49,14 +48,14 @@ export function MerchantBotRecovery({
     setError(null);
     try {
       const s = await fetchMerchantBotStatus(businessId);
-      applyStatus(s);
+      setStatus(s);
     } catch (e) {
       setStatus(null);
       setError(formatAdminApiError(e));
     } finally {
       setLoading(false);
     }
-  }, [businessId, applyStatus]);
+  }, [businessId]);
 
   useEffect(() => {
     void loadStatus();
@@ -68,7 +67,8 @@ export function MerchantBotRecovery({
     setSuccess(null);
     try {
       const s = await postMerchantBotCheck(businessId);
-      applyStatus(s);
+      setStatus(s);
+      notifyParent(s);
       setSuccess(
         s.status === "connected"
           ? "Бот отвечает, webhook в порядке."
@@ -87,7 +87,8 @@ export function MerchantBotRecovery({
     setSuccess(null);
     try {
       const s = await postMerchantBotReconnect(businessId);
-      applyStatus(s);
+      setStatus(s);
+      notifyParent(s);
       setSuccess(
         s.status === "connected"
           ? "Webhook переподключён, бот работает."

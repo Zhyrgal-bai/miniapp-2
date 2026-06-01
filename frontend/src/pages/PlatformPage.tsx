@@ -204,9 +204,13 @@ export default function PlatformPage() {
   const storesSectionRef = useRef<HTMLElement>(null);
   const helpSectionRef = useRef<HTMLElement>(null);
   const subscriptionSectionRef = useRef<HTMLElement>(null);
+  const businessesRef = useRef(businesses);
+  businessesRef.current = businesses;
 
-  const loadBusinesses = useCallback(async () => {
-    setLoading(true);
+  const loadBusinesses = useCallback(async (opts?: { background?: boolean }) => {
+    if (!opts?.background) {
+      setLoading(true);
+    }
     setError(null);
     setInfoBanner(null);
     try {
@@ -276,7 +280,9 @@ export default function PlatformPage() {
       setError(formatAdminApiError(e));
       setBusinesses([]);
     } finally {
-      setLoading(false);
+      if (!opts?.background) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -372,7 +378,7 @@ export default function PlatformPage() {
   }, [onboardingStep]);
 
   const reloadReadiness = useCallback(async (businessId?: number) => {
-    const bid = businessId ?? businesses[0]?.id;
+    const bid = businessId ?? businessesRef.current[0]?.id;
     if (bid == null || bid <= 0) {
       setReadiness(null);
       return;
@@ -386,7 +392,7 @@ export default function PlatformPage() {
     } finally {
       setReadinessRefreshing(false);
     }
-  }, [businesses]);
+  }, []);
 
   useEffect(() => {
     const first = businesses[0];
@@ -942,7 +948,7 @@ export default function PlatformPage() {
           : `Токен сохранён. ${out.botStatus?.label ?? "Проверьте статус бота на главной."}`,
       );
       setBotRecoveryRefresh((n) => n + 1);
-      void loadBusinesses();
+      void loadBusinesses({ background: true });
       void reloadReadiness(settingsBusinessId);
     } catch (e) {
       setSettingsErr(formatAdminApiError(e));
@@ -1091,7 +1097,7 @@ export default function PlatformPage() {
           row.id === settingsBusinessId ? { ...row, name: out.name } : row,
         ),
       );
-      void loadBusinesses();
+      void loadBusinesses({ background: true });
       void reloadReadiness(settingsBusinessId);
     } catch (e) {
       setSettingsErr(formatAdminApiError(e));
@@ -1115,6 +1121,14 @@ export default function PlatformPage() {
     !regPending;
 
   const primaryBusiness = businesses[0] ?? null;
+
+  const handleBotRecoveryStatusChange = useCallback(() => {
+    void loadBusinesses({ background: true });
+    const bid = businessesRef.current[0]?.id;
+    if (bid != null && bid > 0) {
+      void reloadReadiness(bid);
+    }
+  }, [loadBusinesses, reloadReadiness]);
 
   const scrollToStores = useCallback(() => {
     storesSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1571,28 +1585,24 @@ export default function PlatformPage() {
             ) : null}
             {businesses.length > 0 ? (
               <>
-            {primaryBusiness != null && !isPlatformAdmin && !loading ? (
+            {primaryBusiness != null && !isPlatformAdmin ? (
               <MerchantBotRecovery
                 businessId={primaryBusiness.id}
                 refreshTrigger={botRecoveryRefresh}
                 onOpenSettings={openPrimarySettings}
-                onStatusChange={() => {
-                  void loadBusinesses();
-                  void reloadReadiness(primaryBusiness.id);
-                }}
+                onStatusChange={handleBotRecoveryStatusChange}
               />
             ) : null}
 
             {primaryBusiness != null &&
             !isPlatformAdmin &&
-            !loading &&
             Number.isFinite(merchantTelegramId) ? (
               <MerchantSubscriptionPanel
                 businessId={primaryBusiness.id}
                 telegramId={merchantTelegramId}
                 sectionRef={subscriptionSectionRef}
                 onPaid={() => {
-                  void loadBusinesses();
+                  void loadBusinesses({ background: true });
                   void reloadReadiness(primaryBusiness.id);
                 }}
               />
