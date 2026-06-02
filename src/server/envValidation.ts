@@ -2,6 +2,12 @@
  * Production environment validation — fail fast on critical misconfiguration.
  */
 
+import {
+  logFinikOfficialEnvKeysLoadStatus,
+  reloadFinikKeysFromEnv,
+  validateFinikOfficialEnvKeys,
+} from "./finik/finikKeys.js";
+
 export type EnvValidationResult = {
   ok: boolean;
   errors: string[];
@@ -102,11 +108,16 @@ export function validateEnvironment(): EnvValidationResult {
     warnings.push("FRONT_URL / MINI_APP_URL not set — Web App links may be broken");
   }
 
+  reloadFinikKeysFromEnv();
+  warnings.push(...validateFinikOfficialEnvKeys());
+
   return { ok: errors.length === 0, errors, warnings };
 }
 
 export function assertEnvironmentOrExit(): void {
+  reloadFinikKeysFromEnv();
   const result = validateEnvironment();
+  logFinikOfficialEnvKeysLoadStatus();
   for (const w of result.warnings) {
     console.warn(`[env] ${w}`);
   }

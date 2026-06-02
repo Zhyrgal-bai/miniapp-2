@@ -33,3 +33,16 @@ export {
   getOfficialAcquiringCreateUrl,
   getOfficialAcquiringBaseUrl,
 } from "./finikCreateConfig.js";
+
+export {
+  getFinikPrivateKey,
+  getFinikPublicKey,
+  getFinikApiKey,
+  getFinikAccountId,
+  reloadFinikKeysFromEnv,
+  isFinikOfficialEnvComplete,
+  getFinikOfficialEnvLoadStatus,
+  validateFinikOfficialEnvKeys,
+  logFinikOfficialEnvKeysLoadStatus,
+} from "./finikKeys.js";
+export type { FinikOfficialEnvKeyName } from "./finikKeys.js";

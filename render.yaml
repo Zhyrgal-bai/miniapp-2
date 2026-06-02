@@ -51,6 +51,15 @@ services:
         sync: false
       - key: FINIK_WEBHOOK_SIGNATURE_HEADER
         value: "x-finik-signature"
+      # Official Finik Acquiring test account (platform only; optional — see finikKeys.ts):
+      # - key: FINIK_PRIVATE_KEY
+      #   sync: false
+      # - key: FINIK_PUBLIC_KEY
+      #   sync: false
+      # - key: FINIK_API_KEY
+      #   sync: false
+      # - key: FINIK_ACCOUNT_ID
+      #   sync: false
       - key: OPERATOR_PASSWORD_HASH
         sync: false
       - key: FRONT_URL
