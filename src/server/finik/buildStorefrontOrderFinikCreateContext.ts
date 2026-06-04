@@ -4,6 +4,7 @@ import {
 } from "../../shared/finikReady.js";
 import { publicApiOrigin } from "../finikMerchant.js";
 import type { FinikCreateContext } from "./finikCreateTypes.js";
+import { buildStorefrontFinikReturnUrl } from "./finikStorefrontUrls.js";
 
 export type StorefrontFinikBusiness = {
   id: number;
@@ -26,6 +27,7 @@ export type BuildStorefrontFinikContextResult =
 export function buildStorefrontOrderFinikCreateContext(
   business: StorefrontFinikBusiness,
   input: StorefrontFinikOrderInput,
+  options?: { slug?: string | null },
 ): BuildStorefrontFinikContextResult {
   const useMock = finikUseMockForBusiness(business);
   let callbackUrl: string;
@@ -45,6 +47,9 @@ export function buildStorefrontOrderFinikCreateContext(
     callbackUrl = `https://pay.finik.kg/mock-webhook/${business.id}`;
   }
 
+  const returnUrl =
+    buildStorefrontFinikReturnUrl(business.id, options?.slug) ?? callbackUrl;
+
   const ctx: FinikCreateContext = {
     flow: "storefront_order",
     tenant: {
@@ -59,7 +64,7 @@ export function buildStorefrontOrderFinikCreateContext(
     orderId: String(input.orderId),
     externalId: `${business.id}:${input.orderId}`,
     callbackUrl,
-    returnUrl: callbackUrl,
+    returnUrl,
     ...(input.correlationId ? { correlationId: input.correlationId } : {}),
   };
 

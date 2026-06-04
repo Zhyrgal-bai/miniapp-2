@@ -63,4 +63,4 @@
 
 ## Webhook
 
-Phase 3 **не меняет** webhook и HMAC. Phase 4 — верификация по публичному ключу Finik.
+Phase 4: webhook `POST /finik/webhook/:businessId` — legacy HMAC (`finikSecret`) **или** official RSA (`FINIK_PUBLIC_KEY`, заголовки `signature` + `x-api-timestamp`). Парсинг `paymentId` / `payment_id` / `transactionId` / `id`. `RedirectUrl` → витрина `?view=my-orders`.

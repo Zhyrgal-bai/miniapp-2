@@ -1,4 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("../../src/server/db.js", () => ({
+  prisma: {
+    business: {
+      findUnique: vi.fn().mockResolvedValue({ slug: null }),
+    },
+  },
+}));
+
 import { buildStorefrontOrderFinikCreateContext } from "../../src/server/finik/buildStorefrontOrderFinikCreateContext.js";
 import { createStorefrontFinikCheckoutSession } from "../../src/server/finik/createStorefrontFinikCheckoutSession.js";
 import * as finikRsaSigning from "../../src/server/finik/finikRsaSigning.js";
@@ -21,6 +30,7 @@ describe("finikStorefrontCheckout", () => {
 
   it("builds FinikCreateContext for storefront_order", () => {
     process.env.API_URL = "https://api.example.com";
+    process.env.FRONT_URL = "https://shop.example.com";
     delete process.env.FINIK_USE_MOCK;
 
     const built = buildStorefrontOrderFinikCreateContext(business, {
@@ -47,7 +57,10 @@ describe("finikStorefrontCheckout", () => {
     expect(built.ctx.callbackUrl).toBe(
       "https://api.example.com/finik/webhook/7",
     );
-    expect(built.ctx.returnUrl).toBe(built.ctx.callbackUrl);
+    expect(built.ctx.returnUrl).toBe(
+      "https://shop.example.com/?shop=7&view=my-orders",
+    );
+    expect(built.ctx.returnUrl).not.toContain("/finik/webhook/");
     expect(built.ctx.correlationId).toBe("corr-1");
   });
 

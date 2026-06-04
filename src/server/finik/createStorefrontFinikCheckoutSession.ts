@@ -1,3 +1,4 @@
+import { prisma } from "../db.js";
 import { buildStorefrontOrderFinikCreateContext } from "./buildStorefrontOrderFinikCreateContext.js";
 import type {
   StorefrontFinikBusiness,
@@ -16,7 +17,13 @@ export async function createStorefrontFinikCheckoutSession(
   business: StorefrontFinikBusiness,
   input: StorefrontFinikOrderInput,
 ): Promise<StorefrontFinikCheckoutSessionResult> {
-  const built = buildStorefrontOrderFinikCreateContext(business, input);
+  const slugRow = await prisma.business.findUnique({
+    where: { id: business.id },
+    select: { slug: true },
+  });
+  const built = buildStorefrontOrderFinikCreateContext(business, input, {
+    slug: slugRow?.slug ?? null,
+  });
   if (!built.ok) {
     return { ok: false, error: built.error };
   }

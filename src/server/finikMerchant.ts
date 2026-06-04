@@ -23,6 +23,11 @@ import {
   getPlatformFinikCredentials,
   platformFinikUseMockForCreate,
 } from "../shared/platformFinik.js";
+import {
+  extractFinikWebhookPaymentIds,
+  parseFinikWebhookPayload,
+} from "./finik/finikWebhookPayload.js";
+import { verifyFinikWebhookAdmission } from "./finik/finikWebhookVerify.js";
 
 /** Base URL для REST Finik (укажите реальный домен вашего аккаунта разработчика). */
 function finikApiBase(): string {
@@ -448,45 +453,85 @@ const FINIK_FAILED_STATUSES = new Set([
   "error",
 ]);
 
-function parseFinikWebhookPayload(body: Record<string, unknown>): {
-  paymentId: string;
+export { parseFinikWebhookPayload } from "./finik/finikWebhookPayload.js";
+
+type FinikOrderRow = {
+  id: number;
+  businessId: number;
+  total: number;
   status: string;
-  amount: number | null;
-  externalId: string | null;
-  orderIdFromBody: number | null;
-} {
-  const paymentIdRaw =
-    body.paymentId ?? body.payment_id ?? body.orderId ?? body.order_id;
-  const statusRaw = body.status ?? body.payment_status ?? body.state;
-  const amountRaw = body.amount ?? body.total ?? body.sum ?? body.payment_amount;
-  const externalRaw = body.external_id ?? body.externalId;
-  const orderIdBodyRaw = body.order_id ?? body.orderId;
+  paymentId: string | null;
+  paymentMethod: string | null;
+  reservationId: number | null;
+  buyerUser: { telegramId: string } | null;
+};
 
-  let orderIdFromBody: number | null = null;
-  if (orderIdBodyRaw != null) {
-    const n = Number(orderIdBodyRaw);
-    if (Number.isFinite(n) && n > 0) orderIdFromBody = Math.floor(n);
-  }
-
-  let amount: number | null = null;
-  if (amountRaw != null) {
-    const n = Number(amountRaw);
-    if (Number.isFinite(n)) amount = Math.round(n);
-  }
-
+function mapPrismaOrderToFinikRow(order: {
+  id: number;
+  businessId: number;
+  total: number;
+  status: string;
+  paymentId: string | null;
+  paymentMethod: string | null;
+  reservationId: number | null;
+  buyerUser: { telegramId: string } | null;
+}): FinikOrderRow {
   return {
-    paymentId:
-      paymentIdRaw != null && String(paymentIdRaw).trim() !== ""
-        ? String(paymentIdRaw).trim()
-        : "",
-    status: String(statusRaw ?? "").toLowerCase(),
-    amount,
-    externalId:
-      externalRaw != null && String(externalRaw).trim() !== ""
-        ? String(externalRaw).trim()
-        : null,
-    orderIdFromBody,
+    id: order.id,
+    businessId: order.businessId,
+    total: order.total,
+    status: order.status,
+    paymentId: order.paymentId,
+    paymentMethod: order.paymentMethod,
+    reservationId: order.reservationId,
+    buyerUser: order.buyerUser,
   };
+}
+
+async function findOrderByFinikPaymentCandidates(
+  businessId: number,
+  paymentIdCandidates: readonly string[],
+): Promise<FinikOrderRow | null> {
+  for (const paymentId of paymentIdCandidates) {
+    const order = await prisma.order.findFirst({
+      where: { paymentId, businessId },
+      include: { buyerUser: true },
+    });
+    if (order) return mapPrismaOrderToFinikRow(order);
+  }
+  return null;
+}
+
+async function findOrderByFinikExternalId(
+  businessId: number,
+  externalId: string | null,
+): Promise<FinikOrderRow | null> {
+  if (externalId == null || externalId.trim() === "") return null;
+  const match = /^(\d+):(\d+)$/.exec(externalId.trim());
+  if (!match) return null;
+  const bid = Number(match[1]);
+  const orderId = Number(match[2]);
+  if (!Number.isInteger(bid) || bid !== businessId || !Number.isInteger(orderId) || orderId <= 0) {
+    return null;
+  }
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, businessId },
+    include: { buyerUser: true },
+  });
+  if (!order || !isFinikOrderPaymentMethod(order.paymentMethod)) return null;
+  return mapPrismaOrderToFinikRow(order);
+}
+
+async function resolveFinikWebhookOrder(
+  businessId: number,
+  parsed: ReturnType<typeof parseFinikWebhookPayload>,
+): Promise<FinikOrderRow | null> {
+  const byPayment = await findOrderByFinikPaymentCandidates(
+    businessId,
+    parsed.paymentIdCandidates,
+  );
+  if (byPayment) return byPayment;
+  return findOrderByFinikExternalId(businessId, parsed.externalId);
 }
 
 export function isFinikOrderPaymentMethod(
@@ -505,17 +550,6 @@ export function blocksManualFinikPaymentConfirm(input: {
     String(input.targetStatus).trim().toUpperCase() === "CONFIRMED"
   );
 }
-
-type FinikOrderRow = {
-  id: number;
-  businessId: number;
-  total: number;
-  status: string;
-  paymentId: string | null;
-  paymentMethod: string | null;
-  reservationId: number | null;
-  buyerUser: { telegramId: string } | null;
-};
 
 const FINIK_PAID_ORDER_STATUSES = new Set([
   "CONFIRMED",
@@ -893,35 +927,33 @@ async function handleFinikWebhookForBusiness(
 
     const corrId = correlationIdFromRequest(req);
 
-    const sigHeader = (process.env.FINIK_WEBHOOK_SIGNATURE_HEADER || "").trim();
-    if (process.env.NODE_ENV === "production" && !sigHeader) {
-      logWebhookReject({
-        provider: "finik",
-        businessId,
-        reason: "signature_header_not_configured",
-        ...(corrId ? { correlationId: corrId } : {}),
-      });
-      res.status(503).json({ error: "Webhook signature not configured" });
-      return;
-    }
-
-    if (!verifyFinikWebhookSignature(business.finikSecret, req, rawBody)) {
-      logWebhookReject({
-        provider: "finik",
-        businessId,
-        reason: "invalid_signature",
-        paymentId: String(
-          (req.body as Record<string, unknown>)?.paymentId ??
-            (req.body as Record<string, unknown>)?.payment_id ??
-            "",
-        ),
-        ...(corrId ? { correlationId: corrId } : {}),
-      });
-      res.status(403).json({ error: "Invalid signature" });
-      return;
-    }
-
     const body = req.body as Record<string, unknown>;
+    const webhookPath = `/finik/webhook/${businessId}`;
+
+    const verify = await verifyFinikWebhookAdmission({
+      finikSecret: business.finikSecret,
+      req,
+      rawBody,
+      body,
+      webhookPath,
+    });
+    if (!verify.ok) {
+      logWebhookReject({
+        provider: "finik",
+        businessId,
+        reason: verify.reason,
+        paymentId: extractFinikWebhookPaymentIds(body)[0] ?? "",
+        ...(corrId ? { correlationId: corrId } : {}),
+      });
+      const statusCode = verify.reason === "no_verify_credentials" ? 503 : 403;
+      res.status(statusCode).json({
+        error:
+          verify.reason === "no_verify_credentials"
+            ? "Webhook signature not configured"
+            : "Invalid signature",
+      });
+      return;
+    }
     const parsed = parseFinikWebhookPayload(body);
 
     if (!parsed.paymentId) {
@@ -951,10 +983,18 @@ async function handleFinikWebhookForBusiness(
     });
 
     if (FINIK_FAILED_STATUSES.has(parsed.status)) {
-      const order = await prisma.order.findFirst({
-        where: { paymentId: parsed.paymentId, businessId },
-        select: { id: true, status: true, reservationId: true },
-      });
+      let order: { id: number; status: string; reservationId: number | null } | null =
+        null;
+      for (const pid of parsed.paymentIdCandidates) {
+        const row = await prisma.order.findFirst({
+          where: { paymentId: pid, businessId },
+          select: { id: true, status: true, reservationId: true },
+        });
+        if (row) {
+          order = row;
+          break;
+        }
+      }
       if (order) {
         const cur = String(order.status ?? "").toUpperCase();
         if (cur === "NEW" || cur === "ACCEPTED" || cur === "PAID_PENDING") {
@@ -1029,10 +1069,7 @@ async function handleFinikWebhookForBusiness(
       throw depErr;
     }
 
-    const order = await prisma.order.findFirst({
-      where: { paymentId: parsed.paymentId, businessId },
-      include: { buyerUser: true },
-    });
+    const order = await resolveFinikWebhookOrder(businessId, parsed);
 
     if (!order) {
       res.status(404).json({ error: "Order not found" });
@@ -1045,6 +1082,18 @@ async function handleFinikWebhookForBusiness(
         res.status(400).json({ error: "external_id mismatch" });
         return;
       }
+    }
+
+    if (
+      parsed.paymentId !== "" &&
+      order.paymentId !== parsed.paymentId &&
+      parsed.paymentIdCandidates.includes(parsed.paymentId)
+    ) {
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { paymentId: parsed.paymentId },
+      });
+      order.paymentId = parsed.paymentId;
     }
 
     if (
@@ -1119,28 +1168,37 @@ export function mountFinikWebhookRoutes(app: Express): void {
   app.post("/finik/webhook", webhooksLimiter, async (req: Request, res: Response) => {
     try {
       const body = req.body as Record<string, unknown>;
-      const paymentIdRaw =
-        body.paymentId ?? body.payment_id ?? body.orderId ?? body.order_id;
-      const paymentId =
-        paymentIdRaw != null && String(paymentIdRaw).trim() !== ""
-          ? String(paymentIdRaw).trim()
-          : "";
-      if (!paymentId) {
+      const paymentIds = extractFinikWebhookPaymentIds(body);
+      if (paymentIds.length === 0) {
         res.status(400).json({ error: "paymentId required" });
         return;
       }
-      const order = await prisma.order.findFirst({
-        where: { paymentId },
-        select: { businessId: true },
-      });
+      let order: { businessId: number } | null = null;
+      for (const paymentId of paymentIds) {
+        const row = await prisma.order.findFirst({
+          where: { paymentId },
+          select: { businessId: true },
+        });
+        if (row) {
+          order = row;
+          break;
+        }
+      }
       if (order) {
         await handleFinikWebhookForBusiness(order.businessId, req, res);
         return;
       }
-      const reservation = await prisma.tableReservation.findFirst({
-        where: { depositPaymentId: paymentId },
-        select: { businessId: true },
-      });
+      let reservation: { businessId: number } | null = null;
+      for (const paymentId of paymentIds) {
+        const row = await prisma.tableReservation.findFirst({
+          where: { depositPaymentId: paymentId },
+          select: { businessId: true },
+        });
+        if (row) {
+          reservation = row;
+          break;
+        }
+      }
       if (!reservation) {
         res.status(404).json({ error: "Payment not found" });
         return;

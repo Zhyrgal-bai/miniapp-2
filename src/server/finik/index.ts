@@ -26,6 +26,19 @@ export {
 
 export { createStorefrontFinikCheckoutSession } from "./createStorefrontFinikCheckoutSession.js";
 
+export {
+  parseFinikWebhookPayload,
+  extractFinikWebhookPaymentIds,
+} from "./finikWebhookPayload.js";
+
+export {
+  verifyFinikWebhookAdmission,
+  verifyFinikOfficialWebhookRsa,
+  isFinikOfficialPublicKeyConfigured,
+} from "./finikWebhookVerify.js";
+
+export { buildStorefrontFinikReturnUrl } from "./finikStorefrontUrls.js";
+
 export { legacyCreateAdapter } from "./legacyCreateAdapter.js";
 export { officialAcquiringCreateAdapter } from "./officialAcquiringCreateAdapter.js";
 export { mockCreateAdapter } from "./mockCreateAdapter.js";
