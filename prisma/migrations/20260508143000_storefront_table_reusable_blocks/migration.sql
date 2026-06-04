@@ -1,4 +1,10 @@
 -- Stage 6: Storefront table + reusable blocks (foundation for multi-storefront)
+--
+-- Ensure storefrontConfig exists before backfill INSERT (same early add as 20260508131000).
+
+ALTER TABLE "Business"
+ADD COLUMN IF NOT EXISTS "storefrontConfig" JSONB NOT NULL DEFAULT '{}'::jsonb,
+ADD COLUMN IF NOT EXISTS "storefrontConfigVersion" INTEGER NOT NULL DEFAULT 1;
 
 CREATE TABLE IF NOT EXISTS "Storefront" (
   "id" SERIAL PRIMARY KEY,

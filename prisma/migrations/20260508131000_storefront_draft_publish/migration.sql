@@ -1,5 +1,12 @@
 -- Stage 4: Visual Storefront Builder (draft/publish)
 -- Adds draft + published storefront configs on Business.
+--
+-- Fresh-install fix: storefrontConfig is also added in 20260607200500_storefront_engine,
+-- but backfill below needs the column earlier. IF NOT EXISTS keeps prod + later migrate idempotent.
+
+ALTER TABLE "Business"
+ADD COLUMN IF NOT EXISTS "storefrontConfig" JSONB NOT NULL DEFAULT '{}'::jsonb,
+ADD COLUMN IF NOT EXISTS "storefrontConfigVersion" INTEGER NOT NULL DEFAULT 1;
 
 ALTER TABLE "Business"
 ADD COLUMN IF NOT EXISTS "storefrontDraftConfig" JSONB NOT NULL DEFAULT '{}'::jsonb,
