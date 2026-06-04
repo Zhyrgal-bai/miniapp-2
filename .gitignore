@@ -8,6 +8,7 @@ frontend/dist
 # Finik RSA keys (generate with scripts/generate-finik-keys.js)
 finik_private.pem
 finik_public.pem
+public_key.pem
 
 /generated/prisma
 
