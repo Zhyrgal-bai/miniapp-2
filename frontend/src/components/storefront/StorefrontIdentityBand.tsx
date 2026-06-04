@@ -51,12 +51,30 @@ function resolvePills(textConfig: Record<string, unknown> | undefined): string[]
   return fallback.slice(0, 4);
 }
 
+function formatStoreAddress(addr: {
+  addressLine: string;
+  city: string;
+}): string {
+  const city = addr.city.trim();
+  const line = addr.addressLine.trim();
+  if (city !== "" && line !== "") return `${city}, ${line}`;
+  return city || line;
+}
+
 export function StorefrontIdentityBand(props: {
   storeName?: string;
+  storeAddress?: {
+    addressLine: string;
+    city: string;
+    latitude: number;
+    longitude: number;
+  };
   textConfig?: Record<string, unknown>;
   styleConfig?: Record<string, unknown>;
 }): React.ReactElement | null {
   const storeName = String(props.storeName ?? "").trim();
+  const addressText =
+    props.storeAddress != null ? formatStoreAddress(props.storeAddress) : "";
   const textConfig = props.textConfig;
   const styleConfig = props.styleConfig;
   const tagline =
@@ -69,13 +87,24 @@ export function StorefrontIdentityBand(props: {
       : "");
   const pills = resolvePills(textConfig);
 
-  if (storeName === "" && tagline === "" && personality === "" && pills.length === 0) return null;
+  if (
+    storeName === "" &&
+    addressText === "" &&
+    tagline === "" &&
+    personality === "" &&
+    pills.length === 0
+  ) {
+    return null;
+  }
 
   return (
     <section className="sf-section sf-section--identity sf-section--padded">
       <div className="sf-identity-band">
         <div className="sf-identity-band__copy">
           {storeName !== "" ? <div className="sf-identity-band__name">{storeName}</div> : null}
+          {addressText !== "" ? (
+            <div className="sf-identity-band__tagline">{addressText}</div>
+          ) : null}
           {tagline !== "" ? <div className="sf-identity-band__tagline">{tagline}</div> : null}
           {personality !== "" ? <div className="sf-identity-band__persona">{personality}</div> : null}
         </div>

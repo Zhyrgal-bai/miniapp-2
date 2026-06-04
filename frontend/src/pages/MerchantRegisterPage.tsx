@@ -8,6 +8,10 @@ import {
 } from "../services/platformApi";
 import { trackPlatformFunnel } from "../services/platformFunnel";
 import { formatApiError } from "../utils/adminApiError";
+import {
+  KG_SUGGESTED_CITIES,
+  parseBusinessAddressInput,
+} from "@repo-shared/businessAddress";
 import "./MerchantRegisterPage.css";
 
 const SS_SHOP = "miniapp-active-shop";
@@ -31,13 +35,14 @@ const BUSINESS_TYPES: Array<{
 const STEP_LABELS = [
   "Тип бизнеса",
   "Название",
+  "Адрес",
   "Токен бота",
   "Телефон",
   "Finik",
   "Проверка",
 ];
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 7;
 
 function businessTypeLabel(id: BusinessType | ""): string {
   return BUSINESS_TYPES.find((b) => b.id === id)?.label ?? "—";
@@ -69,6 +74,10 @@ export default function MerchantRegisterPage() {
   const [step, setStep] = useState(1);
   const [businessType, setBusinessType] = useState<BusinessType | "">("");
   const [storeName, setStoreName] = useState("");
+  const [addressLine, setAddressLine] = useState("");
+  const [city, setCity] = useState("Бишкек");
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
   const [botToken, setBotToken] = useState("");
   const [phone, setPhone] = useState("");
   const [finikApiKey, setFinikApiKey] = useState("");
@@ -172,14 +181,34 @@ export default function MerchantRegisterPage() {
     return null;
   }, [finikApiKey, finikAccountId]);
 
+  const addressStepError = useMemo(() => {
+    if (step !== 3) return null;
+    const parsed = parseBusinessAddressInput({
+      addressLine,
+      city,
+      latitude,
+      longitude,
+    });
+    return parsed.ok ? null : parsed.error;
+  }, [step, addressLine, city, latitude, longitude]);
+
   const canNext = useMemo(() => {
     if (step === 1) return businessType !== "";
     if (step === 2) return storeName.trim().length >= 2;
-    if (step === 3) return botToken.trim().length > 10;
-    if (step === 4) return phone.trim().length >= 9;
-    if (step === 5) return finikPairError == null;
+    if (step === 3) return addressStepError == null;
+    if (step === 4) return botToken.trim().length > 10;
+    if (step === 5) return phone.trim().length >= 9;
+    if (step === 6) return finikPairError == null;
     return true;
-  }, [step, businessType, storeName, botToken, phone, finikPairError]);
+  }, [
+    step,
+    businessType,
+    storeName,
+    addressStepError,
+    botToken,
+    phone,
+    finikPairError,
+  ]);
 
   const goNext = () => {
     if (!canNext) return;
@@ -199,6 +228,17 @@ export default function MerchantRegisterPage() {
       setSubmitError("Выберите тип бизнеса");
       return;
     }
+    const addr = parseBusinessAddressInput({
+      addressLine,
+      city,
+      latitude,
+      longitude,
+    });
+    if (!addr.ok) {
+      setSubmitError(addr.error);
+      setStep(3);
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -206,6 +246,10 @@ export default function MerchantRegisterPage() {
       const account = finikAccountId.trim();
       await submitPlatformRegisterRequest({
         storeName: storeName.trim(),
+        addressLine: addr.value.addressLine,
+        city: addr.value.city,
+        latitude: addr.value.latitude,
+        longitude: addr.value.longitude,
         botToken: botToken.trim(),
         phone: phone.trim(),
         telegramId: uid,
@@ -295,7 +339,7 @@ export default function MerchantRegisterPage() {
       </header>
 
       <div className="mr__progress" aria-hidden>
-        {[1, 2, 3, 4, 5, 6].map((n) => (
+        {[1, 2, 3, 4, 5, 6, 7].map((n) => (
           <span
             key={n}
             className={`mr__progress-dot${n <= step ? " mr__progress-dot--active" : ""}`}
@@ -354,6 +398,89 @@ export default function MerchantRegisterPage() {
           {step === 3 ? (
             <>
               <div className="mr__card-head">
+                <h1 className="mr__title">Адрес магазина</h1>
+                <p className="mr__subtitle">
+                  Улица и координаты — для доставки и карты на витрине
+                </p>
+              </div>
+              <div className="mr__field">
+                <label className="mr__label" htmlFor="mr-city">
+                  Город
+                </label>
+                <input
+                  id="mr-city"
+                  type="text"
+                  list="mr-city-suggestions"
+                  autoFocus
+                  maxLength={120}
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  className="mr__input"
+                />
+                <datalist id="mr-city-suggestions">
+                  {KG_SUGGESTED_CITIES.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
+              </div>
+              <div className="mr__field">
+                <label className="mr__label" htmlFor="mr-address-line">
+                  Адрес
+                </label>
+                <input
+                  id="mr-address-line"
+                  type="text"
+                  maxLength={500}
+                  placeholder="ул. Чуй 123, офис 5"
+                  value={addressLine}
+                  onChange={(e) => setAddressLine(e.target.value)}
+                  className="mr__input"
+                />
+              </div>
+              <div className="mr__field">
+                <label className="mr__label" htmlFor="mr-lat">
+                  Широта
+                </label>
+                <input
+                  id="mr-lat"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="42.8746"
+                  value={latitude}
+                  onChange={(e) => setLatitude(e.target.value)}
+                  className="mr__input mr__input--mono"
+                />
+              </div>
+              <div className="mr__field mr__field--solo">
+                <label className="mr__label" htmlFor="mr-lng">
+                  Долгота
+                </label>
+                <input
+                  id="mr-lng"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="74.6122"
+                  value={longitude}
+                  onChange={(e) => setLongitude(e.target.value)}
+                  className="mr__input mr__input--mono"
+                />
+              </div>
+              {addressStepError ? (
+                <p className="mr__err" role="alert">
+                  {addressStepError}
+                </p>
+              ) : (
+                <p className="mr__hint">
+                  Координаты можно взять из Google Maps (КР: широта 39–43, долгота
+                  69–80)
+                </p>
+              )}
+            </>
+          ) : null}
+
+          {step === 4 ? (
+            <>
+              <div className="mr__card-head">
                 <h1 className="mr__title">Токен бота</h1>
                 <p className="mr__subtitle">
                   Создайте бота в @BotFather и вставьте токен
@@ -374,7 +501,7 @@ export default function MerchantRegisterPage() {
             </>
           ) : null}
 
-          {step === 4 ? (
+          {step === 5 ? (
             <>
               <div className="mr__card-head">
                 <h1 className="mr__title">Телефон</h1>
@@ -396,7 +523,7 @@ export default function MerchantRegisterPage() {
             </>
           ) : null}
 
-          {step === 5 ? (
+          {step === 6 ? (
             <>
               <div className="mr__card-head">
                 <h1 className="mr__title">Finik (опционально)</h1>
@@ -441,7 +568,7 @@ export default function MerchantRegisterPage() {
             </>
           ) : null}
 
-          {step >= 6 ? (
+          {step >= 7 ? (
             <>
               <div className="mr__card-head">
                 <h1 className="mr__title">Проверьте заявку</h1>
@@ -457,6 +584,16 @@ export default function MerchantRegisterPage() {
                 <div className="mr__review-row">
                   <dt>Название</dt>
                   <dd>{storeName.trim()}</dd>
+                </div>
+                <div className="mr__review-row">
+                  <dt>Адрес</dt>
+                  <dd>
+                    {city.trim()}, {addressLine.trim()}
+                    <br />
+                    <span className="mr__review-masked">
+                      {latitude.trim()}, {longitude.trim()}
+                    </span>
+                  </dd>
                 </div>
                 <div className="mr__review-row">
                   <dt>Токен бота</dt>

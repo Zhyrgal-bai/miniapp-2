@@ -56,6 +56,12 @@ model Business {
 
   slug String? @unique
 
+  /// Физический адрес магазина (доставка, карты — Phase 1 foundation).
+  addressLine String?
+  city        String?
+  latitude    Float?
+  longitude   Float?
+
   /// Telegram bot: AES-256-GCM (enc:v1:...) или временно plain в локальном dev без ключа.
   botToken String
 
@@ -103,6 +109,9 @@ model Business {
   businessType BusinessType
 
   merchantConfig Json? @default("{}")
+
+  /// Phase 4: правила доставки (pricing mode, min order, тарифы).
+  deliverySettings Json? @default("{}")
 
   templateVersion Int @default(1)
 
@@ -536,6 +545,9 @@ model Order {
 
   total Int
 
+  /// Стоимость доставки (сом), включена в total.
+  deliveryFee Int @default(0)
+
   paymentMethod String?
 
   tracking   String?
@@ -803,6 +815,11 @@ model RegistrationRequest {
   name       String
   botToken   String
   phone      String
+
+  addressLine String?
+  city        String?
+  latitude    Float?
+  longitude   Float?
 
   /// Finik (онлайн ККМ), подставляется в Business после approve.
   finikApiKey String?

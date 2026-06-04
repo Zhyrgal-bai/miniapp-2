@@ -68,6 +68,45 @@ import type { RegistrationStatusPayload } from "../services/platformApi";
 import { ru } from "../i18n/ru";
 import { useBodyScrollLock } from "../utils/bodyScrollLock";
 import { shareMiniAppLink } from "../utils/miniAppShare";
+import {
+  KG_SUGGESTED_CITIES,
+  parseBusinessAddressInput,
+} from "@repo-shared/businessAddress";
+import { defaultMerchantDeliverySettings } from "@repo-shared/merchantDeliverySettings";
+import type { MerchantDeliverySettings } from "@repo-shared/merchantDeliverySettings";
+import { MerchantDeliverySettingsPanel } from "../components/platform/MerchantDeliverySettingsPanel";
+import type { BusinessStoreAddressDTO } from "../services/platformApi";
+
+function storeAddressDraftMatchesSnap(
+  snap: BusinessStoreAddressDTO | null,
+  addressLine: string,
+  city: string,
+  latitude: string,
+  longitude: string,
+): boolean {
+  const parsed = parseBusinessAddressInput({
+    addressLine,
+    city,
+    latitude,
+    longitude,
+  });
+  if (!parsed.ok) {
+    if (snap != null) return false;
+    return (
+      addressLine.trim() === "" &&
+      city.trim() === "" &&
+      latitude.trim() === "" &&
+      longitude.trim() === ""
+    );
+  }
+  if (snap == null) return false;
+  return (
+    parsed.value.addressLine === snap.addressLine &&
+    parsed.value.city === snap.city &&
+    parsed.value.latitude === snap.latitude &&
+    parsed.value.longitude === snap.longitude
+  );
+}
 
 function miniAppNavigatePath(b: Pick<PlatformMyBusinessDTO, "id" | "slug">): string {
   const s = typeof b.slug === "string" ? b.slug.trim() : "";
@@ -149,6 +188,12 @@ export default function PlatformPage() {
     null,
   );
   const [settingsName, setSettingsName] = useState("");
+  const [settingsAddressLine, setSettingsAddressLine] = useState("");
+  const [settingsCity, setSettingsCity] = useState("");
+  const [settingsLatitude, setSettingsLatitude] = useState("");
+  const [settingsLongitude, setSettingsLongitude] = useState("");
+  const [deliverySettingsDraft, setDeliverySettingsDraft] =
+    useState<MerchantDeliverySettings>(defaultMerchantDeliverySettings());
   const [finikKeyDraft, setFinikKeyDraft] = useState("");
   const [finikAccountIdDraft, setFinikAccountIdDraft] = useState("");
   const [finikSecretDraft, setFinikSecretDraft] = useState("");
@@ -428,6 +473,11 @@ export default function PlatformPage() {
       setSettingsErr(null);
       setSettingsOkMsg(null);
       setSettingsName("");
+      setSettingsAddressLine("");
+      setSettingsCity("");
+      setSettingsLatitude("");
+      setSettingsLongitude("");
+      setDeliverySettingsDraft(defaultMerchantDeliverySettings());
       setFinikKeyDraft("");
       setFinikSecretDraft("");
       setFinikSaving(false);
@@ -455,7 +505,20 @@ export default function PlatformPage() {
         if (cancelled) return;
         setSettingsSnap(s);
         setSettingsName(s.name);
+        const sa = s.storeAddress;
+        if (sa != null) {
+          setSettingsAddressLine(sa.addressLine);
+          setSettingsCity(sa.city);
+          setSettingsLatitude(String(sa.latitude));
+          setSettingsLongitude(String(sa.longitude));
+        } else {
+          setSettingsAddressLine("");
+          setSettingsCity("Бишкек");
+          setSettingsLatitude("");
+          setSettingsLongitude("");
+        }
         setMerchantConfigDraft(s.merchantConfig ?? {});
+        setDeliverySettingsDraft(s.deliverySettings ?? defaultMerchantDeliverySettings());
         setFinikKeyDraft("");
         setFinikSecretDraft("");
         setFinikMsg(null);
@@ -1033,6 +1096,16 @@ export default function PlatformPage() {
     }
     const trimmedName = settingsName.trim();
     const nameChanged = trimmedName !== settingsSnap.name.trim();
+    const addressChanged = !storeAddressDraftMatchesSnap(
+      settingsSnap.storeAddress,
+      settingsAddressLine,
+      settingsCity,
+      settingsLatitude,
+      settingsLongitude,
+    );
+    const deliveryChanged =
+      JSON.stringify(deliverySettingsDraft) !==
+      JSON.stringify(settingsSnap.deliverySettings ?? defaultMerchantDeliverySettings());
     const newTok = settingsNewToken.replace(/\s/g, "").trim();
 
     const payload: {
@@ -1041,11 +1114,33 @@ export default function PlatformPage() {
       storeName?: string;
       newBotToken?: string;
       merchantConfig?: Record<string, unknown>;
+      addressLine?: string;
+      city?: string;
+      latitude?: number;
+      longitude?: number;
+      deliverySettings?: MerchantDeliverySettings;
     } = {
       telegramId: merchantTelegramId,
       businessId: settingsBusinessId,
     };
     if (nameChanged) payload.storeName = trimmedName;
+    if (addressChanged) {
+      const addr = parseBusinessAddressInput({
+        addressLine: settingsAddressLine,
+        city: settingsCity,
+        latitude: settingsLatitude,
+        longitude: settingsLongitude,
+      });
+      if (!addr.ok) {
+        setSettingsErr(addr.error);
+        return;
+      }
+      payload.addressLine = addr.value.addressLine;
+      payload.city = addr.value.city;
+      payload.latitude = addr.value.latitude;
+      payload.longitude = addr.value.longitude;
+    }
+    if (deliveryChanged) payload.deliverySettings = deliverySettingsDraft;
     if (newTok !== "" && isPlatformAdmin) payload.newBotToken = newTok;
     if (
       isPlatformAdmin &&
@@ -1057,7 +1152,9 @@ export default function PlatformPage() {
     if (
       payload.storeName === undefined &&
       payload.newBotToken === undefined &&
-      payload.merchantConfig === undefined
+      payload.merchantConfig === undefined &&
+      payload.addressLine === undefined &&
+      payload.deliverySettings === undefined
     ) {
       setSettingsErr("Нет изменений для сохранения.");
       return;
@@ -1068,9 +1165,25 @@ export default function PlatformPage() {
     setSettingsOkMsg(null);
     try {
       const out = await savePlatformStoreSettings(payload);
+      const nextStoreAddress =
+        payload.addressLine !== undefined &&
+        payload.city !== undefined &&
+        payload.latitude !== undefined &&
+        payload.longitude !== undefined
+          ? {
+              addressLine: payload.addressLine,
+              city: payload.city,
+              latitude: payload.latitude,
+              longitude: payload.longitude,
+            }
+          : settingsSnap.storeAddress;
       setSettingsSnap({
         ...settingsSnap,
         name: out.name,
+        storeAddress: nextStoreAddress,
+        deliverySettings: deliveryChanged
+          ? deliverySettingsDraft
+          : settingsSnap.deliverySettings,
         finikConfigured: out.finikConfigured,
         finikReady: out.finikConfigured,
         pendingBotTokenChange: out.pendingBotTokenChange,
@@ -2197,7 +2310,7 @@ export default function PlatformPage() {
                     <span className="mp-settings-section__title">Магазин</span>
                   </div>
                   <p className="mp-settings-section__desc">
-                    Название видят покупатели в витрине и заказах.
+                    Название и адрес видят покупатели в витрине и заказах.
                   </p>
                   <div className="mp-settings-field">
                     <label
@@ -2219,6 +2332,85 @@ export default function PlatformPage() {
                       className={archa.input}
                     />
                   </div>
+                  <div className="mp-settings-field">
+                    <label
+                      htmlFor="platform-settings-city"
+                      className="mp-settings-field__label"
+                    >
+                      Город
+                    </label>
+                    <input
+                      id="platform-settings-city"
+                      type="text"
+                      list="platform-settings-city-suggestions"
+                      maxLength={120}
+                      disabled={settingsSnap == null}
+                      value={settingsCity}
+                      onChange={(e) => setSettingsCity(e.target.value)}
+                      className={archa.input}
+                    />
+                    <datalist id="platform-settings-city-suggestions">
+                      {KG_SUGGESTED_CITIES.map((c) => (
+                        <option key={c} value={c} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <div className="mp-settings-field">
+                    <label
+                      htmlFor="platform-settings-address"
+                      className="mp-settings-field__label"
+                    >
+                      Адрес
+                    </label>
+                    <input
+                      id="platform-settings-address"
+                      type="text"
+                      maxLength={500}
+                      placeholder="ул. Чуй 123"
+                      disabled={settingsSnap == null}
+                      value={settingsAddressLine}
+                      onChange={(e) => setSettingsAddressLine(e.target.value)}
+                      className={archa.input}
+                    />
+                  </div>
+                  <div className="mp-settings-field">
+                    <label
+                      htmlFor="platform-settings-lat"
+                      className="mp-settings-field__label"
+                    >
+                      Широта
+                    </label>
+                    <input
+                      id="platform-settings-lat"
+                      type="text"
+                      inputMode="decimal"
+                      disabled={settingsSnap == null}
+                      value={settingsLatitude}
+                      onChange={(e) => setSettingsLatitude(e.target.value)}
+                      className={`${archa.input} font-mono`}
+                    />
+                  </div>
+                  <div className="mp-settings-field">
+                    <label
+                      htmlFor="platform-settings-lng"
+                      className="mp-settings-field__label"
+                    >
+                      Долгота
+                    </label>
+                    <input
+                      id="platform-settings-lng"
+                      type="text"
+                      inputMode="decimal"
+                      disabled={settingsSnap == null}
+                      value={settingsLongitude}
+                      onChange={(e) => setSettingsLongitude(e.target.value)}
+                      className={`${archa.input} font-mono`}
+                    />
+                  </div>
+                  <p className="mp-settings-section__desc">
+                    Координаты в пределах КР (для доставки и карт в следующих
+                    фазах).
+                  </p>
 
                   {settingsSnap != null &&
                   isPlatformAdmin &&
@@ -2237,6 +2429,20 @@ export default function PlatformPage() {
                       />
                     </div>
                   ) : null}
+                </div>
+
+                <div className="mp-settings-section mp-settings-section--accent">
+                  <div className="mp-settings-section__head">
+                    <span className="mp-settings-section__title">Доставка</span>
+                  </div>
+                  <p className="mp-settings-section__desc">
+                    Правила доставки для checkout и расчёта суммы заказа.
+                  </p>
+                  <MerchantDeliverySettingsPanel
+                    value={deliverySettingsDraft}
+                    onChange={setDeliverySettingsDraft}
+                    disabled={settingsSnap == null}
+                  />
                 </div>
 
                 <div className="mp-settings-section mp-settings-section--accent">

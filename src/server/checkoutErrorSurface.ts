@@ -6,6 +6,7 @@ export type CheckoutStepName =
   | "validated"
   | "pricing"
   | "promo"
+  | "delivery_quote"
   | "customer"
   | "cooldown"
   | "duplicate_check"

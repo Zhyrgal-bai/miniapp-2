@@ -6,6 +6,7 @@ import {
   PLATFORM_STORE_NAME_MAX,
   PLATFORM_STORE_NAME_MIN,
 } from "./platformRegisterRequest.js";
+import { parseBusinessAddressInput } from "../shared/businessAddress.js";
 
 export function formatZodApiError(err: z.ZodError): string {
   const first = err.issues[0]?.message?.trim();
@@ -35,6 +36,10 @@ export const platformRegisterRequestShape = z
     finikAccountId: z.string().optional(),
     businessType: z.enum(["clothing", "coffee", "fastfood", "flowers"]),
     ownerUsername: z.string().optional(),
+    addressLine: z.string().optional(),
+    city: z.string().optional(),
+    latitude: z.union([z.number(), z.string()]).optional(),
+    longitude: z.union([z.number(), z.string()]).optional(),
   })
   .superRefine((val, ctx) => {
     if (val.botToken === "") {
@@ -77,6 +82,19 @@ export const platformRegisterRequestShape = z
         code: z.ZodIssueCode.custom,
         message: finik.error,
         path: ["finikAccountId"],
+      });
+    }
+    const addr = parseBusinessAddressInput({
+      addressLine: val.addressLine,
+      city: val.city,
+      latitude: val.latitude,
+      longitude: val.longitude,
+    });
+    if (!addr.ok) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: addr.error,
+        path: ["addressLine"],
       });
     }
   });

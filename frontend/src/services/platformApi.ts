@@ -245,9 +245,31 @@ export async function fetchMerchantSubscriptionPanel(
   return j;
 }
 
+export type BusinessStoreAddressDTO = {
+  addressLine: string;
+  city: string;
+  latitude: number;
+  longitude: number;
+};
+
+export type MerchantDeliverySettingsDTO = {
+  version: 1;
+  pricingMode:
+    | "SELF_PICKUP"
+    | "FIXED_PRICE"
+    | "DISTANCE_BASED"
+    | "FREE_DELIVERY"
+    | "MANUAL_CONFIRMATION";
+  minOrderAmountSom: number;
+  fixedPriceSom: number;
+  distanceTiers: Array<{ maxKm: number | null; priceSom: number }>;
+};
+
 export type PlatformStoreSettingsDTO = {
   businessId: number;
   name: string;
+  storeAddress: BusinessStoreAddressDTO | null;
+  deliverySettings: MerchantDeliverySettingsDTO;
   finikConfigured: boolean;
   finikReady: boolean;
   finikHasApiKey: boolean;
@@ -290,6 +312,13 @@ export async function fetchPlatformStoreSettings(params: {
     subscriptionStatus?: unknown;
     subscriptionEndsAt?: unknown;
     trialEndsAt?: unknown;
+    storeAddress?: {
+      addressLine?: string;
+      city?: string;
+      latitude?: number;
+      longitude?: number;
+    } | null;
+    deliverySettings?: MerchantDeliverySettingsDTO;
   }>(
     apiAbsoluteUrl(`/api/platform/store-settings?${q.toString()}`),
     { method: "GET", businessId: params.businessId, json: false },
@@ -305,9 +334,68 @@ export async function fetchPlatformStoreSettings(params: {
     typeof j.finikReady === "boolean"
       ? j.finikReady
       : Boolean(j.finikConfigured);
+  let storeAddress: BusinessStoreAddressDTO | null = null;
+  const sa = j.storeAddress;
+  if (
+    sa != null &&
+    typeof sa === "object" &&
+    typeof sa.addressLine === "string" &&
+    typeof sa.city === "string" &&
+    typeof sa.latitude === "number" &&
+    Number.isFinite(sa.latitude) &&
+    typeof sa.longitude === "number" &&
+    Number.isFinite(sa.longitude)
+  ) {
+    storeAddress = {
+      addressLine: sa.addressLine.trim(),
+      city: sa.city.trim(),
+      latitude: sa.latitude,
+      longitude: sa.longitude,
+    };
+  }
+  const defaultDelivery: MerchantDeliverySettingsDTO = {
+    version: 1,
+    pricingMode: "FREE_DELIVERY",
+    minOrderAmountSom: 0,
+    fixedPriceSom: 0,
+    distanceTiers: [],
+  };
+  const ds = j.deliverySettings;
+  const deliverySettings: MerchantDeliverySettingsDTO =
+    ds != null &&
+    typeof ds === "object" &&
+    typeof ds.pricingMode === "string" &&
+    typeof ds.minOrderAmountSom === "number"
+      ? {
+          version: 1,
+          pricingMode: ds.pricingMode as MerchantDeliverySettingsDTO["pricingMode"],
+          minOrderAmountSom: Math.max(0, Math.round(ds.minOrderAmountSom)),
+          fixedPriceSom: Math.max(0, Math.round(Number(ds.fixedPriceSom) || 0)),
+          distanceTiers: Array.isArray(ds.distanceTiers)
+            ? ds.distanceTiers
+                .map((t) => {
+                  if (t == null || typeof t !== "object") return null;
+                  const maxKm =
+                    (t as { maxKm?: number | null }).maxKm ?? null;
+                  const priceSom = Number((t as { priceSom?: number }).priceSom);
+                  if (!Number.isFinite(priceSom)) return null;
+                  return {
+                    maxKm:
+                      maxKm != null && Number.isFinite(Number(maxKm))
+                        ? Number(maxKm)
+                        : null,
+                    priceSom: Math.max(0, Math.round(priceSom)),
+                  };
+                })
+                .filter((x): x is { maxKm: number | null; priceSom: number } => x != null)
+            : [],
+        }
+      : defaultDelivery;
   return {
     businessId: bid,
     name: String(j.name ?? ""),
+    storeAddress,
+    deliverySettings,
     finikConfigured: finikReady,
     finikReady,
     finikHasApiKey: Boolean(j.finikHasApiKey ?? finikReady),
@@ -402,6 +490,11 @@ export async function savePlatformStoreSettings(payload: {
   storeName?: string;
   newBotToken?: string;
   merchantConfig?: Record<string, unknown>;
+  addressLine?: string;
+  city?: string;
+  latitude?: number | string;
+  longitude?: number | string;
+  deliverySettings?: MerchantDeliverySettingsDTO;
 }): Promise<PlatformStoreSettingsSaveResult> {
   void payload.telegramId;
   const body: Record<string, unknown> = {
@@ -411,6 +504,12 @@ export async function savePlatformStoreSettings(payload: {
   if (payload.newBotToken !== undefined) body.newBotToken = payload.newBotToken;
   if (payload.merchantConfig !== undefined)
     body.merchantConfig = payload.merchantConfig;
+  if (payload.addressLine !== undefined) body.addressLine = payload.addressLine;
+  if (payload.city !== undefined) body.city = payload.city;
+  if (payload.latitude !== undefined) body.latitude = payload.latitude;
+  if (payload.longitude !== undefined) body.longitude = payload.longitude;
+  if (payload.deliverySettings !== undefined)
+    body.deliverySettings = payload.deliverySettings;
 
   const j = await adminFetchJson<{
     error?: string;
@@ -518,6 +617,10 @@ export async function postPlatformUpdateFinik(payload: {
 
 export async function submitPlatformRegisterRequest(payload: {
   storeName: string;
+  addressLine: string;
+  city: string;
+  latitude: number | string;
+  longitude: number | string;
   botToken: string;
   phone: string;
   telegramId: number;
@@ -529,6 +632,10 @@ export async function submitPlatformRegisterRequest(payload: {
   void payload.telegramId;
   const body: Record<string, unknown> = {
     storeName: payload.storeName,
+    addressLine: payload.addressLine,
+    city: payload.city,
+    latitude: payload.latitude,
+    longitude: payload.longitude,
     botToken: payload.botToken,
     phone: payload.phone,
     telegramId: payload.telegramId,

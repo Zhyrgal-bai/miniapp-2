@@ -35,6 +35,8 @@ import {
   shouldRenderIdentityBand,
   StorefrontIdentityBand,
 } from "./StorefrontIdentityBand";
+import { getStorefrontCommerceMode } from "../../hooks/useStorefrontCommerceMode";
+import { WebStorefrontInfoBar } from "./commerce/WebStorefrontInfoBar";
 import { trackStoreView } from "../../services/storefrontAnalytics";
 import { enrichProductsFromCatalog } from "../../utils/enrichProductsFromCatalog";
 import { businessTypeSupportsTableReservations } from "@repo-shared/tableReservation";
@@ -68,10 +70,34 @@ export type StorefrontFeaturedPromo = {
   remainingUses: number;
 };
 
+export type StorefrontStoreAddress = {
+  addressLine: string;
+  city: string;
+  latitude: number;
+  longitude: number;
+};
+
+export type StorefrontDeliveryPolicy = {
+  pricingMode:
+    | "SELF_PICKUP"
+    | "FIXED_PRICE"
+    | "DISTANCE_BASED"
+    | "FREE_DELIVERY"
+    | "MANUAL_CONFIRMATION";
+  minOrderAmountSom: number;
+  fixedPriceSom: number;
+  distanceTiers: Array<{ maxKm: number | null; priceSom: number }>;
+  manualConfirmationNotice: string | null;
+  pickupOnly: boolean;
+};
+
 export type ResolvedStorefrontPayload = {
   businessId: number;
   storefrontSlug?: string | null;
   storeName?: string;
+  storeAddress?: StorefrontStoreAddress;
+  telegramOpenUrl?: string;
+  deliveryPolicy?: StorefrontDeliveryPolicy;
   businessType: string;
   templateId: string | null;
   storefrontConfigVersion: number;
@@ -129,7 +155,11 @@ export function StorefrontRenderer(props: {
     [props.payload.storefrontCardConfig, cardViewportTier, props.payload.businessType],
   );
 
-  const showTableBooking = businessTypeSupportsTableReservations(props.payload.businessType);
+  const commerceMode = getStorefrontCommerceMode();
+  const isWebBrowse = commerceMode === "web";
+  const showTableBooking =
+    !isWebBrowse &&
+    businessTypeSupportsTableReservations(props.payload.businessType);
 
   const openTableBooking = useCallback(() => {
     window.dispatchEvent(new CustomEvent("sf:openTableBooking"));
@@ -250,6 +280,11 @@ export function StorefrontRenderer(props: {
 
   const identityTextCfg = props.payload.storefrontTextConfig ?? undefined;
   const storeBrandHeaderActive = Boolean(String(props.payload.storeName ?? "").trim());
+  const hasStoreAddress = Boolean(
+    props.payload.storeAddress != null &&
+      (props.payload.storeAddress.addressLine.trim() !== "" ||
+        props.payload.storeAddress.city.trim() !== ""),
+  );
   const showIdentityBand = useMemo(
     () =>
       shouldRenderIdentityBand(
@@ -257,8 +292,14 @@ export function StorefrontRenderer(props: {
         identityTextCfg as Record<string, unknown> | undefined,
         styleCfg,
         { headerBrandActive: storeBrandHeaderActive },
-      ),
-    [props.payload.storeName, identityTextCfg, styleCfg, storeBrandHeaderActive],
+      ) || hasStoreAddress,
+    [
+      props.payload.storeName,
+      identityTextCfg,
+      styleCfg,
+      storeBrandHeaderActive,
+      hasStoreAddress,
+    ],
   );
 
   return (
@@ -276,8 +317,18 @@ export function StorefrontRenderer(props: {
             <div className="sf-feed__chunk sf-feed__chunk--identity sf-feed__chunk--stack">
               <StorefrontIdentityBand
                 storeName={props.payload.storeName}
+                storeAddress={props.payload.storeAddress}
                 textConfig={identityTextCfg}
                 styleConfig={styleCfg}
+              />
+            </div>
+          ) : null}
+          {isWebBrowse ? (
+            <div className="sf-feed__chunk sf-feed__chunk--web-info sf-feed__chunk--stack">
+              <WebStorefrontInfoBar
+                storeName={props.payload.storeName}
+                storeAddress={props.payload.storeAddress}
+                telegramOpenUrl={props.payload.telegramOpenUrl ?? null}
               />
             </div>
           ) : null}

@@ -28,6 +28,16 @@ import {
 import { platformMerchantIsStoreOwner } from "./platformMerchantAccess.js";
 import { PLATFORM_STORE_NAME_MAX, PLATFORM_STORE_NAME_MIN } from "./platformRegisterRequest.js";
 import { cleanInput } from "./orderInputSanitize.js";
+import {
+  businessAddressRowToPublic,
+  parseBusinessAddressInput,
+  type BusinessAddressPublic,
+} from "../shared/businessAddress.js";
+import {
+  defaultMerchantDeliverySettings,
+  parseMerchantDeliverySettings,
+  type MerchantDeliverySettings,
+} from "../shared/merchantDeliverySettings.js";
 
 export type PlatformStoreSettingsDTO = {
   businessId: number;
@@ -48,6 +58,8 @@ export type PlatformStoreSettingsDTO = {
   subscriptionStatus: string;
   subscriptionEndsAt: string | null;
   trialEndsAt: string | null;
+  storeAddress: BusinessAddressPublic | null;
+  deliverySettings: MerchantDeliverySettings;
 };
 
 export async function getPlatformStoreSettingsForMerchant(input: {
@@ -78,6 +90,11 @@ export async function getPlatformStoreSettingsForMerchant(input: {
       subscriptionStatus: true,
       subscriptionEndsAt: true,
       trialEndsAt: true,
+      addressLine: true,
+      city: true,
+      latitude: true,
+      longitude: true,
+      deliverySettings: true,
     },
   });
   if (b == null) {
@@ -132,6 +149,11 @@ export async function getPlatformStoreSettingsForMerchant(input: {
       subscriptionStatus: String(b.subscriptionStatus ?? ""),
       subscriptionEndsAt: b.subscriptionEndsAt?.toISOString() ?? null,
       trialEndsAt: b.trialEndsAt?.toISOString() ?? null,
+      storeAddress: businessAddressRowToPublic(b),
+      deliverySettings: (() => {
+        const p = parseMerchantDeliverySettings((b as any).deliverySettings);
+        return p.ok ? p.value : defaultMerchantDeliverySettings();
+      })(),
     },
   };
 }
@@ -142,6 +164,11 @@ export type PlatformStoreSettingsUpdateBody = {
   finikAccountId?: unknown;
   newBotToken?: unknown;
   merchantConfig?: unknown;
+  addressLine?: unknown;
+  city?: unknown;
+  latitude?: unknown;
+  longitude?: unknown;
+  deliverySettings?: unknown;
 };
 
 export async function updatePlatformStoreSettingsForMerchant(input: {
@@ -200,14 +227,60 @@ export async function updatePlatformStoreSettingsForMerchant(input: {
     rawTok !== undefined &&
     !(typeof rawTok === "string" && rawTok.replace(/\s/g, "").trim() === "");
   const hasMerchantConfig = rawMerchantConfig !== undefined;
+  const hasAddress =
+    input.body.addressLine !== undefined ||
+    input.body.city !== undefined ||
+    input.body.latitude !== undefined ||
+    input.body.longitude !== undefined;
+  const hasDeliverySettings = input.body.deliverySettings !== undefined;
 
-  if (!hasName && !hasFinik && !hasFinikAccount && !hasTok && !hasMerchantConfig) {
+  if (
+    !hasName &&
+    !hasFinik &&
+    !hasFinikAccount &&
+    !hasTok &&
+    !hasMerchantConfig &&
+    !hasAddress &&
+    !hasDeliverySettings
+  ) {
     return {
       ok: false,
       statusCode: 400,
       error:
-        "Укажите storeName, finikApiKey, finikAccountId, newBotToken и/или merchantConfig",
+        "Укажите storeName, адрес, deliverySettings, finikApiKey, finikAccountId, newBotToken и/или merchantConfig",
     };
+  }
+
+  if (hasDeliverySettings) {
+    const parsed = parseMerchantDeliverySettings(input.body.deliverySettings);
+    if (!parsed.ok) {
+      return { ok: false, statusCode: 400, error: parsed.error };
+    }
+    await prisma.business.update({
+      where: { id: input.businessId },
+      data: { deliverySettings: parsed.value as any },
+    });
+  }
+
+  if (hasAddress) {
+    const addr = parseBusinessAddressInput({
+      addressLine: input.body.addressLine,
+      city: input.body.city,
+      latitude: input.body.latitude,
+      longitude: input.body.longitude,
+    });
+    if (!addr.ok) {
+      return { ok: false, statusCode: 400, error: addr.error };
+    }
+    await prisma.business.update({
+      where: { id: input.businessId },
+      data: {
+        addressLine: addr.value.addressLine,
+        city: addr.value.city,
+        latitude: addr.value.latitude,
+        longitude: addr.value.longitude,
+      },
+    });
   }
 
   if (hasName) {

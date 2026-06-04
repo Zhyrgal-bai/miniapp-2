@@ -59,6 +59,9 @@ import {
   kitFromTemplateId,
   storefrontShellModeFromStyleConfig,
 } from "./storefront/buildStorefrontLayoutCssVars";
+import { isStorefrontCommerceEnabled } from "./hooks/useStorefrontCommerceMode";
+import { useCustomerLocationPrompt } from "./hooks/useCustomerLocationPrompt";
+import { CustomerLocationPrompt } from "./components/storefront/commerce/CustomerLocationPrompt";
 
 type AppNavPage =
   | "home"
@@ -182,15 +185,27 @@ export default function App() {
     (storefrontLoading || (Boolean(slugHint) && storefrontError == null));
   const shopMissing = !allowWithoutShop && businessId == null && !tenantBoot;
 
+  const commerceEnabled = isStorefrontCommerceEnabled();
+
+  const customerLocationPrompt = useCustomerLocationPrompt(
+    businessId != null && !tenantBoot && !shopMissing ? businessId : null,
+  );
+
   const items = useCartStore((state) => state.items);
   const totalQuantity = items.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
+
+  useEffect(() => {
+    if (!commerceEnabled && (page === "cart" || page === "checkout" || page === "my-orders" || page === "support" || page === "table-booking")) {
+      setPage("home");
+    }
+  }, [commerceEnabled, page]);
 
   const sfAppRef = useRef<HTMLDivElement | null>(null);
   const [stickyCartHeight, setStickyCartHeight] = useState(0);
   const [productSheetOpen, setProductSheetOpen] = useState(false);
 
   useLayoutEffect(() => {
-    const stickyVisible = page === "home" && totalQuantity > 0;
+    const stickyVisible = commerceEnabled && page === "home" && totalQuantity > 0;
     if (!stickyVisible) {
       setStickyCartHeight(0);
       sfAppRef.current?.style.setProperty("--sf-chrome-sticky-height", "0px");
@@ -214,7 +229,7 @@ export default function App() {
       ro.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [page, totalQuantity]);
+  }, [page, totalQuantity, commerceEnabled]);
 
   useEffect(() => {
     const onOpen = () => setProductSheetOpen(true);
@@ -651,7 +666,10 @@ export default function App() {
 
   const content = (
     <PreorderProvider businessId={businessId}>
-    <div className={`app${storeBrandHeader ? " app--store-brand" : ""}`}>
+    <div
+      className={`app${storeBrandHeader ? " app--store-brand" : ""}${commerceEnabled ? "" : " app--web-storefront"}`}
+      data-sf-commerce={commerceEnabled ? "telegram" : "web"}
+    >
       <Header
         menuOpen={isMenuOpen}
         onMenuToggle={handleMenuToggle}
@@ -662,15 +680,19 @@ export default function App() {
         logoUrl={theme.logoUrl}
         storeBrandMode={storeBrandHeader}
         isMerchantStaff={adminAllowed}
-        accountMenu={{
-          onGoToStore: () => handleNav("home"),
-          onMyOrders: () => {
-            sessionStorage.removeItem(SF_ORDERS_INTENT_KEY);
-            setMyOrdersPlainNonce((n) => n + 1);
-            handleNav("my-orders");
-          },
-          onOpenSupportHub: () => handleNav("support"),
-        }}
+        accountMenu={
+          commerceEnabled
+            ? {
+                onGoToStore: () => handleNav("home"),
+                onMyOrders: () => {
+                  sessionStorage.removeItem(SF_ORDERS_INTENT_KEY);
+                  setMyOrdersPlainNonce((n) => n + 1);
+                  handleNav("my-orders");
+                },
+                onOpenSupportHub: () => handleNav("support"),
+              }
+            : undefined
+        }
         merchantMenu={
           adminAllowed
             ? {
@@ -698,16 +720,19 @@ export default function App() {
         onNavToAdmin={goAdminSection}
       />
 
-      <PaymentProcessingBanner
-        businessId={businessId}
-        onViewOrders={() => handleNav("my-orders")}
-      />
+      {commerceEnabled ? (
+        <PaymentProcessingBanner
+          businessId={businessId}
+          onViewOrders={() => handleNav("my-orders")}
+        />
+      ) : null}
 
       <div className="content app__content">
         <div className="sf-commerce-shell" data-sf-shell={commerceShellMode}>
-          {(page === "home" || page === "cart" || page === "checkout") && (
+          {commerceEnabled &&
+          (page === "home" || page === "cart" || page === "checkout") ? (
             <PreorderBanner />
-          )}
+          ) : null}
           {page === "home" && <HomePage />}
           {page === "table-booking" && (
             <TableBookingPage onBack={() => commitPage("home")} />
@@ -745,25 +770,36 @@ export default function App() {
         </div>
       </div>
 
-      <FloatingCart
-        visible={
-          !productSheetOpen &&
-          page !== "support" &&
-          page !== "checkout" &&
-          page !== "table-booking" &&
-          !(page === "home" && totalQuantity > 0)
-        }
-        totalQuantity={totalQuantity}
-        onOpen={handleFloatingCartClick}
-        bottomInsetPx={stickyCartHeight}
-      />
+      {commerceEnabled ? (
+        <FloatingCart
+          visible={
+            !productSheetOpen &&
+            page !== "support" &&
+            page !== "checkout" &&
+            page !== "table-booking" &&
+            !(page === "home" && totalQuantity > 0)
+          }
+          totalQuantity={totalQuantity}
+          onOpen={handleFloatingCartClick}
+          bottomInsetPx={stickyCartHeight}
+        />
+      ) : null}
 
-      <StickyCartBar
-        visible={page === "home" && !productSheetOpen}
-        onOpenCart={handleFloatingCartClick}
-        onCheckout={handleCheckoutQuick}
-      />
+      {commerceEnabled ? (
+        <StickyCartBar
+          visible={page === "home" && !productSheetOpen}
+          onOpenCart={handleFloatingCartClick}
+          onCheckout={handleCheckoutQuick}
+        />
+      ) : null}
       <ToastHost />
+      <CustomerLocationPrompt
+        open={customerLocationPrompt.promptVisible}
+        requesting={customerLocationPrompt.requesting}
+        error={customerLocationPrompt.requestError}
+        onAllow={customerLocationPrompt.onAllow}
+        onDismiss={customerLocationPrompt.onDismiss}
+      />
     </div>
     </PreorderProvider>
   );

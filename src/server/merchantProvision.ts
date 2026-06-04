@@ -19,6 +19,10 @@ export type ProvisionMerchantStoreParams = {
   finikApiKey?: string | null;
   finikAccountId?: string | null;
   businessType?: string;
+  addressLine?: string | null;
+  city?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 /** Business + Settings + OWNER после approve заявки (бот или platform). */
@@ -73,6 +77,16 @@ export async function provisionMerchantStoreInTx(
       billingPlan: BillingPlan.FREE,
       trialEndsAt: trialEnd,
       subscriptionEndsAt: null,
+      addressLine: params.addressLine?.trim() || null,
+      city: params.city?.trim() || null,
+      latitude:
+        params.latitude != null && Number.isFinite(params.latitude)
+          ? params.latitude
+          : null,
+      longitude:
+        params.longitude != null && Number.isFinite(params.longitude)
+          ? params.longitude
+          : null,
     } as any,
   });
 

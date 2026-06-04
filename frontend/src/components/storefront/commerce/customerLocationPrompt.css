@@ -1,0 +1,71 @@
+.sf-geo-prompt-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.sf-geo-prompt {
+  width: min(100%, 420px);
+  border-radius: 16px 16px 14px 14px;
+  padding: 1.25rem 1.15rem 1.1rem;
+  background: var(--tg-theme-bg-color, #fff);
+  color: var(--tg-theme-text-color, #111);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+}
+
+.sf-geo-prompt__title {
+  margin: 0 0 0.5rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.sf-geo-prompt__text {
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  opacity: 0.9;
+}
+
+.sf-geo-prompt__error {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  color: #b42318;
+}
+
+.sf-geo-prompt__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.sf-geo-prompt__btn {
+  width: 100%;
+  border: none;
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sf-geo-prompt__btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.sf-geo-prompt__btn--primary {
+  background: var(--tg-theme-button-color, #2481cc);
+  color: var(--tg-theme-button-text-color, #fff);
+}
+
+.sf-geo-prompt__btn--ghost {
+  background: transparent;
+  color: inherit;
+  opacity: 0.85;
+}

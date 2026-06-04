@@ -19,6 +19,13 @@ import { toPublicProduct } from "../shared/productDto.js";
 import { loadStockRowsByProductIds } from "./inventoryService.js";
 import { getFeaturedPromoForStorefront } from "./promoRepo.js";
 import { rejectUnlessCanAcceptCustomerOrders } from "./subscriptionCustomerGate.js";
+import { businessAddressRowToPublic } from "../shared/businessAddress.js";
+import { buildMerchantTelegramOpenUrl } from "./merchantTelegramOpenUrl.js";
+import {
+  merchantDeliverySettingsToPublic,
+  parseMerchantDeliverySettings,
+  defaultMerchantDeliverySettings,
+} from "../shared/merchantDeliverySettings.js";
 
 /** Public GET /api/storefront payload (shared by numeric id and slug routes). */
 export async function sendStorefrontPublicPayload(
@@ -62,6 +69,12 @@ export async function sendStorefrontPublicPayload(
         storefrontPublishedConfig: true,
         storefrontConfigVersion: true,
         featureFlags: true,
+        addressLine: true,
+        city: true,
+        latitude: true,
+        longitude: true,
+        botToken: true,
+        deliverySettings: true,
       },
     });
     if (rejectUnlessCanAcceptCustomerOrders(res, b)) {
@@ -99,6 +112,25 @@ export async function sendStorefrontPublicPayload(
     const slugVal = (b as any).slug;
     (payload as any).storefrontSlug =
       typeof slugVal === "string" && slugVal.trim() !== "" ? String(slugVal).trim() : null;
+
+    if (b != null) {
+      const storeAddress = businessAddressRowToPublic(b);
+      if (storeAddress != null) {
+        (payload as any).storeAddress = storeAddress;
+      }
+      const telegramOpenUrl = await buildMerchantTelegramOpenUrl({
+        id: b.id,
+        slug: b.slug,
+        botToken: b.botToken,
+      });
+      if (telegramOpenUrl != null) {
+        (payload as any).telegramOpenUrl = telegramOpenUrl;
+      }
+      const deliveryParsed = parseMerchantDeliverySettings(b.deliverySettings);
+      (payload as any).deliveryPolicy = merchantDeliverySettingsToPublic(
+        deliveryParsed.ok ? deliveryParsed.value : defaultMerchantDeliverySettings(),
+      );
+    }
 
     const bt = String((b as any).businessType ?? "").trim() as BusinessType;
     if (bt) {

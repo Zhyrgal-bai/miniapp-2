@@ -238,6 +238,10 @@ export async function approveRegistrationRequestById(
         finikApiKey: row.finikApiKey,
         finikAccountId: row.finikAccountId,
         businessType: (row as any).businessType,
+        addressLine: row.addressLine,
+        city: row.city,
+        latitude: row.latitude,
+        longitude: row.longitude,
       });
 
       await tx.registrationRequest.update({

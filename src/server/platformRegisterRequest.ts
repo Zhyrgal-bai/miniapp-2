@@ -7,6 +7,10 @@ import {
   MSG_BOT_ALREADY_REGISTERED,
   precheckBotTokenBeforeRegistrationPersist,
 } from "./registrationTokenGate.js";
+import {
+  parseBusinessAddressInput,
+  type BusinessAddressInput,
+} from "../shared/businessAddress.js";
 
 export const PLATFORM_STORE_NAME_MIN = 2;
 export const PLATFORM_STORE_NAME_MAX = 160;
@@ -20,6 +24,10 @@ export type PlatformRegisterBody = {
   ownerUsername?: unknown;
   finikApiKey?: unknown;
   finikAccountId?: unknown;
+  addressLine?: unknown;
+  city?: unknown;
+  latitude?: unknown;
+  longitude?: unknown;
 };
 
 export type PlatformRegisterResult =
@@ -101,6 +109,16 @@ export async function validateAndPersistPlatformRegistration(
     };
   }
 
+  const addressParsed = parseBusinessAddressInput({
+    addressLine: body.addressLine,
+    city: body.city,
+    latitude: body.latitude,
+    longitude: body.longitude,
+  } satisfies BusinessAddressInput);
+  if (!addressParsed.ok) {
+    return { ok: false, statusCode: 400, error: addressParsed.error };
+  }
+
   const pendingSameUser = await prisma.registrationRequest.findFirst({
     where: {
       telegramId,
@@ -147,6 +165,10 @@ export async function validateAndPersistPlatformRegistration(
         telegramId,
         ownerUsername,
         botUsername,
+        addressLine: addressParsed.value.addressLine,
+        city: addressParsed.value.city,
+        latitude: addressParsed.value.latitude,
+        longitude: addressParsed.value.longitude,
         status: RegistrationStatus.PENDING,
       },
       select: { id: true },

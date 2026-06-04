@@ -18,6 +18,8 @@ import { ru } from "../../i18n/ru";
 import "./app-shell.css";
 import { useStorefrontPayload } from "../storefront/runtime/StorefrontPayloadContext";
 import { businessTypeSupportsTableReservations } from "@repo-shared/tableReservation";
+import { isStorefrontCommerceEnabled } from "../../hooks/useStorefrontCommerceMode";
+import { OpenInTelegramCta } from "../storefront/commerce/OpenInTelegramCta";
 
 type AppNavPage =
   | "home"
@@ -115,7 +117,10 @@ export default function SideMenu({
   onNavToAdmin,
 }: SideMenuProps) {
   const { payload } = useStorefrontPayload();
-  const showTableBooking = businessTypeSupportsTableReservations(payload?.businessType);
+  const commerceEnabled = isStorefrontCommerceEnabled();
+  const showTableBooking =
+    commerceEnabled &&
+    businessTypeSupportsTableReservations(payload?.businessType);
   const hash = useSyncExternalStore(subscribeHash, readHash, () => "");
   const user = useMemo(() => getTelegramUser(), []);
   const admin = useAdminPanelVisible();
@@ -216,22 +221,24 @@ export default function SideMenu({
               </div>
 
               <nav className="app-drawer__nav" aria-label="Разделы">
-                <button
-                  type="button"
-                  className={`app-drawer__link app-drawer__link--orders${myOrdersActive ? " app-drawer__link--active" : ""}`}
-                  onClick={() => {
-                    onNavToMyOrders();
-                    onClose();
-                  }}
-                >
-                  {myOrdersAttentionDot && !myOrdersActive ? (
-                    <span className="app-drawer__orders-attention-dot" aria-hidden />
-                  ) : null}
-                  <span className="app-drawer__link-icon" aria-hidden>
-                    📦
-                  </span>
-                  {readTxt("menuOrdersLabel", ru.menu.orders)}
-                </button>
+                {commerceEnabled ? (
+                  <button
+                    type="button"
+                    className={`app-drawer__link app-drawer__link--orders${myOrdersActive ? " app-drawer__link--active" : ""}`}
+                    onClick={() => {
+                      onNavToMyOrders();
+                      onClose();
+                    }}
+                  >
+                    {myOrdersAttentionDot && !myOrdersActive ? (
+                      <span className="app-drawer__orders-attention-dot" aria-hidden />
+                    ) : null}
+                    <span className="app-drawer__link-icon" aria-hidden>
+                      📦
+                    </span>
+                    {readTxt("menuOrdersLabel", ru.menu.orders)}
+                  </button>
+                ) : null}
 
                 <button
                   type="button"
@@ -247,22 +254,24 @@ export default function SideMenu({
                   {readTxt("menuShopLabel", ru.menu.shop)}
                 </button>
 
-                <button
-                  type="button"
-                  className={`app-drawer__link${cartActive ? " app-drawer__link--active" : ""}`}
-                  onClick={() => {
-                    onNavToCart();
-                    onClose();
-                  }}
-                >
-                  <span className="app-drawer__link-icon app-drawer__link-icon--with-badge" aria-hidden>
-                    🛒
-                    {cartCount > 0 && (
-                      <span className="app-drawer__cart-badge">{cartCount}</span>
-                    )}
-                  </span>
-                  {readTxt("menuCartLabel", ru.menu.cart)}
-                </button>
+                {commerceEnabled ? (
+                  <button
+                    type="button"
+                    className={`app-drawer__link${cartActive ? " app-drawer__link--active" : ""}`}
+                    onClick={() => {
+                      onNavToCart();
+                      onClose();
+                    }}
+                  >
+                    <span className="app-drawer__link-icon app-drawer__link-icon--with-badge" aria-hidden>
+                      🛒
+                      {cartCount > 0 && (
+                        <span className="app-drawer__cart-badge">{cartCount}</span>
+                      )}
+                    </span>
+                    {readTxt("menuCartLabel", ru.menu.cart)}
+                  </button>
+                ) : null}
 
                 {showTableBooking ? (
                   <button
@@ -280,19 +289,30 @@ export default function SideMenu({
                   </button>
                 ) : null}
 
-                <button
-                  type="button"
-                  className={`app-drawer__link${supportActive ? " app-drawer__link--active" : ""}`}
-                  onClick={() => {
-                    onNavToSupport();
-                    onClose();
-                  }}
-                >
-                  <span className="app-drawer__link-icon" aria-hidden>
-                    💬
-                  </span>
-                  {readTxt("menuSupportLabel", ru.menu.support)}
-                </button>
+                {commerceEnabled ? (
+                  <button
+                    type="button"
+                    className={`app-drawer__link${supportActive ? " app-drawer__link--active" : ""}`}
+                    onClick={() => {
+                      onNavToSupport();
+                      onClose();
+                    }}
+                  >
+                    <span className="app-drawer__link-icon" aria-hidden>
+                      💬
+                    </span>
+                    {readTxt("menuSupportLabel", ru.menu.support)}
+                  </button>
+                ) : null}
+
+                {!commerceEnabled ? (
+                  <div className="app-drawer__web-cta">
+                    <OpenInTelegramCta
+                      telegramOpenUrl={payload?.telegramOpenUrl ?? null}
+                      variant="hero"
+                    />
+                  </div>
+                ) : null}
 
                 {admin && (
                   <>

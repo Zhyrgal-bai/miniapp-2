@@ -14,6 +14,8 @@ import "./index.css";
 /** Последним в бандле: перебивает ProductCard.css / ProductGrid.css / kits (порядок каскада). */
 import "./components/storefront/storefrontBones.css";
 import "./components/storefront/commerceShell.css";
+import "./components/storefront/commerce/openInTelegramCta.css";
+import "./components/storefront/commerce/customerLocationPrompt.css";
 import { bootstrapTelegramWebApp } from "./utils/telegramWebAppBootstrap";
 
 bootstrapTelegramWebApp();

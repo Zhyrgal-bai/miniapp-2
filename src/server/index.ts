@@ -140,6 +140,7 @@ import {
   logInventoryMismatch,
 } from "./structuredLog.js";
 import { initializeOrderDelivery } from "./deliveryService.js";
+import { resolveCheckoutDeliveryQuote } from "./deliveryQuoteService.js";
 import { onOrderStatusChanged } from "./orderInventoryHooks.js";
 import { attachStaffRoutes } from "./staffRoutes.js";
 import {
@@ -1020,6 +1021,10 @@ app.post("/api/platform/store-settings", async (req: Request, res: Response) => 
       finikAccountId: raw.finikAccountId,
       newBotToken: raw.newBotToken,
       merchantConfig: raw.merchantConfig,
+      addressLine: raw.addressLine,
+      city: raw.city,
+      latitude: raw.latitude,
+      longitude: raw.longitude,
     };
     const out = await updatePlatformStoreSettingsForMerchant({
       telegramId,
@@ -1144,6 +1149,10 @@ app.post(
       finikAccountId: shaped.data.finikAccountId,
       businessType: shaped.data.businessType,
       ownerUsername: shaped.data.ownerUsername,
+      addressLine: shaped.data.addressLine,
+      city: shaped.data.city,
+      latitude: shaped.data.latitude,
+      longitude: shaped.data.longitude,
       telegramId: authTid,
     });
     if (!result.ok) {
@@ -4870,6 +4879,9 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
     select: {
       ...businessSubscriptionGateSelect,
       businessType: true,
+      deliverySettings: true,
+      latitude: true,
+      longitude: true,
     },
   });
   if (rejectUnlessCanAcceptCustomerOrders(res, biz)) {
@@ -5028,7 +5040,34 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
           }
         }, checkoutCtx);
       }
-      orderTotal = coerceCheckoutOrderTotal(orderTotal);
+
+      const deliveryModeParsed = parseCheckoutDeliveryMode(
+        body as { deliveryMode?: unknown; deliveryType?: unknown },
+      );
+
+      const deliveryQuoteResult = await runCheckoutStep(
+        "delivery_quote",
+        tenantBusinessId,
+        async () => {
+          const result = resolveCheckoutDeliveryQuote({
+            deliverySettingsRaw: biz!.deliverySettings,
+            storeLatitude: biz!.latitude,
+            storeLongitude: biz!.longitude,
+            customerLatitude: orderLat,
+            customerLongitude: orderLng,
+            fulfillmentMode: deliveryModeParsed,
+            subtotalSom: priced.subtotal,
+          });
+          if (!result.ok) {
+            throw new Error(`DELIVERY:${result.statusCode}:${result.error}`);
+          }
+          return result;
+        },
+        checkoutCtx,
+      );
+
+      const deliveryFeeSom = deliveryQuoteResult.quote.deliveryFeeSom;
+      orderTotal = coerceCheckoutOrderTotal(orderTotal + deliveryFeeSom);
 
       const telegramId = verifiedTg;
       const businessId = tenantBusinessId;
@@ -5127,6 +5166,7 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
               phone: customerPhoneValue,
               address: addrFinal,
               total: orderTotal,
+              deliveryFee: deliveryFeeSom,
               status: PrismaOrderStatus.NEW,
               lat: orderLat,
               lng: orderLng,
@@ -5174,9 +5214,7 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
       );
       void reserved;
 
-      const deliveryMode = parseCheckoutDeliveryMode(
-        body as { deliveryMode?: unknown; deliveryType?: unknown },
-      );
+      const deliveryMode = deliveryModeParsed;
       const rawPrep = (body as { preparationMinutes?: unknown }).preparationMinutes;
       const preparationMinutes =
         rawPrep != null && Number.isFinite(Number(rawPrep))
@@ -5241,6 +5279,12 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
     }
     if (msg.startsWith("PROMO:")) {
       return res.status(400).json({ error: msg.slice(6) });
+    }
+    if (msg.startsWith("DELIVERY:")) {
+      const parts = msg.split(":");
+      const statusCode = Number(parts[1]) || 400;
+      const errText = parts.slice(2).join(":") || "Ошибка доставки";
+      return res.status(statusCode).json({ error: errText });
     }
     if (msg.startsWith("COOLDOWN:")) {
       return res.status(429).json({ error: msg.slice(9) });

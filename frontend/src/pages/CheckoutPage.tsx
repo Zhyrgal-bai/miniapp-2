@@ -21,6 +21,13 @@ import { formatOrderLineSummary } from "@repo-shared/businessCommerce";
 import { cartLineIdentityKey } from "../commerce/cartLineIdentity";
 import { readTableSession } from "../utils/tableSessionStorage";
 import { readPreorderContext, clearPreorderContext } from "../utils/reservationPreorderStorage";
+import {
+  computeDeliveryQuote,
+  defaultMerchantDeliverySettings,
+  haversineDistanceKm,
+  type MerchantDeliverySettings,
+} from "@repo-shared/merchantDeliverySettings";
+import { readCustomerLocationCoords } from "../storefront/customerLocationStorage";
 
 type Props = {
   onBack?: () => void;
@@ -114,6 +121,7 @@ export default function CheckoutPage({ onBack }: Props) {
   const addressSearchSeqRef = useRef(0);
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [deliveryType, setDeliveryType] = useState("delivery");
+  const pickupOnly = Boolean(payload?.deliveryPolicy?.pickupOnly);
   const [promo, setPromo] = useState("");
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -179,17 +187,68 @@ export default function CheckoutPage({ onBack }: Props) {
     }
   }, [businessId]);
 
+  useEffect(() => {
+    if (pickupOnly) setDeliveryType("pickup");
+  }, [pickupOnly]);
+
   const subtotal = useMemo(
     () => items.reduce((sum, item) => sum + item.price * (item.quantity ?? 1), 0),
     [items],
   );
+
+  const deliverySettings = useMemo((): MerchantDeliverySettings => {
+    const p = payload?.deliveryPolicy;
+    if (p == null) return defaultMerchantDeliverySettings();
+    return {
+      version: 1,
+      pricingMode: p.pricingMode,
+      minOrderAmountSom: p.minOrderAmountSom,
+      fixedPriceSom: p.fixedPriceSom,
+      distanceTiers: p.distanceTiers,
+    };
+  }, [payload?.deliveryPolicy]);
+
+  const distanceKm = useMemo(() => {
+    if (deliveryType === "pickup") return null;
+    const store = payload?.storeAddress;
+    if (store == null) return null;
+    const saved = businessId != null ? readCustomerLocationCoords(businessId) : null;
+    const customerLat = lat ?? saved?.latitude ?? null;
+    const customerLng = lng ?? saved?.longitude ?? null;
+    if (customerLat == null || customerLng == null) return null;
+    return (
+      Math.round(
+        haversineDistanceKm(
+          { latitude: store.latitude, longitude: store.longitude },
+          { latitude: customerLat, longitude: customerLng },
+        ) * 100,
+      ) / 100
+    );
+  }, [deliveryType, payload?.storeAddress, lat, lng, businessId]);
+
+  const deliveryQuote = useMemo(() => {
+    const fulfillmentMode = deliveryType === "pickup" ? "PICKUP" : "DELIVERY";
+    return computeDeliveryQuote({
+      settings: deliverySettings,
+      fulfillmentMode,
+      subtotalSom: subtotal,
+      distanceKm,
+    });
+  }, [deliverySettings, deliveryType, subtotal, distanceKm]);
+
+  const deliveryFeeSom = deliveryQuote.ok ? deliveryQuote.deliveryFeeSom : 0;
+  const manualDeliveryNotice =
+    deliveryQuote.ok && deliveryQuote.manualConfirmation
+      ? deliveryQuote.message
+      : null;
 
   const discountAmount = useMemo(() => {
     if (!promoPreview) return 0;
     return Math.max(0, subtotal - promoPreview.newTotal);
   }, [promoPreview, subtotal]);
 
-  const totalPrice = promoPreview?.newTotal ?? subtotal;
+  const goodsAfterPromo = promoPreview?.newTotal ?? subtotal;
+  const totalPrice = goodsAfterPromo + deliveryFeeSom;
 
   useEffect(() => {
     setPromoPreview(null);
@@ -436,6 +495,10 @@ export default function CheckoutPage({ onBack }: Props) {
       return;
     }
     if (!validateForm()) return;
+    if (!deliveryQuote.ok) {
+      setCheckoutError(deliveryQuote.error);
+      return;
+    }
 
     const tg = getTelegramUser();
     const uid = getTelegramWebAppUserId();
@@ -443,11 +506,11 @@ export default function CheckoutPage({ onBack }: Props) {
     const promoCode = cleanInput(promo);
     const phoneTrimmed = phone.trim();
 
-    let payTotal = subtotal;
+    let payTotal = goodsAfterPromo + deliveryFeeSom;
     if (promoCode) {
       const applied = await applyPromoCode();
       if (applied == null) return;
-      payTotal = applied;
+      payTotal = applied + deliveryFeeSom;
     } else {
       setPromoPreview(null);
     }
@@ -679,8 +742,19 @@ export default function CheckoutPage({ onBack }: Props) {
                 ? t("checkout.pickup")
                 : t("checkout.delivery")}
             </span>
-            <span>{t("checkout.deliveryFree")}</span>
+            <span>
+              {!deliveryQuote.ok
+                ? deliveryQuote.error
+                : manualDeliveryNotice != null
+                  ? "Уточняется"
+                  : deliveryFeeSom === 0
+                    ? t("checkout.deliveryFree")
+                    : formatSom(deliveryFeeSom)}
+            </span>
           </div>
+          {manualDeliveryNotice != null ? (
+            <p className="checkout-summary__hint">{manualDeliveryNotice}</p>
+          ) : null}
           {promoPreview && discountAmount > 0 && (
             <div className="checkout-summary__line checkout-summary__line--discount">
               <span>
@@ -741,6 +815,7 @@ export default function CheckoutPage({ onBack }: Props) {
             </div>
           )}
 
+          {deliveryType !== "pickup" && !pickupOnly ? (
           <div className="checkout-field">
             <label className="checkout-field__label" htmlFor="checkout-address">
               {t("checkout.address")}
@@ -839,11 +914,15 @@ export default function CheckoutPage({ onBack }: Props) {
               )}
             </div>
           </div>
+          ) : null}
 
           <div className="checkout-field">
             <label className="checkout-field__label" htmlFor="checkout-delivery">
               {t("checkout.deliveryType")}
             </label>
+            {pickupOnly ? (
+              <p className="checkout-field__hint">{t("checkout.pickup")}</p>
+            ) : (
             <select
               id="checkout-delivery"
               value={deliveryType}
@@ -852,6 +931,7 @@ export default function CheckoutPage({ onBack }: Props) {
               <option value="delivery">{t("checkout.delivery")}</option>
               <option value="pickup">{t("checkout.pickup")}</option>
             </select>
+            )}
           </div>
 
           <div className="checkout-field">
@@ -916,7 +996,12 @@ export default function CheckoutPage({ onBack }: Props) {
           type="button"
           className="order-btn order-btn--primary order-btn--checkout"
           onClick={handleSubmit}
-          disabled={submitting || finikRedirectMessage != null || Boolean(cartStockIssue)}
+          disabled={
+            submitting ||
+            finikRedirectMessage != null ||
+            Boolean(cartStockIssue) ||
+            !deliveryQuote.ok
+          }
         >
           {submitting ? t("checkout.submitting") : t("checkout.submit")}
         </button>

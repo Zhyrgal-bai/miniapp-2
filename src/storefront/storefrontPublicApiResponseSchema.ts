@@ -69,6 +69,33 @@ const FeaturedPromoWireSchema = z.object({
   remainingUses: z.number().int().nonnegative(),
 });
 
+const StoreAddressWireSchema = z.object({
+  addressLine: z.string(),
+  city: z.string(),
+  latitude: z.number(),
+  longitude: z.number(),
+});
+
+const DeliveryDistanceTierWireSchema = z.object({
+  maxKm: z.number().nullable(),
+  priceSom: z.number(),
+});
+
+const DeliveryPolicyWireSchema = z.object({
+  pricingMode: z.enum([
+    "SELF_PICKUP",
+    "FIXED_PRICE",
+    "DISTANCE_BASED",
+    "FREE_DELIVERY",
+    "MANUAL_CONFIRMATION",
+  ]),
+  minOrderAmountSom: z.number(),
+  fixedPriceSom: z.number(),
+  distanceTiers: z.array(DeliveryDistanceTierWireSchema),
+  manualConfirmationNotice: z.string().nullable(),
+  pickupOnly: z.boolean(),
+});
+
 const FeaturedProductWireSchema = z
   .object({
     id: z.number(),
@@ -106,6 +133,10 @@ export const StorefrontPublicApiResponseSchema = z
     featuredProducts: z.array(FeaturedProductWireSchema).optional(),
     featuredPromo: FeaturedPromoWireSchema.optional(),
     orderOptionsSchema: z.record(z.string(), z.unknown()).optional(),
+    storeAddress: StoreAddressWireSchema.optional(),
+    /** Deep link: t.me/bot?startapp=slug — для CTA «Открыть в Telegram» в веб-витрине. */
+    telegramOpenUrl: z.string().url().optional(),
+    deliveryPolicy: DeliveryPolicyWireSchema.optional(),
   })
   .passthrough();
 

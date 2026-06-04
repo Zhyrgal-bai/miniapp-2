@@ -25,6 +25,9 @@ import {
   trackAddToCart,
   trackProductView,
 } from "../../services/storefrontAnalytics";
+import { isStorefrontCommerceEnabled } from "../../hooks/useStorefrontCommerceMode";
+import { useStorefrontPayload } from "../storefront/runtime/StorefrontPayloadContext";
+import { OpenInTelegramCta } from "../storefront/commerce/OpenInTelegramCta";
 
 type Props = {
   product: Product;
@@ -125,6 +128,8 @@ function normalizeCardConfig(raw: Record<string, unknown> | undefined): {
 
 export default function ProductCard({ product, showToast, onOpenDetail, cardConfig, textConfig, kit = "default", businessId, businessType }: Props) {
   useTheme(); // keep existing context behavior for now (legacy vars)
+  const commerceEnabled = isStorefrontCommerceEnabled();
+  const { payload } = useStorefrontPayload();
   const cfg = useMemo(() => normalizeCardConfig(cardConfig), [cardConfig]);
   const addLabel =
     readTextConfigString(textConfig ?? undefined, "addToCartLabel").trim() !== ""
@@ -444,6 +449,15 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
       </>
     );
 
+  const purchaseControl = commerceEnabled ? (
+    AddToCartButton
+  ) : (
+    <OpenInTelegramCta
+      telegramOpenUrl={payload?.telegramOpenUrl ?? null}
+      variant="inline"
+    />
+  );
+
   return (
     <div
       className={[
@@ -594,7 +608,9 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
               {PriceBlock}
             </div>
             <div className="product-actions product-actions--icon">
-              {quantity <= 0 ? (
+              {!commerceEnabled ? (
+                purchaseControl
+              ) : quantity <= 0 ? (
                 <button
                   className="product-add-btn product-add-btn--icon"
                   onClick={handleAddToCart}
@@ -606,9 +622,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
                   +
                 </button>
               ) : (
-                <div className="product-actions">
-                  {AddToCartButton}
-                </div>
+                <div className="product-actions">{purchaseControl}</div>
               )}
             </div>
           </div>
@@ -616,7 +630,9 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
           <div className="product-bottom product-bottom--luxury">
             {PriceBlock}
             <div className="product-actions product-actions--full">
-              {quantity <= 0 ? (
+              {!commerceEnabled ? (
+                purchaseControl
+              ) : quantity <= 0 ? (
                 <button
                   className="product-add-btn product-add-btn--full"
                   onClick={handleAddToCart}
@@ -626,24 +642,24 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
                   {addLabel}
                 </button>
               ) : (
-                <div className="product-actions">{AddToCartButton}</div>
+                <div className="product-actions">{purchaseControl}</div>
               )}
             </div>
           </div>
         ) : archetype === "minimal" ? (
           <div className="product-bottom product-bottom--minimal">
             {PriceBlock}
-            <div className="product-actions">{AddToCartButton}</div>
+            <div className="product-actions">{purchaseControl}</div>
           </div>
         ) : archetype === "neon" ? (
           <div className="product-bottom product-bottom--neon">
             {PriceBlock}
-            <div className="product-actions product-actions--neon">{AddToCartButton}</div>
+            <div className="product-actions product-actions--neon">{purchaseControl}</div>
           </div>
         ) : (
           <div className="product-bottom">
             {PriceBlock}
-            <div className="product-actions">{AddToCartButton}</div>
+            <div className="product-actions">{purchaseControl}</div>
           </div>
         )}
       </div>

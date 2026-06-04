@@ -1,0 +1,75 @@
+.sf-open-tg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  border: none;
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--tg-theme-button-color, #2481cc);
+  color: var(--tg-theme-button-text-color, #fff);
+  padding: 0.75rem 1rem;
+  text-align: center;
+}
+
+.sf-open-tg--hero {
+  padding: 1rem 1.25rem;
+  font-size: 1.05rem;
+  border-radius: 14px;
+}
+
+.sf-open-tg--sticky {
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.12);
+}
+
+.sf-open-tg--disabled {
+  cursor: default;
+  background: color-mix(in srgb, var(--sf-muted, #6b7280) 18%, transparent);
+  color: var(--sf-text, #111);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.sf-open-tg__hint {
+  font-size: 0.82rem;
+  font-weight: 400;
+  opacity: 0.85;
+  line-height: 1.35;
+}
+
+.sf-open-tg__icon {
+  font-size: 1.1rem;
+}
+
+.sf-web-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.sf-web-info__name {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.sf-web-info__address {
+  margin: 0;
+  opacity: 0.85;
+  line-height: 1.4;
+}
+
+.sf-web-info__lead {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  opacity: 0.9;
+}
+
+.app-drawer__web-cta {
+  padding: 0.75rem 0 0.25rem;
+}
