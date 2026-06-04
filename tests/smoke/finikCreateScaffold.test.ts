@@ -64,6 +64,16 @@ describe("finikCreateScaffold", () => {
     );
   });
 
+  it("defaults official status path to /v1/payment/{paymentId}", async () => {
+    const { getOfficialAcquiringStatusPath, getOfficialAcquiringStatusUrl } =
+      await import("../../src/server/finik/finikCreateConfig.js");
+    delete process.env.FINIK_OFFICIAL_ACQUIRING_STATUS_PATH;
+    expect(getOfficialAcquiringStatusPath("uuid-1")).toBe("/v1/payment/uuid-1");
+    expect(getOfficialAcquiringStatusUrl("uuid-1")).toBe(
+      "https://beta.api.acquiring.averspay.kg/v1/payment/uuid-1",
+    );
+  });
+
   it("official adapter returns 201 JSON payment url", async () => {
     const signSpy = vi.spyOn(finikRsaSigning, "signFinikOfficialRequest").mockResolvedValue({
       signature: "sig",

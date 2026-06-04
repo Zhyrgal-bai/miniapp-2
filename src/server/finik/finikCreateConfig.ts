@@ -40,6 +40,26 @@ export function getOfficialAcquiringCreatePath(): string {
   return p.startsWith("/") ? p : `/${p}`;
 }
 
+/**
+ * Official GET payment status (не описан в Telegraph; дефолт — симметрия с create).
+ * Placeholder: `{paymentId}` (URL-encoded).
+ */
+export function getOfficialAcquiringStatusPath(paymentId: string): string {
+  const template = (
+    process.env.FINIK_OFFICIAL_ACQUIRING_STATUS_PATH ||
+    "/v1/payment/{paymentId}"
+  ).trim();
+  const path = template.replace(
+    "{paymentId}",
+    encodeURIComponent(paymentId.trim()),
+  );
+  return path.startsWith("/") ? path : `/${path}`;
+}
+
+export function getOfficialAcquiringStatusUrl(paymentId: string): string {
+  return `${getOfficialAcquiringBaseUrl()}${getOfficialAcquiringStatusPath(paymentId)}`;
+}
+
 export function getOfficialAcquiringCreateUrl(): string {
   return `${getOfficialAcquiringBaseUrl()}${getOfficialAcquiringCreatePath()}`;
 }

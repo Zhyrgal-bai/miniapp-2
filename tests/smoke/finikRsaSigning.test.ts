@@ -3,6 +3,7 @@ import {
   canonicalFinikRequestBody,
   isFinikRsaPrivateKeyConfigured,
   loadFinikRsaPrivateKeyPem,
+  signFinikOfficialGetRequest,
   signFinikOfficialRequest,
 } from "../../src/server/finik/finikRsaSigning.js";
 import { reloadFinikKeysFromEnv } from "../../src/server/finik/finikKeys.js";
@@ -69,5 +70,20 @@ describe("finikRsaSigning", () => {
     expect(out.timestamp).toMatch(/^\d+$/);
     expect(out.bodyJson).toContain('"Amount":50');
     expect(out.bodyJson).toContain("FINIK_QR");
+  });
+
+  it("signFinikOfficialGetRequest returns signature for GET status", async () => {
+    process.env.FINIK_RSA_PRIVATE_KEY =
+      "-----BEGIN PRIVATE KEY-----\\nX\\n-----END PRIVATE KEY-----";
+    reloadFinikKeysFromEnv();
+
+    const out = await signFinikOfficialGetRequest({
+      host: "beta.api.acquiring.averspay.kg",
+      path: "/v1/payment/00000000-0000-0000-0000-000000000001",
+      apiKey: "test-api-key",
+    });
+
+    expect(out.signature).toBe("mock-base64-signature");
+    expect(out.timestamp).toMatch(/^\d+$/);
   });
 });

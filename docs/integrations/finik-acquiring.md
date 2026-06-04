@@ -7,7 +7,9 @@
 | Слой | URL |
 |------|-----|
 | Legacy create (текущий prod) | `{FINIK_API_BASE_URL}{FINIK_API_CREATE_PAYMENT_PATH}` — default `https://api.finik.kg/payments` |
-| Official Acquiring beta | `{FINIK_OFFICIAL_ACQUIRING_BASE_URL}{FINIK_OFFICIAL_ACQUIRING_CREATE_PATH}` — default `https://beta.api.acquiring.averspay.kg/v1/payment` |
+| Official Acquiring beta (create) | `{FINIK_OFFICIAL_ACQUIRING_BASE_URL}{FINIK_OFFICIAL_ACQUIRING_CREATE_PATH}` — default `https://beta.api.acquiring.averspay.kg/v1/payment` |
+| Official Acquiring beta (status) | `{FINIK_OFFICIAL_ACQUIRING_BASE_URL}{FINIK_OFFICIAL_ACQUIRING_STATUS_PATH}` — default `https://beta.api.acquiring.averspay.kg/v1/payment/{paymentId}` (GET, RSA) |
+| Legacy status | `{FINIK_API_BASE_URL}{FINIK_API_GET_PAYMENT_PATH}` — default `https://api.finik.kg/payments/{id}` |
 
 ## Переменные окружения
 
@@ -16,6 +18,8 @@
 | `FINIK_CREATE_API_MODE` | `legacy` | `legacy` \| `official` \| `auto` |
 | `FINIK_OFFICIAL_ACQUIRING_BASE_URL` | `https://beta.api.acquiring.averspay.kg` | Beta host |
 | `FINIK_OFFICIAL_ACQUIRING_CREATE_PATH` | `/v1/payment` | Create path |
+| `FINIK_OFFICIAL_ACQUIRING_STATUS_PATH` | `/v1/payment/{paymentId}` | GET status (Phase 5-B; уточнить у Finik при расхождении) |
+| `FINIK_API_GET_PAYMENT_PATH` | `/payments/{id}` | Legacy GET status |
 | `FINIK_RSA_PRIVATE_KEY` | — | PEM для RSA (official, позже) |
 | `FINIK_RSA_PRIVATE_KEY_PATH` | — | Путь к PEM |
 
@@ -34,6 +38,9 @@
 | `src/server/finik/officialAcquiringCreateAdapter.ts` | Official RSA create (`POST /v1/payment`) |
 | `src/server/finik/finikRsaSigning.ts` | RSA-SHA256 via `@mancho.devs/authorizer` |
 | `src/server/finik/finikCreateRouter.ts` | `createFinikPaymentSession()` |
+| `src/server/finik/finikStatusRouter.ts` | `fetchFinikPaymentStatusRouted()` — legacy / official / auto |
+| `src/server/finik/officialAcquiringStatusAdapter.ts` | Official GET + RSA |
+| `src/server/finik/legacyStatusAdapter.ts` | Legacy GET + Secret |
 | `src/server/finik/finikCreateResponseNormalizer.ts` | Поля ответа legacy / official |
 | `src/server/finik/finikCreateLogging.ts` | Structured logs |
 
@@ -56,7 +63,7 @@
 
 1. Canonical RSA string для `POST /payment`
 2. Поля request/response JSON
-3. ID в webhook vs create response
+3. ID в webhook vs create response; canonical GET status path у Finik
 4. Формат суммы (KGS)
 5. Idempotency
 6. Один platform RSA key для нескольких `accountId`

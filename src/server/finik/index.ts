@@ -54,7 +54,23 @@ export {
   getLegacyFinikApiBaseUrl,
   getOfficialAcquiringCreateUrl,
   getOfficialAcquiringBaseUrl,
+  getOfficialAcquiringStatusPath,
+  getOfficialAcquiringStatusUrl,
 } from "./finikCreateConfig.js";
+
+export {
+  fetchFinikPaymentStatusRouted,
+  getFinikStatusApiMode,
+  isOfficialAcquiringStatusRoutingAllowed,
+} from "./finikStatusRouter.js";
+export type {
+  FinikPaymentStatusResult,
+  FinikStatusBusinessCredentials,
+} from "./finikStatusRouter.js";
+
+export { fetchLegacyFinikPaymentStatus } from "./legacyStatusAdapter.js";
+export { fetchOfficialFinikPaymentStatus } from "./officialAcquiringStatusAdapter.js";
+export { normalizeFinikPaymentStatusResponse } from "./finikStatusResponseNormalizer.js";
 
 export {
   getFinikPrivateKey,

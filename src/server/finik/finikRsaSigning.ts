@@ -64,6 +64,12 @@ export type FinikOfficialSignInput = {
   body: FinikOfficialRequestBody;
 };
 
+export type FinikOfficialSignGetInput = {
+  host: string;
+  path: string;
+  apiKey: string;
+};
+
 export type FinikOfficialSignedRequest = {
   signature: string;
   timestamp: string;
@@ -98,4 +104,32 @@ export async function signFinikOfficialRequest(
   const bodyJson = canonicalFinikRequestBody(input.body);
 
   return { signature, timestamp, bodyJson };
+}
+
+/**
+ * Подпись GET official status (пустое тело `{}` в canonical string).
+ */
+export async function signFinikOfficialGetRequest(
+  input: FinikOfficialSignGetInput,
+): Promise<{ signature: string; timestamp: string }> {
+  const privateKey = loadFinikRsaPrivateKeyPem();
+  if (privateKey === "") {
+    throw new Error("Finik RSA private key is not configured");
+  }
+
+  const timestamp = Date.now().toString();
+  const requestData: FinikSignerRequestData = {
+    httpMethod: "GET",
+    path: input.path,
+    headers: {
+      Host: input.host,
+      "x-api-key": input.apiKey,
+      "x-api-timestamp": timestamp,
+    },
+    queryStringParameters: null,
+    body: {},
+  };
+
+  const signature = await new Signer(requestData).sign(privateKey);
+  return { signature, timestamp };
 }

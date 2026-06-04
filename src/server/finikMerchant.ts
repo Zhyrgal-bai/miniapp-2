@@ -28,6 +28,7 @@ import {
   parseFinikWebhookPayload,
 } from "./finik/finikWebhookPayload.js";
 import { verifyFinikWebhookAdmission } from "./finik/finikWebhookVerify.js";
+import { fetchFinikPaymentStatusRouted } from "./finik/finikStatusRouter.js";
 
 /** Base URL для REST Finik (укажите реальный домен вашего аккаунта разработчика). */
 function finikApiBase(): string {
@@ -421,14 +422,6 @@ export async function createFinikReservationDepositSession(
   }
 }
 
-function finikGetPaymentPath(paymentId: string): string {
-  const template = (
-    process.env.FINIK_API_GET_PAYMENT_PATH || "/payments/{id}"
-  ).trim();
-  const path = template.replace("{id}", encodeURIComponent(paymentId));
-  return path.startsWith("/") ? path : `/${path}`;
-}
-
 function finikUseMock(business: {
   finikApiKey: string | null;
   finikAccountId: string | null;
@@ -632,7 +625,7 @@ async function fetchFinikPaymentStatus(
     finikAccountId: string | null;
     finikSecret: string | null;
   },
-  paymentId: string
+  paymentId: string,
 ): Promise<
   | { ok: true; status: string; amount: number | null }
   | { ok: false; error: string }
@@ -641,36 +634,22 @@ async function fetchFinikPaymentStatus(
     return { ok: false, error: "Finik mock: статус только через webhook" };
   }
 
-  const url = `${finikApiBase()}${finikGetPaymentPath(paymentId)}`;
-  try {
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${business.finikApiKey!.trim()}`,
-        "X-Api-Secret": business.finikSecret!.trim(),
-      },
-    });
-    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    if (!res.ok) {
-      console.error("Finik get payment HTTP", res.status, json);
-      return { ok: false, error: "Finik API: не удалось получить статус платежа" };
+  const remote = await fetchFinikPaymentStatusRouted(business, paymentId);
+  if (!remote.ok) {
+    if (remote.apiMode === "legacy" || remote.apiMode === "official") {
+      console.error(
+        "Finik get payment",
+        remote.apiMode,
+        remote.error,
+      );
     }
-    const statusRaw = json.status ?? json.payment_status ?? json.state;
-    const amountRaw = json.amount ?? json.total ?? json.sum;
-    let amount: number | null = null;
-    if (amountRaw != null) {
-      const n = Number(amountRaw);
-      if (Number.isFinite(n)) amount = Math.round(n);
-    }
-    return {
-      ok: true,
-      status: String(statusRaw ?? "").toLowerCase(),
-      amount,
-    };
-  } catch (e) {
-    console.error("Finik get payment fetch:", e);
-    return { ok: false, error: "Ошибка сети при запросе статуса Finik" };
+    return { ok: false, error: remote.error };
   }
+  return {
+    ok: true,
+    status: remote.status,
+    amount: remote.amount,
+  };
 }
 
 export type SyncFinikReservationDepositResult =
