@@ -22,6 +22,7 @@
     "predeploy": "node scripts/predeploy-check.mjs"
   },
   "dependencies": {
+    "@mancho.devs/authorizer": "^2.12.8",
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.9.0",

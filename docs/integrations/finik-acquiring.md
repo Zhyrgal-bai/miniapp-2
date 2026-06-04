@@ -7,7 +7,7 @@
 | Слой | URL |
 |------|-----|
 | Legacy create (текущий prod) | `{FINIK_API_BASE_URL}{FINIK_API_CREATE_PAYMENT_PATH}` — default `https://api.finik.kg/payments` |
-| Official Acquiring beta | `{FINIK_OFFICIAL_ACQUIRING_BASE_URL}{FINIK_OFFICIAL_ACQUIRING_CREATE_PATH}` — default `https://beta.api.acquiring.averspay.kg/payment` |
+| Official Acquiring beta | `{FINIK_OFFICIAL_ACQUIRING_BASE_URL}{FINIK_OFFICIAL_ACQUIRING_CREATE_PATH}` — default `https://beta.api.acquiring.averspay.kg/v1/payment` |
 
 ## Переменные окружения
 
@@ -15,7 +15,7 @@
 |----------|---------|----------|
 | `FINIK_CREATE_API_MODE` | `legacy` | `legacy` \| `official` \| `auto` |
 | `FINIK_OFFICIAL_ACQUIRING_BASE_URL` | `https://beta.api.acquiring.averspay.kg` | Beta host |
-| `FINIK_OFFICIAL_ACQUIRING_CREATE_PATH` | `/payment` | Create path |
+| `FINIK_OFFICIAL_ACQUIRING_CREATE_PATH` | `/v1/payment` | Create path |
 | `FINIK_RSA_PRIVATE_KEY` | — | PEM для RSA (official, позже) |
 | `FINIK_RSA_PRIVATE_KEY_PATH` | — | Путь к PEM |
 
@@ -31,7 +31,8 @@
 |--------|------------|
 | `src/server/finik/finikCreateTypes.ts` | `FinikCreatePort`, контекст, результат |
 | `src/server/finik/legacyCreateAdapter.ts` | Legacy HTTP create |
-| `src/server/finik/officialAcquiringCreateAdapter.ts` | Scaffold official |
+| `src/server/finik/officialAcquiringCreateAdapter.ts` | Official RSA create (`POST /v1/payment`) |
+| `src/server/finik/finikRsaSigning.ts` | RSA-SHA256 via `@mancho.devs/authorizer` |
 | `src/server/finik/finikCreateRouter.ts` | `createFinikPaymentSession()` |
 | `src/server/finik/finikCreateResponseNormalizer.ts` | Поля ответа legacy / official |
 | `src/server/finik/finikCreateLogging.ts` | Structured logs |

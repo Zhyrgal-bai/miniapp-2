@@ -233,16 +233,16 @@ import {
 import { buildMerchantAdminOrdersWebAppUrl } from "./miniAppUrls.js";
 import {
   blocksManualFinikPaymentConfirm,
-  createFinikMerchantSession,
   mountFinikWebhookRoutes,
   mountFinikSettingsRoutes,
   publicApiOrigin,
   syncFinikOrderPayment,
 } from "./finikMerchant.js";
+import { createStorefrontFinikCheckoutSession } from "./finik/createStorefrontFinikCheckoutSession.js";
 import {
   FINIK_LEGACY_HTTP_UNAVAILABLE_ERROR,
+  canCreateFinikPayment,
   isFinikCredentialsReady,
-  isFinikLegacyHttpReady,
 } from "../shared/finikReady.js";
 import {
   mountSubscriptionFinikPaymentRoutes,
@@ -5298,7 +5298,7 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
       }
       if (
         isFinikCredentialsReady(business.finikApiKey, business.finikAccountId) &&
-        !isFinikLegacyHttpReady(business.finikApiKey, business.finikSecret)
+        !canCreateFinikPayment(business)
       ) {
         await onOrderStatusChanged(order.id, "NEW", "CANCELLED");
         await prisma.order.update({
@@ -5316,9 +5316,10 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
         "payment_session",
         tenantBusinessId,
         () =>
-          createFinikMerchantSession(business, {
+          createStorefrontFinikCheckoutSession(business, {
             orderId: order.id,
             amount: order.total,
+            ...(corrId ? { correlationId: corrId } : {}),
           }),
         { ...(corrId ? { correlationId: corrId } : {}), orderId: order.id },
       );

@@ -17,6 +17,15 @@ export {
   isOfficialAcquiringSigningConfigured,
 } from "./finikCreateRouter.js";
 
+export {
+  buildStorefrontOrderFinikCreateContext,
+  type BuildStorefrontFinikContextResult,
+  type StorefrontFinikBusiness,
+  type StorefrontFinikOrderInput,
+} from "./buildStorefrontOrderFinikCreateContext.js";
+
+export { createStorefrontFinikCheckoutSession } from "./createStorefrontFinikCheckoutSession.js";
+
 export { legacyCreateAdapter } from "./legacyCreateAdapter.js";
 export { officialAcquiringCreateAdapter } from "./officialAcquiringCreateAdapter.js";
 export { mockCreateAdapter } from "./mockCreateAdapter.js";

@@ -1,4 +1,5 @@
 import type { FinikCreateApiMode } from "./finikCreateTypes.js";
+import { isFinikRsaPrivateKeyConfigured } from "./finikRsaSigning.js";
 
 const VALID_MODES = new Set<FinikCreateApiMode>(["legacy", "official", "auto"]);
 
@@ -34,7 +35,7 @@ export function getOfficialAcquiringBaseUrl(): string {
 
 export function getOfficialAcquiringCreatePath(): string {
   const p = (
-    process.env.FINIK_OFFICIAL_ACQUIRING_CREATE_PATH || "/payment"
+    process.env.FINIK_OFFICIAL_ACQUIRING_CREATE_PATH || "/v1/payment"
   ).trim();
   return p.startsWith("/") ? p : `/${p}`;
 }
@@ -43,11 +44,9 @@ export function getOfficialAcquiringCreateUrl(): string {
   return `${getOfficialAcquiringBaseUrl()}${getOfficialAcquiringCreatePath()}`;
 }
 
-/** Для `auto`: official только если задан ключ подписи (реализация — позже). */
+/** Для `auto` / `official`: нужен PEM для RSA-SHA256. */
 export function isOfficialAcquiringSigningConfigured(): boolean {
-  const inline = process.env.FINIK_RSA_PRIVATE_KEY?.trim() ?? "";
-  const path = process.env.FINIK_RSA_PRIVATE_KEY_PATH?.trim() ?? "";
-  return inline !== "" || path !== "";
+  return isFinikRsaPrivateKeyConfigured();
 }
 
 export function isOfficialAcquiringRoutingAllowed(): boolean {

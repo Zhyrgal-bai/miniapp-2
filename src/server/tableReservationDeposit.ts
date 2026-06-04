@@ -6,8 +6,8 @@ import {
 } from "./finikMerchant.js";
 import {
   FINIK_LEGACY_HTTP_UNAVAILABLE_ERROR,
+  canCreateFinikPayment,
   isFinikCredentialsReady,
-  isFinikLegacyHttpReady,
 } from "../shared/finikReady.js";
 import {
   DEPOSIT_PAYMENT_TIMEOUT_MINUTES,
@@ -170,7 +170,7 @@ export async function startReservationDepositPayment(input: {
 
   if (
     isFinikCredentialsReady(business.finikApiKey, business.finikAccountId) &&
-    !isFinikLegacyHttpReady(business.finikApiKey, business.finikSecret)
+    !canCreateFinikPayment(business)
   ) {
     return { ok: false, status: 503, error: FINIK_LEGACY_HTTP_UNAVAILABLE_ERROR };
   }

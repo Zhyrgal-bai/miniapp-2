@@ -30,6 +30,55 @@ export function isFinikLegacyHttpReady(
   return finikHasApiKey(finikApiKey) && finikHasSecret(finikSecret);
 }
 
+/** PEM для official create доступен на сервере (ENV; per-merchant key — позже). */
+export function isFinikOfficialPrivateKeyConfigured(): boolean {
+  if ((process.env.FINIK_RSA_PRIVATE_KEY?.trim() ?? "") !== "") {
+    return true;
+  }
+  if ((process.env.FINIK_PRIVATE_KEY?.trim() ?? "") !== "") {
+    return true;
+  }
+  return (process.env.FINIK_RSA_PRIVATE_KEY_PATH?.trim() ?? "") !== "";
+}
+
+/** Official Acquiring create: API Key + Account ID + private key на сервере. */
+export function canUseOfficialFinikCreate(business: {
+  finikApiKey: string | null | undefined;
+  finikAccountId: string | null | undefined;
+}): boolean {
+  if (isFinikUseMockEnabled()) {
+    return false;
+  }
+  return (
+    finikHasApiKey(business.finikApiKey) &&
+    finikHasAccountId(business.finikAccountId) &&
+    isFinikOfficialPrivateKeyConfigured()
+  );
+}
+
+/** Legacy HTTP create (finikMerchant): API Key + Secret. */
+export function canUseLegacyFinikCreate(business: {
+  finikApiKey: string | null | undefined;
+  finikSecret: string | null | undefined;
+}): boolean {
+  return isFinikLegacyHttpReady(business.finikApiKey, business.finikSecret);
+}
+
+/** Можно создавать платёж Finik: official или legacy (checkout gate). */
+export function canCreateFinikPayment(business: {
+  finikApiKey: string | null | undefined;
+  finikAccountId: string | null | undefined;
+  finikSecret: string | null | undefined;
+}): boolean {
+  if (isFinikUseMockEnabled()) {
+    return true;
+  }
+  return (
+    canUseOfficialFinikCreate(business) ||
+    canUseLegacyFinikCreate(business)
+  );
+}
+
 export function finikHasApiKey(finikApiKey: string | null | undefined): boolean {
   return typeof finikApiKey === "string" && finikApiKey.trim().length > 0;
 }

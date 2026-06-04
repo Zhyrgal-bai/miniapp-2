@@ -2,16 +2,19 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createFinikPaymentSession,
   getFinikCreateApiMode,
+  getOfficialAcquiringCreateUrl,
   isOfficialAcquiringRoutingAllowed,
   legacyCreateAdapter,
   mockCreateAdapter,
   officialAcquiringCreateAdapter,
 } from "../../src/server/finik/index.js";
+import { getOfficialAcquiringCreatePath } from "../../src/server/finik/finikCreateConfig.js";
 import {
   normalizeLegacyFinikCreateResponse,
   normalizeOfficialFinikCreateResponse,
 } from "../../src/server/finik/finikCreateResponseNormalizer.js";
 import type { FinikCreateContext } from "../../src/server/finik/finikCreateTypes.js";
+import * as finikRsaSigning from "../../src/server/finik/finikRsaSigning.js";
 
 const baseCtx: FinikCreateContext = {
   flow: "storefront_order",
@@ -53,13 +56,76 @@ describe("finikCreateScaffold", () => {
     expect(isOfficialAcquiringRoutingAllowed()).toBe(false);
   });
 
-  it("official mode allows official routing flag but adapter is scaffold", async () => {
-    process.env.FINIK_CREATE_API_MODE = "official";
-    expect(isOfficialAcquiringRoutingAllowed()).toBe(true);
+  it("defaults official create path to /v1/payment", () => {
+    delete process.env.FINIK_OFFICIAL_ACQUIRING_CREATE_PATH;
+    expect(getOfficialAcquiringCreatePath()).toBe("/v1/payment");
+    expect(getOfficialAcquiringCreateUrl()).toBe(
+      "https://beta.api.acquiring.averspay.kg/v1/payment",
+    );
+  });
+
+  it("official adapter returns 201 JSON payment url", async () => {
+    const signSpy = vi.spyOn(finikRsaSigning, "signFinikOfficialRequest").mockResolvedValue({
+      signature: "sig",
+      timestamp: "1737369012345",
+      bodyJson: '{"Amount":100,"CardType":"FINIK_QR"}',
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      headers: { get: () => null },
+      json: async () => ({
+        paymentId: "pay-official-1",
+        paymentUrl: "https://qr.finik.kg/test",
+        status: "PENDING",
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
     const out = await officialAcquiringCreateAdapter.createPaymentSession(baseCtx);
+    expect(out.ok).toBe(true);
+    if (out.ok) {
+      expect(out.apiMode).toBe("official");
+      expect(out.paymentId).toBe("pay-official-1");
+      expect(out.paymentUrl).toBe("https://qr.finik.kg/test");
+    }
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://beta.api.acquiring.averspay.kg/v1/payment");
+    expect(init.method).toBe("POST");
+    expect(init.headers).toMatchObject({
+      "content-type": "application/json",
+      "x-api-key": "key-1234",
+      "x-api-timestamp": "1737369012345",
+      signature: "sig",
+    });
+    expect(init.redirect).toBe("manual");
+
+    signSpy.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it("official mode allows official routing when RSA key is set", () => {
+    process.env.FINIK_CREATE_API_MODE = "official";
+    process.env.FINIK_RSA_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\\nX\\n-----END PRIVATE KEY-----";
+    expect(isOfficialAcquiringRoutingAllowed()).toBe(true);
+  });
+
+  it("official adapter rejects missing credentials", async () => {
+    const out = await officialAcquiringCreateAdapter.createPaymentSession({
+      ...baseCtx,
+      tenant: {
+        kind: "business",
+        businessId: 1,
+        finikApiKey: null,
+        finikAccountId: null,
+        finikSecret: null,
+      },
+    });
     expect(out.ok).toBe(false);
     if (!out.ok) {
-      expect(out.code).toBe("finik_official_not_implemented");
+      expect(out.code).toBe("finik_official_credentials_missing");
     }
   });
 
