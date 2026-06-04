@@ -6,7 +6,6 @@ import { telegramWebAppInitDataHeader } from "../utils/telegramInitDataHeader";
 import { requireTelegramInitData } from "../utils/telegramSession";
 import {
   normalizeApiRoot,
-  normalizeBaseUrl,
   resolveRequestApiBase as resolveRequestApiBasePure,
   resolveRuntimeApiFallbackBase as resolveRuntimeApiFallbackBasePure,
 } from "./apiBaseUrl.js";
