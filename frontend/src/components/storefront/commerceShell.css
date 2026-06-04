@@ -279,3 +279,62 @@
     padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   }
 }
+
+/* Storefront builder FAQ section — accordion */
+.sf-faq-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.sf-faq-accordion__item {
+  border-radius: var(--sf-radius-lg, 14px);
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 62%, transparent);
+  background: color-mix(in srgb, var(--sf-color-surface) 94%, transparent);
+  overflow: hidden;
+}
+
+.sf-faq-accordion__trigger {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.85rem 0.95rem;
+  border: none;
+  background: transparent;
+  color: var(--sf-color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sf-faq-accordion__q {
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.sf-faq-accordion__icon {
+  flex-shrink: 0;
+  width: 1.4rem;
+  height: 1.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sf-color-muted) 12%, transparent);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.sf-faq-accordion__panel {
+  padding: 0 0.95rem 0.9rem;
+}
+
+.sf-faq-accordion__a {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.58;
+  color: color-mix(in srgb, var(--sf-color-text) 88%, transparent);
+}

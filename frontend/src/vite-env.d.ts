@@ -22,6 +22,8 @@ interface TelegramWebApp {
     auth_date?: string;
     hash?: string;
   };
+  /** Client platform: ios, android, tdesktop, web, unknown, … */
+  platform?: string;
   ready: () => void;
   /** Развернуть на весь экран внутри Telegram */
   expand?: () => void;

@@ -37,7 +37,7 @@ export function OpenInTelegramCta(props: {
       <span className="sf-open-tg__icon" aria-hidden>
         ✈
       </span>
-      <span className="sf-open-tg__label">Открыть магазин в Telegram</span>
+      <span className="sf-open-tg__label">Открыть в Telegram</span>
     </button>
   );
 }

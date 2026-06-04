@@ -51,6 +51,25 @@
   gap: 0.65rem;
 }
 
+.sf-web-info__kicker {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.sf-web-info__features {
+  margin: 0;
+  padding: 0 0 0 1.1rem;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  opacity: 0.9;
+}
+
+.sf-web-info__features li {
+  margin: 0.15rem 0;
+}
+
 .sf-web-info__name {
   margin: 0;
   font-size: 1.25rem;

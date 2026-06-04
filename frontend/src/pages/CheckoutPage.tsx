@@ -28,6 +28,7 @@ import {
   type MerchantDeliverySettings,
 } from "@repo-shared/merchantDeliverySettings";
 import { readCustomerLocationCoords } from "../storefront/customerLocationStorage";
+import { checkoutLocationLabel } from "../utils/checkoutLocationLabel";
 
 type Props = {
   onBack?: () => void;
@@ -909,7 +910,7 @@ export default function CheckoutPage({ onBack }: Props) {
               )}
               {!loadingLocation && lat != null && lng != null && (
                 <p className="checkout-loc-coords" aria-live="polite">
-                  {t("checkout.coordsSaved")} ({lat.toFixed(5)}, {lng.toFixed(5)})
+                  {checkoutLocationLabel(address)}
                 </p>
               )}
             </div>

@@ -26,7 +26,7 @@ import type { SchemaObject } from "../../admin/DynamicFieldRenderer";
 import { recordRecentlyViewed } from "../discovery/recentlyViewed";
 import { useBodyScrollLock } from "../../../utils/bodyScrollLock";
 import { isStorefrontCommerceEnabled } from "../../../hooks/useStorefrontCommerceMode";
-import { OpenInTelegramCta } from "../commerce/OpenInTelegramCta";
+import { openOpenInTelegramModal } from "../../../storefront/openInTelegramModal";
 import "./ProductDetailSheet.css";
 
 export type ProductDetailSheetProps = {
@@ -448,10 +448,15 @@ export function ProductDetailSheet({
         <div className="sf-pds-sticky-cta">
           <div className="sf-pds-cta-row">
             {!isStorefrontCommerceEnabled() ? (
-              <OpenInTelegramCta
-                telegramOpenUrl={payload?.telegramOpenUrl ?? null}
-                variant="sticky"
-              />
+              <button
+                type="button"
+                className="sf-pds-add"
+                onClick={() =>
+                  openOpenInTelegramModal(payload?.telegramOpenUrl ?? null)
+                }
+              >
+                {outOfStock ? "Нет в наличии" : "В корзину"}
+              </button>
             ) : quantity <= 0 ? (
               <button
                 type="button"

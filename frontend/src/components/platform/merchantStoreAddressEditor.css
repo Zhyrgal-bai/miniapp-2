@@ -1,0 +1,60 @@
+.msa-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.msa-editor__label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+.msa-editor__input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.msa-editor__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.msa-editor__action {
+  flex: 1 1 auto;
+  min-width: 10rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.msa-editor__action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.msa-editor__map {
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.msa-editor__hint,
+.msa-editor__error {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.msa-editor__hint {
+  opacity: 0.75;
+}
+
+.msa-editor__error {
+  color: #f87171;
+}

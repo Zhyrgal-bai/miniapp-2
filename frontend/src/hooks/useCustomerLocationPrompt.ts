@@ -100,7 +100,7 @@ export function useCustomerLocationPrompt(
         if (!isLatitudeInKgRange(lat) || !isLongitudeInKgRange(lng)) {
           setRequesting(false);
           setRequestError(
-            "Координаты вне Кыргызстана. Проверьте GPS или выберите «Не сейчас».",
+            "Кыргызстан. Проверьте GPS или выберите «Не сейчас».",
           );
           return;
         }

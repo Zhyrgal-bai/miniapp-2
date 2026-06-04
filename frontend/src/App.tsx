@@ -62,6 +62,8 @@ import {
 import { isStorefrontCommerceEnabled } from "./hooks/useStorefrontCommerceMode";
 import { useCustomerLocationPrompt } from "./hooks/useCustomerLocationPrompt";
 import { CustomerLocationPrompt } from "./components/storefront/commerce/CustomerLocationPrompt";
+import { OpenInTelegramModal } from "./components/storefront/commerce/OpenInTelegramModal";
+import { openOpenInTelegramModal } from "./storefront/openInTelegramModal";
 
 type AppNavPage =
   | "home"
@@ -73,6 +75,14 @@ type AppNavPage =
   | "my-orders"
   | "support"
   | "table-booking";
+
+const WEB_BLOCKED_NAV_PAGES = new Set<AppNavPage>([
+  "cart",
+  "checkout",
+  "my-orders",
+  "support",
+  "table-booking",
+]);
 
 function myOrdersNeedAttention(rows: MyOrderRow[]): boolean {
   return rows.some((o) => {
@@ -262,6 +272,13 @@ export default function App() {
 
   const commitPage = useCallback(
     (next: AppNavPage) => {
+      if (
+        !isStorefrontCommerceEnabled() &&
+        WEB_BLOCKED_NAV_PAGES.has(next)
+      ) {
+        openOpenInTelegramModal(payload?.telegramOpenUrl ?? null);
+        return;
+      }
       if (next === "faq") {
         if (shopIdString) {
           navigate(
@@ -327,6 +344,7 @@ export default function App() {
       tenantMergedSearch,
       shopIdString,
       payload?.storefrontSlug,
+      payload?.telegramOpenUrl,
     ],
   );
 
@@ -734,24 +752,24 @@ export default function App() {
             <PreorderBanner />
           ) : null}
           {page === "home" && <HomePage />}
-          {page === "table-booking" && (
+          {commerceEnabled && page === "table-booking" && (
             <TableBookingPage onBack={() => commitPage("home")} />
           )}
           {page === "faq" && <FAQ />}
           {page === "about-shop" && <AboutShopPage />}
-          {page === "my-orders" && (
+          {commerceEnabled && page === "my-orders" && (
             <MyOrders profilePlainNonce={myOrdersPlainNonce} />
           )}
-          {page === "support" && (
+          {commerceEnabled && page === "support" && (
             <SupportHubPage
               onBack={() => commitPage("home")}
               onGoShopping={() => commitPage("home")}
             />
           )}
-          {page === "cart" && (
+          {commerceEnabled && page === "cart" && (
             <CartPage onGoToCheckout={() => commitPage("checkout")} />
           )}
-          {page === "checkout" && (
+          {commerceEnabled && page === "checkout" && (
             <CheckoutPage onBack={() => commitPage("cart")} />
           )}
           {page === "admin" &&
@@ -799,6 +817,9 @@ export default function App() {
         error={customerLocationPrompt.requestError}
         onAllow={customerLocationPrompt.onAllow}
         onDismiss={customerLocationPrompt.onDismiss}
+      />
+      <OpenInTelegramModal
+        defaultTelegramOpenUrl={payload?.telegramOpenUrl ?? null}
       />
     </div>
     </PreorderProvider>

@@ -7,6 +7,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 import { StorefrontPayloadProvider } from "./components/storefront/runtime/StorefrontPayloadContext";
 import MerchantDashboardPage from "./pages/MerchantDashboardPage";
 import MerchantRegisterPage from "./pages/MerchantRegisterPage";
+import MerchantFaqPage from "./pages/MerchantFaqPage";
 import RootAppOrPlatform from "./pages/RootAppOrPlatform";
 import AppErrorBoundary from "./components/ui/AppErrorBoundary";
 import "leaflet/dist/leaflet.css";
@@ -32,6 +33,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 path="/merchant/register"
                 element={<MerchantRegisterPage />}
               />
+              <Route path="/merchant/faq" element={<MerchantFaqPage />} />
               <Route path="/merchant" element={<MerchantDashboardPage />} />
               <Route
                 path="/platform"

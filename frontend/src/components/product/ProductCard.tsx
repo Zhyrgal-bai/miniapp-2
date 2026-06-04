@@ -27,7 +27,7 @@ import {
 } from "../../services/storefrontAnalytics";
 import { isStorefrontCommerceEnabled } from "../../hooks/useStorefrontCommerceMode";
 import { useStorefrontPayload } from "../storefront/runtime/StorefrontPayloadContext";
-import { OpenInTelegramCta } from "../storefront/commerce/OpenInTelegramCta";
+import { openOpenInTelegramModal } from "../../storefront/openInTelegramModal";
 
 type Props = {
   product: Product;
@@ -452,10 +452,29 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   const purchaseControl = commerceEnabled ? (
     AddToCartButton
   ) : (
-    <OpenInTelegramCta
-      telegramOpenUrl={payload?.telegramOpenUrl ?? null}
-      variant="inline"
-    />
+    <button
+      type="button"
+      className="product-add-btn"
+      onClick={() =>
+        openOpenInTelegramModal(payload?.telegramOpenUrl ?? null)
+      }
+    >
+      {addLabel}
+    </button>
+  );
+
+  const webIconAddButton = (
+    <button
+      type="button"
+      className="product-add-btn product-add-btn--icon"
+      onClick={() =>
+        openOpenInTelegramModal(payload?.telegramOpenUrl ?? null)
+      }
+      aria-label={addLabel}
+      title={addLabel}
+    >
+      +
+    </button>
   );
 
   return (
@@ -609,7 +628,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
             </div>
             <div className="product-actions product-actions--icon">
               {!commerceEnabled ? (
-                purchaseControl
+                webIconAddButton
               ) : quantity <= 0 ? (
                 <button
                   className="product-add-btn product-add-btn--icon"

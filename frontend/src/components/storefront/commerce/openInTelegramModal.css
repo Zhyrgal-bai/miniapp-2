@@ -1,0 +1,60 @@
+.sf-tg-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+.sf-tg-modal {
+  width: min(100%, 22rem);
+  padding: 1.25rem 1.15rem 1.1rem;
+  border-radius: 1rem;
+  background: var(--sf-card-bg, #1a1a1a);
+  color: var(--sf-text, #fff);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+}
+
+.sf-tg-modal__title {
+  margin: 0 0 0.65rem;
+  font-size: 1.05rem;
+  line-height: 1.35;
+  font-weight: 700;
+}
+
+.sf-tg-modal__text {
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  opacity: 0.88;
+}
+
+.sf-tg-modal__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.sf-tg-modal__open {
+  width: 100%;
+}
+
+.sf-tg-modal__close {
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: none;
+  border-radius: 0.65rem;
+  background: transparent;
+  color: inherit;
+  font-size: 0.875rem;
+  opacity: 0.75;
+  cursor: pointer;
+}
+
+.sf-tg-modal__close:hover {
+  opacity: 1;
+}

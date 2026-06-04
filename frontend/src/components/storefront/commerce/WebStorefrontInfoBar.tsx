@@ -21,13 +21,17 @@ export function WebStorefrontInfoBar(props: {
   return (
     <section className="sf-section sf-section--web-info sf-section--padded">
       <div className="sf-web-info">
+        <p className="sf-web-info__kicker">📱 Полный функционал доступен в Telegram</p>
         {name !== "" ? <h2 className="sf-web-info__name">{name}</h2> : null}
         {addressText !== "" ? (
           <p className="sf-web-info__address">{addressText}</p>
         ) : null}
-        <p className="sf-web-info__lead">
-          Покупки и оплата доступны в Telegram Mini App магазина.
-        </p>
+        <ul className="sf-web-info__features">
+          <li>Заказы</li>
+          <li>Оплата</li>
+          <li>История заказов</li>
+          <li>Уведомления</li>
+        </ul>
         <OpenInTelegramCta
           telegramOpenUrl={props.telegramOpenUrl}
           variant="hero"

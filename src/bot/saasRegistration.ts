@@ -31,6 +31,13 @@ import {
   registrationAdminReplyKeyboardMarkup,
   tryHandleRegistrationAdminReplyKeyboardButton,
 } from "./registrationBotAdminPanel.js";
+import {
+  archaAboutInlineKeyboard,
+  archaAboutMenuButton,
+  buildArchaAboutMessage,
+  SAAS_CB_ABOUT,
+  SAAS_CB_BACK_MENU,
+} from "./archaAboutContent.js";
 
 type BotRole =
   | { type: "env"; botIndex: number }
@@ -315,6 +322,7 @@ function launchLayerInlineKeyboard(): {
   if (cabinetUrl != null) {
     rows.push([{ text: "📊 Кабинет", web_app: { url: cabinetUrl } }]);
   }
+  rows.push([archaAboutMenuButton()]);
   return { inline_keyboard: rows };
 }
 
@@ -458,6 +466,7 @@ async function replyMerchantStoreDashboard(
     }
   }
 
+  keyboard.push([archaAboutMenuButton()]);
   keyboard.push([
     { text: "➕ Добавить магазин", callback_data: "saas_new_store" },
   ]);
@@ -1032,6 +1041,31 @@ export async function handleRegistrationCallbacks(
 
   const data = ctx.callbackQuery.data;
   if (typeof data !== "string") return false;
+
+  if (data === SAAS_CB_ABOUT) {
+    try {
+      await ctx.answerCbQuery().catch(() => undefined);
+      await ctx.reply(buildArchaAboutMessage(), {
+        reply_markup: archaAboutInlineKeyboard(),
+        ...adminReplyKeyboardExtraIfAdmin(ctx),
+      });
+    } catch (e) {
+      console.error("saas_about callback:", e);
+      await ctx.answerCbQuery("Позже попробуйте").catch(() => undefined);
+    }
+    return true;
+  }
+
+  if (data === SAAS_CB_BACK_MENU) {
+    try {
+      await ctx.answerCbQuery().catch(() => undefined);
+      await replyAfterRegistrationExit(ctx);
+    } catch (e) {
+      console.error("saas_back_menu callback:", e);
+      await ctx.answerCbQuery("Позже попробуйте").catch(() => undefined);
+    }
+    return true;
+  }
 
   if (data.startsWith("bt_")) {
     await ctx.answerCbQuery("Регистрация только в Mini App").catch(() => undefined);

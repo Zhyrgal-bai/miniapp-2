@@ -10,6 +10,10 @@ import {
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
+import {
+  reverseGeocodeKg,
+  type ResolvedMerchantAddress,
+} from "../../utils/nominatimGeocode";
 
 const defaultIcon = L.icon({
   iconUrl: markerIcon,
@@ -30,6 +34,7 @@ type MapPickerProps = {
   setLat: (value: number) => void;
   setLng: (value: number) => void;
   setAddress: (value: string) => void;
+  onResolved?: (value: ResolvedMerchantAddress) => void;
 };
 
 function MapViewToSelection({
@@ -53,6 +58,7 @@ function LocationMarker({
   setLng,
   setAddress,
   setReverseBusy,
+  onResolved,
 }: Omit<MapPickerProps, "lat" | "lng"> & {
   setReverseBusy: (v: boolean) => void;
 }) {
@@ -64,22 +70,10 @@ function LocationMarker({
       setLng(nextLng);
       setReverseBusy(true);
       try {
-        const url = new URL("https://nominatim.openstreetmap.org/reverse");
-        url.searchParams.set("format", "jsonv2");
-        url.searchParams.set("lat", String(nextLat));
-        url.searchParams.set("lon", String(nextLng));
-        url.searchParams.set("accept-language", "ru");
-
-        const res = await fetch(url.toString(), {
-          headers: {
-            Accept: "application/json",
-          },
-        });
-        const data = (await res.json().catch(() => ({}))) as {
-          display_name?: string;
-        };
-        if (typeof data.display_name === "string" && data.display_name.trim()) {
-          setAddress(data.display_name.trim().slice(0, 2000));
+        const resolved = await reverseGeocodeKg(nextLat, nextLng);
+        if (resolved.ok) {
+          setAddress(resolved.value.displayAddress);
+          onResolved?.(resolved.value);
         }
       } catch {
         /* адрес можно ввести вручную */
@@ -98,6 +92,7 @@ export default function MapPicker({
   setLat,
   setLng,
   setAddress,
+  onResolved,
 }: MapPickerProps) {
   const [reverseBusy, setReverseBusy] = useState(false);
   const center: [number, number] =
@@ -122,6 +117,7 @@ export default function MapPicker({
           setLng={setLng}
           setAddress={setAddress}
           setReverseBusy={setReverseBusy}
+          onResolved={onResolved}
         />
         {lat != null && lng != null ? <Marker position={[lat, lng]} /> : null}
       </MapContainer>

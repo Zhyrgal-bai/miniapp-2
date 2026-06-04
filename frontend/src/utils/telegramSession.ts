@@ -32,8 +32,30 @@ function maxInitDataAgeSec(): number {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : DEFAULT_MAX_AGE_SEC;
 }
 
+/** True only inside a real Telegram Mini App host (not bare browser with SDK script). */
 export function isTelegramMiniAppEnv(): boolean {
-  return typeof window !== "undefined" && Boolean(window.Telegram?.WebApp);
+  if (typeof window === "undefined") return false;
+  const tg = window.Telegram?.WebApp;
+  if (tg == null) return false;
+
+  const initData = tg.initData?.trim() ?? "";
+  if (initData.length > 0) return true;
+
+  const user = tg.initDataUnsafe?.user;
+  if (user != null && typeof user.id === "number" && user.id > 0) {
+    return true;
+  }
+
+  const platform = String(tg.platform ?? "").trim().toLowerCase();
+  if (
+    platform !== "" &&
+    platform !== "unknown" &&
+    platform !== "web" /* telegram.org in desktop browser, not Mini App */
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 /** Signed initData string from Telegram WebApp (never initDataUnsafe). */

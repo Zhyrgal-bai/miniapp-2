@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, afterEach } from "vitest";
 import {
   assessTelegramInitData,
+  isTelegramMiniAppEnv,
   parseInitDataMeta,
   telegramSessionFailureMessage,
 } from "../../frontend/src/utils/telegramSession.ts";
@@ -43,5 +44,56 @@ describe("telegram session assessment (client)", () => {
   it("exposes RU failure messages", () => {
     expect(telegramSessionFailureMessage("stale")).toMatch(/устарел/i);
     expect(telegramSessionFailureMessage("timeout")).toMatch(/обновите/i);
+  });
+});
+
+describe("isTelegramMiniAppEnv", () => {
+  const originalWindow = globalThis.window;
+
+  afterEach(() => {
+    if (originalWindow === undefined) {
+      // @ts-expect-error test cleanup
+      delete globalThis.window;
+    } else {
+      globalThis.window = originalWindow;
+    }
+  });
+
+  it("returns false when Telegram SDK exists without init context (plain browser)", () => {
+    globalThis.window = {
+      Telegram: {
+        WebApp: {
+          initData: "",
+          initDataUnsafe: {},
+          platform: "unknown",
+        },
+      },
+    } as unknown as Window & typeof globalThis;
+    expect(isTelegramMiniAppEnv()).toBe(false);
+  });
+
+  it("returns true when signed initData is present", () => {
+    globalThis.window = {
+      Telegram: {
+        WebApp: {
+          initData: "user=%7B%7D&hash=abc",
+          platform: "unknown",
+        },
+      },
+    } as unknown as Window & typeof globalThis;
+    expect(isTelegramMiniAppEnv()).toBe(true);
+  });
+
+  it("returns true for native Telegram platform without web platform string", () => {
+    globalThis.window = {
+      Telegram: {
+        WebApp: {
+          initData: "",
+          initDataUnsafe: {},
+          platform: "ios",
+        },
+      },
+    } as unknown as Window & typeof globalThis;
+    expect(isTelegramMiniAppEnv()).toBe(true);
   });
 });

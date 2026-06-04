@@ -91,7 +91,7 @@ export const ru = {
     mapShow: "🗺 Выбрать на карте",
     mapHide: "🗺 Скрыть карту",
     mapHint: "Нажмите на карту, чтобы поставить точку и подставить адрес",
-    coordsSaved: "Координаты сохранены",
+    locationResolved: "Местоположение определено",
     promoInvalid: "Неверный или использован промокод",
     promoNeedShop: "Откройте мини-приложение со ссылкой ?shop=id_магазина",
     payLinkMissing:

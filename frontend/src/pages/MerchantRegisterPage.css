@@ -308,3 +308,21 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   letter-spacing: 0.08em;
 }
+
+.mr__faq-link-wrap {
+  margin: 0;
+  padding: 0 20px 20px;
+  text-align: center;
+}
+
+.mr__faq-link {
+  border: none;
+  background: transparent;
+  color: #93c5fd;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}

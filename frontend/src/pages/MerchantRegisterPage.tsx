@@ -8,10 +8,14 @@ import {
 } from "../services/platformApi";
 import { trackPlatformFunnel } from "../services/platformFunnel";
 import { formatApiError } from "../utils/adminApiError";
+import { MerchantStoreAddressEditor } from "../components/platform/MerchantStoreAddressEditor";
 import {
-  KG_SUGGESTED_CITIES,
-  parseBusinessAddressInput,
-} from "@repo-shared/businessAddress";
+  emptyMerchantStoreAddressDraft,
+  formatMerchantStoreAddressDisplay,
+  resolveMerchantStoreAddressForSave,
+  validateMerchantAddressDisplay,
+  type MerchantStoreAddressDraft,
+} from "../utils/nominatimGeocode";
 import "./MerchantRegisterPage.css";
 
 const SS_SHOP = "miniapp-active-shop";
@@ -74,15 +78,15 @@ export default function MerchantRegisterPage() {
   const [step, setStep] = useState(1);
   const [businessType, setBusinessType] = useState<BusinessType | "">("");
   const [storeName, setStoreName] = useState("");
-  const [addressLine, setAddressLine] = useState("");
-  const [city, setCity] = useState("Бишкек");
-  const [latitude, setLatitude] = useState("");
-  const [longitude, setLongitude] = useState("");
+  const [storeAddress, setStoreAddress] = useState<MerchantStoreAddressDraft>(
+    emptyMerchantStoreAddressDraft(),
+  );
   const [botToken, setBotToken] = useState("");
   const [phone, setPhone] = useState("");
   const [finikApiKey, setFinikApiKey] = useState("");
   const [finikAccountId, setFinikAccountId] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [geocoding, setGeocoding] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [gateLoading, setGateLoading] = useState(true);
   const [gateMessage, setGateMessage] = useState<string | null>(null);
@@ -183,14 +187,8 @@ export default function MerchantRegisterPage() {
 
   const addressStepError = useMemo(() => {
     if (step !== 3) return null;
-    const parsed = parseBusinessAddressInput({
-      addressLine,
-      city,
-      latitude,
-      longitude,
-    });
-    return parsed.ok ? null : parsed.error;
-  }, [step, addressLine, city, latitude, longitude]);
+    return validateMerchantAddressDisplay(storeAddress);
+  }, [step, storeAddress]);
 
   const canNext = useMemo(() => {
     if (step === 1) return businessType !== "";
@@ -210,9 +208,27 @@ export default function MerchantRegisterPage() {
     finikPairError,
   ]);
 
-  const goNext = () => {
-    if (!canNext) return;
+  const goNext = async () => {
+    if (!canNext || geocoding) return;
     setSubmitError(null);
+    if (step === 3) {
+      setGeocoding(true);
+      try {
+        const resolved = await resolveMerchantStoreAddressForSave(storeAddress);
+        if (!resolved.ok) {
+          setSubmitError(resolved.error);
+          return;
+        }
+        setStoreAddress({
+          addressLine: resolved.value.addressLine,
+          city: resolved.value.city,
+          latitude: resolved.value.latitude,
+          longitude: resolved.value.longitude,
+        });
+      } finally {
+        setGeocoding(false);
+      }
+    }
     if (step < TOTAL_STEPS) {
       setStep((s) => s + 1);
     }
@@ -228,49 +244,49 @@ export default function MerchantRegisterPage() {
       setSubmitError("Выберите тип бизнеса");
       return;
     }
-    const addr = parseBusinessAddressInput({
-      addressLine,
-      city,
-      latitude,
-      longitude,
-    });
-    if (!addr.ok) {
-      setSubmitError(addr.error);
-      setStep(3);
-      return;
-    }
-    setSubmitting(true);
-    setSubmitError(null);
+    setGeocoding(true);
     try {
-      const key = finikApiKey.trim();
-      const account = finikAccountId.trim();
-      await submitPlatformRegisterRequest({
-        storeName: storeName.trim(),
-        addressLine: addr.value.addressLine,
-        city: addr.value.city,
-        latitude: addr.value.latitude,
-        longitude: addr.value.longitude,
-        botToken: botToken.trim(),
-        phone: phone.trim(),
-        telegramId: uid,
-        businessType,
-        ownerUsername,
-        ...(key !== "" && account !== ""
-          ? { finikApiKey: key, finikAccountId: account }
-          : {}),
-      });
-      trackPlatformFunnel("register_submit");
-      try {
-        sessionStorage.setItem(MERCHANT_REGISTER_SENT_KEY, "1");
-      } catch {
-        /* ignore */
+      const resolved = await resolveMerchantStoreAddressForSave(storeAddress);
+      if (!resolved.ok) {
+        setSubmitError(resolved.error);
+        setStep(3);
+        return;
       }
-      goMerchant();
-    } catch (e) {
-      setSubmitError(formatApiError(e));
-      setStep(TOTAL_STEPS);
+      setSubmitting(true);
+      setSubmitError(null);
+      try {
+        const key = finikApiKey.trim();
+        const account = finikAccountId.trim();
+        await submitPlatformRegisterRequest({
+          storeName: storeName.trim(),
+          addressLine: resolved.value.addressLine,
+          city: resolved.value.city,
+          latitude: resolved.value.latitude,
+          longitude: resolved.value.longitude,
+          botToken: botToken.trim(),
+          phone: phone.trim(),
+          telegramId: uid,
+          businessType,
+          ownerUsername,
+          ...(key !== "" && account !== ""
+            ? { finikApiKey: key, finikAccountId: account }
+            : {}),
+        });
+        trackPlatformFunnel("register_submit");
+        try {
+          sessionStorage.setItem(MERCHANT_REGISTER_SENT_KEY, "1");
+        } catch {
+          /* ignore */
+        }
+        goMerchant();
+      } catch (e) {
+        setSubmitError(formatApiError(e));
+        setStep(TOTAL_STEPS);
+      } finally {
+        setSubmitting(false);
+      }
     } finally {
-      setSubmitting(false);
+      setGeocoding(false);
     }
   };
 
@@ -400,81 +416,16 @@ export default function MerchantRegisterPage() {
               <div className="mr__card-head">
                 <h1 className="mr__title">Адрес магазина</h1>
                 <p className="mr__subtitle">
-                  Улица и координаты — для доставки и карты на витрине
+                  Для доставки и отображения на витрине
                 </p>
               </div>
-              <div className="mr__field">
-                <label className="mr__label" htmlFor="mr-city">
-                  Город
-                </label>
-                <input
-                  id="mr-city"
-                  type="text"
-                  list="mr-city-suggestions"
-                  autoFocus
-                  maxLength={120}
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  className="mr__input"
-                />
-                <datalist id="mr-city-suggestions">
-                  {KG_SUGGESTED_CITIES.map((c) => (
-                    <option key={c} value={c} />
-                  ))}
-                </datalist>
-              </div>
-              <div className="mr__field">
-                <label className="mr__label" htmlFor="mr-address-line">
-                  Адрес
-                </label>
-                <input
-                  id="mr-address-line"
-                  type="text"
-                  maxLength={500}
-                  placeholder="ул. Чуй 123, офис 5"
-                  value={addressLine}
-                  onChange={(e) => setAddressLine(e.target.value)}
-                  className="mr__input"
-                />
-              </div>
-              <div className="mr__field">
-                <label className="mr__label" htmlFor="mr-lat">
-                  Широта
-                </label>
-                <input
-                  id="mr-lat"
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="42.8746"
-                  value={latitude}
-                  onChange={(e) => setLatitude(e.target.value)}
-                  className="mr__input mr__input--mono"
-                />
-              </div>
-              <div className="mr__field mr__field--solo">
-                <label className="mr__label" htmlFor="mr-lng">
-                  Долгота
-                </label>
-                <input
-                  id="mr-lng"
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="74.6122"
-                  value={longitude}
-                  onChange={(e) => setLongitude(e.target.value)}
-                  className="mr__input mr__input--mono"
-                />
-              </div>
-              {addressStepError ? (
-                <p className="mr__err" role="alert">
-                  {addressStepError}
-                </p>
-              ) : (
-                <p className="mr__hint">
-                  Координаты можно взять из Google Maps (КР: широта 39–43, долгота
-                  69–80)
-                </p>
-              )}
+              <MerchantStoreAddressEditor
+                inputId="mr-store-address"
+                inputClassName="mr__input"
+                value={storeAddress}
+                onChange={setStoreAddress}
+                error={addressStepError}
+              />
             </>
           ) : null}
 
@@ -588,11 +539,10 @@ export default function MerchantRegisterPage() {
                 <div className="mr__review-row">
                   <dt>Адрес</dt>
                   <dd>
-                    {city.trim()}, {addressLine.trim()}
-                    <br />
-                    <span className="mr__review-masked">
-                      {latitude.trim()}, {longitude.trim()}
-                    </span>
+                    {formatMerchantStoreAddressDisplay(
+                      storeAddress.city,
+                      storeAddress.addressLine,
+                    )}
                   </dd>
                 </div>
                 <div className="mr__review-row">
@@ -631,11 +581,11 @@ export default function MerchantRegisterPage() {
             {step < TOTAL_STEPS ? (
               <button
                 type="button"
-                disabled={!canNext}
-                onClick={goNext}
+                disabled={!canNext || geocoding}
+                onClick={() => void goNext()}
                 className="mr__submit"
               >
-                Далее
+                {geocoding ? "Определяем адрес…" : "Далее"}
               </button>
             ) : (
               <button
@@ -648,6 +598,15 @@ export default function MerchantRegisterPage() {
               </button>
             )}
           </div>
+          <p className="mr__faq-link-wrap">
+            <button
+              type="button"
+              className="mr__faq-link"
+              onClick={() => navigate("/merchant/faq")}
+            >
+              Вопросы и ответы об ARCHA
+            </button>
+          </p>
         </div>
       </div>
     </div>
