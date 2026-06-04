@@ -4,19 +4,12 @@ import { formatHttpStatusError } from "../utils/adminApiError";
 import { getBusinessIdNumber } from "../utils/storeParams";
 import { telegramWebAppInitDataHeader } from "../utils/telegramInitDataHeader";
 import { requireTelegramInitData } from "../utils/telegramSession";
-
-function normalizeBaseUrl(url: string): string {
-  return url.replace(/\/$/, "");
-}
-
-/** Убираем хвост `/api`, чтобы пути вроде `/categories` не превращались в `/api/categories` (404). */
-function normalizeApiRoot(url: string): string {
-  const trimmed = normalizeBaseUrl(url);
-  if (trimmed.endsWith("/api")) {
-    return trimmed.slice(0, -4);
-  }
-  return trimmed;
-}
+import {
+  normalizeApiRoot,
+  normalizeBaseUrl,
+  resolveRequestApiBase as resolveRequestApiBasePure,
+  resolveRuntimeApiFallbackBase as resolveRuntimeApiFallbackBasePure,
+} from "./apiBaseUrl.js";
 
 const envUrl =
   typeof import.meta.env.VITE_API_URL === "string"
@@ -28,31 +21,49 @@ const envFallbackUrl =
     ? import.meta.env.VITE_FALLBACK_API_URL.trim()
     : "";
 
-const DEFAULT_RENDER_API_ORIGIN = "https://miniapp-store.onrender.com";
-
 /** База API: задайте `VITE_API_URL` в `frontend/.env` (тот же публичный URL, что `API_URL` на бэкенде). */
 export const API_BASE_URL =
   envUrl !== "" ? normalizeApiRoot(envUrl) : "";
 
 let warnedEmptyApiBase = false;
 
+function runtimeLocation(): { hostname: string; origin: string } {
+  if (typeof window === "undefined") {
+    return { hostname: "", origin: "" };
+  }
+  return {
+    hostname: window.location.hostname,
+    origin: window.location.origin,
+  };
+}
+
+/** @see apiBaseUrl.ts */
+export function resolveRuntimeApiFallbackBase(): string {
+  const loc = runtimeLocation();
+  return resolveRuntimeApiFallbackBasePure({
+    envFallbackUrl,
+    hostname: loc.hostname,
+    origin: loc.origin,
+  });
+}
+
+/** Итоговая база для privileged/platform fetch. */
+export function resolveRequestApiBase(): string {
+  const loc = runtimeLocation();
+  return resolveRequestApiBasePure({
+    builtInApiBase: API_BASE_URL,
+    envFallbackUrl,
+    hostname: loc.hostname,
+    origin: loc.origin,
+  });
+}
+
 /**
  * Абсолютный URL эндпоинта (axios с baseURL игнорирует свой baseURL для absolute URL).
  * Используй для путей, которые должны гарантированно попасть на бэкенд.
- *
- * Если `VITE_API_URL` не был задан **на сборке** (например Vercel без env),
- * здесь получится относительный `/api/...` → браузер бьёт в origin фронта, а не в Render → initData/API «не работают».
  */
 export function apiAbsoluteUrl(path: string): string {
-  const vercelLikelyHost =
-    typeof window !== "undefined" && /\.vercel\.app$/i.test(window.location.hostname);
-  const fallbackBase =
-    envFallbackUrl !== ""
-      ? normalizeApiRoot(envFallbackUrl)
-      : vercelLikelyHost
-        ? DEFAULT_RENDER_API_ORIGIN
-        : "";
-  const base = normalizeBaseUrl(API_BASE_URL || fallbackBase);
+  const base = resolveRequestApiBase();
   const p = path.startsWith("/") ? path : `/${path}`;
   if (
     base === "" &&
@@ -64,8 +75,8 @@ export function apiAbsoluteUrl(path: string): string {
     warnedEmptyApiBase = true;
     if (typeof console !== "undefined" && typeof console.error === "function") {
       console.error(
-        "[api] При сборке не задан VITE_API_URL — запросы идут на текущий хост SPA, сервер Mini App не вызывается. " +
-          "Задайте на Vercel переменную VITE_API_URL = публичный URL API (например https://your-app.onrender.com) без / в конце и пересоберите.",
+        "[api] Не задан VITE_API_URL и нет runtime fallback — задайте VITE_API_URL при сборке " +
+          "(Render: RENDER_EXTERNAL_URL → scripts/render-vite-build.mjs) или VITE_FALLBACK_API_URL для Vercel.",
       );
     }
   }

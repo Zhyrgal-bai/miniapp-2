@@ -23,17 +23,19 @@ services:
         fromDatabase:
           name: miniapp-db
           property: connectionString
-      # Если задать API_URL вручную — имеет приоритет над RENDER_EXTERNAL_URL
+      # Публичный URL API (без /). На Render обычно = https://<service>.onrender.com
       - key: API_URL
         sync: false
-      # Сборка Vite: публичный URL API без слэша в конце (как API_URL). Если SPA с того же хоста
-      # что и API — можно оставить пустым: axios пойдёт на текущий origin.
+      # Опционально: переопределить URL для Vite (иначе build берёт RENDER_EXTERNAL_URL)
       - key: VITE_API_URL
         sync: false
       # Заполните в Dashboard после первого деплоя:
       # - BOT_TOKEN или BOT_TOKENS (бот регистрации / платформы; первый токен — проверка Mini App initData)
       # - PLATFORM_WEBAPP_BOT_TOKEN — если Mini App открывается не с того бота что первый в BOT_TOKENS
-      # - FRONT_URL — URL минимаркета на Vercel (без / в конце), для кнопок Web App в боте
+      # - MINI_APP_URL и/или FRONT_URL — HTTPS URL Mini App для кнопок бота (тот же хост, что API, если SPA на Render)
+      #   Пример: https://miniapp-2-qipd.onrender.com
+      - key: MINI_APP_URL
+        sync: false
       # - ADMIN_IDS / PLATFORM_ADMIN_TELEGRAM_ID — по необходимости
       # - TELEGRAM_WEBHOOK_SECRET (production): тот же secret_token в setWebhook + заголовок X-Telegram-Bot-Api-Secret-Token
       # - BOT_TOKEN_SECRET_KEY (production): AES-256 шифрование Business.botToken в БД (≥32 символа)
@@ -63,4 +65,6 @@ services:
       - key: OPERATOR_PASSWORD_HASH
         sync: false
       - key: FRONT_URL
+        sync: false
+      - key: FRONTEND_URL
         sync: false
