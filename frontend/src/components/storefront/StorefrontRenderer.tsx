@@ -32,9 +32,14 @@ import {
 } from "../../storefront/catalogCardPresets";
 import { StorefrontFeed } from "./StorefrontFeed";
 import {
-  shouldRenderIdentityBand,
+  hasIdentityBandExtras,
   StorefrontIdentityBand,
 } from "./StorefrontIdentityBand";
+import { StorefrontStoreCard } from "./StorefrontStoreCard";
+import "./storefrontStoreCard.css";
+import { CatalogSearchBar } from "./CatalogSearchBar";
+import "./catalogSearchBar.css";
+import { filterProductsBySearch } from "../../utils/filterProductsBySearch";
 import { getStorefrontCommerceMode } from "../../hooks/useStorefrontCommerceMode";
 import { WebStorefrontInfoBar } from "./commerce/WebStorefrontInfoBar";
 import { trackStoreView } from "../../services/storefrontAnalytics";
@@ -120,6 +125,7 @@ export function StorefrontRenderer(props: {
   const [catalog, setCatalog] = useState<Product[] | null>(null);
   const [sheetProduct, setSheetProduct] = useState<Product | null>(null);
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [cardViewportTier, setCardViewportTier] = useState<StorefrontCardViewportTier>("default");
 
@@ -173,6 +179,11 @@ export function StorefrontRenderer(props: {
     [activeCategoryId],
   );
 
+  const filterCatalog = useCallback(
+    (list: Product[]) => filterProductsBySearch(filterByCategory(list), searchQuery),
+    [filterByCategory, searchQuery],
+  );
+
   const featuredAll = useMemo(
     () =>
       enrichProductsFromCatalog(
@@ -182,14 +193,23 @@ export function StorefrontRenderer(props: {
     [props.payload.featuredProducts, catalog],
   );
   const featuredFiltered = useMemo(
-    () => filterByCategory(featuredAll),
-    [featuredAll, filterByCategory],
+    () => filterCatalog(featuredAll),
+    [featuredAll, filterCatalog],
   );
 
   const catalogFiltered = useMemo(
+    () => filterCatalog(catalog ?? []),
+    [catalog, filterCatalog],
+  );
+
+  const catalogForRails = useMemo(
     () => filterByCategory(catalog ?? []),
     [catalog, filterByCategory],
   );
+  const primaryDisplayProducts = useMemo(() => {
+    if (featuredFiltered.length > 0) return featuredFiltered;
+    return catalogFiltered;
+  }, [featuredFiltered, catalogFiltered]);
 
   useEffect(() => {
     const bid = props.payload.businessId;
@@ -219,6 +239,7 @@ export function StorefrontRenderer(props: {
   useEffect(() => {
     setSheetProduct(null);
     setActiveCategoryId(null);
+    setSearchQuery("");
   }, [props.payload.businessId]);
 
   useEffect(() => {
@@ -279,28 +300,20 @@ export function StorefrontRenderer(props: {
   }, [styleCfg, catalog]);
 
   const identityTextCfg = props.payload.storefrontTextConfig ?? undefined;
-  const storeBrandHeaderActive = Boolean(String(props.payload.storeName ?? "").trim());
-  const hasStoreAddress = Boolean(
-    props.payload.storeAddress != null &&
-      (props.payload.storeAddress.addressLine.trim() !== "" ||
-        props.payload.storeAddress.city.trim() !== ""),
-  );
   const showIdentityBand = useMemo(
     () =>
-      shouldRenderIdentityBand(
-        String(props.payload.storeName ?? "").trim(),
+      hasIdentityBandExtras(
         identityTextCfg as Record<string, unknown> | undefined,
         styleCfg,
-        { headerBrandActive: storeBrandHeaderActive },
-      ) || hasStoreAddress,
-    [
-      props.payload.storeName,
-      identityTextCfg,
-      styleCfg,
-      storeBrandHeaderActive,
-      hasStoreAddress,
-    ],
+      ),
+    [identityTextCfg, styleCfg],
   );
+  const searchPlaceholder =
+    typeof identityTextCfg?.searchPlaceholder === "string" &&
+    String(identityTextCfg.searchPlaceholder).trim() !== ""
+      ? String(identityTextCfg.searchPlaceholder)
+      : "Поиск товаров…";
+  const catalogLoading = catalog === null;
 
   return (
     <ThemeVarsProvider theme={theme}>
@@ -313,6 +326,22 @@ export function StorefrontRenderer(props: {
         style={cssVars as unknown as React.CSSProperties}
       >
         <StorefrontFeed>
+          <div className="sf-feed__chunk sf-feed__chunk--store-card sf-feed__chunk--stack">
+            <StorefrontStoreCard
+              storeName={props.payload.storeName}
+              storeAddress={props.payload.storeAddress}
+              logoUrl={theme.logoUrl}
+              textConfig={identityTextCfg}
+            />
+          </div>
+          <div className="sf-feed__chunk sf-feed__chunk--search sf-feed__chunk--stack sf-feed__chunk--sticky-search">
+            <CatalogSearchBar
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder={searchPlaceholder}
+              onClear={() => setActiveCategoryId(null)}
+            />
+          </div>
           {showIdentityBand ? (
             <div className="sf-feed__chunk sf-feed__chunk--identity sf-feed__chunk--stack">
               <StorefrontIdentityBand
@@ -437,9 +466,15 @@ export function StorefrontRenderer(props: {
                       catalogProductCount={featuredAll.length}
                       cardConfig={mergedCardConfig}
                       textConfig={props.payload.storefrontTextConfig ?? undefined}
-                      catalogProducts={catalog === null ? [] : catalogFiltered}
+                      catalogProducts={catalogForRails}
                       onOpenProduct={openProduct}
                       catalogBold={catalogBold}
+                      searchQuery={searchQuery}
+                      catalogLoading={catalogLoading}
+                      onClearFilters={() => {
+                        setSearchQuery("");
+                        setActiveCategoryId(null);
+                      }}
                     />
                   );
                 }
@@ -478,27 +513,33 @@ export function StorefrontRenderer(props: {
             );
           })}
 
-          {!hasFeaturedSection && catalog !== null ? (
+          {(!hasFeaturedSection && (catalog !== null || catalogLoading)) ? (
             <div className="sf-feed__chunk sf-feed__chunk--commerce sf-feed__chunk--stack">
               <CommerceDiscoveryFeed
                 variant="standalone"
                 kit={kit}
                 businessType={props.payload.businessType}
                 businessId={props.payload.businessId}
-                featuredProducts={featuredFiltered}
-                primaryProducts={featuredFiltered}
+                featuredProducts={featuredAll}
+                primaryProducts={primaryDisplayProducts}
                 primaryTitle={
                   typeof props.payload.storefrontTextConfig?.titleHits === "string" &&
                   String(props.payload.storefrontTextConfig.titleHits).trim() !== ""
                     ? String(props.payload.storefrontTextConfig.titleHits)
                     : "Каталог"
                 }
-                catalogProductCount={featuredAll.length || catalogFiltered.length}
+                catalogProductCount={Math.max(featuredAll.length, catalog?.length ?? 0)}
                 cardConfig={mergedCardConfig}
                 textConfig={props.payload.storefrontTextConfig ?? undefined}
-                catalogProducts={catalogFiltered}
+                catalogProducts={catalogForRails}
                 onOpenProduct={openProduct}
                 catalogBold={catalogBold}
+                searchQuery={searchQuery}
+                catalogLoading={catalogLoading}
+                onClearFilters={() => {
+                  setSearchQuery("");
+                  setActiveCategoryId(null);
+                }}
               />
             </div>
           ) : null}

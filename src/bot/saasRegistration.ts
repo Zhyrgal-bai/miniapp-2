@@ -34,7 +34,7 @@ import {
 import {
   archaAboutInlineKeyboard,
   archaAboutMenuButton,
-  buildArchaAboutMessage,
+  buildArchaAboutMessageHtml,
   SAAS_CB_ABOUT,
   SAAS_CB_BACK_MENU,
 } from "./archaAboutContent.js";
@@ -1045,7 +1045,9 @@ export async function handleRegistrationCallbacks(
   if (data === SAAS_CB_ABOUT) {
     try {
       await ctx.answerCbQuery().catch(() => undefined);
-      await ctx.reply(buildArchaAboutMessage(), {
+      await ctx.reply(buildArchaAboutMessageHtml(), {
+        parse_mode: "HTML",
+        link_preview_options: { is_disabled: true },
         reply_markup: archaAboutInlineKeyboard(),
         ...adminReplyKeyboardExtraIfAdmin(ctx),
       });

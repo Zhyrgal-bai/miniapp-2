@@ -1,5 +1,7 @@
 import type { Product } from "../../types";
 import ProductCard from "./ProductCard";
+import { EmptyState } from "../ui/EmptyState";
+import "../ui/emptyState.css";
 import "../ui/ProductGrid.css";
 
 type ProductGridProps = {
@@ -41,19 +43,22 @@ export default function ProductGrid({
 
   if (catalogProductCount === 0) {
     return (
-      <div className="product-grid product-grid--empty" role="status">
-        <p className="product-grid__empty-title">{readTxt("emptyCatalogTitle", "Нет товаров")}</p>
-        <p className="product-grid__empty-hint">{readTxt("emptyCatalogHint", "Скоро появятся товары")}</p>
-      </div>
+      <EmptyState
+        icon="🛍️"
+        title={readTxt("emptyCatalogTitle", "Нет товаров")}
+        description={readTxt("emptyCatalogHint", "Скоро появятся товары")}
+      />
     );
   }
 
   if (products.length === 0) {
     return (
-      <div className="product-grid product-grid--empty" role="status">
-        <p className="product-grid__empty-title">{readTxt("emptySearchTitle", "Ничего не найдено")}</p>
-        <p className="product-grid__empty-hint">{readTxt("emptySearchHint", "Смените категорию или поиск")}</p>
-      </div>
+      <EmptyState
+        compact
+        icon="🔍"
+        title={readTxt("emptySearchTitle", "Ничего не найдено")}
+        description={readTxt("emptySearchHint", "Смените категорию или поиск")}
+      />
     );
   }
 

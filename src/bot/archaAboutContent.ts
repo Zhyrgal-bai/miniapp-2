@@ -35,13 +35,21 @@ export function archaAboutMenuButton(): {
 }
 
 export function buildArchaAboutMessage(): string {
+  return buildArchaAboutMessageHtml().replace(/<[^>]+>/g, "");
+}
+
+/** HTML для Telegram (кликабельные ссылки Instagram). */
+export function buildArchaAboutMessageHtml(): string {
   const founderBlocks = ARCHA_FOUNDERS.map(
     (f) =>
-      [`👨‍💻 ${f.name}`, `Instagram: @${f.instagramHandle}`].join("\n"),
+      [
+        `👨‍💻 ${f.name}`,
+        `Instagram: <a href="${f.instagramUrl}">@${f.instagramHandle}</a>`,
+      ].join("\n"),
   ).join("\n\n");
 
   return [
-    "🚀 ARCHA",
+    "🚀 <b>ARCHA</b>",
     "",
     "ARCHA — это платформа для создания интернет-магазинов внутри Telegram.",
     "",
@@ -57,13 +65,13 @@ export function buildArchaAboutMessage(): string {
     "",
     "—",
     "",
-    "👥 Основатели проекта",
+    "👥 <b>Основатели проекта</b>",
     "",
     founderBlocks,
     "",
     "—",
     "",
-    "🎯 Наша миссия",
+    "🎯 <b>Наша миссия</b>",
     "",
     "Мы создаём удобную платформу,",
     "которая помогает предпринимателям",

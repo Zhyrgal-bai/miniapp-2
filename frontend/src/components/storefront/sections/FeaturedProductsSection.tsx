@@ -1,6 +1,8 @@
 import type { Product } from "../../../types";
 import type { ReactNode } from "react";
 import ProductGrid from "../../product/ProductGrid";
+import { EmptyState } from "../../ui/EmptyState";
+import "../../ui/emptyState.css";
 
 function readTitle(config: Record<string, unknown>, fallback: string): string {
   const v = config.title;
@@ -45,10 +47,12 @@ export function FeaturedProductsSection(props: {
       <div className="sf-section__title">{title}</div>
       <div className="sf-section-card sf-section-card--transparent sf-section-card--inset">
         {props.products.length === 0 ? (
-          <div className="sf-featured-empty" role="status">
-            <p className="sf-featured-empty__title">Нет товаров в категории</p>
-            <p className="sf-featured-empty__hint">Выберите другую категорию или «Все»</p>
-          </div>
+          <EmptyState
+            compact
+            icon="🏷️"
+            title="Нет товаров в категории"
+            description="Выберите другую категорию или «Все»"
+          />
         ) : (
           <ProductGrid
             products={props.products}

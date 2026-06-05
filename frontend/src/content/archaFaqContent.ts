@@ -4,13 +4,7 @@ import {
   formatSaasPriceSom,
 } from "@repo-shared/saasSubscriptionPricing";
 
-export type ArchaFaqCategoryId =
-  | "about"
-  | "shop"
-  | "payment"
-  | "delivery"
-  | "subscription"
-  | "support";
+export type ArchaFaqCategoryId = string;
 
 export type ArchaFaqItem = {
   id: string;

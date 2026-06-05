@@ -5,6 +5,8 @@ import ProductGrid from "../../product/ProductGrid";
 import { buildUnifiedCommerceFeed } from "../../../storefront/unifiedFeed";
 import { useCommerceSessionRevision } from "../runtime/useCommerceSessionRevision";
 import { fetchStorefrontRecommendations } from "../../../services/storefrontRecommendations";
+import { EmptyState } from "../../ui/EmptyState";
+import { ProductCardSkeleton } from "../../ui/Skeleton";
 
 type Kit = "minimal" | "luxury" | "fashion" | "neon" | "default";
 
@@ -23,6 +25,9 @@ export type CommerceDiscoveryFeedProps = {
   /** Embedded inside featured block — tighter rhythm. */
   variant?: "embedded" | "standalone";
   catalogBold?: boolean;
+  searchQuery?: string;
+  catalogLoading?: boolean;
+  onClearFilters?: () => void;
 };
 
 function railLayoutClass(layout: string): string {
@@ -37,12 +42,18 @@ function railLayoutClass(layout: string): string {
   }
 }
 
+function readTxt(cfg: Record<string, unknown> | undefined, key: string, fb: string): string {
+  const v = cfg?.[key];
+  return typeof v === "string" && v.trim() !== "" ? v : fb;
+}
+
 /** Unified commerce discovery stream — primary grid + connected rails. */
 export function CommerceDiscoveryFeed(
   props: CommerceDiscoveryFeedProps,
 ): ReactElement | null {
   const sessionRev = useCommerceSessionRevision(props.businessId);
   const [coPurchaseIds, setCoPurchaseIds] = useState<number[]>([]);
+  const searchActive = (props.searchQuery ?? "").trim() !== "";
 
   useEffect(() => {
     let cancelled = false;
@@ -60,14 +71,14 @@ export function CommerceDiscoveryFeed(
   const blocks = useMemo(() => {
     void sessionRev;
     return buildUnifiedCommerceFeed({
-        kit: props.kit,
-        businessType: props.businessType,
-        businessId: props.businessId,
-        featuredProducts: props.featuredProducts,
-        catalogProducts: props.catalogProducts,
-        textConfig: props.textConfig,
-        primaryProducts: props.primaryProducts,
-        primaryTitle: props.primaryTitle,
+      kit: props.kit,
+      businessType: props.businessType,
+      businessId: props.businessId,
+      featuredProducts: props.featuredProducts,
+      catalogProducts: props.catalogProducts,
+      textConfig: props.textConfig,
+      primaryProducts: props.primaryProducts,
+      primaryTitle: props.primaryTitle,
       coPurchaseIds,
     });
   }, [
@@ -83,7 +94,23 @@ export function CommerceDiscoveryFeed(
     sessionRev,
   ]);
 
-  if (blocks.length === 0) return null;
+  const rails = blocks.filter((b) => b.kind === "rail");
+  const hasRails = rails.length > 0;
+  const showRecommendationsHint = !searchActive && props.primaryProducts.length === 0 && hasRails;
+
+  if (props.catalogProductCount === 0 && !props.catalogLoading) {
+    return (
+      <section className="sf-commerce-feed sf-commerce-feed--standalone" data-sf-commerce-feed>
+        <EmptyState
+          icon="🛍️"
+          title={readTxt(props.textConfig, "emptyCatalogTitle", "Нет товаров")}
+          description={readTxt(props.textConfig, "emptyCatalogHint", "Скоро появятся новые позиции в каталоге")}
+        />
+      </section>
+    );
+  }
+
+  if (blocks.length === 0 && !props.catalogLoading) return null;
 
   const embedded = props.variant === "embedded";
   const rootClass = [
@@ -96,9 +123,13 @@ export function CommerceDiscoveryFeed(
 
   return (
     <section className={rootClass} data-sf-commerce-feed>
+      {showRecommendationsHint ? (
+        <p className="sf-commerce-feed__hint" role="status">
+          Подборка для вас
+        </p>
+      ) : null}
       {blocks.map((block, idx) => {
         if (block.kind === "primary") {
-          if (props.catalogProductCount === 0) return null;
           return (
             <div
               key="primary"
@@ -107,13 +138,36 @@ export function CommerceDiscoveryFeed(
             >
               <h2 className="sf-commerce-feed__title">{block.title}</h2>
               <div className="sf-commerce-feed__grid-wrap">
-                {block.products.length === 0 ? (
-                  <div className="sf-featured-empty" role="status">
-                    <p className="sf-featured-empty__title">Нет товаров в категории</p>
-                    <p className="sf-featured-empty__hint">
-                      Выберите другую категорию или «Все»
-                    </p>
+                {props.catalogLoading ? (
+                  <div className="sf-commerce-feed__skeleton-grid" aria-busy="true" aria-label="Загрузка товаров">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <ProductCardSkeleton key={i} />
+                    ))}
                   </div>
+                ) : block.products.length === 0 ? (
+                  searchActive ? (
+                    <EmptyState
+                      compact
+                      icon="🔍"
+                      title={readTxt(props.textConfig, "emptySearchTitle", "Ничего не найдено")}
+                      description={readTxt(
+                        props.textConfig,
+                        "emptySearchHint",
+                        "Попробуйте другой запрос или посмотрите рекомендации ниже",
+                      )}
+                      actionLabel="Сбросить поиск"
+                      onAction={props.onClearFilters}
+                    />
+                  ) : (
+                    <EmptyState
+                      compact
+                      icon="🏷️"
+                      title="Нет товаров в категории"
+                      description="Выберите другую категорию или «Все»"
+                      actionLabel="Показать все"
+                      onAction={props.onClearFilters}
+                    />
+                  )
                 ) : (
                   <ProductGrid
                     products={block.products}
@@ -164,6 +218,13 @@ export function CommerceDiscoveryFeed(
           </div>
         );
       })}
+      {props.catalogLoading && blocks.every((b) => b.kind === "rail") ? (
+        <div className="sf-commerce-feed__skeleton-grid" aria-busy="true" aria-label="Загрузка каталога">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <ProductCardSkeleton key={i} />
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 }

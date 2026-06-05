@@ -243,6 +243,41 @@ export default function CheckoutPage({ onBack }: Props) {
       ? deliveryQuote.message
       : null;
 
+  const deliverySummaryLabel = useMemo(() => {
+    if (deliveryType === "pickup") {
+      return t("checkout.deliveryFree");
+    }
+    if (!deliveryQuote.ok) {
+      return deliveryQuote.error;
+    }
+    if (manualDeliveryNotice != null) {
+      return "Уточняется";
+    }
+    const dist =
+      deliveryQuote.distanceKm != null
+        ? ` · ≈ ${deliveryQuote.distanceKm} км`
+        : "";
+    if (deliverySettings.pricingMode === "DISTANCE_BASED") {
+      if (deliveryQuote.distanceKm == null) {
+        return "Укажите местоположение на карте";
+      }
+      if (deliveryFeeSom === 0) {
+        return `${t("checkout.deliveryFree")}${dist}`;
+      }
+      return `${formatSom(deliveryFeeSom)}${dist}`;
+    }
+    if (deliveryFeeSom === 0) {
+      return t("checkout.deliveryFree");
+    }
+    return formatSom(deliveryFeeSom);
+  }, [
+    deliveryType,
+    deliveryQuote,
+    manualDeliveryNotice,
+    deliveryFeeSom,
+    deliverySettings.pricingMode,
+  ]);
+
   const discountAmount = useMemo(() => {
     if (!promoPreview) return 0;
     return Math.max(0, subtotal - promoPreview.newTotal);
@@ -743,15 +778,7 @@ export default function CheckoutPage({ onBack }: Props) {
                 ? t("checkout.pickup")
                 : t("checkout.delivery")}
             </span>
-            <span>
-              {!deliveryQuote.ok
-                ? deliveryQuote.error
-                : manualDeliveryNotice != null
-                  ? "Уточняется"
-                  : deliveryFeeSom === 0
-                    ? t("checkout.deliveryFree")
-                    : formatSom(deliveryFeeSom)}
-            </span>
+            <span>{deliverySummaryLabel}</span>
           </div>
           {manualDeliveryNotice != null ? (
             <p className="checkout-summary__hint">{manualDeliveryNotice}</p>

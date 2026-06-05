@@ -1,11 +1,5 @@
 import { useMemo, useState, type ReactElement } from "react";
-import {
-  ARCHA_FAQ_CATEGORIES,
-  ARCHA_FAQ_ITEMS,
-  ARCHA_FAQ_SUPPORT_TELEGRAM_URL,
-  type ArchaFaqCategoryId,
-  type ArchaFaqItem,
-} from "../../content/archaFaqContent";
+import type { ArchaFaqCategory, ArchaFaqItem } from "../../content/archaFaqContent";
 import { openTelegramExternalLink } from "../../utils/telegramWebAppBootstrap";
 import "./archaFaq.css";
 
@@ -77,21 +71,25 @@ function FaqAccordionItem(props: {
 export function ArchaFaqView(props: {
   title?: string;
   subtitle?: string;
+  items: ArchaFaqItem[];
+  categories: ArchaFaqCategory[];
   showSupportCta?: boolean;
+  supportCtaLabel?: string;
+  supportTelegramUrl?: string;
   className?: string;
 }): ReactElement {
   const [query, setQuery] = useState("");
-  const [categoryId, setCategoryId] = useState<ArchaFaqCategoryId | "all">("all");
-  const [openId, setOpenId] = useState<string | null>(ARCHA_FAQ_ITEMS[0]?.id ?? null);
+  const [categoryId, setCategoryId] = useState<string | "all">("all");
+  const [openId, setOpenId] = useState<string | null>(props.items[0]?.id ?? null);
 
   const normalizedQuery = normalizeSearch(query);
 
   const filteredItems = useMemo(() => {
-    return ARCHA_FAQ_ITEMS.filter((item) => {
+    return props.items.filter((item) => {
       if (categoryId !== "all" && item.categoryId !== categoryId) return false;
       return itemMatchesQuery(item, normalizedQuery);
     });
-  }, [categoryId, normalizedQuery]);
+  }, [props.items, categoryId, normalizedQuery]);
 
   const title = props.title ?? "Вопросы и ответы";
   const subtitle =
@@ -134,7 +132,7 @@ export function ArchaFaqView(props: {
         >
           Все
         </button>
-        {ARCHA_FAQ_CATEGORIES.map((cat) => (
+        {props.categories.map((cat) => (
           <button
             key={cat.id}
             type="button"
@@ -167,7 +165,7 @@ export function ArchaFaqView(props: {
         </div>
       )}
 
-      {props.showSupportCta !== false ? (
+      {props.showSupportCta !== false && props.supportTelegramUrl ? (
         <footer className="archa-faq__footer">
           <p className="archa-faq__footer-text">
             Не нашли ответ? Напишите в поддержку платформы.
@@ -175,9 +173,9 @@ export function ArchaFaqView(props: {
           <button
             type="button"
             className="archa-faq__support-btn"
-            onClick={() => openTelegramExternalLink(ARCHA_FAQ_SUPPORT_TELEGRAM_URL)}
+            onClick={() => openTelegramExternalLink(props.supportTelegramUrl!)}
           >
-            Написать @archa_kg
+            {props.supportCtaLabel ?? "Написать @archa_kg"}
           </button>
         </footer>
       ) : null}

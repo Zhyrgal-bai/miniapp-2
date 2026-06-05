@@ -5,7 +5,7 @@ import { api } from "../../../services/api";
 import { useShop } from "../../../context/ShopContext";
 import type { ResolvedStorefrontPayload } from "../StorefrontRenderer";
 import { safeParseStorefrontPublicApiResponse } from "@repo-storefront/storefrontPublicApiResponseSchema";
-import { readStoreSlugString, rememberResolvedStoreSlug } from "../../../utils/storeParams";
+import { readStoreSlugString, rememberResolvedStoreSlug, clearTenantSession } from "../../../utils/storeParams";
 
 const FETCH_TIMEOUT_MS = 12_000;
 
@@ -75,7 +75,11 @@ export function StorefrontPayloadProvider(props: { children: React.ReactNode }):
     } catch (e) {
       if (aborted.current !== ac) return;
       console.error(e);
-      const status = (e as { response?: { status?: number } })?.response?.status;
+      const resp = (e as { response?: { status?: number; data?: { error?: string } } })
+        ?.response;
+      const status = resp?.status;
+      const apiMessage =
+        typeof resp?.data?.error === "string" ? resp.data.error.trim() : "";
       const timedOut = ac.signal.aborted;
       const canRetry =
         (status == null || status >= 500 || timedOut) &&
@@ -91,12 +95,27 @@ export function StorefrontPayloadProvider(props: { children: React.ReactNode }):
         return;
       }
       setPayload(null);
+      if (slug) {
+        clearTenantSession();
+      }
       if (status === 404) {
-        setError("Витрина пока недоступна");
+        setError(
+          apiMessage !== ""
+            ? apiMessage
+            : "Магазин не найден. Проверьте ссылку или откройте витрину через Telegram.",
+        );
+      } else if (status === 403) {
+        setError(
+          apiMessage !== ""
+            ? apiMessage
+            : "Магазин временно недоступен. Подписка могла истечь — свяжитесь с владельцем.",
+        );
       } else if (timedOut) {
         setError("Сервер не ответил вовремя. Попробуйте ещё раз.");
       } else {
-        setError("Не удалось загрузить витрину");
+        setError(
+          apiMessage !== "" ? apiMessage : "Не удалось загрузить витрину",
+        );
       }
     } finally {
       window.clearTimeout(timeoutId);

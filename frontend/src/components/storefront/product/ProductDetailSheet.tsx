@@ -308,37 +308,35 @@ export function ProductDetailSheet({
         >
           <div className="sf-pds-handle" aria-hidden />
         </div>
-        <div className="sf-pds-scroll">
+        <div
+          className="sf-pds-gallery sf-pds-gallery--hero"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
           <div
-            className="sf-pds-gallery"
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
-          >
-            <div
-              className="sf-pds-gallery-track"
-              style={
-                images.length > 0
-                  ? {
-                      width: `${images.length * 100}%`,
-                      transform: `translateX(-${(currentIndex * 100) / images.length}%)`,
-                    }
-                  : undefined
-              }
-            >
-              {images.map((src, i) => (
-                <div
-                  key={i}
-                  className="sf-pds-gallery-slide"
-                  style={
-                    images.length > 0
-                      ? { flex: `0 0 ${100 / images.length}%` }
-                      : undefined
+            className="sf-pds-gallery-track"
+            style={
+              images.length > 0
+                ? {
+                    width: `${images.length * 100}%`,
+                    transform: `translateX(-${(currentIndex * 100) / images.length}%)`,
                   }
-                >
-                  <img src={src} alt="" />
-                </div>
-              ))}
-            </div>
+                : undefined
+            }
+          >
+            {images.map((src, i) => (
+              <div
+                key={i}
+                className="sf-pds-gallery-slide"
+                style={
+                  images.length > 0
+                    ? { flex: `0 0 ${100 / images.length}%` }
+                    : undefined
+                }
+              >
+                <img src={src} alt="" />
+              </div>
+            ))}
           </div>
           {images.length > 1 ? (
             <div className="sf-pds-dots" aria-hidden>
@@ -350,7 +348,8 @@ export function ProductDetailSheet({
               ))}
             </div>
           ) : null}
-
+        </div>
+        <div className="sf-pds-scroll">
           <h2 id="sf-pds-title" className="sf-pds-title">
             {display.name}
           </h2>

@@ -11,10 +11,18 @@ import { getMaxOrderQty } from "../commerce/quantityPolicy";
 import { isOutOfStock } from "../utils/product";
 import { formatOrderLineSummary } from "@repo-shared/businessCommerce";
 import { cartLineIdentityKey } from "../commerce/cartLineIdentity";
+import { EmptyState } from "../components/ui/EmptyState";
+import "../components/ui/emptyState.css";
+import { CheckoutLoadingSkeleton } from "../components/ui/Skeleton";
+import "../components/ui/skeleton.css";
 
 type Props = {
   onGoToCheckout: () => void;
 };
+
+function formatSom(n: number): string {
+  return `${Math.round(n)} сом`;
+}
 
 export default function CartPage({ onGoToCheckout }: Props) {
   const items = useCartStore((state) => state.items);
@@ -23,6 +31,7 @@ export default function CartPage({ onGoToCheckout }: Props) {
   const { businessId } = useShop();
   const { pathname, search } = useLocation();
   const [catalogById, setCatalogById] = useState<Map<number, Product>>(() => new Map());
+  const [catalogLoading, setCatalogLoading] = useState(false);
   const { payload } = useStorefrontPayload();
 
   useEffect(() => {
@@ -31,6 +40,7 @@ export default function CartPage({ onGoToCheckout }: Props) {
       return;
     }
     let cancelled = false;
+    setCatalogLoading(true);
     void (async () => {
       try {
         const res = await api.get<Product[]>("/products");
@@ -42,6 +52,8 @@ export default function CartPage({ onGoToCheckout }: Props) {
         setCatalogById(m);
       } catch {
         if (!cancelled) setCatalogById(new Map());
+      } finally {
+        if (!cancelled) setCatalogLoading(false);
       }
     })();
     return () => {
@@ -56,9 +68,18 @@ export default function CartPage({ onGoToCheckout }: Props) {
     return typeof v === "string" && v.trim() !== "" ? v : fb;
   };
 
-  const totalPrice = items.reduce((sum, item) => {
-    return sum + item.price * (item.quantity ?? 1);
-  }, 0);
+  const lineTotals = useMemo(
+    () =>
+      items.map((item) => ({
+        item,
+        qty: item.quantity ?? 1,
+        lineTotal: item.price * (item.quantity ?? 1),
+      })),
+    [items],
+  );
+
+  const totalPrice = lineTotals.reduce((sum, row) => sum + row.lineTotal, 0);
+  const totalItems = lineTotals.reduce((sum, row) => sum + row.qty, 0);
 
   const handleGoShop = () => {
     const shop = readShopIdString(pathname, search);
@@ -121,75 +142,94 @@ export default function CartPage({ onGoToCheckout }: Props) {
     });
   };
 
+  if (catalogLoading && items.length > 0) {
+    return (
+      <div className="cart">
+        <h1 className="cart-title">{readTxt("menuCartLabel", "Корзина")}</h1>
+        <CheckoutLoadingSkeleton />
+      </div>
+    );
+  }
+
   return (
     <div className="cart">
       <h1 className="cart-title">{readTxt("menuCartLabel", "Корзина")}</h1>
 
       {items.length === 0 && (
-        <div className="cart-empty">
-          <div className="cart-empty-icon">🛒</div>
-          <h2>{readTxt("emptyCartTitle", "Корзина пуста").toUpperCase()}</h2>
-          <p>{readTxt("emptyCartHint", "Добавьте товары, чтобы оформить заказ")}</p>
-          <button className="go-shop" type="button" onClick={handleGoShop}>
-            {readTxt("menuShopLabel", "Магазин").toUpperCase()}
-          </button>
-        </div>
+        <EmptyState
+          icon="🛒"
+          title={readTxt("emptyCartTitle", "Корзина пуста")}
+          description={readTxt("emptyCartHint", "Добавьте товары, чтобы оформить заказ")}
+          actionLabel={readTxt("menuShopLabel", "В магазин")}
+          onAction={handleGoShop}
+        />
       )}
 
       {items.length > 0 && (
         <>
           <div className="cart-list">
-            {items.map((item) => {
+            {lineTotals.map(({ item, qty, lineTotal }) => {
               const variantLabel = formatOrderLineSummary({
                 businessType,
                 size: item.size,
                 color: item.color,
                 options: item.options,
               });
+              const maxQty = maxQtyForLine(item);
+              const atMax = qty >= maxQty;
               return (
-              <div
-                key={cartLineIdentityKey(item)}
-                className="cart-item"
-              >
-                {item.image ? (
-                  <img src={item.image} alt="" />
-                ) : (
-                  <div className="cart-thumb-fallback" aria-hidden="true" />
-                )}
+                <div key={cartLineIdentityKey(item)} className="cart-item">
+                  {item.image ? (
+                    <img src={item.image} alt="" />
+                  ) : (
+                    <div className="cart-thumb-fallback" aria-hidden="true" />
+                  )}
 
-                <div className="cart-content">
-                  <div className="cart-top">
-                    <h3>{item.name}</h3>
-                    {variantLabel ? (
-                      <p className="cart-variant-label">{variantLabel}</p>
-                    ) : null}
-                    <span className="price">
-                      {item.price} сом
-                    </span>
-                  </div>
-
-                  <div className="cart-bottom">
-                    <div className="cart-actions">
+                  <div className="cart-content">
+                    <div className="cart-top">
+                      <div className="cart-top__copy">
+                        <h3>{item.name}</h3>
+                        {variantLabel ? (
+                          <p className="cart-variant-label">{variantLabel}</p>
+                        ) : null}
+                        <p className="cart-unit-price">{formatSom(item.price)} / шт.</p>
+                      </div>
                       <button
                         type="button"
-                        onClick={() => handleDecrement(item)}
-                        aria-label="Уменьшить"
+                        className="cart-remove-btn"
+                        aria-label="Удалить из корзины"
+                        onClick={() => removeItem(item)}
                       >
-                        −
+                        🗑
                       </button>
-                      <span>{item.quantity}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleIncrement(item)}
-                        aria-label="Увеличить"
-                      >
-                        +
-                      </button>
+                    </div>
+
+                    <div className="cart-bottom">
+                      <div className="cart-actions" role="group" aria-label="Количество">
+                        <button
+                          type="button"
+                          className="cart-actions__btn"
+                          onClick={() => handleDecrement(item)}
+                          aria-label="Уменьшить"
+                        >
+                          −
+                        </button>
+                        <span className="cart-actions__qty">{qty}</span>
+                        <button
+                          type="button"
+                          className="cart-actions__btn"
+                          onClick={() => handleIncrement(item)}
+                          aria-label="Увеличить"
+                          disabled={atMax}
+                        >
+                          +
+                        </button>
+                      </div>
+                      <strong className="cart-line-total">{formatSom(lineTotal)}</strong>
                     </div>
                   </div>
                 </div>
-              </div>
-            );
+              );
             })}
           </div>
 
@@ -199,9 +239,15 @@ export default function CartPage({ onGoToCheckout }: Props) {
                 {stockIssue}
               </p>
             ) : null}
-            <div className="total">
-              <span>Итого</span>
-              <strong>{totalPrice} сом</strong>
+            <div className="cart-summary">
+              <div className="cart-summary__row">
+                <span>Позиций</span>
+                <span>{totalItems}</span>
+              </div>
+              <div className="cart-summary__row cart-summary__row--total">
+                <span>Итого</span>
+                <strong>{formatSom(totalPrice)}</strong>
+              </div>
             </div>
 
             <button
@@ -212,7 +258,7 @@ export default function CartPage({ onGoToCheckout }: Props) {
             >
               {stockIssue
                 ? "Нет в наличии"
-                : readTxt("checkoutLabel", "Оформить").toUpperCase()}
+                : readTxt("checkoutLabel", "Оформить заказ")}
             </button>
           </div>
         </>

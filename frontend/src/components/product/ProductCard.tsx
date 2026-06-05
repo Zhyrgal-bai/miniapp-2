@@ -415,12 +415,15 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   const AddToCartButton =
     quantity <= 0 ? (
       <button
-        className={`product-add-btn product-add-btn--${cta.emphasis} product-add-btn--cta-${cfg.ctaStyle}`}
+        className={`product-add-btn product-add-btn--modern product-add-btn--${cta.emphasis} product-add-btn--cta-${cfg.ctaStyle}`}
         onClick={handleAddToCart}
         disabled={cta.disabled}
         type="button"
       >
-        <span className="product-add-btn__label">{cta.label}</span>
+        <span className="product-add-btn__icon" aria-hidden>
+          🛒
+        </span>
+        <span className="product-add-btn__label">{cta.label || addLabel}</span>
         {cta.sublabel ? <span className="product-add-btn__sub">{cta.sublabel}</span> : null}
       </button>
     ) : (
@@ -454,26 +457,29 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   ) : (
     <button
       type="button"
-      className="product-add-btn"
+      className="product-add-btn product-add-btn--modern"
       onClick={() =>
         openOpenInTelegramModal(payload?.telegramOpenUrl ?? null)
       }
     >
-      {addLabel}
+      <span className="product-add-btn__icon" aria-hidden>
+        🛒
+      </span>
+      <span className="product-add-btn__label">{addLabel}</span>
     </button>
   );
 
   const webIconAddButton = (
     <button
       type="button"
-      className="product-add-btn product-add-btn--icon"
+      className="product-add-btn product-add-btn--icon product-add-btn--modern"
       onClick={() =>
         openOpenInTelegramModal(payload?.telegramOpenUrl ?? null)
       }
       aria-label={addLabel}
       title={addLabel}
     >
-      +
+      🛒
     </button>
   );
 
@@ -631,14 +637,14 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
                 webIconAddButton
               ) : quantity <= 0 ? (
                 <button
-                  className="product-add-btn product-add-btn--icon"
+                  className="product-add-btn product-add-btn--icon product-add-btn--modern"
                   onClick={handleAddToCart}
                   disabled={outOfStock || !canAddToCart}
                   type="button"
                   aria-label={addLabel}
                   title={addLabel}
                 >
-                  +
+                  🛒
                 </button>
               ) : (
                 <div className="product-actions">{purchaseControl}</div>
@@ -653,12 +659,15 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
                 purchaseControl
               ) : quantity <= 0 ? (
                 <button
-                  className="product-add-btn product-add-btn--full"
+                  className="product-add-btn product-add-btn--full product-add-btn--modern"
                   onClick={handleAddToCart}
                   disabled={outOfStock || !canAddToCart}
                   type="button"
                 >
-                  {addLabel}
+                  <span className="product-add-btn__icon" aria-hidden>
+                    🛒
+                  </span>
+                  <span className="product-add-btn__label">{addLabel}</span>
                 </button>
               ) : (
                 <div className="product-actions">{purchaseControl}</div>

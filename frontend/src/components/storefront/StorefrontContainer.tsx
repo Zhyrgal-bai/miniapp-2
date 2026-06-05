@@ -1,6 +1,9 @@
 import { StorefrontRenderer } from "./StorefrontRenderer";
 import { useStorefrontPayload } from "./runtime/StorefrontPayloadContext";
-import { t } from "../../i18n";
+import { StorefrontLoadingSkeleton } from "../ui/Skeleton";
+import "../ui/skeleton.css";
+import { ErrorState } from "../ui/ErrorState";
+import "../ui/errorState.css";
 
 export function StorefrontContainer(): React.ReactElement {
   const { payload, error, loading, refresh } = useStorefrontPayload();
@@ -8,15 +11,22 @@ export function StorefrontContainer(): React.ReactElement {
   if (error) {
     return (
       <div className="sf-container-state">
-        <p>{error}</p>
-        <button type="button" className="sf-container-state__retry" onClick={() => void refresh()}>
-          {t("common.retry")}
-        </button>
+        <ErrorState
+          title="Не удалось загрузить витрину"
+          message={error}
+          onRetry={() => void refresh()}
+          onBack={() => window.history.back()}
+          backLabel="Назад"
+        />
       </div>
     );
   }
   if (loading || !payload) {
-    return <div className="sf-container-state">Загрузка…</div>;
+    return (
+      <div className="sf-container-state sf-container-state--loading">
+        <StorefrontLoadingSkeleton />
+      </div>
+    );
   }
 
   return <StorefrontRenderer payload={payload} />;

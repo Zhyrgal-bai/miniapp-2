@@ -140,6 +140,7 @@ function readLegacyShopIdFromQueryOrTelegram(pathname?: string, rawSearch?: stri
     parseStoreSlugFromPath(path) ??
     storeSlugFromQuery(path, rawSearch, { includeSessionFallback: false });
   if (slug) {
+    syncTenantSessionForSlug(slug);
     const savedSlug = normalizeStoreSlug(sessionStorage.getItem(SLUG_SESSION_KEY));
     const id = parseDigits(sessionStorage.getItem(STORAGE_KEY));
     if (savedSlug === slug && id) return id;
@@ -241,4 +242,22 @@ export function rememberResolvedStoreSlug(slug: string, businessId: number): voi
   const normalizedSlug = normalizeStoreSlug(slug) ?? slug.trim().toLowerCase();
   sessionStorage.setItem(SLUG_SESSION_KEY, normalizedSlug);
   sessionStorage.setItem(STORAGE_KEY, String(businessId));
+}
+
+/** Сброс tenant в sessionStorage, если slug в URL не совпадает с сохранённым. */
+export function syncTenantSessionForSlug(pathSlug: string | undefined): void {
+  if (typeof window === "undefined" || pathSlug == null) return;
+  const normalized = normalizeStoreSlug(pathSlug);
+  if (normalized == null) return;
+  const savedSlug = normalizeStoreSlug(sessionStorage.getItem(SLUG_SESSION_KEY));
+  if (savedSlug != null && savedSlug !== normalized) {
+    sessionStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(SLUG_SESSION_KEY);
+  }
+}
+
+export function clearTenantSession(): void {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(STORAGE_KEY);
+  sessionStorage.removeItem(SLUG_SESSION_KEY);
 }

@@ -1,4 +1,4 @@
-/* Корзина — только кости: список, итог, кнопки */
+/* Корзина — mobile-first список, итог, CTA */
 
 .cart {
   max-width: 520px;
@@ -14,39 +14,37 @@
 
 .cart-title {
   margin: 0;
-  padding: 12px 12px 8px;
-  font-size: 1.1rem;
-  font-weight: 600;
+  padding: 14px 14px 10px;
+  font-size: 1.125rem;
+  font-weight: 800;
+  font-family: var(--sf-font-heading);
 }
 
 .cart-list {
   flex: 1 1 auto;
   min-height: 0;
-  /* Single body scroll — avoid nested scroll trap in Telegram WebView */
   overflow: visible;
-  padding: 0 12px 120px;
+  padding: 0 12px 140px;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 10px;
 }
 
 .cart-item {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--sf-color-border, #444);
-}
-
-.cart-item:last-child {
-  border-bottom: none;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--sf-radius-lg, 16px);
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 55%, transparent);
+  background: color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface)) 88%, transparent);
 }
 
 .cart-item > img,
 .cart-thumb-fallback {
-  width: 64px;
-  height: 64px;
-  border-radius: 2px;
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
   object-fit: cover;
   flex-shrink: 0;
   background: #333;
@@ -61,60 +59,93 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
 }
 
 .cart-top {
   display: flex;
   justify-content: space-between;
   gap: 8px;
+  align-items: flex-start;
+}
+
+.cart-top__copy {
+  min-width: 0;
 }
 
 .cart-top h3 {
   margin: 0;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 0.9375rem;
+  font-weight: 700;
   line-height: 1.3;
 }
 
-.cart-top .price {
-  font-size: 13px;
+.cart-unit-price {
+  margin: 4px 0 0;
+  font-size: 0.8125rem;
   color: var(--sf-color-muted, #999);
-  white-space: nowrap;
+}
+
+.cart-remove-btn {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 55%, transparent);
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.cart-remove-btn:active {
+  transform: scale(0.96);
 }
 
 .cart-bottom {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .cart-actions {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 0;
+  border-radius: var(--sf-radius-full, 999px);
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 60%, transparent);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--sf-color-card) 80%, transparent);
 }
 
-.cart-actions button {
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--sf-color-border, #555);
-  border-radius: 2px;
+.cart-actions__btn {
+  width: 36px;
+  height: 36px;
+  border: 0;
   background: transparent;
   color: inherit;
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1;
   cursor: pointer;
 }
 
-.cart-actions button:disabled {
-  opacity: 0.4;
+.cart-actions__btn:disabled {
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
-.cart-actions span {
-  min-width: 20px;
+.cart-actions__qty {
+  min-width: 28px;
   text-align: center;
-  font-size: 14px;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.cart-line-total {
+  font-size: 0.9375rem;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .cart-footer {
@@ -125,31 +156,60 @@
   width: 100%;
   max-width: 520px;
   box-sizing: border-box;
-  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0));
-  background: var(--sf-color-background, var(--store-bg, #111));
-  border-top: 1px solid var(--sf-color-border, #444);
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0));
+  background: color-mix(in srgb, var(--sf-color-background, var(--store-bg, #111)) 92%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid color-mix(in srgb, var(--sf-color-border) 55%, transparent);
+  box-shadow: 0 -8px 24px color-mix(in srgb, #000 12%, transparent);
 }
 
-.total {
+.cart-summary {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.cart-summary__row {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 8px;
-  font-size: 14px;
+  font-size: 0.875rem;
+  color: var(--sf-color-muted);
 }
 
-.total strong {
-  font-weight: 600;
+.cart-summary__row--total {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px dashed color-mix(in srgb, var(--sf-color-border) 50%, transparent);
+  color: var(--sf-color-text);
+  font-size: 1rem;
+}
+
+.cart-summary__row--total strong {
+  font-size: 1.125rem;
+  font-weight: 800;
+}
+
+.cart-stock-warning {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, #ef4444 12%, transparent);
+  border: 1px solid color-mix(in srgb, #ef4444 30%, transparent);
+  font-size: 0.8125rem;
+  line-height: 1.4;
 }
 
 .checkout-btn {
   width: 100%;
-  padding: 10px 12px;
+  min-height: 48px;
+  padding: 0 14px;
   border: 1px solid var(--sf-color-primary, #6366f1);
-  border-radius: 2px;
+  border-radius: var(--sf-radius-full, 999px);
   background: var(--sf-color-primary, #6366f1);
   color: var(--sf-on-primary, #fff);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 0.9375rem;
+  font-weight: 700;
   cursor: pointer;
 }
 
@@ -158,47 +218,20 @@
   cursor: not-allowed;
 }
 
-.cart-empty {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 24px 16px;
-  text-align: center;
-  min-height: 40vh;
-}
-
-.cart-empty-icon {
-  font-size: 32px;
-  margin-bottom: 8px;
-}
-
-.cart-empty h2 {
-  margin: 0 0 6px;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.cart-empty p {
-  margin: 0 0 16px;
-  font-size: 13px;
-  color: var(--sf-color-muted, #999);
-}
-
-.go-shop {
-  padding: 8px 16px;
-  border: 1px solid var(--sf-color-border, #555);
-  border-radius: 2px;
-  background: transparent;
-  color: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
 .cart-variant-label {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: color-mix(in srgb, var(--sf-color-text) 72%, transparent);
+}
+
+.cart .sf-empty-state {
+  margin-top: 8vh;
+}
+
+@media (max-width: 390px) {
+  .cart-item > img,
+  .cart-thumb-fallback {
+    width: 64px;
+    height: 64px;
+  }
 }

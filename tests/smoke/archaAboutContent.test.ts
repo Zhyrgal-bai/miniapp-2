@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ARCHA_FOUNDERS,
   buildArchaAboutMessage,
+  buildArchaAboutMessageHtml,
   buildArchaFoundersFaqAnswer,
   archaAboutInlineKeyboard,
 } from "../../src/bot/archaAboutContent.js";
@@ -25,6 +26,12 @@ describe("archaAboutContent (registration bot)", () => {
     expect(text).toMatch(/ARCHA/);
     expect(text).toMatch(/Кыргызстан/);
     expect(text.length).toBeLessThan(4096);
+  });
+
+  it("HTML message includes instagram anchors", () => {
+    const html = buildArchaAboutMessageHtml();
+    expect(html).toContain('href="https://instagram.com/zhyrgal4_ik"');
+    expect(html).toContain("@zhyrgal4_ik");
   });
 
   it("adds Instagram url buttons and back", () => {

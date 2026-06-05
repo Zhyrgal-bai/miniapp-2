@@ -239,3 +239,15 @@
   font-size: 0.92rem;
   cursor: pointer;
 }
+
+@media (max-width: 360px) {
+  .archa-faq {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .archa-faq-chip {
+    font-size: 0.78rem;
+    padding: 0.38rem 0.62rem;
+  }
+}

@@ -674,3 +674,46 @@
   cursor: not-allowed;
   transform: none;
 }
+
+.product-add-btn--modern {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 40px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  transition:
+    transform 0.16s ease,
+    filter 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.product-add-btn--modern .product-add-btn__icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.product-add-btn--modern:hover:not(:disabled) {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.product-add-btn--modern:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.product-add-btn--full.product-add-btn--modern {
+  width: 100%;
+  border-radius: var(--sf-button-radius, 14px);
+}
+
+@media (max-width: 360px) {
+  .product-add-btn--modern {
+    min-height: 38px;
+    padding: 7px 12px;
+    font-size: 11px;
+  }
+}

@@ -1,0 +1,59 @@
+.sf-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: calc(var(--sf-space-xl, 28px) + 8px) var(--sf-space-lg, 20px);
+  min-height: min(52vh, 420px);
+}
+
+.sf-error-state__icon {
+  font-size: 2.25rem;
+  margin-bottom: 12px;
+}
+
+.sf-error-state__title {
+  margin: 0 0 8px;
+  font-family: var(--sf-font-heading);
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: var(--sf-color-text);
+}
+
+.sf-error-state__message {
+  margin: 0;
+  max-width: 32ch;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--sf-color-muted);
+}
+
+.sf-error-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.sf-error-state__btn {
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: var(--sf-radius-full, 999px);
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.sf-error-state__btn--primary {
+  background: var(--sf-color-primary);
+  color: var(--sf-on-primary, #fff);
+}
+
+.sf-error-state__btn--ghost {
+  background: transparent;
+  color: var(--sf-color-text);
+  border-color: color-mix(in srgb, var(--sf-color-border) 70%, transparent);
+}

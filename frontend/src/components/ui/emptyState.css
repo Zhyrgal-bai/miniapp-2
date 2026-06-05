@@ -1,0 +1,87 @@
+.sf-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: calc(var(--sf-space-lg, 24px) + 4px) var(--sf-space-lg, 20px);
+  margin: var(--sf-space-sm, 8px) var(--sf-space-md, 12px) var(--sf-space-lg, 20px);
+  border-radius: var(--sf-card-radius, var(--sf-radius-lg, 20px));
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--sf-color-primary) 10%, transparent), transparent 55%),
+    color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface)) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 55%, transparent);
+  min-height: 220px;
+}
+
+.sf-empty-state--compact {
+  min-height: 160px;
+  padding: var(--sf-space-lg, 20px) var(--sf-space-md, 16px);
+}
+
+.sf-empty-state__icon {
+  font-size: clamp(2rem, 8vw, 2.75rem);
+  line-height: 1;
+  margin-bottom: 12px;
+  filter: saturate(0.95);
+}
+
+.sf-empty-state__title {
+  margin: 0 0 8px;
+  font-family: var(--sf-font-heading);
+  font-size: clamp(1rem, 3.6vw, 1.125rem);
+  font-weight: 800;
+  color: var(--sf-color-text);
+  text-wrap: balance;
+}
+
+.sf-empty-state__desc {
+  margin: 0;
+  max-width: 28ch;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--sf-color-muted);
+}
+
+.sf-empty-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 18px;
+  width: 100%;
+}
+
+.sf-empty-state__btn {
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: var(--sf-radius-full, 999px);
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: transform 120ms ease, filter 120ms ease;
+}
+
+.sf-empty-state__btn:active {
+  transform: scale(0.98);
+}
+
+.sf-empty-state__btn--primary {
+  background: var(--sf-color-primary);
+  color: var(--sf-on-primary, #fff);
+  border-color: color-mix(in srgb, var(--sf-color-primary) 80%, #000);
+}
+
+.sf-empty-state__btn--ghost {
+  background: transparent;
+  color: var(--sf-color-text);
+  border-color: color-mix(in srgb, var(--sf-color-border) 70%, transparent);
+}
+
+@media (max-width: 390px) {
+  .sf-empty-state {
+    margin-inline: var(--sf-mobile-pad, 10px);
+    padding-inline: var(--sf-mobile-pad, 14px);
+  }
+}
