@@ -7,28 +7,29 @@ import {
 import { validateProductAttributesForAdmin, validateProductAttributes } from "../../src/server/templateValidation.js";
 
 describe("product attribute normalization", () => {
-  const coffeeSchemaKeys = ["volume", "hotOrCold", "sugar", "syrups"];
+  const coffeeSchemaKeys = ["hotOrCold", "sugar", "syrups"];
 
   it("strips clothing legacy keys from coffee attributes", () => {
     const raw = {
-      volume: "350ml",
       hotOrCold: "hot",
       size: ["S", "M", "L"],
       color: ["black"],
       brand: "Nike",
+      volume: "350ml",
       variants: [{ color: "x", sizes: [] }],
     };
     const { value, strippedKeys, staleLegacyKeys } = stripProductAttributesToSchema(
       coffeeSchemaKeys,
       raw,
     );
-    expect(value).toEqual({ volume: "350ml", hotOrCold: "hot" });
+    expect(value).toEqual({ hotOrCold: "hot" });
     expect(strippedKeys.sort()).toEqual(
-      ["brand", "color", "size", "variants"].sort(),
+      ["brand", "color", "size", "variants", "volume"].sort(),
     );
     expect(staleLegacyKeys).toContain("size");
     expect(staleLegacyKeys).toContain("color");
     expect(staleLegacyKeys).toContain("brand");
+    expect(staleLegacyKeys).toContain("volume");
   });
 
   it("documents common stale keys list", () => {
@@ -48,11 +49,13 @@ describe("product attribute normalization", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value).toMatchObject({
-        volume: "350ml",
         hotOrCold: "hot",
+        sugar: "normal",
       });
+      expect(result.value).not.toHaveProperty("volume");
       expect(result.value).not.toHaveProperty("size");
       expect(result.value).not.toHaveProperty("color");
+      expect(result.value).not.toHaveProperty("bouquetCount");
     }
   });
 
@@ -66,9 +69,10 @@ describe("product attribute normalization", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value).toMatchObject({
-        bouquetCount: "21",
         packaging: "paper",
+        freshness: "today",
       });
+      expect(result.value).not.toHaveProperty("bouquetCount");
       expect(result.value).not.toHaveProperty("size");
       expect(result.value).not.toHaveProperty("volume");
     }

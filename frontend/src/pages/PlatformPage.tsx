@@ -63,6 +63,8 @@ import {
   MerchantSettingsRenderer,
   type SchemaObject as MerchantSchemaObject,
 } from "../components/merchant/MerchantSettingsRenderer";
+import { MerchantPremiumOverview } from "../components/merchant/MerchantPremiumOverview";
+import "../design/archaPremium.css";
 import { MERCHANT_REGISTER_SENT_KEY } from "./MerchantRegisterPage";
 import "./MerchantPage.css";
 import type { RegistrationStatusPayload } from "../services/platformApi";
@@ -1378,12 +1380,45 @@ export default function PlatformPage() {
     const locked = !b.subscriptionActive;
     return [
       {
-        id: "open",
-        label: "Магазин",
-        icon: "🛍",
-        accent: true,
+        id: "orders",
+        label: "Заказы",
+        icon: "📦",
         disabled: locked,
-        onClick: () => openStorefront(b),
+        onClick: () => navigate(merchantAdminNavigateTarget(b, "orders")),
+      },
+      {
+        id: "products",
+        label: "Товары",
+        icon: "👕",
+        disabled: locked,
+        onClick: () => navigate(merchantAdminNavigateTarget(b, "products")),
+      },
+      {
+        id: "categories",
+        label: "Категории",
+        icon: "📁",
+        disabled: locked,
+        onClick: () => navigate(merchantAdminNavigateTarget(b, "categories")),
+      },
+      {
+        id: "delivery",
+        label: "Доставка",
+        icon: "🚚",
+        onClick: () => {
+          setSettingsErr(null);
+          setSettingsOkMsg(null);
+          setSettingsBusinessId(b.id);
+        },
+      },
+      {
+        id: "bot",
+        label: "Бот",
+        icon: "🤖",
+        onClick: () => {
+          setSettingsErr(null);
+          setSettingsOkMsg(null);
+          setSettingsBusinessId(b.id);
+        },
       },
       {
         id: "settings",
@@ -1395,27 +1430,8 @@ export default function PlatformPage() {
           setSettingsBusinessId(b.id);
         },
       },
-      {
-        id: "share",
-        label: "Поделиться",
-        icon: "🔗",
-        onClick: () => void handleCopyMiniAppUrl(b),
-      },
-      {
-        id: "create",
-        label: "Новый",
-        icon: "➕",
-        onClick: goToMerchantRegister,
-      },
     ];
-  }, [
-    loading,
-    businesses.length,
-    primaryBusiness,
-    openStorefront,
-    goToMerchantRegister,
-    handleCopyMiniAppUrl,
-  ]);
+  }, [loading, businesses.length, primaryBusiness, navigate]);
 
   const readinessPct =
     readiness != null && readiness.maxScore > 0
@@ -1424,7 +1440,7 @@ export default function PlatformPage() {
 
   return (
     <>
-      <div className="mp-page mp-page--v2">
+      <div className="mp-page mp-page--v2 mp-page--premium">
         <div
           className={`mp-shell mp-shell--v2 ${showBottomCreateBar ? "mp-shell--dock" : ""}`}
         >
@@ -1432,7 +1448,7 @@ export default function PlatformPage() {
             subtitle={
               isPlatformAdmin
                 ? "Панель оператора платформы"
-                : "Управляйте магазинами в одном месте"
+                : "Панель управления магазином"
             }
             roleLabel={isPlatformAdmin ? "Оператор" : "Продавец"}
             isAdmin={isPlatformAdmin}
@@ -1463,6 +1479,19 @@ export default function PlatformPage() {
               ) : null
             }
           >
+            {!loading && businesses.length > 0 && !isPlatformAdmin && primaryBusiness != null ? (
+              <MerchantPremiumOverview
+                business={primaryBusiness}
+                readiness={readiness}
+                readinessPct={readinessPct}
+                onOpenOrders={() =>
+                  navigate(merchantAdminNavigateTarget(primaryBusiness, "orders"))
+                }
+                onOpenStore={() => openStorefront(primaryBusiness)}
+                onScrollSubscription={scrollToSubscription}
+              />
+            ) : null}
+
             {!loading && businesses.length > 0 && !isPlatformAdmin ? (
               <PlatformQuickActions actions={quickActions} />
             ) : null}

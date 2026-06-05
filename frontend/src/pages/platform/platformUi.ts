@@ -31,7 +31,11 @@ export function webhookUrlLine(b: PlatformMyBusinessDTO): string {
   return "URL вебхука не задан";
 }
 
-export type MerchantAdminSection = "products" | "design" | "orders";
+export type MerchantAdminSection =
+  | "products"
+  | "design"
+  | "orders"
+  | "categories";
 
 /** Открыть админку магазина с tenant в URL и hash-разделом. */
 export function merchantAdminNavigateTarget(
@@ -47,6 +51,7 @@ export function merchantAdminNavigateTarget(
     products: "#/admin/products",
     design: "#/admin/design",
     orders: "#/admin/orders",
+    categories: "#/admin/categories",
   };
   return `${base}${hash[section]}`;
 }

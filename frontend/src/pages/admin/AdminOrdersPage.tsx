@@ -142,6 +142,19 @@ export default function AdminOrdersPage() {
     });
   }, [orders, filter, search]);
 
+  const orderKpis = useMemo(() => {
+    let active = 0;
+    let newCount = 0;
+    let pendingPay = 0;
+    for (const o of orders) {
+      const s = canonicalStatus(o.status);
+      if (s !== "DELIVERED" && s !== "CANCELLED") active += 1;
+      if (s === "NEW") newCount += 1;
+      if (s === "PAID_PENDING") pendingPay += 1;
+    }
+    return { total: orders.length, active, newCount, pendingPay };
+  }, [orders]);
+
   useEffect(() => {
     setTrackingDraft((prev) => {
       const next = { ...prev };
@@ -256,13 +269,34 @@ export default function AdminOrdersPage() {
   }
 
   return (
-    <div className="admin-dash-page">
+    <div className="admin-dash-page admin-dash-page--premium">
       <header className="admin-dash-page__head">
         <h1 className="admin-dash-page__title">Заказы</h1>
         <p className="admin-dash-page__subtitle">
-          Управление заказами только в Mini App. Список обновляется каждые 3 с.
+          Premium operations — обновление каждые 3 с.
         </p>
       </header>
+
+      {!loading && orders.length > 0 ? (
+        <div className="admin-ops-kpi-scroll" aria-label="Статистика заказов">
+          <div className="admin-ops-kpi-card">
+            <strong>{orderKpis.total}</strong>
+            <span>Всего</span>
+          </div>
+          <div className="admin-ops-kpi-card">
+            <strong>{orderKpis.newCount}</strong>
+            <span>Новые</span>
+          </div>
+          <div className="admin-ops-kpi-card">
+            <strong>{orderKpis.active}</strong>
+            <span>Активные</span>
+          </div>
+          <div className="admin-ops-kpi-card">
+            <strong>{orderKpis.pendingPay}</strong>
+            <span>Ожидают оплаты</span>
+          </div>
+        </div>
+      ) : null}
 
       <div className="admin-order-search">
         <input

@@ -137,7 +137,9 @@ export function PlatformShell({
 
 export function PlatformQuickActions({
   actions,
+  title = "Панель управления",
 }: {
+  title?: string;
   actions: Array<{
     id: string;
     label: string;
@@ -149,8 +151,8 @@ export function PlatformQuickActions({
 }) {
   if (actions.length === 0) return null;
   return (
-    <section className="mp-v2-section" aria-label="Быстрые действия">
-      <h2 className="mp-v2-section-title">Быстрые действия</h2>
+    <section className="mp-v2-section" aria-label={title}>
+      <h2 className="mp-v2-section-title">{title}</h2>
       <div className="mp-v2-quick-grid">
         {actions.map((a) => (
           <motion.button

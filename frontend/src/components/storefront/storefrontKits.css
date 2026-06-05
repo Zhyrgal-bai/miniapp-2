@@ -991,3 +991,26 @@
     }
   }
 }
+
+@media (max-width: 640px) {
+  .sf-hero.sf-hero--split,
+  .sf-hero--fashion {
+    display: flex;
+    flex-direction: column;
+    grid-template-columns: none;
+  }
+
+  .sf-hero.sf-hero--split .sf-hero__media {
+    order: 0;
+    min-height: 220px;
+  }
+
+  .sf-hero.sf-hero--split .sf-hero__media img {
+    min-height: 220px;
+    height: auto;
+  }
+
+  .sf-hero--fashion .sf-hero__media {
+    order: -1;
+  }
+}

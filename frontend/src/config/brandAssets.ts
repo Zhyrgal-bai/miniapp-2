@@ -17,4 +17,11 @@ export const ARCHA_BRAND = {
   icon512: "/archa-icon-512.png",
   themeColor: "#0a120a",
   backgroundColor: "#050805",
+  heroTagline: "Платформа для интернет-магазинов внутри Telegram",
+  /** Открыть бота / канал для входа с веб-лендинга. */
+  telegramLoginUrl:
+    typeof import.meta.env.VITE_ARCHA_TELEGRAM_BOT_URL === "string" &&
+    import.meta.env.VITE_ARCHA_TELEGRAM_BOT_URL.trim() !== ""
+      ? import.meta.env.VITE_ARCHA_TELEGRAM_BOT_URL.trim()
+      : "https://t.me/archa_kg",
 } as const;

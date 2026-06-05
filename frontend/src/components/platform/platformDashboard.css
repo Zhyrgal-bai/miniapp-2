@@ -1,10 +1,9 @@
 /* Premium platform dashboard — Telegram-native, mobile-first */
 
-.mp-page.mp-page--v2 {
+.mp-page.mp-page--v2.mp-page--premium {
   background:
-    radial-gradient(ellipse 120% 80% at 50% -20%, rgba(34, 197, 94, 0.12), transparent 55%),
-    radial-gradient(ellipse 80% 50% at 100% 0%, rgba(59, 130, 246, 0.06), transparent 45%),
-    #0f172a;
+    radial-gradient(ellipse 100% 60% at 50% -15%, rgba(127, 255, 58, 0.1), transparent 50%),
+    var(--archa-bg);
 }
 
 .mp-shell--v2 {

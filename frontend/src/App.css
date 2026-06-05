@@ -455,3 +455,135 @@ button:active {
   border-radius: var(--sf-radius-xs, 4px);
   background: color-mix(in srgb, var(--sf-color-surface) 88%, transparent);
 }
+
+.app--store-not-found {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  background: #050805;
+}
+
+.store-not-found {
+  position: relative;
+  width: min(100%, 420px);
+  text-align: center;
+  color: #f4f7f2;
+}
+
+.store-not-found__bg {
+  position: absolute;
+  inset: -40px -24px;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 0.45;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.store-not-found__bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(5, 8, 5, 0.55) 0%,
+    rgba(5, 8, 5, 0.88) 60%,
+    rgba(5, 8, 5, 0.96) 100%
+  );
+}
+
+.store-not-found__inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.store-not-found__logo {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 24px rgba(157, 255, 87, 0.25));
+}
+
+.store-not-found__code {
+  margin: 4px 0 0;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  color: #9dff57;
+}
+
+.store-not-found__title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.store-not-found__slug {
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+.store-not-found__slug code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.88em;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  word-break: break-all;
+}
+
+.store-not-found__hint {
+  margin: 0;
+  line-height: 1.55;
+  opacity: 0.82;
+  font-size: 0.95rem;
+}
+
+.store-not-found__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.store-not-found__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  font-family: inherit;
+  border: 1px solid transparent;
+}
+
+.store-not-found__btn--primary {
+  background: linear-gradient(135deg, #9dff57 0%, #6fdc3a 100%);
+  color: #0a120a;
+  border: none;
+}
+
+.store-not-found__btn--ghost {
+  background: rgba(255, 255, 255, 0.06);
+  color: #f4f7f2;
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.store-not-found__btn:active {
+  transform: scale(0.98);
+}

@@ -55,6 +55,7 @@ import { useTheme } from "./context/ThemeContext";
 import { useStorefrontPayload } from "./components/storefront/runtime/StorefrontPayloadContext";
 import { ARCHA_BRAND } from "./config/brandAssets";
 import TenantBootScreen from "./components/ui/TenantBootScreen";
+import StoreNotFoundScreen from "./components/storefront/runtime/StoreNotFoundScreen";
 import {
   buildStorefrontLayoutCssVars,
   kitFromTemplateId,
@@ -104,7 +105,7 @@ export default function App() {
   const location = useLocation();
   const { businessId, shopIdString } = useShop();
   const { theme, templateId } = useTheme();
-  const { payload, loading: storefrontLoading, error: storefrontError, refresh: refreshStorefront } = useStorefrontPayload();
+  const { payload, loading: storefrontLoading, error: storefrontError, storeNotFound, refresh: refreshStorefront } = useStorefrontPayload();
 
   const storeDisplayName = payload?.storeName?.trim() || "";
   const storeBrandHeader = storeDisplayName !== "";
@@ -645,6 +646,16 @@ export default function App() {
           />
         </div>
       </ThemeVarsProvider>
+    );
+  }
+
+  if (storeNotFound && slugHint) {
+    return (
+      <StoreNotFoundScreen
+        slug={slugHint}
+        message={storefrontError}
+        onRetry={() => void refreshStorefront()}
+      />
     );
   }
 

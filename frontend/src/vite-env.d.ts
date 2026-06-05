@@ -45,6 +45,7 @@ interface ImportMetaEnv {
   readonly VITE_API_URL?: string;
   /** Short brand / store name in header and hero. */
   readonly VITE_APP_NAME?: string;
+  readonly VITE_ARCHA_TELEGRAM_BOT_URL?: string;
   /** First-order promo code shown in the banner. */
   readonly VITE_FIRST_ORDER_PROMO?: string;
   /** Номер MBank для экрана оплаты (по умолчанию 0556996312). */

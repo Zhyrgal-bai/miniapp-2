@@ -13,6 +13,8 @@ type StorefrontPayloadCtx = {
   payload: ResolvedStorefrontPayload | null;
   loading: boolean;
   error: string | null;
+  /** Slug или businessId резолвились в HTTP 404. */
+  storeNotFound: boolean;
   refresh: () => Promise<void>;
 };
 
@@ -25,6 +27,7 @@ export function StorefrontPayloadProvider(props: { children: React.ReactNode }):
   const [payload, setPayload] = useState<ResolvedStorefrontPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [storeNotFound, setStoreNotFound] = useState(false);
   const aborted = useRef<AbortController | null>(null);
   const transientRetries = useRef(0);
 
@@ -38,6 +41,7 @@ export function StorefrontPayloadProvider(props: { children: React.ReactNode }):
     aborted.current = ac;
     setLoading(true);
     setError(null);
+    setStoreNotFound(false);
 
     const url = slug
       ? `/api/storefront/by-slug/${encodeURIComponent(slug)}`
@@ -99,6 +103,7 @@ export function StorefrontPayloadProvider(props: { children: React.ReactNode }):
         clearTenantSession();
       }
       if (status === 404) {
+        setStoreNotFound(true);
         setError(
           apiMessage !== ""
             ? apiMessage
@@ -131,8 +136,8 @@ export function StorefrontPayloadProvider(props: { children: React.ReactNode }):
   }, [refresh]);
 
   const value = useMemo<StorefrontPayloadCtx>(
-    () => ({ payload, loading, error, refresh }),
-    [payload, loading, error, refresh],
+    () => ({ payload, loading, error, storeNotFound, refresh }),
+    [payload, loading, error, storeNotFound, refresh],
   );
 
   return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>;

@@ -716,4 +716,13 @@
     padding: 7px 12px;
     font-size: 11px;
   }
+
+  .product-title {
+    font-size: 13px;
+    min-height: 2.5em;
+  }
+
+  .product-bottom {
+    gap: 6px;
+  }
 }

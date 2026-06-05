@@ -1,0 +1,139 @@
+.archa-hub {
+  margin-bottom: 1.25rem;
+}
+
+.archa-hub__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 0.85rem;
+}
+
+@media (min-width: 480px) {
+  .archa-hub__stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.archa-hub__stat {
+  position: relative;
+  padding: 0.85rem 0.75rem;
+  border-radius: var(--archa-radius-lg);
+  text-align: center;
+}
+
+.archa-hub__stat-value {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--archa-text);
+  line-height: 1.2;
+}
+
+.archa-hub__stat-value--ok {
+  color: var(--archa-green-neon);
+}
+
+.archa-hub__stat-value--warn {
+  color: #fbbf24;
+}
+
+.archa-hub__stat-label {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--archa-text-dim);
+}
+
+.archa-hub__panels {
+  display: grid;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .archa-hub__panels {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.archa-hub__panel {
+  position: relative;
+  padding: 1rem 1.1rem;
+  border-radius: var(--archa-radius-lg);
+}
+
+.archa-hub__panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.archa-hub__panel-head h3 {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--archa-text-muted);
+}
+
+.archa-hub__pill {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.archa-hub__pill--ok {
+  color: var(--archa-green-neon);
+  border-color: rgba(157, 255, 87, 0.35);
+  background: rgba(157, 255, 87, 0.08);
+}
+
+.archa-hub__pill--warn {
+  color: #fcd34d;
+  border-color: rgba(252, 211, 77, 0.35);
+  background: rgba(252, 211, 77, 0.08);
+}
+
+.archa-hub__panel-text {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--archa-text);
+  line-height: 1.4;
+}
+
+.archa-hub__panel-meta {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--archa-text-muted);
+}
+
+.archa-hub__panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.archa-hub__link-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--archa-text-muted);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.archa-hub__link-btn--accent {
+  color: var(--archa-green-neon);
+}
