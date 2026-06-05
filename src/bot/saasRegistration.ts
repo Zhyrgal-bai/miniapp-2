@@ -1227,7 +1227,6 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
         name: row.name,
         botToken: row.botToken.trim(),
         telegramId: row.telegramId,
-        slugSuffix: `${requestId}-${Date.now().toString(36)}`,
         finikApiKey: row.finikApiKey,
         finikAccountId: row.finikAccountId,
         businessType: (row as any).businessType,

@@ -10,6 +10,7 @@ import {
   getEffectivePrice,
   getPrimaryImage,
 } from "../../../utils/product";
+import { getMaxOrderQty } from "../../../commerce/quantityPolicy";
 import { getVariantCssBackground } from "../../../utils/variantColor";
 import {
   useVerticalProductSelection,
@@ -27,6 +28,10 @@ import { useBodyScrollLock } from "../../../utils/bodyScrollLock";
 import { isStorefrontCommerceEnabled } from "../../../hooks/useStorefrontCommerceMode";
 import { openOpenInTelegramModal } from "../../../storefront/openInTelegramModal";
 import { trackAddToCart } from "../../../services/storefrontAnalytics";
+import {
+  productRequiresVariantPicker,
+  resolveInstantAddLine,
+} from "../../../commerce/productVariantPolicy";
 import "./ProductDetailSheet.css";
 
 export type ProductDetailSheetProps = {
@@ -40,25 +45,19 @@ export type ProductDetailSheetProps = {
   showToast?: (msg: string) => void;
 };
 
-function mergeProductsUnique(a: Product[], b: Product[]): Product[] {
-  const m = new Map<number, Product>();
-  for (const p of [...a, ...b]) {
-    const id = p.id;
-    if (typeof id === "number" && id > 0) m.set(id, p);
-  }
-  return [...m.values()];
-}
-
 export function ProductDetailSheet({
   product,
   businessId,
   businessType,
-  featuredProducts,
-  catalogProducts,
+  featuredProducts: _featuredProducts,
+  catalogProducts: _catalogProducts,
   onClose,
-  onSelectProduct,
+  onSelectProduct: _onSelectProduct,
   showToast,
 }: ProductDetailSheetProps): ReactElement | null {
+  void _featuredProducts;
+  void _catalogProducts;
+  void _onSelectProduct;
   const toast = showToast ?? (() => undefined);
   const [resolved, setResolved] = useState<Product | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -118,8 +117,13 @@ export function ProductDetailSheet({
     setSelectionHint(null);
   }, [product.id]);
 
+  const requiresVariantPicker = productRequiresVariantPicker(
+    display,
+    resolvedBusinessType,
+  );
+
   const selection = useVerticalProductSelection(display, resolvedBusinessType, {
-    autoSelectDefaults: false,
+    autoSelectDefaults: !requiresVariantPicker,
   });
   const {
     selectedSize,
@@ -167,17 +171,24 @@ export function ProductDetailSheet({
 
   const storageColor = storageColorForCart(resolvedBusinessType, lineColor);
 
+  const activeLine = useMemo(() => {
+    if (selectedSize != null) {
+      return { size: selectedSize, color: storageColor };
+    }
+    return resolveInstantAddLine(display, resolvedBusinessType);
+  }, [selectedSize, storageColor, display, resolvedBusinessType]);
+
   const cartItem = useMemo(() => {
-    if (!selectedSize) return null;
+    if (!activeLine) return null;
     const probe = {
       productId: display.id!,
-      size: selectedSize,
-      color: storageColor,
+      size: activeLine.size,
+      color: activeLine.color,
       options: orderOptions,
     };
     const key = cartLineIdentityKey(probe);
     return items.find((i) => cartLineIdentityKey(i) === key) ?? null;
-  }, [items, display.id, selectedSize, storageColor, orderOptions]);
+  }, [items, display.id, activeLine, orderOptions]);
 
   const cartQuantity = cartItem?.quantity ?? 0;
 
@@ -186,45 +197,54 @@ export function ProductDetailSheet({
 
   const selectionReady =
     !outOfStock &&
-    selectedSize != null &&
-    selectedStock > 0 &&
-    (!showColorPicker || !hasCustomColors || selectedColor != null);
+    activeLine != null &&
+    (requiresVariantPicker
+      ? selectedSize != null &&
+        selectedStock > 0 &&
+        (!showColorPicker || !hasCustomColors || selectedColor != null)
+      : true);
 
   const upsertQuantity = useCallback(
     (nextQuantity: number) => {
-      if (!selectedSize || outOfStock) return;
-      if (showColorPicker && hasCustomColors && selectedColor == null) return;
-      if (selectedStock <= 0) return;
+      const line = activeLine ?? resolveInstantAddLine(display, resolvedBusinessType);
+      if (!line || outOfStock) return;
+      if (requiresVariantPicker) {
+        if (showColorPicker && hasCustomColors && selectedColor == null) return;
+        if (selectedSize == null || selectedStock <= 0) return;
+      }
       if (cartItem) removeItem(cartItem);
       if (nextQuantity <= 0) return;
-      const capped = Math.min(nextQuantity, selectedStock);
+      const stock = selectedSize != null ? selectedStock : getMaxOrderQty(display, line.size, line.color);
+      const capped = Math.min(nextQuantity, Math.max(stock, 1));
       addItem({
         productId: display.id!,
         name: display.name,
         price: displayPrice,
         image: getPrimaryImage(display),
-        size: selectedSize,
-        color: storageColor,
+        size: line.size,
+        color: line.color,
         options: { ...orderOptions },
         quantity: capped,
       });
       if (businessId && display.id) trackAddToCart(businessId, display.id);
     },
     [
-      selectedSize,
+      activeLine,
       outOfStock,
+      requiresVariantPicker,
       showColorPicker,
       hasCustomColors,
       selectedColor,
+      selectedSize,
       selectedStock,
       cartItem,
       removeItem,
       addItem,
       display,
       displayPrice,
-      storageColor,
       orderOptions,
       businessId,
+      resolvedBusinessType,
     ],
   );
 
@@ -234,7 +254,7 @@ export function ProductDetailSheet({
       setSelectionHint("Выберите цвет");
       return false;
     }
-    if (selectedSize == null) {
+    if (selectedSize == null && sizes.length > 0) {
       setSelectionHint(`Выберите ${primaryLabel.toLowerCase()}`);
       return false;
     }
@@ -249,21 +269,16 @@ export function ProductDetailSheet({
   const handleAddToCart = () => {
     if (!validateSelection()) return;
     recordRecentlyViewed({ businessId, product: display });
+    const stock =
+      selectedSize != null && selectedStock > 0
+        ? selectedStock
+        : activeLine
+          ? getMaxOrderQty(display, activeLine.size, activeLine.color)
+          : 0;
     const next = cartQuantity > 0 ? cartQuantity + pickQty : pickQty;
-    upsertQuantity(Math.min(next, selectedStock));
+    upsertQuantity(Math.min(next, stock || next));
     toast("Добавлено в корзину");
   };
-
-  const related = useMemo(() => {
-    const pool = mergeProductsUnique(featuredProducts, catalogProducts);
-    const cid = display.categoryId;
-    const filtered = pool.filter((p) => p.id !== display.id);
-    if (cid != null) {
-      const same = filtered.filter((p) => p.categoryId === cid);
-      if (same.length > 0) return same.slice(0, 8);
-    }
-    return filtered.slice(0, 8);
-  }, [featuredProducts, catalogProducts, display.id, display.categoryId]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
@@ -288,30 +303,49 @@ export function ProductDetailSheet({
 
   if (!host) return null;
 
-  const maxPickQty = selectionReady ? Math.max(1, selectedStock - cartQuantity) : 1;
+  const maxPickQty =
+    selectionReady && selectedStock > 0
+      ? Math.max(1, selectedStock - cartQuantity)
+      : activeLine
+        ? Math.max(1, getMaxOrderQty(display, activeLine.size, activeLine.color) - cartQuantity)
+        : 1;
+
+  const addToCartDisabled = outOfStock || !selectionReady;
 
   return createPortal(
     <AnimatePresence>
       <motion.div
-        key="pdp-screen"
-        className="pdp-screen"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="pdp-title"
-        initial={{ x: "100%" }}
-        animate={{ x: 0 }}
-        exit={{ x: "100%" }}
-        transition={{ type: "tween", duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
+        key="pdp-overlay"
+        className="pdp-overlay"
+        role="presentation"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        onClick={onClose}
       >
-        <header className="pdp-topbar">
-          <button type="button" className="pdp-topbar__back" onClick={onClose} aria-label="Назад">
-            ←
+        <motion.div
+          key="pdp-quickview"
+          className="pdp-quickview"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pdp-title"
+          initial={{ opacity: 0, scale: 0.94, y: 12 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.96, y: 8 }}
+          transition={{ type: "tween", duration: 0.24, ease: [0.32, 0.72, 0, 1] }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="pdp-quickview__close"
+            aria-label="Закрыть"
+            onClick={onClose}
+          >
+            ×
           </button>
-          <span className="pdp-topbar__title">Товар</span>
-          <span className="pdp-topbar__spacer" aria-hidden />
-        </header>
 
-        <div className="pdp-scroll">
+          <div className="pdp-quickview__scroll">
           <div
             className="pdp-gallery"
             onTouchStart={handleTouchStart}
@@ -355,9 +389,9 @@ export function ProductDetailSheet({
           </div>
 
           <div className="pdp-body">
-            <h1 id="pdp-title" className="pdp-name">
+            <h2 id="pdp-title" className="pdp-name">
               {display.name}
-            </h1>
+            </h2>
 
             <div className="pdp-price-block">
               <span className="pdp-price">{displayPrice} сом</span>
@@ -378,7 +412,7 @@ export function ProductDetailSheet({
               <>
                 {showColorPicker && hasCustomColors ? (
                   <section className="pdp-section">
-                    <h2 className="pdp-section__label">Цвет</h2>
+                    <h3 className="pdp-section__label">Цвет</h3>
                     <div className="pdp-colors">
                       {colors.map((c) => (
                         <button
@@ -402,7 +436,7 @@ export function ProductDetailSheet({
 
                 {sizes.length > 0 ? (
                   <section className="pdp-section">
-                    <h2 className="pdp-section__label">{primaryLabel}</h2>
+                    <h3 className="pdp-section__label">{primaryLabel}</h3>
                     <div className="pdp-sizes">
                       {sizes.map((s) => (
                         <button
@@ -431,7 +465,7 @@ export function ProductDetailSheet({
                 />
 
                 <section className="pdp-section">
-                  <h2 className="pdp-section__label">Количество</h2>
+                  <h3 className="pdp-section__label">Количество</h3>
                   <div className="pdp-qty" role="group" aria-label="Количество">
                     <button
                       type="button"
@@ -462,74 +496,54 @@ export function ProductDetailSheet({
                 {selectionHint}
               </p>
             ) : null}
-
-            {related.length > 0 ? (
-              <section className="pdp-section pdp-section--related">
-                <h2 className="pdp-section__label">Похожие товары</h2>
-                <div className="pdp-related">
-                  {related.map((p) => (
-                    <button
-                      key={String(p.id)}
-                      type="button"
-                      className="pdp-related__card"
-                      onClick={() => onSelectProduct(p)}
-                    >
-                      <img src={getPrimaryImage(p)} alt="" />
-                      <span>{p.name}</span>
-                      <strong>{getEffectivePrice(p)} сом</strong>
-                    </button>
-                  ))}
-                </div>
-              </section>
-            ) : null}
-          </div>
-        </div>
-
-        <footer className="pdp-sticky-bar">
-          <div className="pdp-sticky-bar__price">
-            <span className="pdp-sticky-bar__label">Итого</span>
-            <strong>{displayPrice * (cartQuantity > 0 ? cartQuantity : pickQty)} сом</strong>
-          </div>
-          {!isStorefrontCommerceEnabled() ? (
-            <button
-              type="button"
-              className="pdp-sticky-bar__cta"
-              onClick={() => openOpenInTelegramModal(payload?.telegramOpenUrl ?? null)}
-            >
-              {outOfStock ? "Нет в наличии" : addLabel}
-            </button>
-          ) : cartQuantity > 0 ? (
-            <div className="pdp-sticky-bar__cart-qty" role="group" aria-label="В корзине">
-              <button
-                type="button"
-                className="pdp-qty__btn"
-                aria-label="Уменьшить"
-                onClick={() => upsertQuantity(cartQuantity - 1)}
-              >
-                −
-              </button>
-              <span className="pdp-qty__value">{cartQuantity}</span>
-              <button
-                type="button"
-                className="pdp-qty__btn"
-                aria-label="Увеличить"
-                disabled={cartQuantity >= selectedStock || !selectionReady}
-                onClick={() => upsertQuantity(cartQuantity + 1)}
-              >
-                +
-              </button>
             </div>
-          ) : (
-            <button
-              type="button"
-              className="pdp-sticky-bar__cta"
-              disabled={outOfStock}
-              onClick={handleAddToCart}
-            >
-              {outOfStock ? "Нет в наличии" : addLabel}
-            </button>
-          )}
-        </footer>
+          </div>
+
+          <footer className="pdp-quickview__footer">
+            {!isStorefrontCommerceEnabled() ? (
+              <button
+                type="button"
+                className="pdp-quickview__cta"
+                onClick={() => openOpenInTelegramModal(payload?.telegramOpenUrl ?? null)}
+              >
+                {outOfStock ? "Нет в наличии" : addLabel}
+              </button>
+            ) : cartQuantity > 0 ? (
+              <div className="pdp-quickview__footer-row">
+                <span className="pdp-quickview__in-cart">В корзине: {cartQuantity}</span>
+                <div className="pdp-qty" role="group" aria-label="В корзине">
+                  <button
+                    type="button"
+                    className="pdp-qty__btn"
+                    aria-label="Уменьшить"
+                    onClick={() => upsertQuantity(cartQuantity - 1)}
+                  >
+                    −
+                  </button>
+                  <span className="pdp-qty__value">{cartQuantity}</span>
+                  <button
+                    type="button"
+                    className="pdp-qty__btn"
+                    aria-label="Увеличить"
+                    disabled={cartQuantity >= selectedStock || !selectionReady}
+                    onClick={() => upsertQuantity(cartQuantity + 1)}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="pdp-quickview__cta"
+                disabled={addToCartDisabled}
+                onClick={handleAddToCart}
+              >
+                {outOfStock ? "Нет в наличии" : addLabel}
+              </button>
+            )}
+          </footer>
+        </motion.div>
       </motion.div>
     </AnimatePresence>,
     host,

@@ -284,6 +284,7 @@ button:active {
   justify-content: center;
   padding: 24px;
   box-sizing: border-box;
+  background: #050805;
 }
 
 .tenant-boot {
@@ -297,13 +298,92 @@ button:active {
   max-width: 360px;
 }
 
+.tenant-boot--platform {
+  position: relative;
+  min-height: 100dvh;
+  width: 100%;
+  max-width: none;
+  padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
+  overflow: hidden;
+}
+
+.tenant-boot__platform-bg {
+  position: absolute;
+  inset: 0;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 0.55;
+}
+
+.tenant-boot__platform-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(5, 8, 5, 0.55) 0%,
+    rgba(5, 8, 5, 0.82) 55%,
+    rgba(5, 8, 5, 0.95) 100%
+  );
+}
+
+.tenant-boot__platform-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin: auto;
+}
+
+.tenant-boot__platform-logo {
+  width: min(120px, 34vw);
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.45));
+}
+
+.tenant-boot__platform-name {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: #f8fafc;
+}
+
+.tenant-boot__platform-tagline {
+  margin: 0;
+  font-size: 0.95rem;
+  color: rgba(248, 250, 252, 0.82);
+}
+
+.tenant-boot__mark {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.tenant-boot__name {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--sf-color-text, #f8fafc);
+}
+
 .tenant-boot__spinner {
   width: 36px;
   height: 36px;
   border-radius: 50%;
   border: 3px solid color-mix(in srgb, var(--sf-color-text, #fff) 18%, transparent);
-  border-top-color: var(--sf-color-primary, #6366f1);
+  border-top-color: #7fff3a;
   animation: tenant-boot-spin 0.85s linear infinite;
+}
+
+.tenant-boot__spinner--platform {
+  margin-top: 8px;
 }
 
 @keyframes tenant-boot-spin {
@@ -318,6 +398,12 @@ button:active {
   font-weight: 600;
   color: var(--sf-color-text, #f8fafc);
   line-height: 1.45;
+}
+
+.tenant-boot__message--platform {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: rgba(248, 250, 252, 0.78);
 }
 
 .tenant-boot__hint {

@@ -6,6 +6,7 @@ import {
 import { encryptedBotTokenRow } from "./businessBotToken.js";
 import { createOwnerStaffRow } from "./businessStaffAccess.js";
 import { parseFinikRegistrationFields } from "../shared/finikRegistration.js";
+import { allocateUniqueBusinessSlug } from "../shared/storeSlug.js";
 
 function normalizeStoreName(raw: string): string {
   return raw.replace(/\s+/g, " ").trim();
@@ -15,7 +16,6 @@ export type ProvisionMerchantStoreParams = {
   name: string;
   botToken: string;
   telegramId: string;
-  slugSuffix: string;
   finikApiKey?: string | null;
   finikAccountId?: string | null;
   businessType?: string;
@@ -30,7 +30,7 @@ export async function provisionMerchantStoreInTx(
   tx: Prisma.TransactionClient,
   params: ProvisionMerchantStoreParams,
 ): Promise<number> {
-  const slug = `shop-${params.slugSuffix}`;
+  const slug = await allocateUniqueBusinessSlug(tx, params.name);
   const botTok = params.botToken.trim();
   const tokenFields = encryptedBotTokenRow(botTok);
   const finik = parseFinikRegistrationFields({

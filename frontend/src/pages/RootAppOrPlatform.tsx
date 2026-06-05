@@ -42,7 +42,12 @@ export default function RootAppOrPlatform() {
   }, []);
 
   if (tgBoot === "checking") {
-    return <TenantBootScreen message="Подключаемся к Telegram…" />;
+    return (
+      <TenantBootScreen
+        variant="platform"
+        message="Подключаемся к Telegram…"
+      />
+    );
   }
 
   if (hasTenantLaunchHint(pathname, search)) {

@@ -2,14 +2,30 @@
 
 .mr {
   box-sizing: border-box;
+  position: relative;
   min-height: 100dvh;
-  background: #0f172a;
+  background: #050805;
   color: #ffffff;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     sans-serif;
   -webkit-font-smoothing: antialiased;
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
-  border-top: 3px solid #22c55e;
+  border-top: 3px solid #7fff3a;
+  overflow: hidden;
+}
+
+.mr__bg {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(5, 8, 5, 0.92) 0%, rgba(5, 8, 5, 0.78) 45%, rgba(5, 8, 5, 0.94) 100%),
+    url("/фон.png") center / cover no-repeat;
+  pointer-events: none;
+}
+
+.mr > :not(.mr__bg) {
+  position: relative;
+  z-index: 1;
 }
 
 .mr *,
@@ -30,8 +46,9 @@
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  object-fit: cover;
+  border: 1px solid rgba(127, 255, 58, 0.15);
+  object-fit: contain;
+  background: rgba(0, 0, 0, 0.35);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
@@ -311,7 +328,7 @@
 
 .mr__faq-link-wrap {
   margin: 0;
-  padding: 0 20px 20px;
+  padding: 0 20px 12px;
   text-align: center;
 }
 
@@ -325,4 +342,12 @@
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
+}
+
+.mr__footer-tag {
+  margin: 0;
+  padding: 0 20px max(20px, env(safe-area-inset-bottom));
+  text-align: center;
+  font-size: 13px;
+  color: rgba(248, 250, 252, 0.72);
 }

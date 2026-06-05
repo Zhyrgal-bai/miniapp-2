@@ -17,6 +17,7 @@ import {
   type MerchantStoreAddressDraft,
 } from "../utils/nominatimGeocode";
 import "./MerchantRegisterPage.css";
+import { ARCHA_BRAND } from "../config/brandAssets";
 
 const SS_SHOP = "miniapp-active-shop";
 
@@ -75,6 +76,10 @@ function parseBackButton(tg: unknown): BackBtn | null {
 
 export default function MerchantRegisterPage() {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    document.title = ARCHA_BRAND.title;
+  }, []);
   const [step, setStep] = useState(1);
   const [businessType, setBusinessType] = useState<BusinessType | "">("");
   const [storeName, setStoreName] = useState("");
@@ -293,6 +298,7 @@ export default function MerchantRegisterPage() {
   if (gateLoading) {
     return (
       <div className="mr">
+        <div className="mr__bg" aria-hidden />
         <p className="mr__loading">Загрузка…</p>
       </div>
     );
@@ -301,9 +307,17 @@ export default function MerchantRegisterPage() {
   if (gateMessage != null) {
     return (
       <div className="mr">
+        <div className="mr__bg" aria-hidden />
         <header className="mr__header">
+          <img
+            src={ARCHA_BRAND.logoMark}
+            alt={ARCHA_BRAND.name}
+            width={40}
+            height={40}
+            className="mr__logo"
+          />
           <div className="mr__brand">
-            <p className="mr__brand-name">ARCHA</p>
+            <p className="mr__brand-name">{ARCHA_BRAND.name}</p>
             <p className="mr__brand-sub">Регистрация</p>
           </div>
           <button type="button" onClick={goMerchant} className="mr__close">
@@ -329,16 +343,17 @@ export default function MerchantRegisterPage() {
 
   return (
     <div className="mr">
+      <div className="mr__bg" aria-hidden />
       <header className="mr__header">
         <img
-          src="/674440574_18101674030793392_828162833995675842_n.jpg"
-          alt="ARCHA"
+          src={ARCHA_BRAND.logoMark}
+          alt={ARCHA_BRAND.name}
           width={40}
           height={40}
           className="mr__logo"
         />
         <div className="mr__brand">
-          <p className="mr__brand-name">ARCHA</p>
+          <p className="mr__brand-name">{ARCHA_BRAND.name}</p>
           <p className="mr__brand-sub">
             Шаг {Math.min(step, TOTAL_STEPS)} из {TOTAL_STEPS} ·{" "}
             {STEP_LABELS[step - 1]}
@@ -607,6 +622,7 @@ export default function MerchantRegisterPage() {
               Вопросы и ответы об ARCHA
             </button>
           </p>
+          <p className="mr__footer-tag">{ARCHA_BRAND.tagline}</p>
         </div>
       </div>
     </div>

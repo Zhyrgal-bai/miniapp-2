@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { ARCHA_BRAND } from "../../config/brandAssets";
 
 type ArchaHeaderProps = {
   subtitle: string;
@@ -20,11 +21,11 @@ export function ArchaHeader({
     >
       <div className="relative shrink-0">
         <img
-          src="/674440574_18101674030793392_828162833995675842_n.jpg"
-          alt="ARCHA"
+          src={ARCHA_BRAND.favicon}
+          alt={ARCHA_BRAND.name}
           width={48}
           height={48}
-          className="h-12 w-12 rounded-2xl border border-white/[0.08] object-cover shadow-lg shadow-black/50 sm:h-14 sm:w-14"
+          className="h-12 w-12 rounded-2xl border border-white/[0.08] object-contain shadow-lg shadow-black/50 sm:h-14 sm:w-14"
         />
         <span
           className="pointer-events-none absolute -inset-px rounded-2xl opacity-40 blur-sm"

@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { getTelegramWebApp } from "../utils/telegram";
 import { resolveMerchantTelegramUserId } from "../utils/telegramUserId";
 import { archa } from "../components/archa/archaUi";
+import { ARCHA_BRAND } from "../config/brandAssets";
 import {
   PlatformQuickActions,
   PlatformShell,
@@ -149,6 +150,10 @@ function readOnboardingCompleted(): boolean {
 /** Панель клиента Mini App: маршрут `/merchant` (витрины: `/store/:slug` или legacy `/?shop=ID`). */
 export default function PlatformPage() {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    document.title = ARCHA_BRAND.title;
+  }, []);
   const [businesses, setBusinesses] = useState<PlatformMyBusinessDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

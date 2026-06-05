@@ -53,6 +53,7 @@ import "./components/storefront/cart/stickyCart.css";
 import { ThemeVarsProvider } from "./components/storefront/theme/ThemeVarsProvider";
 import { useTheme } from "./context/ThemeContext";
 import { useStorefrontPayload } from "./components/storefront/runtime/StorefrontPayloadContext";
+import { ARCHA_BRAND } from "./config/brandAssets";
 import TenantBootScreen from "./components/ui/TenantBootScreen";
 import {
   buildStorefrontLayoutCssVars,
@@ -107,6 +108,12 @@ export default function App() {
 
   const storeDisplayName = payload?.storeName?.trim() || "";
   const storeBrandHeader = storeDisplayName !== "";
+
+  useEffect(() => {
+    document.title = storeDisplayName
+      ? `${storeDisplayName} · ${ARCHA_BRAND.name}`
+      : ARCHA_BRAND.title;
+  }, [storeDisplayName]);
   const [page, setPage] = useState<AppNavPage>(initialPageFromPath);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [myOrdersAttention, setMyOrdersAttention] = useState(false);

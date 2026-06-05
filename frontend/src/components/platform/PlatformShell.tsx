@@ -1,5 +1,6 @@
 import { useCallback, useEffect, type ReactNode } from "react";
 import { motion } from "framer-motion";
+import { ARCHA_BRAND } from "../../config/brandAssets";
 import "./platformDashboard.css";
 
 export type PlatformMenuItem = {
@@ -51,8 +52,8 @@ export function PlatformShell({
               <span className="mp-v2-logo-glow" aria-hidden />
               <img
                 className="mp-v2-logo"
-                src="/674440574_18101674030793392_828162833995675842_n.jpg"
-                alt="ARCHA"
+                src={ARCHA_BRAND.favicon}
+                alt={ARCHA_BRAND.name}
                 width={48}
                 height={48}
               />
@@ -126,7 +127,7 @@ export function PlatformShell({
                 </button>
               ))}
             </nav>
-            <p className="mp-v2-menu-footer">ARCHA · Mini App</p>
+            <p className="mp-v2-menu-footer">{ARCHA_BRAND.tagline}</p>
           </aside>
         </>
       ) : null}
