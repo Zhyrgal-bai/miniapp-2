@@ -1,7 +1,7 @@
 import { MembershipRole, SubscriptionStatus } from "@prisma/client";
 import { plainBotTokenFromStored } from "./businessBotToken.js";
 import { prisma } from "./db.js";
-import { merchantStoreEntitled } from "./subscriptionAccess.js";
+import { merchantStorefrontEntitled } from "./subscriptionAccess.js";
 import {
   classifyWebhookOkError,
   fetchTelegramWebhookInfo,
@@ -91,7 +91,7 @@ export async function mapRowsWithWebhook(
       plainBotTokenFromStored(r.botToken),
     );
     const webhookStatus = classifyWebhookOkError(info);
-    const subscriptionActive = merchantStoreEntitled(r, now);
+    const subscriptionActive = merchantStorefrontEntitled(r, now);
     return {
       id: r.id,
       name: r.name,

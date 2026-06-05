@@ -136,7 +136,34 @@ export const platformDeleteMyBusinessBodySchema = z.object({
   businessId: z.coerce.number().int().positive(),
 });
 
-export const platformSubscriptionPaymentBodySchema = z.object({
+export const platformSubscriptionPaymentBodySchema = z
+  .object({
+    businessId: z.coerce.number().int().positive(),
+    plan: z.union([z.literal(30), z.literal(90)]).optional(),
+    planCode: z
+      .enum(["MONTHLY", "HALF_YEAR", "YEARLY"])
+      .optional(),
+  })
+  .refine((v) => v.plan != null || v.planCode != null, {
+    message: "Укажите planCode или plan",
+  });
+
+export const platformSubscriptionAutoRenewBodySchema = z.object({
   businessId: z.coerce.number().int().positive(),
-  plan: z.union([z.literal(30), z.literal(90)]),
+  enabled: z.boolean(),
 });
+
+export const platformAdminExtendBodySchema = z
+  .object({
+    businessId: z.coerce.number().int().positive(),
+    days: z.union([
+      z.literal(7),
+      z.literal(30),
+      z.literal(90),
+      z.literal(365),
+    ]).optional(),
+    extendToDate: z.string().min(1).optional(),
+  })
+  .refine((v) => v.days != null || v.extendToDate != null, {
+    message: "Укажите days или extendToDate",
+  });

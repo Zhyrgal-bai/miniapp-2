@@ -1,9 +1,9 @@
-import { SubscriptionStatus } from "@prisma/client";
 import {
   API_ERR_BUSINESS_NOT_FOUND,
   API_ERR_STORE_SUBSCRIPTION_EXPIRED,
   API_ERR_STORE_UNAVAILABLE,
 } from "../shared/apiClientMessages.js";
+import { SubscriptionStatus } from "@prisma/client";
 
 /** Поля подписки для проверки доступа (без финансовых атрибутов витрины). */
 export type SubscriptionGateFields = {
@@ -12,6 +12,7 @@ export type SubscriptionGateFields = {
   subscriptionStatus: SubscriptionStatus;
   trialEndsAt: Date | null;
   subscriptionEndsAt: Date | null;
+  gracePeriodEndsAt?: Date | null;
 };
 
 /** Prisma select для проверок витрины / каталога / checkout. */
@@ -22,11 +23,25 @@ export const businessSubscriptionGateSelect = {
   subscriptionStatus: true,
   trialEndsAt: true,
   subscriptionEndsAt: true,
+  gracePeriodEndsAt: true,
 } as const;
 
+export function isInSubscriptionGracePeriod(
+  b: Pick<
+    SubscriptionGateFields,
+    "subscriptionEndsAt" | "gracePeriodEndsAt"
+  >,
+  now = new Date(),
+): boolean {
+  if (b.gracePeriodEndsAt == null) return false;
+  const t = now.getTime();
+  if (b.gracePeriodEndsAt.getTime() < t) return false;
+  if (b.subscriptionEndsAt == null) return false;
+  return b.subscriptionEndsAt.getTime() <= t;
+}
+
 /**
- * Есть действующее оплатное окно или действующий trial (без учёта флагов isActive / isBlocked).
- * TRIALING: если задан истёкший subscriptionEndsAt — доступа нет (согласовано с автодеактивацией cron).
+ * Есть действующее оплатное окно или действующий trial (без grace).
  */
 export function hasValidPaidOrTrialWindow(
   b: Pick<
@@ -51,9 +66,22 @@ export function hasValidPaidOrTrialWindow(
       }
       return b.trialEndsAt != null && b.trialEndsAt.getTime() >= t;
     }
+    case SubscriptionStatus.PAST_DUE:
+      return (
+        b.subscriptionEndsAt != null && b.subscriptionEndsAt.getTime() >= t
+      );
     default:
       return false;
   }
+}
+
+/** Магазин в оплаченном окне или grace period (витрина, заказы, история). */
+export function hasCustomerAccessWindow(
+  b: SubscriptionGateFields,
+  now = new Date(),
+): boolean {
+  if (hasValidPaidOrTrialWindow(b, now)) return true;
+  return isInSubscriptionGracePeriod(b, now);
 }
 
 /**
@@ -73,29 +101,40 @@ export function customerOrdersRejectionReason(
 ): string | null {
   if (b == null) return API_ERR_BUSINESS_NOT_FOUND;
   if (b.isBlocked || !b.isActive) return API_ERR_STORE_UNAVAILABLE;
-  if (!hasValidPaidOrTrialWindow(b, now)) {
+  if (!hasCustomerAccessWindow(b, now)) {
     return API_ERR_STORE_SUBSCRIPTION_EXPIRED;
   }
   return null;
 }
 
-/** Магазин может работать для клиентов: не заблокирован, витрина включена, есть оплата/trial по срокам. */
+/** Магазин может работать для клиентов: не заблокирован, витрина включена, есть оплата/trial/grace. */
 export function isSubscriptionActive(
   b: SubscriptionGateFields,
   now = new Date(),
 ): boolean {
   if (b.isBlocked) return false;
   if (!b.isActive) return false;
-  return hasValidPaidOrTrialWindow(b, now);
+  return hasCustomerAccessWindow(b, now);
 }
 
-/** Право менять настройки платформы / включать бота после оплаты: не блок + есть окно подписки/trial. */
+/**
+ * Premium-функции платформы (настройки, Finik, bot token) — только paid/trial, не grace.
+ */
 export function merchantStoreEntitled(
   b: SubscriptionGateFields,
   now = new Date(),
 ): boolean {
   if (b.isBlocked) return false;
   return hasValidPaidOrTrialWindow(b, now);
+}
+
+/** Витрина открыта для покупателей (включая grace). */
+export function merchantStorefrontEntitled(
+  b: SubscriptionGateFields,
+  now = new Date(),
+): boolean {
+  if (b.isBlocked) return false;
+  return hasCustomerAccessWindow(b, now);
 }
 
 /**

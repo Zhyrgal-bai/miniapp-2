@@ -6,11 +6,13 @@ import {
   verifyFinikWebhookSignature,
 } from "./finikMerchant.js";
 import {
-  extendBusinessSubscriptionAfterFinikPayment,
-  saasFinikSubscriptionPlanSpec,
+  extendBusinessSubscription,
+  type ExtendBusinessSubscriptionSource,
 } from "./saasBillingService.js";
 import {
+  hasCustomerAccessWindow,
   hasValidPaidOrTrialWindow,
+  isInSubscriptionGracePeriod,
   type SubscriptionGateFields,
 } from "./subscriptionAccess.js";
 import { platformMerchantIsStoreOwner } from "./platformMerchantAccess.js";
@@ -21,27 +23,44 @@ import {
 } from "../shared/platformFinik.js";
 import { FINIK_LEGACY_HTTP_UNAVAILABLE_ERROR } from "../shared/finikReady.js";
 import {
-  SAAS_SUBSCRIPTION_PLANS,
-  type SaasSubscriptionPlanDays,
-} from "../shared/saasSubscriptionPricing.js";
+  ARCHA_SUBSCRIPTION_PLANS,
+  legacyPlanDaysToCode,
+  approximateAccessDays,
+  parseArchaSubscriptionPlanCode,
+  planCodeLabel,
+  planSpecForCode,
+  subscriptionEndAfterPlan,
+  type ArchaSubscriptionPlanCode,
+} from "../shared/archaSubscriptionPlans.js";
 
-export type MerchantSubscriptionUiStatus = "ACTIVE" | "TRIAL" | "EXPIRED";
+export type MerchantSubscriptionUiStatus =
+  | "ACTIVE"
+  | "TRIAL"
+  | "GRACE"
+  | "EXPIRED"
+  | "EXPIRING";
 
 export type MerchantSubscriptionPanelPayload = {
   businessId: number;
   displayStatus: MerchantSubscriptionUiStatus;
   displayStatusLabel: string;
   subscriptionStatus: string;
+  subscriptionPlanCode: string | null;
+  subscriptionPlanLabel: string;
   trialEndsAt: string | null;
   subscriptionEndsAt: string | null;
+  gracePeriodEndsAt: string | null;
   daysLeft: number | null;
+  countdownMs: number | null;
+  inGracePeriod: boolean;
+  autoRenewEnabled: boolean;
   storeOpenForCustomers: boolean;
   isBlocked: boolean;
   isActive: boolean;
   platformFinikReady: boolean;
   canPay: boolean;
   isOwner: boolean;
-  plans: typeof SAAS_SUBSCRIPTION_PLANS;
+  plans: typeof ARCHA_SUBSCRIPTION_PLANS;
 };
 
 const MS_DAY = 24 * 60 * 60 * 1000;
@@ -53,8 +72,7 @@ function calendarDaysAhead(end: Date, now: Date): number | null {
     end.getDate(),
   );
   const utcEarlier = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
-  const d = Math.round((utcLater - utcEarlier) / MS_DAY);
-  return d;
+  return Math.round((utcLater - utcEarlier) / MS_DAY);
 }
 
 export function resolveMerchantSubscriptionUiStatus(
@@ -63,6 +81,9 @@ export function resolveMerchantSubscriptionUiStatus(
 ): MerchantSubscriptionUiStatus {
   if (b.isBlocked) {
     return "EXPIRED";
+  }
+  if (isInSubscriptionGracePeriod(b, now)) {
+    return "GRACE";
   }
   const t = now.getTime();
   const trialOk =
@@ -78,6 +99,8 @@ export function resolveMerchantSubscriptionUiStatus(
     b.subscriptionEndsAt != null &&
     b.subscriptionEndsAt.getTime() >= t;
   if (paidOk) {
+    const days = calendarDaysAhead(b.subscriptionEndsAt!, now);
+    if (days != null && days <= 7) return "EXPIRING";
     return "ACTIVE";
   }
   if (hasValidPaidOrTrialWindow(b, now)) {
@@ -89,20 +112,26 @@ export function resolveMerchantSubscriptionUiStatus(
 }
 
 const STATUS_LABEL: Record<MerchantSubscriptionUiStatus, string> = {
-  ACTIVE: "ACTIVE",
-  TRIAL: "TRIAL",
-  EXPIRED: "EXPIRED",
+  ACTIVE: "Активна",
+  TRIAL: "Пробный период",
+  GRACE: "Grace period",
+  EXPIRING: "Истекает",
+  EXPIRED: "Просрочена",
 };
 
-function primaryEndIso(b: {
+function primaryEndDate(b: {
   subscriptionStatus: SubscriptionStatus;
   trialEndsAt: Date | null;
   subscriptionEndsAt: Date | null;
-}): string | null {
-  if (b.subscriptionStatus === SubscriptionStatus.TRIALING && b.trialEndsAt) {
-    return b.trialEndsAt.toISOString();
+  gracePeriodEndsAt: Date | null;
+}): Date | null {
+  if (isInSubscriptionGracePeriod(b, new Date()) && b.gracePeriodEndsAt) {
+    return b.gracePeriodEndsAt;
   }
-  return b.subscriptionEndsAt?.toISOString() ?? null;
+  if (b.subscriptionStatus === SubscriptionStatus.TRIALING && b.trialEndsAt) {
+    return b.trialEndsAt;
+  }
+  return b.subscriptionEndsAt;
 }
 
 export async function buildMerchantSubscriptionPanel(input: {
@@ -138,8 +167,11 @@ export async function buildMerchantSubscriptionPanel(input: {
       isBlocked: true,
       isActive: true,
       subscriptionStatus: true,
+      subscriptionPlanCode: true,
       trialEndsAt: true,
       subscriptionEndsAt: true,
+      gracePeriodEndsAt: true,
+      autoRenewEnabled: true,
     },
   });
   if (b == null) {
@@ -148,18 +180,17 @@ export async function buildMerchantSubscriptionPanel(input: {
 
   const now = new Date();
   const displayStatus = resolveMerchantSubscriptionUiStatus(b, now);
-  const endIso = primaryEndIso(b);
+  const endDate = primaryEndDate(b);
   let daysLeft: number | null = null;
-  if (endIso != null) {
-    const end = new Date(endIso);
-    if (!Number.isNaN(end.getTime())) {
-      daysLeft = calendarDaysAhead(end, now);
-    }
+  let countdownMs: number | null = null;
+  if (endDate != null) {
+    countdownMs = Math.max(0, endDate.getTime() - now.getTime());
+    daysLeft = calendarDaysAhead(endDate, now);
   }
 
-  const entitled = hasValidPaidOrTrialWindow(b, now);
-  const storeOpenForCustomers =
-    !b.isBlocked && b.isActive && entitled;
+  const inGrace = isInSubscriptionGracePeriod(b, now);
+  const entitled = hasCustomerAccessWindow(b, now);
+  const storeOpenForCustomers = !b.isBlocked && b.isActive && entitled;
 
   return {
     ok: true,
@@ -168,9 +199,15 @@ export async function buildMerchantSubscriptionPanel(input: {
       displayStatus,
       displayStatusLabel: STATUS_LABEL[displayStatus],
       subscriptionStatus: String(b.subscriptionStatus),
+      subscriptionPlanCode: b.subscriptionPlanCode,
+      subscriptionPlanLabel: planCodeLabel(b.subscriptionPlanCode),
       trialEndsAt: b.trialEndsAt?.toISOString() ?? null,
       subscriptionEndsAt: b.subscriptionEndsAt?.toISOString() ?? null,
+      gracePeriodEndsAt: b.gracePeriodEndsAt?.toISOString() ?? null,
       daysLeft,
+      countdownMs,
+      inGracePeriod: inGrace,
+      autoRenewEnabled: b.autoRenewEnabled,
       storeOpenForCustomers,
       isBlocked: b.isBlocked,
       isActive: b.isActive,
@@ -181,7 +218,7 @@ export async function buildMerchantSubscriptionPanel(input: {
         isPlatformFinikLegacyHttpReady() &&
         !b.isBlocked,
       isOwner,
-      plans: SAAS_SUBSCRIPTION_PLANS,
+      plans: ARCHA_SUBSCRIPTION_PLANS,
     },
   };
 }
@@ -191,23 +228,66 @@ export type CreatePlatformSubscriptionPaymentResult =
       ok: true;
       paymentUrl: string;
       subscriptionPaymentId: number;
-      planDays: SaasSubscriptionPlanDays;
+      planCode: ArchaSubscriptionPlanCode;
+      planDays: number;
+      accessDaysGranted: number;
       amountSom: number;
     }
   | { ok: false; statusCode: number; error: string };
 
+function resolvePlanCode(input: {
+  planCode?: unknown;
+  plan?: unknown;
+}): ArchaSubscriptionPlanCode | null {
+  const fromCode = parseArchaSubscriptionPlanCode(input.planCode);
+  if (fromCode != null) return fromCode;
+  const n =
+    typeof input.plan === "number" && Number.isFinite(input.plan)
+      ? Math.trunc(input.plan)
+      : typeof input.plan === "string"
+        ? Number(input.plan.trim())
+        : NaN;
+  if (n === 30 || n === 90) return legacyPlanDaysToCode(n);
+  return null;
+}
+
+export async function findPendingSubscriptionFinikPayment(
+  businessId: number,
+): Promise<{ id: number; source: string; finikPaymentId: string | null } | null> {
+  return prisma.subscriptionFinikPayment.findFirst({
+    where: { businessId, status: "pending" },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, source: true, finikPaymentId: true },
+  });
+}
+
 export async function createPlatformSubscriptionPaymentSession(input: {
   telegramId: string;
   businessId: number;
-  plan: SaasSubscriptionPlanDays;
+  planCode?: ArchaSubscriptionPlanCode;
+  plan?: 30 | 90;
+  source?: ExtendBusinessSubscriptionSource;
 }): Promise<CreatePlatformSubscriptionPaymentResult> {
-  const { telegramId, businessId, plan } = input;
+  const { telegramId, businessId } = input;
+  const planCode =
+    input.planCode ??
+    (input.plan != null ? legacyPlanDaysToCode(input.plan) : null) ??
+    resolvePlanCode(input);
+
+  if (planCode == null) {
+    return {
+      ok: false,
+      statusCode: 400,
+      error: "Укажите planCode: MONTHLY, HALF_YEAR или YEARLY",
+    };
+  }
+
   if (!Number.isInteger(businessId) || businessId <= 0) {
     return { ok: false, statusCode: 400, error: "Нужен корректный businessId" };
   }
 
   const isOwner = await platformMerchantIsStoreOwner(telegramId, businessId);
-  if (!isOwner) {
+  if (!isOwner && input.source !== "auto_renew") {
     return {
       ok: false,
       statusCode: 403,
@@ -247,14 +327,31 @@ export async function createPlatformSubscriptionPaymentSession(input: {
     };
   }
 
-  const spec = saasFinikSubscriptionPlanSpec(plan);
+  const pending = await findPendingSubscriptionFinikPayment(businessId);
+  if (pending != null) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error:
+        "Уже есть неоплаченный счёт. Оплатите его или дождитесь отмены, прежде чем создавать новый.",
+    };
+  }
+
+  const spec = planSpecForCode(planCode);
+  const paymentSource = input.source ?? "finik";
+  const baseForMeta = new Date();
+  const endForMeta = subscriptionEndAfterPlan(baseForMeta, spec.planCode);
+  const accessDaysMeta = approximateAccessDays(baseForMeta, endForMeta);
 
   const row = await prisma.subscriptionFinikPayment.create({
     data: {
       businessId,
-      planDays: spec.days,
+      planDays: accessDaysMeta,
+      planCode: spec.planCode,
+      accessDaysGranted: accessDaysMeta,
       amountSom: spec.amountSom,
       payerTelegramId: telegramId,
+      source: paymentSource === "auto_renew" ? "auto_renew" : "manual",
       status: "pending",
     },
   });
@@ -281,9 +378,177 @@ export async function createPlatformSubscriptionPaymentSession(input: {
     ok: true,
     paymentUrl: finik.paymentUrl,
     subscriptionPaymentId: row.id,
-    planDays: spec.days as SaasSubscriptionPlanDays,
+    planCode: spec.planCode,
+    planDays: accessDaysMeta,
+    accessDaysGranted: accessDaysMeta,
     amountSom: spec.amountSom,
   };
+}
+
+export type SubscriptionHistoryEntry = {
+  id: string;
+  entryType: "finik_payment" | "operator_extension";
+  createdAt: string;
+  amountSom: number | null;
+  planCode: string | null;
+  planLabel: string;
+  status: string;
+  externalId: string | null;
+  source: string;
+};
+
+function operatorExtensionLabel(
+  daysAdded: number | null,
+  note: string | null,
+): string {
+  if (note != null && note.trim() !== "") return note.trim();
+  if (daysAdded != null) return `Оператор +${daysAdded} дн.`;
+  return "Продление оператором";
+}
+
+export async function listSubscriptionHistoryForMerchant(input: {
+  telegramId: string;
+  businessId: number;
+}): Promise<
+  | { ok: true; entries: SubscriptionHistoryEntry[] }
+  | { ok: false; statusCode: number; error: string }
+> {
+  const isOwner = await platformMerchantIsStoreOwner(
+    input.telegramId,
+    input.businessId,
+  );
+  const staff = await prisma.businessStaff.findFirst({
+    where: {
+      businessId: input.businessId,
+      user: { telegramId: input.telegramId.trim() },
+    },
+    select: { id: true },
+  });
+  if (!isOwner && staff == null) {
+    return { ok: false, statusCode: 403, error: "Нет доступа" };
+  }
+
+  const [finikRows, manualRows] = await Promise.all([
+    prisma.subscriptionFinikPayment.findMany({
+      where: { businessId: input.businessId },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      select: {
+        id: true,
+        createdAt: true,
+        amountSom: true,
+        planCode: true,
+        status: true,
+        finikPaymentId: true,
+        source: true,
+      },
+    }),
+    prisma.subscriptionManualExtension.findMany({
+      where: { businessId: input.businessId },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      select: {
+        id: true,
+        createdAt: true,
+        daysAdded: true,
+        note: true,
+        operatorTelegramId: true,
+      },
+    }),
+  ]);
+
+  const finikEntries: SubscriptionHistoryEntry[] = finikRows.map((r) => ({
+    id: `finik:${r.id}`,
+    entryType: "finik_payment",
+    createdAt: r.createdAt.toISOString(),
+    amountSom: r.amountSom,
+    planCode: r.planCode,
+    planLabel: planCodeLabel(r.planCode),
+    status: r.status,
+    externalId: r.finikPaymentId,
+    source: r.source,
+  }));
+
+  const operatorEntries: SubscriptionHistoryEntry[] = manualRows.map((r) => ({
+    id: `operator:${r.id}`,
+    entryType: "operator_extension",
+    createdAt: r.createdAt.toISOString(),
+    amountSom: null,
+    planCode: null,
+    planLabel: operatorExtensionLabel(r.daysAdded, r.note),
+    status: "applied",
+    externalId: String(r.id),
+    source: "operator",
+  }));
+
+  const entries = [...finikEntries, ...operatorEntries]
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    )
+    .slice(0, 50);
+
+  return { ok: true, entries };
+}
+
+/** @deprecated Используйте listSubscriptionHistoryForMerchant. */
+export async function listSubscriptionPaymentsForMerchant(input: {
+  telegramId: string;
+  businessId: number;
+}): Promise<
+  | {
+      ok: true;
+      payments: Array<{
+        id: number;
+        createdAt: string;
+        amountSom: number;
+        planCode: string | null;
+        planLabel: string;
+        status: string;
+        finikPaymentId: string | null;
+        source: string;
+        accessDaysGranted: number | null;
+      }>;
+    }
+  | { ok: false; statusCode: number; error: string }
+> {
+  const hist = await listSubscriptionHistoryForMerchant(input);
+  if (!hist.ok) return hist;
+  return {
+    ok: true,
+    payments: hist.entries
+      .filter((e) => e.entryType === "finik_payment")
+      .map((e) => ({
+        id: Number(e.id.replace("finik:", "")),
+        createdAt: e.createdAt,
+        amountSom: e.amountSom ?? 0,
+        planCode: e.planCode,
+        planLabel: e.planLabel,
+        status: e.status,
+        finikPaymentId: e.externalId,
+        source: e.source,
+        accessDaysGranted: null,
+      })),
+  };
+}
+
+export async function setMerchantAutoRenew(input: {
+  telegramId: string;
+  businessId: number;
+  enabled: boolean;
+}): Promise<{ ok: true; autoRenewEnabled: boolean } | { ok: false; statusCode: number; error: string }> {
+  const isOwner = await platformMerchantIsStoreOwner(
+    input.telegramId,
+    input.businessId,
+  );
+  if (!isOwner) {
+    return { ok: false, statusCode: 403, error: "Только владелец может менять автопродление" };
+  }
+  await prisma.business.update({
+    where: { id: input.businessId },
+    data: { autoRenewEnabled: input.enabled },
+  });
+  return { ok: true, autoRenewEnabled: input.enabled };
 }
 
 export async function applyPlatformSubscriptionFinikWebhook(
@@ -352,6 +617,10 @@ export async function applyPlatformSubscriptionFinikWebhook(
     return { ok: true, duplicate: true };
   }
 
+  const planCode = parseArchaSubscriptionPlanCode(subRow.planCode);
+  const source: ExtendBusinessSubscriptionSource =
+    subRow.source === "auto_renew" ? "auto_renew" : "finik";
+
   const outcome = await prisma.$transaction(async (tx) => {
     const claimed = await tx.subscriptionFinikPayment.updateMany({
       where: { id: subRow!.id, status: "pending" },
@@ -361,12 +630,17 @@ export async function applyPlatformSubscriptionFinikWebhook(
       return { kind: "duplicate" as const };
     }
 
-    const ext = await extendBusinessSubscriptionAfterFinikPayment(
-      subRow!.businessId,
-      subRow!.planDays,
-      new Date(),
+    const ext = await extendBusinessSubscription({
+      businessId: subRow!.businessId,
+      ...(planCode != null
+        ? { planCode }
+        : {
+            operatorDaysGranted:
+              subRow!.accessDaysGranted ?? subRow!.planDays,
+          }),
+      source,
       tx,
-    );
+    });
     return { kind: "applied" as const, ext };
   });
 
@@ -455,7 +729,7 @@ async function sendOwnerPaymentSuccessNotice(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chat_id: chatId,
-          text: "✅ Оплата подписки прошла успешно. Магазин снова открыт для покупателей.",
+          text: "✅ Оплата подписки ARCHA прошла успешно. Магазин снова открыт для покупателей.",
         }),
       },
     );

@@ -3,13 +3,17 @@ import { plainBotTokenFromStored } from "./businessBotToken.js";
 import { prisma } from "./db.js";
 import { verifyFinikWebhookSignature } from "./finikMerchant.js";
 import {
-  extendBusinessSubscriptionAfterFinikPayment,
+  extendBusinessSubscription,
 } from "./saasBillingService.js";
 import {
   applyPlatformSubscriptionFinikWebhook,
   createPlatformSubscriptionPaymentSession,
   type CreatePlatformSubscriptionPaymentResult,
 } from "./platformSubscriptionBilling.js";
+import {
+  legacyPlanDaysToCode,
+  parseArchaSubscriptionPlanCode,
+} from "../shared/archaSubscriptionPlans.js";
 
 function telegramIdFromTrustedHeader(req: Request): string | null {
   const rawXi = req.headers["x-telegram-id"];
@@ -30,6 +34,20 @@ export function parseSubscriptionPlanDays(raw: unknown): 30 | 90 | null {
         ? Number(raw.trim())
         : NaN;
   if (n === 30 || n === 90) return n;
+  return null;
+}
+
+export function parseSubscriptionPlanInput(body: {
+  plan?: unknown;
+  planCode?: unknown;
+}):
+  | { plan: 30 | 90; planCode?: undefined }
+  | { planCode: "MONTHLY" | "HALF_YEAR" | "YEARLY"; plan?: undefined }
+  | null {
+  const planCode = parseArchaSubscriptionPlanCode(body.planCode);
+  if (planCode != null) return { planCode };
+  const plan = parseSubscriptionPlanDays(body.plan);
+  if (plan != null) return { plan };
   return null;
 }
 
@@ -112,7 +130,8 @@ export type CreateSubscriptionFinikSessionResult =
 export async function createSubscriptionFinikPaymentSession(input: {
   telegramId: string;
   businessId: number;
-  plan: 30 | 90;
+  plan?: 30 | 90;
+  planCode?: "MONTHLY" | "HALF_YEAR" | "YEARLY";
 }): Promise<CreateSubscriptionFinikSessionResult> {
   return createPlatformSubscriptionPaymentSession(input);
 }
@@ -199,12 +218,17 @@ async function handleLegacyMerchantSubscriptionWebhook(
       return { kind: "duplicate" as const };
     }
 
-    const ext = await extendBusinessSubscriptionAfterFinikPayment(
-      subRow!.businessId,
-      subRow!.planDays,
-      new Date(),
+    const ext = await extendBusinessSubscription({
+      businessId: subRow!.businessId,
+      ...(parseArchaSubscriptionPlanCode(subRow!.planCode) != null
+        ? { planCode: parseArchaSubscriptionPlanCode(subRow!.planCode)! }
+        : {
+            operatorDaysGranted:
+              subRow!.accessDaysGranted ?? subRow!.planDays,
+          }),
+      source: "finik",
       tx,
-    );
+    });
     return { kind: "applied" as const, ext };
   });
 
@@ -254,7 +278,7 @@ export function mountSubscriptionFinikPaymentRoutes(app: Express): void {
         return;
       }
 
-      const body = req.body as { businessId?: unknown; plan?: unknown };
+      const body = req.body as { businessId?: unknown; plan?: unknown; planCode?: unknown };
       const rawBid = body.businessId;
       const businessId =
         typeof rawBid === "number" && Number.isInteger(rawBid)
@@ -267,17 +291,28 @@ export function mountSubscriptionFinikPaymentRoutes(app: Express): void {
         return;
       }
 
-      const plan = parseSubscriptionPlanDays(body.plan);
-      if (plan == null) {
-        res.status(400).json({ error: "Параметр plan: 30 или 90 (дней)" });
+      const planInput = parseSubscriptionPlanInput(body);
+      if (planInput == null) {
+        res.status(400).json({
+          error: "Параметр planCode: MONTHLY, HALF_YEAR, YEARLY или plan: 30 | 90",
+        });
         return;
       }
 
-      const out = await createSubscriptionFinikPaymentSession({
-        telegramId,
-        businessId,
-        plan,
-      });
+      let out;
+      if ("planCode" in planInput && planInput.planCode != null) {
+        out = await createSubscriptionFinikPaymentSession({
+          telegramId,
+          businessId,
+          planCode: planInput.planCode,
+        });
+      } else {
+        out = await createSubscriptionFinikPaymentSession({
+          telegramId,
+          businessId,
+          plan: planInput.plan,
+        });
+      }
       if (!out.ok) {
         res.status(out.statusCode).json({ error: out.error });
         return;
@@ -285,7 +320,9 @@ export function mountSubscriptionFinikPaymentRoutes(app: Express): void {
       res.json({
         paymentUrl: out.paymentUrl,
         subscriptionPaymentId: out.subscriptionPaymentId,
+        planCode: out.planCode,
         planDays: out.planDays,
+        accessDaysGranted: out.accessDaysGranted,
         amountSom: out.amountSom,
       });
     } catch (e) {

@@ -4,6 +4,8 @@ import {
   canAcceptCustomerOrders,
   customerOrdersRejectionReason,
   hasValidPaidOrTrialWindow,
+  isInSubscriptionGracePeriod,
+  merchantStoreEntitled,
 } from "../../src/server/subscriptionAccess.js";
 import { API_ERR_STORE_SUBSCRIPTION_EXPIRED } from "../../src/shared/apiClientMessages.js";
 
@@ -85,5 +87,46 @@ describe("canAcceptCustomerOrders", () => {
         subscriptionEndsAt: future,
       }),
     ).toBe(false);
+  });
+
+  it("allows orders during grace period after subscription end", () => {
+    const subPast = new Date(Date.now() - 86400000);
+    const graceEnd = new Date(Date.now() + 5 * 86400000);
+    expect(
+      isInSubscriptionGracePeriod(
+        { subscriptionEndsAt: subPast, gracePeriodEndsAt: graceEnd },
+        new Date(),
+      ),
+    ).toBe(true);
+    expect(
+      canAcceptCustomerOrders({
+        isBlocked: false,
+        isActive: true,
+        subscriptionStatus: SubscriptionStatus.PAST_DUE,
+        trialEndsAt: null,
+        subscriptionEndsAt: subPast,
+        gracePeriodEndsAt: graceEnd,
+      }),
+    ).toBe(true);
+    expect(hasValidPaidOrTrialWindow({
+      subscriptionStatus: SubscriptionStatus.PAST_DUE,
+      trialEndsAt: null,
+      subscriptionEndsAt: subPast,
+    })).toBe(false);
+  });
+
+  it("blocks premium settings during grace but allows storefront orders", () => {
+    const subPast = new Date(Date.now() - 86400000);
+    const graceEnd = new Date(Date.now() + 5 * 86400000);
+    const gate = {
+      isBlocked: false,
+      isActive: true,
+      subscriptionStatus: SubscriptionStatus.PAST_DUE,
+      trialEndsAt: null,
+      subscriptionEndsAt: subPast,
+      gracePeriodEndsAt: graceEnd,
+    };
+    expect(canAcceptCustomerOrders(gate)).toBe(true);
+    expect(merchantStoreEntitled(gate)).toBe(false);
   });
 });

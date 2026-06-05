@@ -1,9 +1,19 @@
 import { BusinessStaffRole, SubscriptionStatus } from "@prisma/client";
 import { plainBotTokenFromStored } from "./businessBotToken.js";
 import { prisma } from "./db.js";
-import { hasValidPaidOrTrialWindow } from "./subscriptionAccess.js";
+import {
+  hasValidPaidOrTrialWindow,
+  isInSubscriptionGracePeriod,
+} from "./subscriptionAccess.js";
+import {
+  ARCHA_AUTO_RENEW_INVOICE_DAYS_BEFORE,
+  ARCHA_SUBSCRIPTION_GRACE_DAYS,
+} from "../shared/archaSubscriptionPlans.js";
+import {
+  createPlatformSubscriptionPaymentSession,
+  findPendingSubscriptionFinikPayment,
+} from "./platformSubscriptionBilling.js";
 
-/** Calendar-day difference: `later` vs `earlier`. */
 function differenceInCalendarDays(later: Date, earlier: Date): number {
   const utcLater = Date.UTC(
     later.getFullYear(),
@@ -18,9 +28,6 @@ function differenceInCalendarDays(later: Date, earlier: Date): number {
   return Math.round((utcLater - utcEarlier) / 86400000);
 }
 
-/**
- * No valid paid window and no valid trial window → fully expired (auto-deactivate).
- */
 export function isSubscriptionFullyExpired(
   b: { trialEndsAt: Date | null; subscriptionEndsAt: Date | null },
   now: Date,
@@ -41,14 +48,15 @@ export function isSubscriptionFullyExpired(
   return true;
 }
 
-/**
- * Отключить магазин: истёк оплаченный период или нет действующего trial/оплаты.
- * (Подписка по `subscriptionEndsAt` может истечь при ещё действующем trial — всё равно отключаем по ТЗ.)
- */
 export function shouldDeactivateStoreForSubscription(
-  b: { trialEndsAt: Date | null; subscriptionEndsAt: Date | null },
+  b: {
+    trialEndsAt: Date | null;
+    subscriptionEndsAt: Date | null;
+    gracePeriodEndsAt?: Date | null;
+  },
   now: Date,
 ): boolean {
+  if (isInSubscriptionGracePeriod(b, now)) return false;
   const subscriptionPast =
     b.subscriptionEndsAt != null &&
     b.subscriptionEndsAt.getTime() < now.getTime();
@@ -61,7 +69,6 @@ function daysLeftUntil(end: Date | null, now: Date): number | null {
   return differenceInCalendarDays(end, now);
 }
 
-/** Только владелец магазина (без fallback на ADMIN). */
 async function findBusinessOwnerTelegramId(
   businessId: number,
 ): Promise<string | null> {
@@ -80,6 +87,7 @@ async function sendTelegramToUser(
   botToken: string,
   telegramUserId: string,
   text: string,
+  extra?: { reply_markup?: unknown },
 ): Promise<boolean> {
   const chatId = Number(telegramUserId);
   if (!Number.isFinite(chatId) || chatId <= 0) return false;
@@ -89,7 +97,11 @@ async function sendTelegramToUser(
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, text }),
+        body: JSON.stringify({
+          chat_id: chatId,
+          text,
+          ...(extra ?? {}),
+        }),
       },
     );
     const json = (await res.json().catch(() => ({}))) as { ok?: boolean };
@@ -108,9 +120,81 @@ async function sendTelegramToUser(
   }
 }
 
+function renewInlineKeyboard(paymentUrl: string) {
+  return {
+    inline_keyboard: [[{ text: "Продлить", url: paymentUrl }]],
+  };
+}
+
+async function tryAutoRenewInvoice(
+  b: {
+    id: number;
+    subscriptionEndsAt: Date | null;
+    subscriptionPlanCode: string | null;
+    autoRenewEnabled: boolean;
+    lastAutoRenewAttemptAt: Date | null;
+  },
+  subLeft: number | null,
+  ownerTg: string | null,
+  plainTok: string,
+  now: Date,
+): Promise<void> {
+  if (!b.autoRenewEnabled || ownerTg == null || subLeft == null) return;
+  if (subLeft !== ARCHA_AUTO_RENEW_INVOICE_DAYS_BEFORE) return;
+  if (b.subscriptionEndsAt == null) return;
+
+  const pending = await findPendingSubscriptionFinikPayment(b.id);
+  if (pending != null) {
+    return;
+  }
+
+  const dayStart = new Date(now);
+  dayStart.setHours(0, 0, 0, 0);
+  if (
+    b.lastAutoRenewAttemptAt != null &&
+    b.lastAutoRenewAttemptAt.getTime() >= dayStart.getTime()
+  ) {
+    return;
+  }
+
+  const planCode =
+    (b.subscriptionPlanCode?.trim().toUpperCase() as
+      | "MONTHLY"
+      | "HALF_YEAR"
+      | "YEARLY"
+      | undefined) ?? "MONTHLY";
+
+  const out = await createPlatformSubscriptionPaymentSession({
+    telegramId: ownerTg,
+    businessId: b.id,
+    planCode,
+    source: "auto_renew",
+  });
+
+  if (!out.ok) {
+    await sendTelegramToUser(
+      plainTok,
+      ownerTg,
+      "⚠️ Не удалось создать счёт автопродления ARCHA. Продлите подписку вручную в панели магазина.",
+    );
+    return;
+  }
+
+  await prisma.business.update({
+    where: { id: b.id },
+    data: { lastAutoRenewAttemptAt: now },
+  });
+
+  await sendTelegramToUser(
+    plainTok,
+    ownerTg,
+    `🔄 Автопродление ARCHA: счёт на оплату подписки.\n\nОплатите до окончания текущего периода, чтобы магазин работал без перерыва.`,
+    { reply_markup: renewInlineKeyboard(out.paymentUrl) },
+  );
+}
+
 /**
- * Ежедневный проход: напоминания за 3 и 1 день до `subscriptionEndsAt`, авто-отключение просроченных,
- * уведомление владельцу. `isBlocked` не трогаем; токен бота только для sendMessage.
+ * Ежедневный проход: напоминания, grace, auto-renew invoice, авто-отключение.
  */
 export async function runSubscriptionMaintenanceOnce(
   now = new Date(),
@@ -124,8 +208,14 @@ export async function runSubscriptionMaintenanceOnce(
       subscriptionStatus: true,
       trialEndsAt: true,
       subscriptionEndsAt: true,
+      gracePeriodEndsAt: true,
+      subscriptionPlanCode: true,
+      autoRenewEnabled: true,
+      lastReminder7DaysAt: true,
       lastReminder3DaysAt: true,
       lastReminder1DayAt: true,
+      lastReminderAfterExpiryAt: true,
+      lastAutoRenewAttemptAt: true,
     },
   });
 
@@ -135,80 +225,133 @@ export async function runSubscriptionMaintenanceOnce(
     try {
       const plainTok = plainBotTokenFromStored(b.botToken);
       const subEnd = b.subscriptionEndsAt;
+      const ownerTg = await findBusinessOwnerTelegramId(b.id);
 
       let subLeft: number | null = null;
-      if (b.isActive && subEnd != null && subEnd.getTime() > now.getTime()) {
+      if (subEnd != null && subEnd.getTime() > now.getTime()) {
         subLeft = daysLeftUntil(subEnd, now);
       }
 
       if (
         subEnd == null &&
-        (b.lastReminder3DaysAt != null || b.lastReminder1DayAt != null)
+        (b.lastReminder7DaysAt != null ||
+          b.lastReminder3DaysAt != null ||
+          b.lastReminder1DayAt != null)
       ) {
-        await prisma.business.update({
-          where: { id: b.id },
-          data: { lastReminder3DaysAt: null, lastReminder1DayAt: null },
-        });
-        b.lastReminder3DaysAt = null;
-        b.lastReminder1DayAt = null;
-      }
-
-      const clear3 =
-        subLeft != null && subLeft > 3 && b.lastReminder3DaysAt != null;
-      const clear1 =
-        subLeft != null && subLeft > 1 && b.lastReminder1DayAt != null;
-      if (clear3 || clear1) {
         await prisma.business.update({
           where: { id: b.id },
           data: {
-            ...(clear3 ? { lastReminder3DaysAt: null } : {}),
-            ...(clear1 ? { lastReminder1DayAt: null } : {}),
+            lastReminder7DaysAt: null,
+            lastReminder3DaysAt: null,
+            lastReminder1DayAt: null,
           },
         });
-        if (clear3) b.lastReminder3DaysAt = null;
-        if (clear1) b.lastReminder1DayAt = null;
       }
 
-      const ownerTg = await findBusinessOwnerTelegramId(b.id);
+      const clearReminders: Record<string, null> = {};
+      if (subLeft != null && subLeft > 7 && b.lastReminder7DaysAt != null) {
+        clearReminders.lastReminder7DaysAt = null;
+      }
+      if (subLeft != null && subLeft > 3 && b.lastReminder3DaysAt != null) {
+        clearReminders.lastReminder3DaysAt = null;
+      }
+      if (subLeft != null && subLeft > 1 && b.lastReminder1DayAt != null) {
+        clearReminders.lastReminder1DayAt = null;
+      }
+      if (Object.keys(clearReminders).length > 0) {
+        await prisma.business.update({
+          where: { id: b.id },
+          data: clearReminders,
+        });
+      }
+
+      if (b.isActive && subLeft != null && ownerTg) {
+        if (subLeft === 7 && b.lastReminder7DaysAt == null) {
+          const ok = await sendTelegramToUser(
+            plainTok,
+            ownerTg,
+            "⚠️ Подписка ARCHA заканчивается через 7 дней.\n\nПродлите магазин, чтобы избежать ограничений.",
+          );
+          if (ok) {
+            await prisma.business.update({
+              where: { id: b.id },
+              data: { lastReminder7DaysAt: now },
+            });
+          }
+        }
+        if (subLeft === 3 && b.lastReminder3DaysAt == null) {
+          const ok = await sendTelegramToUser(
+            plainTok,
+            ownerTg,
+            "⚠️ Подписка ARCHA заканчивается через 3 дня.\n\nПродлите магазин, чтобы избежать ограничений.",
+          );
+          if (ok) {
+            await prisma.business.update({
+              where: { id: b.id },
+              data: { lastReminder3DaysAt: now },
+            });
+          }
+        }
+        if (subLeft === 1 && b.lastReminder1DayAt == null) {
+          const ok = await sendTelegramToUser(
+            plainTok,
+            ownerTg,
+            "⚠️ Подписка ARCHA заканчивается завтра.\n\nПродлите магазин, чтобы избежать ограничений.",
+          );
+          if (ok) {
+            await prisma.business.update({
+              where: { id: b.id },
+              data: { lastReminder1DayAt: now },
+            });
+          }
+        }
+
+        await tryAutoRenewInvoice(
+          b,
+          subLeft,
+          ownerTg,
+          plainTok,
+          now,
+        );
+      }
+
+      const paidWindow =
+        subEnd != null && subEnd.getTime() > now.getTime();
+      const inGrace = isInSubscriptionGracePeriod(b, now);
 
       if (
         b.isActive &&
-        subLeft === 3 &&
-        b.lastReminder3DaysAt == null &&
-        ownerTg
+        !paidWindow &&
+        subEnd != null &&
+        subEnd.getTime() <= now.getTime() &&
+        !inGrace &&
+        b.gracePeriodEndsAt == null
       ) {
-        const ok = await sendTelegramToUser(
-          plainTok,
-          ownerTg,
-          "⚠️ Ваша подписка заканчивается через 3 дня",
+        const graceEnd = new Date(
+          subEnd.getTime() + ARCHA_SUBSCRIPTION_GRACE_DAYS * 86400000,
         );
-        if (ok) {
-          await prisma.business.update({
-            where: { id: b.id },
-            data: { lastReminder3DaysAt: now },
-          });
-          b.lastReminder3DaysAt = now;
+        await prisma.business.update({
+          where: { id: b.id },
+          data: {
+            subscriptionStatus: SubscriptionStatus.PAST_DUE,
+            gracePeriodEndsAt: graceEnd,
+            isActive: true,
+          },
+        });
+        if (ownerTg && b.lastReminderAfterExpiryAt == null) {
+          const ok = await sendTelegramToUser(
+            plainTok,
+            ownerTg,
+            `⛔ Подписка ARCHA закончилась.\n\nУ вас ${ARCHA_SUBSCRIPTION_GRACE_DAYS} дней grace period — заказы пока работают. Продлите подписку, чтобы не потерять доступ.`,
+          );
+          if (ok) {
+            await prisma.business.update({
+              where: { id: b.id },
+              data: { lastReminderAfterExpiryAt: now },
+            });
+          }
         }
-      }
-
-      if (
-        b.isActive &&
-        subLeft === 1 &&
-        b.lastReminder1DayAt == null &&
-        ownerTg
-      ) {
-        const ok = await sendTelegramToUser(
-          plainTok,
-          ownerTg,
-          "⚠️ Подписка закончится завтра",
-        );
-        if (ok) {
-          await prisma.business.update({
-            where: { id: b.id },
-            data: { lastReminder1DayAt: now },
-          });
-          b.lastReminder1DayAt = now;
-        }
+        continue;
       }
 
       const shouldDeactivate =
@@ -220,7 +363,8 @@ export async function runSubscriptionMaintenanceOnce(
             subscriptionEndsAt: b.subscriptionEndsAt,
           },
           now,
-        );
+        ) &&
+        !isInSubscriptionGracePeriod(b, now);
 
       if (shouldDeactivate) {
         await prisma.business.update({
@@ -228,17 +372,19 @@ export async function runSubscriptionMaintenanceOnce(
           data: {
             isActive: false,
             subscriptionStatus: SubscriptionStatus.EXPIRED,
+            gracePeriodEndsAt: null,
             lastReminder3DaysAt: null,
             lastReminder1DayAt: null,
+            lastReminder7DaysAt: null,
+            lastReminderAfterExpiryAt: null,
           },
         });
-        const tgId =
-          ownerTg ?? (await findBusinessOwnerTelegramId(b.id));
+        const tgId = ownerTg ?? (await findBusinessOwnerTelegramId(b.id));
         if (tgId) {
           await sendTelegramToUser(
             plainTok,
             tgId,
-            "⛔ Подписка истекла. Магазин временно отключён",
+            "⛔ Grace period закончился. Магазин временно отключён. Продлите подписку ARCHA в панели.",
           );
         }
         console.log("subscriptionMaintenance: deactivated business", b.id);
@@ -249,7 +395,6 @@ export async function runSubscriptionMaintenanceOnce(
   }
 }
 
-/** По умолчанию раз в час; переопределение: SUBSCRIPTION_CRON_MS (минимум 60 с). */
 const DEFAULT_INTERVAL_MS = 60 * 60 * 1000;
 
 export function startSubscriptionMaintenanceScheduler(): void {

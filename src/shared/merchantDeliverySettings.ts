@@ -113,7 +113,7 @@ export function parseMerchantDeliverySettings(
     return { ok: true, value: base };
   }
   if (typeof raw !== "object" || Array.isArray(raw)) {
-    return { ok: false, error: "deliverySettings: ожидается объект" };
+    return { ok: false, error: "Некорректные настройки доставки." };
   }
   const o = raw as Record<string, unknown>;
   const modeRaw = String(o.pricingMode ?? base.pricingMode).trim().toUpperCase();

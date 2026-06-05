@@ -25,17 +25,18 @@ describe("resolveMerchantSubscriptionUiStatus", () => {
     expect(s).toBe("TRIAL");
   });
 
-  it("returns ACTIVE when paid subscription end in future", () => {
+  it("returns EXPIRING when paid subscription ends within 7 days", () => {
     const s = resolveMerchantSubscriptionUiStatus(
       {
         isBlocked: false,
         subscriptionStatus: SubscriptionStatus.ACTIVE,
         trialEndsAt: null,
-        subscriptionEndsAt: new Date("2026-07-01T00:00:00.000Z"),
+        subscriptionEndsAt: new Date("2026-06-04T00:00:00.000Z"),
+        gracePeriodEndsAt: null,
       },
       now,
     );
-    expect(s).toBe("ACTIVE");
+    expect(s).toBe("EXPIRING");
   });
 
   it("returns EXPIRED when trial ended", () => {

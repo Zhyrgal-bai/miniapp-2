@@ -246,8 +246,7 @@ export async function updatePlatformStoreSettingsForMerchant(input: {
     return {
       ok: false,
       statusCode: 400,
-      error:
-        "Укажите storeName, адрес, deliverySettings, finikApiKey, finikAccountId, newBotToken и/или merchantConfig",
+      error: "Нет данных для сохранения. Измените название, адрес, доставку или другие настройки.",
     };
   }
 
@@ -375,7 +374,11 @@ export async function updatePlatformStoreSettingsForMerchant(input: {
     });
     const bt = (b as any)?.businessType;
     if (typeof bt !== "string" || bt.trim() === "") {
-      return { ok: false, statusCode: 400, error: "Магазин без businessType" };
+      return {
+        ok: false,
+        statusCode: 400,
+        error: "Не удалось сохранить настройки магазина. Обратитесь в поддержку.",
+      };
     }
     const v = validateMerchantConfig(bt as any, rawMerchantConfig);
     if (!v.ok) {
@@ -495,7 +498,7 @@ export async function savePlatformFinikForMerchant(input: {
     return {
       ok: false,
       statusCode: 400,
-      error: "Укажите finikApiKey, finikAccountId и/или finikSecret",
+      error: "Укажите API Key и Account ID Finik или очистите поля для отключения.",
     };
   }
 

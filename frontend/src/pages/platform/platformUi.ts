@@ -85,6 +85,21 @@ export function formatDaysRemaining(iso: string | null): string | null {
   return `${days} дн.`;
 }
 
+export function formatSubscriptionCountdown(ms: number | null): string | null {
+  if (ms == null || ms <= 0) return null;
+  const totalMin = Math.floor(ms / 60000);
+  const days = Math.floor(totalMin / (60 * 24));
+  const hours = Math.floor((totalMin - days * 60 * 24) / 60);
+  const minutes = totalMin % 60;
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days} ${days === 1 ? "день" : days < 5 ? "дня" : "дней"}`);
+  if (hours > 0) parts.push(`${hours} ${hours === 1 ? "час" : hours < 5 ? "часа" : "часов"}`);
+  if (minutes > 0 || parts.length === 0) {
+    parts.push(`${minutes} ${minutes === 1 ? "минута" : minutes < 5 ? "минуты" : "минут"}`);
+  }
+  return parts.join(" ");
+}
+
 export function botRunBadge(b: PlatformMyBusinessDTO): { label: string; className: string } {
   if (b.isBlocked) {
     return { label: "Заблокирован", className: "mp-v2-badge mp-v2-badge--blocked" };

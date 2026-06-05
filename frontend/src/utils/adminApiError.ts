@@ -5,6 +5,11 @@ export const TELEGRAM_SESSION_RU =
   "Сессия Telegram недоступна. Закройте Mini App и откройте снова из бота.";
 
 const GENERIC_FAIL = "Не удалось выполнить запрос.";
+const SETTINGS_SAVE_FAIL = "Не удалось сохранить настройки. Проверьте обязательные поля.";
+
+/** Internal API / schema field names — never show to merchants. */
+const TECHNICAL_FIELD_RE =
+  /\b(storeName|deliverySettings|finikApiKey|finikAccountId|finikSecret|newBotToken|merchantConfig|businessType|businessId|telegramId|initData)\b/i;
 
 /** Legacy English backend strings → RU (regression safety net). */
 const LEGACY_EN_TO_RU: Record<string, string> = {
@@ -25,15 +30,36 @@ const LEGACY_EN_TO_RU: Record<string, string> = {
   "invalid signature": "Неверная подпись",
 };
 
+function sanitizeTechnicalApiMessage(t: string): string | null {
+  if (/storeName,\s*адрес,\s*deliverySettings/i.test(t)) return SETTINGS_SAVE_FAIL;
+  if (/Укажите storeName/i.test(t)) return SETTINGS_SAVE_FAIL;
+  if (/finikApiKey,\s*finikAccountId/i.test(t)) {
+    return "Укажите API Key и Account ID Finik или очистите поля для отключения.";
+  }
+  if (/Укажите finikApiKey/i.test(t)) {
+    return "Укажите API Key и Account ID Finik или очистите поля для отключения.";
+  }
+  if (/^deliverySettings:/i.test(t)) return "Некорректные настройки доставки.";
+  if (/businessType/i.test(t)) return SETTINGS_SAVE_FAIL;
+  if (/Неизвестный тип поля:/i.test(t)) return "Проверьте дополнительные поля магазина.";
+  if (TECHNICAL_FIELD_RE.test(t)) return SETTINGS_SAVE_FAIL;
+  return null;
+}
+
 function sanitizeMerchantMessage(raw: string): string {
   const t = raw.trim();
   if (t === "") return "";
+  const technical = sanitizeTechnicalApiMessage(t);
+  if (technical != null) return technical;
   const legacy = LEGACY_EN_TO_RU[t.toLowerCase()];
   if (legacy) return legacy;
   if (/^server error$/i.test(t)) return "";
   if (/^request failed with status code \d+$/i.test(t)) return "";
   if (/^network error$/i.test(t)) return "";
   if (/^http \d{3}$/i.test(t)) return "";
+  if (/^\s*at\s+\S+/m.test(t) || /stack trace/i.test(t)) {
+    return GENERIC_FAIL;
+  }
   if (t.length > 320) return `${t.slice(0, 300)}…`;
   return t;
 }

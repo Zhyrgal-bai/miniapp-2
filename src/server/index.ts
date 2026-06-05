@@ -43,6 +43,8 @@ import {
   platformMerchantBotTokenBodySchema,
   platformRegisterRequestShape,
   platformSubscriptionPaymentBodySchema,
+  platformSubscriptionAutoRenewBodySchema,
+  platformAdminExtendBodySchema,
   platformToggleBotBodySchema,
 } from "./platformRouteBodySchemas.js";
 import {
@@ -60,6 +62,7 @@ import {
 import {
   approveRegistrationRequestById,
   extendBusinessSubscriptionAdmin,
+  listSubscriptionManualExtensionsAdmin,
   isPlatformAdminTelegramId,
   isPlatformOperatorTelegramId,
   listBusinessesForPlatformAdmin,
@@ -249,7 +252,12 @@ import {
   mountSubscriptionFinikPaymentRoutes,
   createSubscriptionFinikPaymentSession,
 } from "./subscriptionFinikPayments.js";
-import { buildMerchantSubscriptionPanel } from "./platformSubscriptionBilling.js";
+import {
+  buildMerchantSubscriptionPanel,
+  createPlatformSubscriptionPaymentSession,
+  listSubscriptionHistoryForMerchant,
+  setMerchantAutoRenew,
+} from "./platformSubscriptionBilling.js";
 import { relayDynamicStoreWebhook as relayDynamicTenantStoreWebhook } from "./storeTelegramWebhookRelay.js";
 import {
   isHexWebhookSlug,
@@ -941,11 +949,12 @@ app.post(
         res.status(400).json({ error: formatZodApiError(parsed.error) });
         return;
       }
-      const { businessId, plan } = parsed.data;
-      const out = await createSubscriptionFinikPaymentSession({
+      const { businessId, plan, planCode } = parsed.data;
+      const out = await createPlatformSubscriptionPaymentSession({
         telegramId,
         businessId,
-        plan,
+        ...(planCode != null ? { planCode } : {}),
+        ...(plan != null ? { plan } : {}),
       });
       if (!out.ok) {
         res.status(out.statusCode).json({ error: out.error });
@@ -954,11 +963,77 @@ app.post(
       res.json({
         paymentUrl: out.paymentUrl,
         subscriptionPaymentId: out.subscriptionPaymentId,
+        planCode: out.planCode,
         planDays: out.planDays,
+        accessDaysGranted: out.accessDaysGranted,
         amountSom: out.amountSom,
       });
     } catch (e) {
       console.error("POST /api/platform/subscription-payment/create:", e);
+      res.status(500).json({ error: "Ошибка сервера" });
+    }
+  },
+);
+
+app.get("/api/platform/subscription/payments", async (req: Request, res: Response) => {
+  try {
+    const telegramId = platformTelegramIdFromWebApp(req);
+    if (!telegramId) {
+      res.status(500).json({
+        error: "Внутренняя ошибка авторизации Mini App",
+      });
+      return;
+    }
+    const bid = Number((req.query as { businessId?: string }).businessId);
+    if (!Number.isInteger(bid) || bid <= 0) {
+      res.status(400).json({ error: "Нужен query businessId" });
+      return;
+    }
+    const out = await listSubscriptionHistoryForMerchant({
+      telegramId,
+      businessId: bid,
+    });
+    if (!out.ok) {
+      res.status(out.statusCode).json({ error: out.error });
+      return;
+    }
+    res.json({ entries: out.entries, payments: out.entries });
+  } catch (e) {
+    console.error("GET /api/platform/subscription/payments:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.patch(
+  "/api/platform/subscription/auto-renew",
+  strictLimiter,
+  requireNonEmptyJsonBody,
+  async (req: Request, res: Response) => {
+    try {
+      const telegramId = platformTelegramIdFromWebApp(req);
+      if (!telegramId) {
+        res.status(500).json({
+          error: "Внутренняя ошибка авторизации Mini App",
+        });
+        return;
+      }
+      const parsed = platformSubscriptionAutoRenewBodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: formatZodApiError(parsed.error) });
+        return;
+      }
+      const out = await setMerchantAutoRenew({
+        telegramId,
+        businessId: parsed.data.businessId,
+        enabled: parsed.data.enabled,
+      });
+      if (!out.ok) {
+        res.status(out.statusCode).json({ error: out.error });
+        return;
+      }
+      res.json({ ok: true, autoRenewEnabled: out.autoRenewEnabled });
+    } catch (e) {
+      console.error("PATCH /api/platform/subscription/auto-renew:", e);
       res.status(500).json({ error: "Ошибка сервера" });
     }
   },
@@ -1025,6 +1100,7 @@ app.post("/api/platform/store-settings", async (req: Request, res: Response) => 
       city: raw.city,
       latitude: raw.latitude,
       longitude: raw.longitude,
+      deliverySettings: raw.deliverySettings,
     };
     const out = await updatePlatformStoreSettingsForMerchant({
       telegramId,
@@ -2146,18 +2222,23 @@ app.post(
 
 app.post("/api/platform/admin/extend", async (req: Request, res: Response) => {
   try {
-    if (!(await requireOperatorRecentReauth(req, res))) return;
-    const body = req.body as { businessId?: unknown; days?: unknown };
-    const businessId = Number(body.businessId);
-    const daysRaw = Number(body.days);
-    const days = daysRaw === 30 || daysRaw === 90 ? daysRaw : null;
-    if (!Number.isInteger(businessId) || businessId <= 0 || days == null) {
-      res
-        .status(400)
-        .json({ error: "Нужны businessId и days: 30 или 90" });
+    const unlocked = await requireOperatorRecentReauth(req, res);
+    if (!unlocked) return;
+    const parsed = platformAdminExtendBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: formatZodApiError(parsed.error) });
       return;
     }
-    const out = await extendBusinessSubscriptionAdmin(businessId, days);
+    const extendToDate =
+      parsed.data.extendToDate != null
+        ? new Date(parsed.data.extendToDate)
+        : undefined;
+    const out = await extendBusinessSubscriptionAdmin({
+      businessId: parsed.data.businessId,
+      operatorTelegramId: unlocked.telegramId,
+      ...(parsed.data.days != null ? { days: parsed.data.days } : {}),
+      ...(extendToDate != null ? { extendToDate } : {}),
+    });
     if (!out.ok) {
       res.status(out.statusCode).json({ error: out.message });
       return;
@@ -2168,6 +2249,29 @@ app.post("/api/platform/admin/extend", async (req: Request, res: Response) => {
     res.status(500).json({ error: "Ошибка сервера" });
   }
 });
+
+app.get(
+  "/api/platform/admin/subscription-extensions",
+  async (req: Request, res: Response) => {
+    try {
+      if (!(await requireOperatorRecentReauth(req, res))) return;
+      const bid = Number((req.query as { businessId?: string }).businessId);
+      if (!Number.isInteger(bid) || bid <= 0) {
+        res.status(400).json({ error: "Нужен query businessId" });
+        return;
+      }
+      const out = await listSubscriptionManualExtensionsAdmin(bid);
+      if (!out.ok) {
+        res.status(out.statusCode).json({ error: out.message });
+        return;
+      }
+      res.json({ extensions: out.rows });
+    } catch (e) {
+      console.error("GET /api/platform/admin/subscription-extensions:", e);
+      res.status(500).json({ error: "Ошибка сервера" });
+    }
+  },
+);
 
 app.post("/api/platform/admin/purge-business", async (req: Request, res: Response) => {
   try {

@@ -21,6 +21,7 @@ import { isEncryptedTokenFormat } from "./botTokenCrypto.js";
 import { isPlatformOperator } from "./adminAuth.js";
 import { mapRowsWithWebhook } from "./platformMyBusinesses.js";
 import { provisionMerchantStoreInTx } from "./merchantProvision.js";
+import { extendBusinessSubscription } from "./saasBillingService.js";
 import {
   finikRegistrationComplete,
   finikRegistrationAdminLine,
@@ -490,15 +491,31 @@ export type ExtendBusinessOutcome =
   | { ok: true; subscriptionEndsAt: string }
   | { ok: false; statusCode: number; message: string };
 
-export async function extendBusinessSubscriptionAdmin(
-  businessId: number,
-  days: 30 | 90,
-): Promise<ExtendBusinessOutcome> {
+const OPERATOR_EXTEND_DAYS = [7, 30, 90, 365] as const;
+export type OperatorExtendDays = (typeof OPERATOR_EXTEND_DAYS)[number];
+
+export function parseOperatorExtendDays(raw: unknown): OperatorExtendDays | null {
+  const n =
+    typeof raw === "number" && Number.isFinite(raw)
+      ? Math.trunc(raw)
+      : typeof raw === "string"
+        ? Number(raw.trim())
+        : NaN;
+  return (OPERATOR_EXTEND_DAYS as readonly number[]).includes(n)
+    ? (n as OperatorExtendDays)
+    : null;
+}
+
+export async function extendBusinessSubscriptionAdmin(input: {
+  businessId: number;
+  operatorTelegramId: string;
+  days?: OperatorExtendDays;
+  extendToDate?: Date;
+  note?: string;
+}): Promise<ExtendBusinessOutcome> {
+  const { businessId, operatorTelegramId } = input;
   if (!Number.isInteger(businessId) || businessId <= 0) {
     return { ok: false, statusCode: 400, message: "Неверный businessId" };
-  }
-  if (days !== 30 && days !== 90) {
-    return { ok: false, statusCode: 400, message: "Нужно 30 или 90 дней" };
   }
 
   const row = await prisma.business.findUnique({
@@ -509,23 +526,127 @@ export async function extendBusinessSubscriptionAdmin(
     return { ok: false, statusCode: 404, message: "Магазин не найден" };
   }
 
-  const now = Date.now();
-  const base =
-    row.subscriptionEndsAt != null &&
-    row.subscriptionEndsAt.getTime() > now
-      ? row.subscriptionEndsAt
-      : new Date(now);
-  const next = new Date(base.getTime() + days * MS_DAY);
+  const now = new Date();
+  let accessDays: number;
+  let note = input.note?.trim() ?? "";
 
-  await prisma.business.update({
-    where: { id: businessId },
-    data: {
-      subscriptionStatus: SubscriptionStatus.ACTIVE,
-      subscriptionEndsAt: next,
-    },
+  if (input.extendToDate != null) {
+    const target = input.extendToDate;
+    if (Number.isNaN(target.getTime())) {
+      return { ok: false, statusCode: 400, message: "Некорректная дата" };
+    }
+    const base =
+      row.subscriptionEndsAt != null &&
+      row.subscriptionEndsAt.getTime() > now.getTime()
+        ? row.subscriptionEndsAt
+        : now;
+    accessDays = Math.max(
+      1,
+      Math.ceil((target.getTime() - base.getTime()) / MS_DAY),
+    );
+    if (note === "") note = `extend_to:${target.toISOString()}`;
+  } else if (input.days != null) {
+    accessDays = input.days;
+    if (note === "") note = `+${input.days}d`;
+  } else {
+    return {
+      ok: false,
+      statusCode: 400,
+      message: "Укажите days (7, 30, 90, 365) или extendToDate",
+    };
+  }
+
+  const ext = await prisma.$transaction(async (tx) => {
+    const result = await extendBusinessSubscription({
+      businessId,
+      operatorDaysGranted: accessDays,
+      source: "operator",
+      now,
+      tx,
+    });
+    if (result == null) {
+      throw new Error("extend failed");
+    }
+    await tx.subscriptionManualExtension.create({
+      data: {
+        businessId,
+        operatorTelegramId,
+        daysAdded: accessDays,
+        previousEndsAt: result.previousEndsAt,
+        newEndsAt: result.subscriptionEndsAt,
+        note: note || null,
+      },
+    });
+    await tx.adminActionLog.create({
+      data: {
+        adminTelegramId: operatorTelegramId,
+        action: AdminActionType.EXTEND_SUBSCRIPTION,
+        targetBusinessId: businessId,
+        details: {
+          daysAdded: accessDays,
+          previousSubscriptionEndsAt:
+            result.previousEndsAt?.toISOString() ?? null,
+          newSubscriptionEndsAt: result.subscriptionEndsAt.toISOString(),
+          note: note || null,
+        },
+      },
+    });
+    return result;
   });
 
-  return { ok: true, subscriptionEndsAt: next.toISOString() };
+  return { ok: true, subscriptionEndsAt: ext.subscriptionEndsAt.toISOString() };
+}
+
+export async function listSubscriptionManualExtensionsAdmin(
+  businessId: number,
+): Promise<
+  | {
+      ok: true;
+      rows: Array<{
+        id: number;
+        operatorTelegramId: string;
+        daysAdded: number | null;
+        previousEndsAt: string | null;
+        newEndsAt: string;
+        note: string | null;
+        createdAt: string;
+      }>;
+    }
+  | { ok: false; statusCode: number; message: string }
+> {
+  if (!Number.isInteger(businessId) || businessId <= 0) {
+    return { ok: false, statusCode: 400, message: "Неверный businessId" };
+  }
+  const rows = await prisma.subscriptionManualExtension.findMany({
+    where: { businessId },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+  return {
+    ok: true,
+    rows: rows.map((r) => ({
+      id: r.id,
+      operatorTelegramId: r.operatorTelegramId,
+      daysAdded: r.daysAdded,
+      previousEndsAt: r.previousEndsAt?.toISOString() ?? null,
+      newEndsAt: r.newEndsAt.toISOString(),
+      note: r.note,
+      createdAt: r.createdAt.toISOString(),
+    })),
+  };
+}
+
+/** @deprecated Используйте extendBusinessSubscriptionAdmin с days. */
+export async function extendBusinessSubscriptionAdminLegacy(
+  businessId: number,
+  days: 30 | 90,
+  operatorTelegramId: string,
+): Promise<ExtendBusinessOutcome> {
+  return extendBusinessSubscriptionAdmin({
+    businessId,
+    operatorTelegramId,
+    days: days === 30 ? 30 : 90,
+  });
 }
 
 export type PurgeBusinessOutcome =

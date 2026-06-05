@@ -1,38 +1,55 @@
-/** Цены SaaS-подписки — синхрон с `saasBillingService.ts`. */
-export const SAAS_SUBSCRIPTION_PRICE_30_D = 5500;
-export const SAAS_SUBSCRIPTION_PRICE_90_D = SAAS_SUBSCRIPTION_PRICE_30_D * 3;
+/**
+ * @deprecated Импортируйте из `archaSubscriptionPlans.ts`.
+ * Оставлено для совместимости с frontend `@repo-shared/saasSubscriptionPricing`.
+ */
+import {
+  ARCHA_SUBSCRIPTION_PLANS,
+  type ArchaSubscriptionPlanCode,
+  formatArchaPriceSom,
+  archaPricePerMonthLabel,
+  legacyPlanDaysToCode,
+  planSpecForCode,
+  subscriptionEndAfterPlan,
+  approximateAccessDays,
+  totalPlanMonths,
+} from "./archaSubscriptionPlans.js";
 
 export type SaasSubscriptionPlanDays = 30 | 90;
 
-export const SAAS_SUBSCRIPTION_PLANS: ReadonlyArray<{
-  days: SaasSubscriptionPlanDays;
-  title: string;
-  subtitle: string;
-  amountSom: number;
-  badge?: string;
-  featured?: boolean;
-}> = [
-  {
-    days: 30,
-    title: "30 дней",
-    subtitle: "Месяц подписки",
-    amountSom: SAAS_SUBSCRIPTION_PRICE_30_D,
-  },
-  {
-    days: 90,
-    title: "90 дней",
-    subtitle: "Квартал без лишних продлений",
-    amountSom: SAAS_SUBSCRIPTION_PRICE_90_D,
-    badge: "Меньше платежей",
-    featured: true,
-  },
-];
+export const SAAS_SUBSCRIPTION_PRICE_30_D =
+  ARCHA_SUBSCRIPTION_PLANS.find((p) => p.code === "MONTHLY")?.amountSom ?? 5500;
+
+export const SAAS_SUBSCRIPTION_PRICE_90_D =
+  ARCHA_SUBSCRIPTION_PLANS.find((p) => p.code === "HALF_YEAR")?.amountSom ??
+  SAAS_SUBSCRIPTION_PRICE_30_D * 6;
+
+export const SAAS_SUBSCRIPTION_PLANS = ARCHA_SUBSCRIPTION_PLANS.map((p) => ({
+  code: p.code as ArchaSubscriptionPlanCode,
+  title: p.title,
+  subtitle: p.subtitle,
+  amountSom: p.amountSom,
+  paidMonths: p.paidMonths,
+  bonusMonths: p.bonusMonths,
+  totalMonths: p.paidMonths + p.bonusMonths,
+  badge: p.badge,
+  featured: p.featured,
+}));
 
 export function formatSaasPriceSom(amount: number): string {
-  return `${amount.toLocaleString("ru-RU")} сом`;
+  return formatArchaPriceSom(amount);
 }
 
-export function saasPricePerDayLabel(amountSom: number, days: number): string {
-  const perDay = Math.round(amountSom / days);
-  return `~${perDay.toLocaleString("ru-RU")} сом/день`;
+export function saasPricePerDayLabel(amountSom: number, months: number): string {
+  return archaPricePerMonthLabel(amountSom, months);
 }
+
+export function saasPlanSpecFromLegacyDays(plan: SaasSubscriptionPlanDays) {
+  return planSpecForCode(legacyPlanDaysToCode(plan));
+}
+
+export type { ArchaSubscriptionPlanCode } from "./archaSubscriptionPlans.js";
+export {
+  ARCHA_SUBSCRIPTION_PLANS,
+  ARCHA_SUBSCRIPTION_GRACE_DAYS,
+  parseArchaSubscriptionPlanCode,
+} from "./archaSubscriptionPlans.js";

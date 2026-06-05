@@ -158,71 +158,114 @@ export async function postOperatorReauth(
 export type PlatformSubscriptionPaymentResult = {
   paymentUrl: string;
   subscriptionPaymentId: number;
-  planDays: 30 | 90;
+  planCode: "MONTHLY" | "HALF_YEAR" | "YEARLY";
+  planDays: number;
+  accessDaysGranted: number;
   amountSom: number;
 };
 
 export async function postPlatformSubscriptionPaymentCreate(params: {
   telegramId: number;
   businessId: number;
-  plan: 30 | 90;
+  planCode: "MONTHLY" | "HALF_YEAR" | "YEARLY";
 }): Promise<PlatformSubscriptionPaymentResult> {
   void params.telegramId;
   const j = await adminFetchJson<{
     error?: string;
     paymentUrl?: string;
     subscriptionPaymentId?: number;
+    planCode?: string;
     planDays?: number;
+    accessDaysGranted?: number;
     amountSom?: number;
   }>(apiAbsoluteUrl("/api/platform/subscription-payment/create"), {
     method: "POST",
     businessId: params.businessId,
     body: JSON.stringify({
       businessId: params.businessId,
-      plan: params.plan,
+      planCode: params.planCode,
     }),
   });
+  const code = j.planCode;
   if (
     typeof j.paymentUrl === "string" &&
     j.paymentUrl.trim() !== "" &&
     typeof j.subscriptionPaymentId === "number" &&
-    (j.planDays === 30 || j.planDays === 90) &&
+    (code === "MONTHLY" || code === "HALF_YEAR" || code === "YEARLY") &&
     typeof j.amountSom === "number"
   ) {
     return {
       paymentUrl: j.paymentUrl.trim(),
       subscriptionPaymentId: j.subscriptionPaymentId,
-      planDays: j.planDays,
+      planCode: code,
+      planDays: typeof j.planDays === "number" ? j.planDays : 0,
+      accessDaysGranted:
+        typeof j.accessDaysGranted === "number"
+          ? j.accessDaysGranted
+          : typeof j.planDays === "number"
+            ? j.planDays
+            : 0,
       amountSom: j.amountSom,
     };
   }
   throw new Error(j.error ?? "Некорректный ответ сервера");
 }
 
-export type MerchantSubscriptionUiStatus = "ACTIVE" | "TRIAL" | "EXPIRED";
+export type MerchantSubscriptionUiStatus =
+  | "ACTIVE"
+  | "TRIAL"
+  | "GRACE"
+  | "EXPIRED"
+  | "EXPIRING";
+
+export type MerchantSubscriptionPlanDTO = {
+  code: "MONTHLY" | "HALF_YEAR" | "YEARLY";
+  title: string;
+  subtitle: string;
+  paidMonths: number;
+  bonusMonths: number;
+  totalMonths: number;
+  amountSom: number;
+  badge?: string;
+  featured?: boolean;
+};
+
+export type SubscriptionHistoryEntryType = "finik_payment" | "operator_extension";
+
+export type SubscriptionPaymentHistoryRow = {
+  id: string | number;
+  entryType?: SubscriptionHistoryEntryType;
+  createdAt: string;
+  amountSom: number | null;
+  planCode: string | null;
+  planLabel: string;
+  status: string;
+  finikPaymentId: string | null;
+  source: string;
+  accessDaysGranted?: number | null;
+};
 
 export type MerchantSubscriptionPanelPayload = {
   businessId: number;
   displayStatus: MerchantSubscriptionUiStatus;
   displayStatusLabel: string;
   subscriptionStatus: string;
+  subscriptionPlanCode: string | null;
+  subscriptionPlanLabel: string;
   trialEndsAt: string | null;
   subscriptionEndsAt: string | null;
+  gracePeriodEndsAt: string | null;
   daysLeft: number | null;
+  countdownMs: number | null;
+  inGracePeriod: boolean;
+  autoRenewEnabled: boolean;
   storeOpenForCustomers: boolean;
   isBlocked: boolean;
   isActive: boolean;
   platformFinikReady: boolean;
   canPay: boolean;
   isOwner: boolean;
-  plans: Array<{
-    days: 30 | 90;
-    title: string;
-    subtitle: string;
-    amountSom: number;
-    badge?: string;
-    featured?: boolean;
-  }>;
+  plans: MerchantSubscriptionPlanDTO[];
 };
 
 export async function fetchMerchantSubscriptionPanel(
@@ -238,11 +281,44 @@ export async function fetchMerchantSubscriptionPanel(
     typeof j.businessId !== "number" ||
     (j.displayStatus !== "ACTIVE" &&
       j.displayStatus !== "TRIAL" &&
-      j.displayStatus !== "EXPIRED")
+      j.displayStatus !== "EXPIRED" &&
+      j.displayStatus !== "GRACE" &&
+      j.displayStatus !== "EXPIRING")
   ) {
     throw new Error("Некорректный ответ сервера");
   }
   return j;
+}
+
+export async function fetchSubscriptionPaymentHistory(
+  businessId: number,
+): Promise<SubscriptionPaymentHistoryRow[]> {
+  const url = new URL(apiAbsoluteUrl("/api/platform/subscription/payments"));
+  url.searchParams.set("businessId", String(businessId));
+  const j = await adminFetchJson<{
+    entries?: SubscriptionPaymentHistoryRow[];
+    payments?: SubscriptionPaymentHistoryRow[];
+  }>(url.toString(), { method: "GET", businessId, json: false });
+  const rows = j.entries ?? j.payments;
+  return Array.isArray(rows) ? rows : [];
+}
+
+export async function patchSubscriptionAutoRenew(params: {
+  businessId: number;
+  enabled: boolean;
+}): Promise<boolean> {
+  const j = await adminFetchJson<{ autoRenewEnabled?: boolean }>(
+    apiAbsoluteUrl("/api/platform/subscription/auto-renew"),
+    {
+      method: "PATCH",
+      businessId: params.businessId,
+      body: JSON.stringify({
+        businessId: params.businessId,
+        enabled: params.enabled,
+      }),
+    },
+  );
+  return Boolean(j.autoRenewEnabled);
 }
 
 export type BusinessStoreAddressDTO = {

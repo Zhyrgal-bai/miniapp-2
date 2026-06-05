@@ -30,7 +30,14 @@ export type PlatformStoreCardProps = {
   onToggleBot: (b: PlatformMyBusinessDTO) => void;
   onCheckWebhook: (b: PlatformMyBusinessDTO) => void;
   onDeleteShop: (b: PlatformMyBusinessDTO) => void;
-  onExtendSubscription: (b: PlatformMyBusinessDTO, days: 30 | 90) => void;
+  onExtendSubscription: (
+    b: PlatformMyBusinessDTO,
+    days: 7 | 30 | 90 | 365,
+  ) => void;
+  onExtendSubscriptionToDate: (
+    b: PlatformMyBusinessDTO,
+    extendToDate: string,
+  ) => void;
   onUnblockShop: (b: PlatformMyBusinessDTO) => void;
 };
 
@@ -53,9 +60,11 @@ export function PlatformStoreCard({
   onCheckWebhook,
   onDeleteShop,
   onExtendSubscription,
+  onExtendSubscriptionToDate,
   onUnblockShop,
 }: PlatformStoreCardProps) {
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [extendToDateDraft, setExtendToDateDraft] = useState("");
   const runBadge = botRunBadge(b);
   const subBadge = subscriptionBadge(b.status);
   const whBadge = webhookBadge(b.webhookStatus);
@@ -252,6 +261,14 @@ export function PlatformStoreCard({
                 <button
                   type="button"
                   disabled={extendBusy}
+                  onClick={() => onExtendSubscription(b, 7)}
+                  className="mp-btn mp-btn--secondary mp-btn-wide-mobile"
+                >
+                  {extendBusy ? "…" : "+7 дн."}
+                </button>
+                <button
+                  type="button"
+                  disabled={extendBusy}
                   onClick={() => onExtendSubscription(b, 30)}
                   className="mp-btn mp-btn--secondary mp-btn-wide-mobile"
                 >
@@ -265,6 +282,33 @@ export function PlatformStoreCard({
                 >
                   {extendBusy ? "…" : "+90 дн."}
                 </button>
+                <button
+                  type="button"
+                  disabled={extendBusy}
+                  onClick={() => onExtendSubscription(b, 365)}
+                  className="mp-btn mp-btn--secondary mp-btn-wide-mobile"
+                >
+                  {extendBusy ? "…" : "+365 дн."}
+                </button>
+                <div className="mp-operator-extend-date">
+                  <input
+                    type="date"
+                    className="mp-operator-extend-date__input"
+                    value={extendToDateDraft}
+                    onChange={(e) => setExtendToDateDraft(e.target.value)}
+                    disabled={extendBusy}
+                  />
+                  <button
+                    type="button"
+                    disabled={extendBusy || extendToDateDraft.trim() === ""}
+                    onClick={() =>
+                      onExtendSubscriptionToDate(b, extendToDateDraft)
+                    }
+                    className="mp-btn mp-btn--secondary mp-btn-wide-mobile"
+                  >
+                    До даты
+                  </button>
+                </div>
               </div>
             </>
           ) : null}

@@ -100,6 +100,24 @@ model Business {
   /// Анти-спам: уже отправили напоминание «за 1 день».
   lastReminder1DayAt DateTime?
 
+  /// Анти-спам: напоминание «за 7 дней» до окончания подписки.
+  lastReminder7DaysAt DateTime?
+
+  /// Анти-спам: уведомление после окончания (начало grace).
+  lastReminderAfterExpiryAt DateTime?
+
+  /// Код текущего тарифа SaaS: MONTHLY | HALF_YEAR | YEARLY.
+  subscriptionPlanCode String?
+
+  /// Автопродление: выставление Finik-счёта до окончания (не auto-charge).
+  autoRenewEnabled Boolean @default(false)
+
+  /// Конец grace period после subscriptionEndsAt (7 дней).
+  gracePeriodEndsAt DateTime?
+
+  /// Последняя попытка auto-renew invoice (анти-спам).
+  lastAutoRenewAttemptAt DateTime?
+
   /// Витрина: цвета, баннер, logoUrl (JSON). Пустой объект = дефолты на сервере/клиенте.
   themeConfig Json? @default("{}")
 
@@ -145,6 +163,7 @@ model Business {
 
   /// Платежи Finik только за SaaS-подписку (не заказы витрины).
   subscriptionFinikPayments SubscriptionFinikPayment[]
+  subscriptionManualExtensions SubscriptionManualExtension[]
 
   merchantChangeRequests MerchantChangeRequest[]
 
@@ -245,8 +264,15 @@ model SubscriptionFinikPayment {
 
   finikPaymentId String? @unique
   planDays       Int
+  /// MONTHLY | HALF_YEAR | YEARLY (null — legacy rows).
+  planCode       String?
+  /// Фактические дни доступа (YEARLY: 12+1 мес.).
+  accessDaysGranted Int?
   amountSom      Int
   payerTelegramId String
+
+  /// manual | auto_renew | operator
+  source    String   @default("manual")
 
   /// pending | completed | failed
   status    String   @default("pending")
@@ -254,6 +280,23 @@ model SubscriptionFinikPayment {
 
   @@index([businessId])
   @@index([status])
+  @@index([createdAt])
+}
+
+/// Ручные продления подписки оператором платформы.
+model SubscriptionManualExtension {
+  id                 Int      @id @default(autoincrement())
+  businessId         Int
+  business           Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  operatorTelegramId String
+  daysAdded          Int?
+  previousEndsAt     DateTime?
+  newEndsAt          DateTime
+  note               String?
+  createdAt          DateTime @default(now())
+
+  @@index([businessId])
+  @@index([createdAt])
 }
 
 /// Глобальная связка Telegram-пользователя (multi-tenant: один аккаунт — несколько Membership).

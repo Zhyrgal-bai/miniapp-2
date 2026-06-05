@@ -1,31 +1,141 @@
 import { SubscriptionStatus, type Prisma } from "@prisma/client";
 import { plainBotTokenFromStored } from "./businessBotToken.js";
 import { prisma } from "./db.js";
+import {
+  ARCHA_SUBSCRIPTION_GRACE_DAYS,
+  addCalendarDays,
+  approximateAccessDays,
+  subscriptionEndAfterPlan,
+  type ArchaSubscriptionPlanCode,
+} from "../shared/archaSubscriptionPlans.js";
+import {
+  hasValidPaidOrTrialWindow,
+  isInSubscriptionGracePeriod,
+  isSubscriptionActive,
+} from "./subscriptionAccess.js";
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
 import {
   initDynamicStoreBot,
   stopDynamicStoreBotInMemory,
 } from "../bot/dynamicBots.js";
-import {
-  hasValidPaidOrTrialWindow,
-  isSubscriptionActive,
-} from "./subscriptionAccess.js";
 import { notifyPlatformAdminsNewPaymentRequest } from "./saasBillingNotify.js";
+import {
+  legacyPlanDaysToCode,
+  planSpecForCode,
+  subscriptionEndAfterPlan,
+  approximateAccessDays,
+} from "../shared/archaSubscriptionPlans.js";
 
 export const SAAS_SUBSCRIPTION_PRICE_20_D = 1500;
 export const SAAS_SUBSCRIPTION_PRICE_30_D = 5500;
 
-/** 90-дневный план как 3×30 (синхронизация с автоматическими платежами Finik). */
-export const SAAS_SUBSCRIPTION_PRICE_90_D = SAAS_SUBSCRIPTION_PRICE_30_D * 3;
+/** @deprecated Используйте HALF_YEAR plan registry. */
+export const SAAS_SUBSCRIPTION_PRICE_90_D = SAAS_SUBSCRIPTION_PRICE_30_D * 6;
 
 export const SUBSCRIPTION_EXPIRED_USER_MESSAGE =
-  "❌ Subscription expired. Use /pay";
+  "❌ Подписка ARCHA истекла. Откройте панель магазина и продлите подписку.";
 
 const MS_DAY = 24 * 60 * 60 * 1000;
 
+export type ExtendBusinessSubscriptionSource =
+  | "finik"
+  | "operator"
+  | "auto_renew"
+  | "legacy_receipt";
+
+export type ExtendBusinessSubscriptionResult = {
+  botToken: string | null;
+  shouldHydrateBot: boolean;
+  subscriptionEndsAt: Date;
+  previousEndsAt: Date | null;
+};
+
+export type ExtendBusinessSubscriptionInput = {
+  businessId: number;
+  /** Тариф с календарными месяцами (Finik, auto-renew). */
+  planCode?: ArchaSubscriptionPlanCode | null;
+  /** Операторское продление в днях (без тарифа). */
+  operatorDaysGranted?: number;
+  source: ExtendBusinessSubscriptionSource;
+  now?: Date;
+  tx?: DbClient;
+};
+
+function clearReminderFields() {
+  return {
+    lastReminder7DaysAt: null,
+    lastReminder3DaysAt: null,
+    lastReminder1DayAt: null,
+    lastReminderAfterExpiryAt: null,
+    gracePeriodEndsAt: null,
+    lastAutoRenewAttemptAt: null,
+  };
+}
+
 /**
- * Если срок триала и оплаты вышел — ставим isActive=false (кроме ручного блока).
+ * Единая точка продления подписки (Finik, оператор, auto-renew, legacy).
+ */
+export async function extendBusinessSubscription(
+  input: ExtendBusinessSubscriptionInput,
+): Promise<ExtendBusinessSubscriptionResult | null> {
+  const db = input.tx ?? prisma;
+  const now = input.now ?? new Date();
+
+  const b = await db.business.findUnique({
+    where: { id: input.businessId },
+    select: {
+      subscriptionEndsAt: true,
+      isBlocked: true,
+      botToken: true,
+    },
+  });
+  if (b == null) return null;
+
+  const previousEndsAt = b.subscriptionEndsAt;
+  const baseStart =
+    previousEndsAt != null && previousEndsAt.getTime() > now.getTime()
+      ? previousEndsAt
+      : now;
+
+  let subscriptionEndsAt: Date;
+  if (input.planCode != null) {
+    subscriptionEndsAt = subscriptionEndAfterPlan(baseStart, input.planCode);
+  } else if (
+    input.operatorDaysGranted != null &&
+    input.operatorDaysGranted > 0
+  ) {
+    subscriptionEndsAt = addCalendarDays(
+      baseStart,
+      Math.round(input.operatorDaysGranted),
+    );
+  } else {
+    return null;
+  }
+
+  const isActive = !b.isBlocked;
+
+  await db.business.update({
+    where: { id: input.businessId },
+    data: {
+      subscriptionEndsAt,
+      subscriptionStatus: SubscriptionStatus.ACTIVE,
+      isActive,
+      ...(input.planCode != null ? { subscriptionPlanCode: input.planCode } : {}),
+      ...clearReminderFields(),
+    },
+  });
+
+  return {
+    botToken: plainBotTokenFromStored(b.botToken),
+    shouldHydrateBot: isActive,
+    subscriptionEndsAt,
+    previousEndsAt,
+  };
+}
+
+/**
+ * Если срок триала и оплаты вышел (включая grace) — ставим isActive=false.
  */
 export async function syncBusinessSubscriptionActivationState(
   businessId: number,
@@ -40,19 +150,23 @@ export async function syncBusinessSubscriptionActivationState(
       subscriptionStatus: true,
       trialEndsAt: true,
       subscriptionEndsAt: true,
+      gracePeriodEndsAt: true,
     },
   });
   if (b == null || b.isBlocked || !b.isActive) return;
 
   if (hasValidPaidOrTrialWindow(b, now)) return;
+  if (isInSubscriptionGracePeriod(b, now)) return;
 
   await prisma.business.update({
     where: { id: businessId },
     data: {
       isActive: false,
       subscriptionStatus: SubscriptionStatus.EXPIRED,
+      gracePeriodEndsAt: null,
       lastReminder3DaysAt: null,
       lastReminder1DayAt: null,
+      lastReminder7DaysAt: null,
     },
   });
 }
@@ -65,7 +179,6 @@ export async function adminBlockBusiness(businessId: number): Promise<void> {
   await stopDynamicStoreBotInMemory(businessId);
 }
 
-/** Выключить магазин без `isBlocked` — иначе «🟢 Включить» после «Выкл» невозможен. */
 export async function adminDeactivateBusiness(businessId: number): Promise<void> {
   await prisma.business.update({
     where: { id: businessId },
@@ -89,6 +202,7 @@ export async function adminUnblockBusiness(businessId: number): Promise<void> {
       subscriptionStatus: true,
       trialEndsAt: true,
       subscriptionEndsAt: true,
+      gracePeriodEndsAt: true,
     },
   });
   const tok = plainBotTokenFromStored(b?.botToken);
@@ -101,10 +215,6 @@ export async function adminUnblockBusiness(businessId: number): Promise<void> {
   }
 }
 
-/**
- * Включить витрину (`isActive`), если магазин не в ручной блокировке.
- * Для истёкшей подписки без `isBlocked` — обратное «выключению» по подписке.
- */
 export async function adminEnableNonBlockedBusiness(
   businessId: number,
 ): Promise<
@@ -120,6 +230,7 @@ export async function adminEnableNonBlockedBusiness(
       subscriptionStatus: true,
       trialEndsAt: true,
       subscriptionEndsAt: true,
+      gracePeriodEndsAt: true,
     },
   });
   if (b == null) {
@@ -185,27 +296,22 @@ export async function adminApproveSaasPayment(
 
   const days = amount === SAAS_SUBSCRIPTION_PRICE_20_D ? 20 : 30;
   const now = new Date();
-  const currentEnd = pr.business.subscriptionEndsAt;
-  const baseStart =
-    currentEnd != null && currentEnd.getTime() > now.getTime()
-      ? currentEnd
-      : now;
-  const subscriptionEndsAt = new Date(baseStart.getTime() + days * MS_DAY);
 
-  await prisma.$transaction([
-    prisma.paymentRequest.update({
+  await prisma.$transaction(async (tx) => {
+    await tx.paymentRequest.update({
       where: { id: paymentRequestId },
       data: { status: "approved" },
-    }),
-    prisma.business.update({
-      where: { id: pr.businessId },
-      data: {
-        isActive: true,
-        subscriptionStatus: SubscriptionStatus.ACTIVE,
-        subscriptionEndsAt,
-      },
-    }),
-  ]);
+    });
+    await extendBusinessSubscription({
+      businessId: pr.businessId,
+      ...(days === 30
+        ? { planCode: "MONTHLY" as const }
+        : { operatorDaysGranted: days }),
+      source: "legacy_receipt",
+      now,
+      tx,
+    });
+  });
 
   const tok = plainBotTokenFromStored(pr.business.botToken);
   if (tok) {
@@ -226,59 +332,47 @@ export async function adminApproveSaasPayment(
   return { ok: true };
 }
 
-/** Дни и сумма для планов SaaS (30 / 90); для ручных заявок по-прежнему 20 / 30 дней. */
+/** @deprecated Используйте planSpecForCode / parseArchaSubscriptionPlanCode. */
 export function saasFinikSubscriptionPlanSpec(
-  plan: 30 | 90,
-): { days: number; amountSom: number } {
-  if (plan === 30) return { days: 30, amountSom: SAAS_SUBSCRIPTION_PRICE_30_D };
-  return { days: 90, amountSom: SAAS_SUBSCRIPTION_PRICE_90_D };
+  plan: 30 | 90 | ArchaSubscriptionPlanCode,
+): {
+  days: number;
+  amountSom: number;
+  planCode: ArchaSubscriptionPlanCode;
+  accessDaysGranted: number;
+} {
+  const code =
+    plan === 30 || plan === 90
+      ? legacyPlanDaysToCode(plan)
+      : plan;
+  const spec = planSpecForCode(code);
+  const base = new Date();
+  const end = subscriptionEndAfterPlan(base, spec.planCode);
+  const accessDaysGranted = approximateAccessDays(base, end);
+  return {
+    days: accessDaysGranted,
+    amountSom: spec.amountSom,
+    planCode: spec.planCode,
+    accessDaysGranted,
+  };
 }
 
-/**
- * Продление подписки на N дней после успешной оплаты Finik.
- * При `isBlocked` дата продлевается, витрину не включаем (`isActive` остаётся false).
- */
+/** @deprecated Используйте extendBusinessSubscription. */
 export async function extendBusinessSubscriptionAfterFinikPayment(
   businessId: number,
   days: number,
   now = new Date(),
   tx?: DbClient,
 ): Promise<{ botToken: string | null; shouldHydrateBot: boolean } | null> {
-  const db = tx ?? prisma;
-  const b = await db.business.findUnique({
-    where: { id: businessId },
-    select: {
-      subscriptionEndsAt: true,
-      isBlocked: true,
-      botToken: true,
-    },
+  const out = await extendBusinessSubscription({
+    businessId,
+    operatorDaysGranted: days,
+    source: "finik",
+    now,
+    ...(tx != null ? { tx } : {}),
   });
-  if (b == null) return null;
-
-  const currentEnd = b.subscriptionEndsAt;
-  const baseStart =
-    currentEnd != null && currentEnd.getTime() > now.getTime()
-      ? currentEnd
-      : now;
-  const subscriptionEndsAt = new Date(baseStart.getTime() + days * MS_DAY);
-
-  const isActive = !b.isBlocked;
-
-  await db.business.update({
-    where: { id: businessId },
-    data: {
-      subscriptionEndsAt,
-      subscriptionStatus: SubscriptionStatus.ACTIVE,
-      isActive,
-      lastReminder3DaysAt: null,
-      lastReminder1DayAt: null,
-    },
-  });
-
-  return {
-    botToken: plainBotTokenFromStored(b.botToken),
-    shouldHydrateBot: isActive,
-  };
+  if (out == null) return null;
+  return { botToken: out.botToken, shouldHydrateBot: out.shouldHydrateBot };
 }
 
 export async function adminRejectSaasPayment(
@@ -379,3 +473,5 @@ export async function sendSubscriptionExpiredChatMessage(input: {
     console.error("[saasBillingService] sendSubscriptionExpired", e);
   }
 }
+
+export { ARCHA_SUBSCRIPTION_GRACE_DAYS };

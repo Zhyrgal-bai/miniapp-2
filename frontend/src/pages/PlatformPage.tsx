@@ -676,7 +676,7 @@ export default function PlatformPage() {
 
   const handleExtendSubscription = async (
     b: PlatformMyBusinessDTO,
-    days: 30 | 90,
+    days: 7 | 30 | 90 | 365,
   ) => {
     if (!Number.isFinite(merchantTelegramId)) {
       setError("Нет данных пользователя Telegram.");
@@ -697,6 +697,43 @@ export default function PlatformPage() {
         telegramId: merchantTelegramId,
         businessId: b.id,
         days,
+        operatorSessionToken: token,
+      });
+      setInfoBanner(
+        `${b.name}: подписка продлена до ${formatRuDateShort(out.subscriptionEndsAt) ?? "—"}`,
+      );
+      await loadOperatorBusinesses(merchantTelegramId, token);
+    } catch (e) {
+      setError(formatAdminApiError(e));
+    } finally {
+      setPending(b.id, "extend", false);
+    }
+  };
+
+  const handleExtendSubscriptionToDate = async (
+    b: PlatformMyBusinessDTO,
+    dateStr: string,
+  ) => {
+    if (!Number.isFinite(merchantTelegramId)) {
+      setError("Нет данных пользователя Telegram.");
+      return;
+    }
+    if (!isPlatformAdmin) return;
+    if (!(await ensureOperatorReauth())) return;
+    const token = operatorSessionToken?.trim();
+    if (!token) {
+      setError("Сессия оператора не активна.");
+      return;
+    }
+    const extendToDate = new Date(`${dateStr}T23:59:59`).toISOString();
+    setError(null);
+    setInfoBanner(null);
+    setPending(b.id, "extend", true);
+    try {
+      const out = await postPlatformAdminExtend({
+        telegramId: merchantTelegramId,
+        businessId: b.id,
+        extendToDate,
         operatorSessionToken: token,
       });
       setInfoBanner(
@@ -1085,6 +1122,11 @@ export default function PlatformPage() {
     const deliveryChanged =
       JSON.stringify(deliverySettingsDraft) !==
       JSON.stringify(settingsSnap.deliverySettings ?? defaultMerchantDeliverySettings());
+    const merchantConfigChanged =
+      isPlatformAdmin &&
+      Object.keys(settingsSnap.merchantSettingsSchema ?? {}).length > 0 &&
+      JSON.stringify(merchantConfigDraft) !==
+        JSON.stringify(settingsSnap.merchantConfig ?? {});
     const newTok = settingsNewToken.replace(/\s/g, "").trim();
 
     const payload: {
@@ -1112,19 +1154,15 @@ export default function PlatformPage() {
     }
     if (deliveryChanged) payload.deliverySettings = deliverySettingsDraft;
     if (newTok !== "" && isPlatformAdmin) payload.newBotToken = newTok;
-    if (
-      isPlatformAdmin &&
-      Object.keys(settingsSnap.merchantSettingsSchema ?? {}).length > 0
-    ) {
-      payload.merchantConfig = merchantConfigDraft;
-    }
+    if (merchantConfigChanged) payload.merchantConfig = merchantConfigDraft;
 
     if (
       payload.storeName === undefined &&
       payload.newBotToken === undefined &&
       payload.merchantConfig === undefined &&
       payload.addressLine === undefined &&
-      payload.deliverySettings === undefined
+      payload.deliverySettings === undefined &&
+      !addressChanged
     ) {
       setSettingsErr("Нет изменений для сохранения.");
       return;
@@ -1168,11 +1206,9 @@ export default function PlatformPage() {
         finikConfigured: out.finikConfigured,
         finikReady: out.finikConfigured,
         pendingBotTokenChange: out.pendingBotTokenChange,
-        merchantConfig:
-          isPlatformAdmin &&
-          Object.keys(settingsSnap.merchantSettingsSchema ?? {}).length > 0
-            ? merchantConfigDraft
-            : settingsSnap.merchantConfig,
+        merchantConfig: merchantConfigChanged
+          ? merchantConfigDraft
+          : settingsSnap.merchantConfig,
       });
       if (nextStoreAddress != null) {
         setStoreAddressDraft(draftFromStoreAddressPublic(nextStoreAddress));
@@ -1811,6 +1847,9 @@ export default function PlatformPage() {
                     onExtendSubscription={(row, days) =>
                       void handleExtendSubscription(row, days)
                     }
+                    onExtendSubscriptionToDate={(row, d) =>
+                      void handleExtendSubscriptionToDate(row, d)
+                    }
                     onUnblockShop={(row) => void handleUnblockShop(row)}
                   />
                 ))}
@@ -2227,7 +2266,10 @@ export default function PlatformPage() {
               </div>
             ) : settingsErr != null && settingsSnap == null ? (
               <div className="mp-settings-scroll">
-                <p className="text-sm text-red-300" role="alert">
+                <p
+                  className="mp-settings-alert mp-settings-alert--error"
+                  role="alert"
+                >
                   {settingsErr}
                 </p>
               </div>
@@ -2452,10 +2494,11 @@ export default function PlatformPage() {
                   ) : null}
                 </MerchantStoreSettingsSection>
 
+                {isPlatformAdmin ? (
                 <MerchantStoreSettingsSection
                   icon="💳"
-                  title="Оплата"
-                  description="Finik: API Key, Account ID и webhook для приёма платежей покупателей."
+                  title="Оплата (оператор)"
+                  description="Finik: API Key, Account ID и webhook — только для оператора платформы."
                   badge={
                     settingsSnap?.finikReady ? (
                       <span className="mp-settings-status-pill mp-settings-status-pill--ok">
@@ -2493,13 +2536,12 @@ export default function PlatformPage() {
                       >
                         кабинете Finik
                       </a>{" "}
-                      вашего магазина.
+                      магазина.
                     </li>
                     <li>Вставьте их ниже и нажмите «Сохранить Finik».</li>
                     <li>
                       Укажите Webhook URL в Finik (кнопка «Скопировать»).
                     </li>
-                    <li>Сделайте тестовый заказ в Mini App магазина.</li>
                   </ol>
                   <div className="mp-settings-field">
                     <label
@@ -2578,17 +2620,13 @@ export default function PlatformPage() {
                       }
                       className={`${archa.input} font-mono`}
                     />
-                    <p className="mp-settings-field__hint">
-                      Чтобы отключить Finik, очистите API Key и Account ID и
-                      сохраните.
-                    </p>
                   </div>
                   <div className="mp-finik-webhook">
                     <span className="mp-settings-field__label">Webhook URL</span>
                     <div className="mp-finik-webhook__row">
                       <code className="mp-finik-webhook__url">
                         {settingsSnap?.finikWebhookUrl?.trim() ||
-                          "Задайте API_URL на сервере — URL появится после сохранения ключей."}
+                          "Задайте API_URL на сервере."}
                       </code>
                       <button
                         type="button"
@@ -2603,7 +2641,10 @@ export default function PlatformPage() {
                     </div>
                   </div>
                   {finikErr ? (
-                    <p className="mt-2 text-sm text-red-300" role="alert">
+                    <p
+                      className="mp-settings-alert mp-settings-alert--error mt-2"
+                      role="alert"
+                    >
                       {finikErr}
                     </p>
                   ) : null}
@@ -2623,6 +2664,30 @@ export default function PlatformPage() {
                     {finikSaving ? "Сохранение…" : "Сохранить Finik"}
                   </button>
                 </MerchantStoreSettingsSection>
+                ) : (
+                <MerchantStoreSettingsSection
+                  icon="💳"
+                  title="Приём оплат"
+                  description="Статус подключения Finik для заказов покупателей."
+                  badge={
+                    settingsSnap?.finikReady ? (
+                      <span className="mp-settings-status-pill mp-settings-status-pill--ok">
+                        Подключено
+                      </span>
+                    ) : (
+                      <span className="mp-settings-status-pill mp-settings-status-pill--warn">
+                        Не подключено
+                      </span>
+                    )
+                  }
+                >
+                  <p className="mp-settings-field__hint">
+                    {settingsSnap?.finikReady
+                      ? "Покупатели могут оплачивать заказы онлайн. Технические ключи и webhook настраивает поддержка ARCHA."
+                      : "Для подключения онлайн-оплаты напишите в поддержку ARCHA — мы поможем настроить Finik для вашего магазина."}
+                  </p>
+                </MerchantStoreSettingsSection>
+                )}
 
                 {!isPlatformAdmin && settingsSnap != null ? (
                   <MerchantStoreSettingsSection
@@ -2646,7 +2711,10 @@ export default function PlatformPage() {
 
                 <div className="mp-settings-save-footer">
                   {settingsErr ? (
-                    <p className="text-sm text-red-300" role="alert">
+                    <p
+                      className="mp-settings-alert mp-settings-alert--error"
+                      role="alert"
+                    >
                       {settingsErr}
                     </p>
                   ) : null}

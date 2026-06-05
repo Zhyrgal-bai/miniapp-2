@@ -272,9 +272,13 @@ export async function postPlatformAdminPurgeBusiness(params: {
 export async function postPlatformAdminExtend(params: {
   telegramId: number;
   businessId: number;
-  days: 30 | 90;
+  days?: 7 | 30 | 90 | 365;
+  extendToDate?: string;
   operatorSessionToken?: string;
 }): Promise<{ subscriptionEndsAt: string }> {
+  const body: Record<string, unknown> = { businessId: params.businessId };
+  if (params.days != null) body.days = params.days;
+  if (params.extendToDate != null) body.extendToDate = params.extendToDate;
   const res = await fetch(apiAbsoluteUrl("/api/platform/admin/extend"), {
     method: "POST",
     credentials: "omit",
@@ -282,10 +286,7 @@ export async function postPlatformAdminExtend(params: {
       ...adminHeaders(params.telegramId, params),
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      businessId: params.businessId,
-      days: params.days,
-    }),
+    body: JSON.stringify(body),
   });
   await throwIfNotOk(res);
   const data = (await res.json()) as { subscriptionEndsAt?: string };
@@ -293,4 +294,33 @@ export async function postPlatformAdminExtend(params: {
     throw new Error("Некорректный ответ сервера");
   }
   return { subscriptionEndsAt: data.subscriptionEndsAt };
+}
+
+export type SubscriptionManualExtensionRow = {
+  id: number;
+  operatorTelegramId: string;
+  daysAdded: number | null;
+  previousEndsAt: string | null;
+  newEndsAt: string;
+  note: string | null;
+  createdAt: string;
+};
+
+export async function fetchPlatformAdminSubscriptionExtensions(params: {
+  telegramId: number;
+  businessId: number;
+  operatorSessionToken?: string;
+}): Promise<SubscriptionManualExtensionRow[]> {
+  const url = new URL(
+    apiAbsoluteUrl("/api/platform/admin/subscription-extensions"),
+  );
+  url.searchParams.set("businessId", String(params.businessId));
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    credentials: "omit",
+    headers: adminHeaders(params.telegramId, params),
+  });
+  await throwIfNotOk(res);
+  const data = (await res.json()) as { extensions?: SubscriptionManualExtensionRow[] };
+  return Array.isArray(data.extensions) ? data.extensions : [];
 }

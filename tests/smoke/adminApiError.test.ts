@@ -34,4 +34,22 @@ describe("admin API error formatting", () => {
       formatAdminApiError(new Error("Request failed with status code 401")),
     ).toBe(TELEGRAM_SESSION_RU);
   });
+
+  it("sanitizes technical store-settings validation messages", () => {
+    expect(
+      formatHttpStatusError(
+        400,
+        "Укажите storeName, адрес, deliverySettings, finikApiKey, finikAccountId, newBotToken и/или merchantConfig",
+      ),
+    ).toBe("Не удалось сохранить настройки. Проверьте обязательные поля.");
+    expect(
+      formatHttpStatusError(400, "Укажите finikApiKey, finikAccountId и/или finikSecret"),
+    ).toBe("Укажите API Key и Account ID Finik или очистите поля для отключения.");
+    expect(formatHttpStatusError(400, "deliverySettings: ожидается объект")).toBe(
+      "Некорректные настройки доставки.",
+    );
+    expect(formatHttpStatusError(400, "Магазин без businessType")).toBe(
+      "Не удалось сохранить настройки. Проверьте обязательные поля.",
+    );
+  });
 });
