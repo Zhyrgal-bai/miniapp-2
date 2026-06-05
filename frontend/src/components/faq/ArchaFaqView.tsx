@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactElement } from "react";
 import type { ArchaFaqCategory, ArchaFaqItem } from "../../content/archaFaqContent";
+import { ARCHA_BRAND } from "../../config/brandAssets";
 import { openTelegramExternalLink } from "../../utils/telegramWebAppBootstrap";
 import "./archaFaq.css";
 
@@ -175,7 +176,7 @@ export function ArchaFaqView(props: {
             className="archa-faq__support-btn"
             onClick={() => openTelegramExternalLink(props.supportTelegramUrl!)}
           >
-            {props.supportCtaLabel ?? "Написать @archa_kg"}
+            {props.supportCtaLabel ?? `Написать ${ARCHA_BRAND.telegramBotHandle}`}
           </button>
         </footer>
       ) : null}

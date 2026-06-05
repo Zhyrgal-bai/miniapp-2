@@ -64,6 +64,7 @@ import {
   type SchemaObject as MerchantSchemaObject,
 } from "../components/merchant/MerchantSettingsRenderer";
 import { MerchantPremiumOverview } from "../components/merchant/MerchantPremiumOverview";
+import { MerchantStoreSettingsSection } from "../components/merchant/MerchantStoreSettingsSection";
 import "../design/archaPremium.css";
 import { MERCHANT_REGISTER_SENT_KEY } from "./MerchantRegisterPage";
 import "./MerchantPage.css";
@@ -1330,10 +1331,10 @@ export default function PlatformPage() {
       },
       {
         id: "docs",
-        label: "Канал ARCHA",
-        icon: "📢",
+        label: "Бот ARCHA",
+        icon: "🤖",
         onClick: () => {
-          const url = "https://t.me/archa_kg";
+          const url = ARCHA_BRAND.telegramLoginUrl;
           try {
             getTelegramWebApp()?.openTelegramLink?.(url);
           } catch {
@@ -2261,15 +2262,15 @@ export default function PlatformPage() {
                         : "";
 
                   return (
-                    <div className="mp-settings-section mp-settings-section--accent">
-                      <div className="mp-settings-section__head">
-                        <span className="mp-settings-section__title">
-                          Подписка
-                        </span>
+                    <MerchantStoreSettingsSection
+                      icon="💎"
+                      title="Подписка"
+                      badge={
                         <span className={subBadge.className}>
                           {subBadge.label}
                         </span>
-                      </div>
+                      }
+                    >
                       {endLabel != null ? (
                         <>
                           <div className="mp-settings-hero__metrics">
@@ -2332,17 +2333,15 @@ export default function PlatformPage() {
                           Срок подписки не указан.
                         </p>
                       )}
-                    </div>
+                    </MerchantStoreSettingsSection>
                   );
                 })() : null}
 
-                <div className="mp-settings-section mp-settings-section--accent">
-                  <div className="mp-settings-section__head">
-                    <span className="mp-settings-section__title">Магазин</span>
-                  </div>
-                  <p className="mp-settings-section__desc">
-                    Название и адрес видят покупатели в витрине и заказах.
-                  </p>
+                <MerchantStoreSettingsSection
+                  icon="🏪"
+                  title="Магазин"
+                  description="Название видят покупатели в витрине, заказах и уведомлениях."
+                >
                   <div className="mp-settings-field">
                     <label
                       htmlFor="platform-settings-name"
@@ -2363,13 +2362,6 @@ export default function PlatformPage() {
                       className={archa.input}
                     />
                   </div>
-                  <MerchantStoreAddressEditor
-                    inputId="platform-settings-address"
-                    inputClassName={archa.input}
-                    disabled={settingsSnap == null}
-                    value={storeAddressDraft}
-                    onChange={setStoreAddressDraft}
-                  />
 
                   {settingsSnap != null &&
                   isPlatformAdmin &&
@@ -2388,33 +2380,43 @@ export default function PlatformPage() {
                       />
                     </div>
                   ) : null}
-                </div>
+                </MerchantStoreSettingsSection>
 
-                <div className="mp-settings-section mp-settings-section--accent">
-                  <div className="mp-settings-section__head">
-                    <span className="mp-settings-section__title">Доставка</span>
-                  </div>
-                  <p className="mp-settings-section__desc">
-                    Правила доставки для checkout и расчёта суммы заказа.
-                  </p>
+                <MerchantStoreSettingsSection
+                  icon="📍"
+                  title="Адрес"
+                  description="Для карты, доставки по расстоянию и блока «О магазине»."
+                >
+                  <MerchantStoreAddressEditor
+                    inputId="platform-settings-address"
+                    inputClassName={archa.input}
+                    disabled={settingsSnap == null}
+                    value={storeAddressDraft}
+                    onChange={setStoreAddressDraft}
+                  />
+                </MerchantStoreSettingsSection>
+
+                <MerchantStoreSettingsSection
+                  icon="🚚"
+                  title="Доставка"
+                  description="Правила доставки для checkout и расчёта суммы заказа."
+                >
                   <MerchantDeliverySettingsPanel
                     value={deliverySettingsDraft}
                     onChange={setDeliverySettingsDraft}
                     disabled={settingsSnap == null}
                   />
-                </div>
+                </MerchantStoreSettingsSection>
 
-                <div className="mp-settings-section mp-settings-section--accent">
-                  <div className="mp-settings-section__head">
-                    <span className="mp-settings-section__title">
-                      Telegram-бот
-                    </span>
-                  </div>
-                  <p className="mp-settings-section__desc">
-                    {isPlatformAdmin
+                <MerchantStoreSettingsSection
+                  icon="🤖"
+                  title="Telegram Bot"
+                  description={
+                    isPlatformAdmin
                       ? "Смена токена создаёт заявку для оператора. Текущий токен не показывается."
-                      : "Вставьте новый токен из @BotFather — проверим Telegram, сохраним и переподключим webhook без ожидания поддержки."}
-                  </p>
+                      : "Вставьте новый токен из @BotFather — проверим Telegram, сохраним и переподключим webhook."
+                  }
+                >
                   <div className="mp-settings-field">
                     <label
                       htmlFor="platform-settings-token"
@@ -2448,12 +2450,14 @@ export default function PlatformPage() {
                       {botTokenSaving ? "Сохранение…" : "Сохранить токен и подключить"}
                     </button>
                   ) : null}
-                </div>
+                </MerchantStoreSettingsSection>
 
-                <div className="mp-settings-section mp-settings-section--accent">
-                  <div className="mp-settings-section__head">
-                    <span className="mp-settings-section__title">Finik</span>
-                    {settingsSnap?.finikReady ? (
+                <MerchantStoreSettingsSection
+                  icon="💳"
+                  title="Оплата"
+                  description="Finik: API Key, Account ID и webhook для приёма платежей покупателей."
+                  badge={
+                    settingsSnap?.finikReady ? (
                       <span className="mp-settings-status-pill mp-settings-status-pill--ok">
                         Готов к оплате
                       </span>
@@ -2461,13 +2465,9 @@ export default function PlatformPage() {
                       <span className="mp-settings-status-pill mp-settings-status-pill--warn">
                         Не настроен
                       </span>
-                    )}
-                  </div>
-                  <p className="mp-settings-section__desc">
-                    Для готовности Finik нужны API Key и Account ID из
-                    личного кабинета Finik, затем webhook URL в Finik. Secret —
-                    только для текущего legacy HTTP до обновления API.
-                  </p>
+                    )
+                  }
+                >
                   <div className="mp-finik-status-row">
                     <span className="mp-settings-key-chip">
                       API Key:{" "}
@@ -2622,17 +2622,14 @@ export default function PlatformPage() {
                   >
                     {finikSaving ? "Сохранение…" : "Сохранить Finik"}
                   </button>
-                </div>
+                </MerchantStoreSettingsSection>
 
                 {!isPlatformAdmin && settingsSnap != null ? (
-                  <div className="mp-settings-section">
-                    <div className="mp-settings-section__head">
-                      <span className="mp-settings-section__title">Подписка</span>
-                    </div>
-                    <p className="mp-settings-section__desc">
-                      Оплата и продление — в разделе «Подписка» на главной панели
-                      (Finik платформы).
-                    </p>
+                  <MerchantStoreSettingsSection
+                    icon="💎"
+                    title="Подписка"
+                    description="Оплата и продление — в разделе «Подписка» на главной панели (Finik платформы)."
+                  >
                     <button
                       type="button"
                       className="mp-settings-btn-secondary"
@@ -2643,7 +2640,7 @@ export default function PlatformPage() {
                     >
                       Перейти к оплате подписки →
                     </button>
-                  </div>
+                  </MerchantStoreSettingsSection>
                 ) : null}
                 </div>
 

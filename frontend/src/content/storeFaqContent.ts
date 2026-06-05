@@ -1,12 +1,12 @@
 import type { ArchaFaqCategory, ArchaFaqItem } from "./archaFaqContent";
 
+/** FAQ покупателя магазина — только заказ, оплата, доставка, возврат, контакты. */
 export const STORE_FAQ_CATEGORIES: ArchaFaqCategory[] = [
-  { id: "about", label: "Заказы", icon: "🛒" },
-  { id: "shop", label: "Оплата", icon: "💳" },
-  { id: "payment", label: "Доставка", icon: "🚚" },
-  { id: "delivery", label: "Поддержка", icon: "💬" },
-  { id: "subscription", label: "Возврат", icon: "↩️" },
-  { id: "support", label: "Магазин", icon: "🏪" },
+  { id: "orders", label: "Заказ", icon: "🛒" },
+  { id: "payment", label: "Оплата", icon: "💳" },
+  { id: "delivery", label: "Доставка", icon: "🚚" },
+  { id: "returns", label: "Возврат", icon: "↩️" },
+  { id: "contacts", label: "Контакты", icon: "📞" },
 ];
 
 export function buildStoreFaqItems(ctx: {
@@ -17,7 +17,7 @@ export function buildStoreFaqItems(ctx: {
   return [
     {
       id: "how-to-order",
-      categoryId: "about",
+      categoryId: "orders",
       question: "Как сделать заказ?",
       paragraphs: [
         `Откройте каталог ${store}, выберите товар, размер и количество, добавьте в корзину и оформите заказ в Telegram Mini App.`,
@@ -26,8 +26,18 @@ export function buildStoreFaqItems(ctx: {
       keywords: ["заказ", "корзина", "купить", "оформить"],
     },
     {
+      id: "order-status",
+      categoryId: "orders",
+      question: "Где посмотреть статус заказа?",
+      paragraphs: [
+        "Откройте меню и выберите «Мои заказы» — там отображаются все ваши заказы в этом магазине и их статус.",
+        "При изменении статуса (принят, готовится, доставляется) информация обновляется автоматически.",
+      ],
+      keywords: ["статус", "мои заказы", "отслеживание"],
+    },
+    {
       id: "how-to-pay",
-      categoryId: "shop",
+      categoryId: "payment",
       question: "Как оплатить заказ?",
       paragraphs: [
         "После оформления заказа вы перейдёте на защищённую страницу оплаты Finik.",
@@ -37,7 +47,7 @@ export function buildStoreFaqItems(ctx: {
     },
     {
       id: "delivery-how",
-      categoryId: "payment",
+      categoryId: "delivery",
       question: "Как работает доставка?",
       paragraphs: [
         `${store} самостоятельно настраивает условия доставки: самовывоз, фиксированная стоимость, расчёт по расстоянию или бесплатная доставка от суммы.`,
@@ -46,18 +56,8 @@ export function buildStoreFaqItems(ctx: {
       keywords: ["доставка", "курьер", "самовывоз", "стоимость"],
     },
     {
-      id: "contact-store",
-      categoryId: "delivery",
-      question: "Как связаться с магазином?",
-      paragraphs: [
-        "В меню выберите «Поддержка» — откроется чат по вашему заказу с этим магазином.",
-        "Если заказа ещё нет, напишите через контакты, указанные на витрине в разделе «О магазине».",
-      ],
-      keywords: ["связаться", "поддержка", "контакт", "написать"],
-    },
-    {
       id: "returns",
-      categoryId: "subscription",
+      categoryId: "returns",
       question: "Можно ли вернуть товар?",
       paragraphs: [
         "Условия возврата и обмена определяет сам магазин.",
@@ -66,14 +66,14 @@ export function buildStoreFaqItems(ctx: {
       keywords: ["возврат", "обмен", "вернуть"],
     },
     {
-      id: "hours",
-      categoryId: "support",
-      question: "График работы магазина",
+      id: "contact-store",
+      categoryId: "contacts",
+      question: "Как связаться с магазином?",
       paragraphs: [
-        "Актуальный график работы и адрес смотрите на главной странице витрины или в разделе «О магазине».",
-        "Если магазин временно не принимает заказы, это будет указано при оформлении.",
+        "В меню выберите «Поддержка» — откроется чат по вашему заказу с этим магазином.",
+        "Если заказа ещё нет, напишите через контакты, указанные на витрине в разделе «О магазине».",
       ],
-      keywords: ["график", "часы", "работа", "адрес"],
+      keywords: ["связаться", "поддержка", "контакт", "написать"],
     },
   ];
 }

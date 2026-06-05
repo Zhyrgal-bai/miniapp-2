@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { ARCHA_BRAND } from "../config/brandAssets";
-import { ARCHA_FAQ_SUPPORT_TELEGRAM_URL } from "../content/archaFaqContent";
 import "../design/archaPremium.css";
 import "./MerchantLandingPage.css";
 
@@ -206,11 +205,11 @@ export default function MerchantLandingPage() {
               </p>
               <a
                 className="archa-landing__link"
-                href={ARCHA_FAQ_SUPPORT_TELEGRAM_URL}
+                href={ARCHA_BRAND.telegramLoginUrl}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                @archa_kg
+                {ARCHA_BRAND.telegramBotHandle}
               </a>
             </div>
           </div>

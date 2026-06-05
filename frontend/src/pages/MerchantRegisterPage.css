@@ -1,16 +1,14 @@
-/* Страница заявки /merchant/register — стили под мини-версию макета ARCHA */
+/* Страница заявки /merchant/register — ARCHA Premium */
 
 .mr {
   box-sizing: border-box;
   position: relative;
   min-height: 100dvh;
-  background: #050805;
-  color: #ffffff;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    sans-serif;
+  background: var(--archa-bg, #050805);
+  color: var(--archa-text, #eef8ea);
+  font-family: var(--archa-font, ui-sans-serif, system-ui, sans-serif);
   -webkit-font-smoothing: antialiased;
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
-  border-top: 3px solid #7fff3a;
   overflow: hidden;
 }
 
@@ -18,7 +16,7 @@
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(180deg, rgba(5, 8, 5, 0.92) 0%, rgba(5, 8, 5, 0.78) 45%, rgba(5, 8, 5, 0.94) 100%),
+    linear-gradient(180deg, rgba(5, 8, 5, 0.88) 0%, rgba(5, 8, 5, 0.72) 45%, rgba(5, 8, 5, 0.94) 100%),
     url("/фон.png") center / cover no-repeat;
   pointer-events: none;
 }
@@ -43,13 +41,13 @@
 
 .mr__logo {
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  border: 1px solid rgba(127, 255, 58, 0.15);
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid var(--archa-glass-border);
   object-fit: contain;
   background: rgba(0, 0, 0, 0.35);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
 }
 
 .mr__brand {
@@ -61,17 +59,17 @@
   margin: 0;
   font-size: 17px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   line-height: 1.25;
-  color: #ffffff;
+  color: var(--archa-text);
 }
 
 .mr__brand-sub {
   margin: 4px 0 0;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.35;
-  color: #cbd5e1;
+  color: var(--archa-text-muted);
 }
 
 .mr__close {
@@ -80,17 +78,18 @@
   margin: 0;
   padding: 8px 14px;
   border-radius: 9999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.08);
-  color: #f1f5f9;
+  border: 1px solid var(--archa-glass-border);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--archa-text);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, transform 0.15s ease;
 }
 
 .mr__close:active {
-  background: rgba(255, 255, 255, 0.14);
+  transform: scale(0.98);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .mr__form {
@@ -101,9 +100,7 @@
 }
 
 .mr__card {
-  border-radius: 0;
-  border: 1px solid #334155;
-  background: #1e293b;
+  border-radius: var(--archa-radius-xl, 1.25rem);
   padding: 0;
   overflow: hidden;
 }
@@ -111,37 +108,31 @@
 .mr__card-head {
   text-align: center;
   padding: 22px 20px 16px;
-  border-bottom: 1px solid #334155;
+  border-bottom: 1px solid var(--archa-glass-border);
 }
 
 .mr__title {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 1.35rem;
   font-weight: 700;
-  line-height: 1.35;
-  color: #ffffff;
+  line-height: 1.3;
+  color: var(--archa-text);
 }
 
 .mr__subtitle {
   margin: 10px 0 0;
   font-size: 14px;
   line-height: 1.55;
-  color: #94a3b8;
-}
-
-.mr__fields {
-  display: flex;
-  flex-direction: column;
+  color: var(--archa-text-muted);
 }
 
 .mr__field {
   padding: 14px 20px;
-  border-bottom: 1px solid #334155;
-  background: #1e293b;
+  border-bottom: 1px solid var(--archa-glass-border);
 }
 
 .mr__field:focus-within {
-  background: rgba(15, 23, 42, 0.55);
+  background: rgba(157, 255, 87, 0.04);
 }
 
 .mr__label {
@@ -149,7 +140,7 @@
   margin: 0 0 10px;
   font-size: 14px;
   font-weight: 500;
-  color: #ffffff;
+  color: var(--archa-text);
   text-align: left;
 }
 
@@ -161,7 +152,7 @@
   border: none;
   border-radius: 0;
   background: transparent;
-  color: #f8fafc;
+  color: var(--archa-text);
   font-size: 16px;
   line-height: 1.45;
   outline: none;
@@ -171,7 +162,7 @@
 }
 
 .mr__input::placeholder {
-  color: #64748b;
+  color: var(--archa-text-dim);
 }
 
 .mr__input--mono {
@@ -181,10 +172,9 @@
 .mr__hint {
   margin: 0;
   padding: 12px 20px 4px;
-  border-top: 1px solid #334155;
   font-size: 12px;
   line-height: 1.45;
-  color: #94a3b8;
+  color: var(--archa-text-muted);
 }
 
 .mr__err {
@@ -203,26 +193,28 @@
 
 .mr__submit {
   width: 100%;
-  min-height: 48px;
+  min-height: 50px;
   margin: 0;
   padding: 12px 16px;
-  border: 1px solid #0f172a;
-  border-radius: 0;
-  background: #22c55e;
-  color: #0f172a;
+  border: none;
+  border-radius: 0.875rem;
+  background: linear-gradient(135deg, #b8ff6a 0%, var(--archa-green-neon) 45%, #6fdc3d 100%);
+  color: var(--archa-black);
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   touch-action: manipulation;
-  transition: filter 0.15s ease, opacity 0.15s ease;
+  transition: filter 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 8px 24px rgba(127, 255, 58, 0.22);
 }
 
 .mr__submit:hover:not(:disabled) {
   filter: brightness(1.05);
+  transform: translateY(-1px);
 }
 
 .mr__submit:active:not(:disabled) {
-  filter: brightness(0.97);
+  transform: scale(0.98);
 }
 
 .mr__submit:disabled {
@@ -234,7 +226,7 @@
   margin: 0;
   padding: 48px 16px;
   text-align: center;
-  color: #94a3b8;
+  color: var(--archa-text-muted);
 }
 
 .mr__progress {
@@ -248,47 +240,82 @@
   width: 8px;
   height: 8px;
   border-radius: 9999px;
-  background: #334155;
+  background: rgba(255, 255, 255, 0.15);
+  transition: background 0.2s ease, transform 0.2s ease;
 }
 
 .mr__progress-dot--active {
-  background: #22c55e;
+  background: var(--archa-green-neon);
+  transform: scale(1.15);
 }
 
 .mr__type-list {
   list-style: none;
   margin: 0;
-  padding: 8px 12px 16px;
+  padding: 12px 14px 16px;
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .mr__type-btn {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: flex-start;
+  gap: 14px;
   width: 100%;
-  min-height: 52px;
-  padding: 12px 16px;
-  border: 1px solid #334155;
-  border-radius: 12px;
-  background: #0f172a;
-  color: #f8fafc;
+  min-height: 72px;
+  padding: 14px 16px;
+  border: 1px solid var(--archa-glass-border);
+  border-radius: var(--archa-radius-lg, 1rem);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--archa-text);
   font-size: 16px;
   font-weight: 500;
   cursor: pointer;
   touch-action: manipulation;
   text-align: left;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.mr__type-btn:hover {
+  border-color: var(--archa-glass-border-strong);
+  background: rgba(157, 255, 87, 0.06);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.25);
 }
 
 .mr__type-btn--active {
-  border-color: #22c55e;
-  background: rgba(34, 197, 94, 0.12);
+  border-color: var(--archa-green-neon);
+  background: rgba(157, 255, 87, 0.1);
+  box-shadow: 0 0 0 1px rgba(157, 255, 87, 0.2);
 }
 
 .mr__type-emoji {
-  font-size: 22px;
+  font-size: 26px;
   line-height: 1;
+  flex-shrink: 0;
+}
+
+.mr__type-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mr__type-label {
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.mr__type-desc {
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--archa-text-muted);
+  font-weight: 400;
 }
 
 .mr__field--solo {
@@ -305,19 +332,19 @@
   justify-content: space-between;
   gap: 12px;
   padding: 12px 0;
-  border-bottom: 1px solid #334155;
+  border-bottom: 1px solid var(--archa-glass-border);
   font-size: 14px;
 }
 
 .mr__review-row dt {
   margin: 0;
-  color: #94a3b8;
+  color: var(--archa-text-muted);
 }
 
 .mr__review-row dd {
   margin: 0;
   text-align: right;
-  color: #f8fafc;
+  color: var(--archa-text);
   font-weight: 500;
 }
 
@@ -335,7 +362,7 @@
 .mr__faq-link {
   border: none;
   background: transparent;
-  color: #93c5fd;
+  color: var(--archa-green-neon);
   font: inherit;
   font-size: 14px;
   font-weight: 600;
@@ -349,5 +376,5 @@
   padding: 0 20px max(20px, env(safe-area-inset-bottom));
   text-align: center;
   font-size: 13px;
-  color: rgba(248, 250, 252, 0.72);
+  color: var(--archa-text-muted);
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { getTelegramWebApp } from "../utils/telegram";
 import { resolveMerchantTelegramUserId } from "../utils/telegramUserId";
 import {
@@ -17,6 +18,7 @@ import {
   type MerchantStoreAddressDraft,
 } from "../utils/nominatimGeocode";
 import "./MerchantRegisterPage.css";
+import "../design/archaPremium.css";
 import { ARCHA_BRAND } from "../config/brandAssets";
 
 const SS_SHOP = "miniapp-active-shop";
@@ -30,11 +32,32 @@ const BUSINESS_TYPES: Array<{
   id: BusinessType;
   emoji: string;
   label: string;
+  description: string;
 }> = [
-  { id: "clothing", emoji: "👕", label: "Одежда" },
-  { id: "coffee", emoji: "☕", label: "Кофейня" },
-  { id: "fastfood", emoji: "🍔", label: "Фастфуд" },
-  { id: "flowers", emoji: "🌸", label: "Цветочный" },
+  {
+    id: "clothing",
+    emoji: "👕",
+    label: "Одежда",
+    description: "Размеры, цвета, варианты и fashion-карточки",
+  },
+  {
+    id: "coffee",
+    emoji: "☕",
+    label: "Кофейня",
+    description: "Напитки, опции заказа и быстрый pickup",
+  },
+  {
+    id: "fastfood",
+    emoji: "🍔",
+    label: "Фастфуд",
+    description: "Комбо, модификаторы и доставка еды",
+  },
+  {
+    id: "flowers",
+    emoji: "🌸",
+    label: "Цветочный",
+    description: "Букеты, дата доставки и подарочная упаковка",
+  },
 ];
 
 const STEP_LABELS = [
@@ -76,6 +99,7 @@ function parseBackButton(tg: unknown): BackBtn | null {
 
 export default function MerchantRegisterPage() {
   const navigate = useNavigate();
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     document.title = ARCHA_BRAND.title;
@@ -346,10 +370,10 @@ export default function MerchantRegisterPage() {
       <div className="mr__bg" aria-hidden />
       <header className="mr__header">
         <img
-          src={ARCHA_BRAND.logoMark}
+          src="/logo.png"
           alt={ARCHA_BRAND.name}
-          width={40}
-          height={40}
+          width={44}
+          height={44}
           className="mr__logo"
         />
         <div className="mr__brand">
@@ -379,12 +403,20 @@ export default function MerchantRegisterPage() {
       </div>
 
       <div className="mr__form">
-        <div className="mr__card">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={step}
+            className="mr__card archa-glass archa-glass--glow"
+            initial={reduceMotion ? false : { opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduceMotion ? undefined : { opacity: 0, y: -8 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+          >
           {step === 1 ? (
             <>
               <div className="mr__card-head">
                 <h1 className="mr__title">Тип бизнеса</h1>
-                <p className="mr__subtitle">Выберите шаблон для вашего магазина</p>
+                <p className="mr__subtitle">Выберите шаблон — каталог, поля товара и тема под вашу нишу</p>
               </div>
               <ul className="mr__type-list">
                 {BUSINESS_TYPES.map((t) => (
@@ -395,7 +427,10 @@ export default function MerchantRegisterPage() {
                       onClick={() => setBusinessType(t.id)}
                     >
                       <span className="mr__type-emoji">{t.emoji}</span>
-                      <span>{t.label}</span>
+                      <span className="mr__type-copy">
+                        <span className="mr__type-label">{t.label}</span>
+                        <span className="mr__type-desc">{t.description}</span>
+                      </span>
                     </button>
                   </li>
                 ))}
@@ -623,7 +658,8 @@ export default function MerchantRegisterPage() {
             </button>
           </p>
           <p className="mr__footer-tag">{ARCHA_BRAND.tagline}</p>
-        </div>
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );

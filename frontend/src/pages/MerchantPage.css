@@ -845,6 +845,35 @@
   color: #86efac;
 }
 
+.mp-settings-section--premium {
+  border-color: var(--archa-glass-border-strong);
+  background: var(--archa-glass);
+  backdrop-filter: blur(var(--archa-blur));
+  -webkit-backdrop-filter: blur(var(--archa-blur));
+  box-shadow: var(--archa-shadow-card), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.mp-settings-section__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  margin-right: 0.35rem;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.mp-settings-section--premium .mp-settings-section__title {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.9375rem;
+  color: var(--archa-text);
+}
+
+.mp-settings-section--premium .mp-settings-section__desc {
+  color: var(--archa-text-muted);
+}
+
 /* Модалка настроек — секции */
 .mp-settings-header {
   display: flex;
@@ -1535,8 +1564,8 @@
   box-sizing: border-box;
   padding: max(0.65rem, env(safe-area-inset-top, 0px)) 0.75rem
     max(0.75rem, env(safe-area-inset-bottom, 0px));
-  background: rgba(15, 23, 42, 0.94);
-  backdrop-filter: blur(10px);
+  background: rgba(3, 4, 3, 0.78);
+  backdrop-filter: blur(12px);
 }
 
 @media (min-width: 640px) {
@@ -1555,15 +1584,13 @@
   width: 100%;
   max-width: 26rem;
   overflow: hidden;
-  border-radius: 1.15rem;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  background: rgba(17, 24, 39, 0.96) !important;
-  backdrop-filter: blur(20px);
-  color: #f8fafc;
+  border-radius: var(--archa-radius-xl, 1.15rem);
+  border: 1px solid var(--archa-glass-border-strong) !important;
+  background: color-mix(in srgb, var(--archa-bg-elevated) 94%, transparent) !important;
+  backdrop-filter: blur(24px);
+  color: var(--archa-text);
   padding: 1.15rem 1.35rem max(1.15rem, env(safe-area-inset-bottom, 0px)) !important;
-  box-shadow:
-    0 28px 64px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(34, 197, 94, 0.06);
+  box-shadow: var(--archa-shadow-glow), var(--archa-shadow-card);
 }
 
 @media (min-width: 640px) {

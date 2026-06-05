@@ -25,7 +25,7 @@ export default function FAQ() {
   return (
     <ArchaFaqView
       title={readTxt("titleFaq", "Вопросы и ответы")}
-      subtitle="Помощь покупателям этого магазина"
+      subtitle="Заказ · оплата · доставка · возврат · контакты — только про этот магазин"
       items={items}
       categories={STORE_FAQ_CATEGORIES}
       showSupportCta={false}
