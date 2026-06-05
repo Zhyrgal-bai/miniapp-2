@@ -28,6 +28,10 @@ import {
 import { isStorefrontCommerceEnabled } from "../../hooks/useStorefrontCommerceMode";
 import { useStorefrontPayload } from "../storefront/runtime/StorefrontPayloadContext";
 import { openOpenInTelegramModal } from "../../storefront/openInTelegramModal";
+import {
+  productRequiresVariantPicker,
+  resolveInstantAddLine,
+} from "../../commerce/productVariantPolicy";
 
 type Props = {
   product: Product;
@@ -183,6 +187,8 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   }, [product, selectedColor]);
 
   const outOfStock = isOutOfStock(product);
+  const needsVariantPicker = productRequiresVariantPicker(product, resolvedBusinessType);
+  const showCardVariants = !onOpenDetail && !needsVariantPicker;
   const profile = useMemo(
     () => profileForBusinessType(businessType),
     [businessType],
@@ -270,20 +276,27 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   const displayPrice = getEffectivePrice(product);
 
   const upsertQuantity = (nextQuantity: number) => {
-    if (!selectedSize || outOfStock || lineColor === null) return;
-    if (selectedStock <= 0) return;
+    const instant =
+      !needsVariantPicker ? resolveInstantAddLine(product, resolvedBusinessType) : null;
+    const size = instant?.size ?? selectedSize;
+    const colorKey = instant?.color ?? lineColor;
+    if (!size || outOfStock || colorKey === null) return;
+    const stock = getMaxOrderQty(product, size, colorKey);
+    if (stock <= 0) return;
+
+    const storage = storageColorForCart(resolvedBusinessType, colorKey);
 
     if (cartItem) removeItem(cartItem);
     if (nextQuantity <= 0) return;
 
-    const capped = Math.min(nextQuantity, selectedStock);
+    const capped = Math.min(nextQuantity, stock);
     addItem({
       productId: product.id!,
       name: product.name,
       price: displayPrice,
       image: getPrimaryImage(product),
-      size: selectedSize,
-      color: storageColor,
+      size,
+      color: storage,
       quantity: capped,
     });
     if (businessId && product.id) {
@@ -291,14 +304,33 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
     }
   };
 
-  const canAddToCart =
-    !outOfStock &&
-    selectedSize !== null &&
-    selectedStock > 0 &&
-    (!hasCustomColors || lineColor !== null);
+  const canAddToCart = (() => {
+    if (needsVariantPicker) return false;
+    const instant = resolveInstantAddLine(product, resolvedBusinessType);
+    if (instant) {
+      return (
+        !outOfStock &&
+        getMaxOrderQty(product, instant.size, instant.color) > 0
+      );
+    }
+    return (
+      !outOfStock &&
+      selectedSize !== null &&
+      selectedStock > 0 &&
+      (!hasCustomColors || lineColor !== null)
+    );
+  })();
 
   const cta = useMemo(() => {
     const soldScore = Number(product.sold ?? 0) || 0;
+    if (needsVariantPicker && quantity <= 0 && !outOfStock) {
+      return {
+        label: addLabel,
+        disabled: false,
+        emphasis: "primary" as const,
+        state: "ready" as const,
+      };
+    }
     return computeCtaModel({
       product,
       profile,
@@ -310,10 +342,22 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
       stockLeft: totalStock,
       soldScore,
     });
-  }, [product, profile, kit, addLabel, outOfStock, canAddToCart, quantity, totalStock]);
+  }, [product, profile, kit, addLabel, outOfStock, canAddToCart, quantity, totalStock, needsVariantPicker]);
 
   const handleAddToCart = () => {
-    if (!canAddToCart || lineColor === null) return;
+    if (needsVariantPicker && onOpenDetail) {
+      openDetail();
+      return;
+    }
+    if (!canAddToCart) return;
+    const instant = resolveInstantAddLine(product, resolvedBusinessType);
+    if (instant) {
+      if (businessId && product.id) recordRecentlyViewed({ businessId, product });
+      upsertQuantity(1);
+      showToast("Добавлено в корзину");
+      return;
+    }
+    if (lineColor === null) return;
     const line = sizes.find((s) => s.size === selectedSize);
     if (!line || line.stock === 0) return;
     if (businessId && product.id) recordRecentlyViewed({ businessId, product });
@@ -595,7 +639,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
           <div className="out-of-stock">НЕТ В НАЛИЧИИ</div>
         ) : (
           <>
-            {hasCustomColors && (
+            {showCardVariants && hasCustomColors && (
               <div className="colors">
                 {colors.map((c) => (
                   <button
@@ -609,6 +653,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
                 ))}
               </div>
             )}
+            {showCardVariants ? (
             <div className="product-tiers">
               {sizes.map((s) => (
                 <button
@@ -623,6 +668,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
                 </button>
               ))}
             </div>
+            ) : null}
           </>
         )}
 

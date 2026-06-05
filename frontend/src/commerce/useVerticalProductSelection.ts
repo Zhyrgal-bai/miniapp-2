@@ -28,10 +28,12 @@ export type VerticalSelection = {
 export function useVerticalProductSelection(
   product: Product,
   businessType?: string | null,
+  options?: { autoSelectDefaults?: boolean },
 ): VerticalSelection & {
   setSelectedSize: (s: string | null) => void;
   setSelectedColor: (s: string | null) => void;
 } {
+  const autoSelectDefaults = options?.autoSelectDefaults !== false;
   const profile = useMemo(
     () => verticalProfileFor(businessType ?? product.businessType),
     [businessType, product.businessType],
@@ -52,15 +54,16 @@ export function useVerticalProductSelection(
 
   useEffect(() => {
     if (!showColorPicker) {
-      setSelectedColor("default");
+      if (autoSelectDefaults) setSelectedColor("default");
       return;
     }
     if (!variants.length) return;
+    if (!autoSelectDefaults) return;
     setSelectedColor((prev) => {
       if (prev && variants.some((x) => x.color === prev)) return prev;
       return variants[0]?.color ?? "default";
     });
-  }, [product.id, variants, showColorPicker]);
+  }, [product.id, variants, showColorPicker, autoSelectDefaults]);
 
   const sizes = useMemo(() => {
     if (!variants.length) return [];
@@ -71,6 +74,7 @@ export function useVerticalProductSelection(
   }, [variants, selectedColor, showColorPicker]);
 
   useEffect(() => {
+    if (!autoSelectDefaults) return;
     if (sizes.length === 0) {
       setSelectedSize(null);
       return;
@@ -80,7 +84,7 @@ export function useVerticalProductSelection(
       const firstAvailable = sizes.find((s) => s.stock > 0);
       return firstAvailable?.size ?? sizes[0]?.size ?? null;
     });
-  }, [product.id, sizes]);
+  }, [product.id, sizes, autoSelectDefaults]);
 
   const lineColor = showColorPicker
     ? (selectedColor ?? variants[0]?.color ?? "default")

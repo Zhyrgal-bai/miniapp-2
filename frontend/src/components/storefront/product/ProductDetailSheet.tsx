@@ -15,7 +15,6 @@ import {
   useVerticalProductSelection,
   formatSizeLabel,
 } from "../../../commerce/useVerticalProductSelection";
-import { formatOrderLineSummary } from "@repo-shared/businessCommerce";
 import { useStorefrontPayload } from "../runtime/StorefrontPayloadContext";
 import { VerticalOrderOptionsFields } from "../../../commerce/VerticalOrderOptionsFields";
 import {
@@ -27,6 +26,7 @@ import { recordRecentlyViewed } from "../discovery/recentlyViewed";
 import { useBodyScrollLock } from "../../../utils/bodyScrollLock";
 import { isStorefrontCommerceEnabled } from "../../../hooks/useStorefrontCommerceMode";
 import { openOpenInTelegramModal } from "../../../storefront/openInTelegramModal";
+import { trackAddToCart } from "../../../services/storefrontAnalytics";
 import "./ProductDetailSheet.css";
 
 export type ProductDetailSheetProps = {
@@ -62,8 +62,9 @@ export function ProductDetailSheet({
   const toast = showToast ?? (() => undefined);
   const [resolved, setResolved] = useState<Product | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [pickQty, setPickQty] = useState(1);
+  const [selectionHint, setSelectionHint] = useState<string | null>(null);
   const touchStartX = useRef<number | null>(null);
-  const touchStartY = useRef<number | null>(null);
 
   const display =
     resolved != null && resolved.id === product.id ? resolved : product;
@@ -71,6 +72,8 @@ export function ProductDetailSheet({
   useEffect(() => {
     setResolved(null);
     setCurrentIndex(0);
+    setPickQty(1);
+    setSelectionHint(null);
     const id = product.id;
     if (!Number.isFinite(id) || !id) return;
     let cancelled = false;
@@ -101,14 +104,23 @@ export function ProductDetailSheet({
   const resolvedBusinessType =
     businessType ?? display.businessType ?? payload?.businessType ?? null;
   const orderOptionsSchema = (payload?.orderOptionsSchema ?? {}) as SchemaObject;
+  const addLabel =
+    typeof payload?.storefrontTextConfig?.addToCartLabel === "string" &&
+    String(payload.storefrontTextConfig.addToCartLabel).trim() !== ""
+      ? String(payload.storefrontTextConfig.addToCartLabel)
+      : "Добавить в корзину";
 
   const [orderOptions, setOrderOptions] = useState<Record<string, unknown>>({});
 
   useEffect(() => {
     setOrderOptions({});
+    setPickQty(1);
+    setSelectionHint(null);
   }, [product.id]);
 
-  const selection = useVerticalProductSelection(display, resolvedBusinessType);
+  const selection = useVerticalProductSelection(display, resolvedBusinessType, {
+    autoSelectDefaults: false,
+  });
   const {
     selectedSize,
     selectedColor,
@@ -119,7 +131,6 @@ export function ProductDetailSheet({
     hasCustomColors,
     outOfStock,
     selectedStock,
-    canSelect,
     primaryLabel,
     showColorPicker,
   } = selection;
@@ -136,25 +147,17 @@ export function ProductDetailSheet({
     return [];
   }, [display, showColorPicker]);
 
-  const variantSummary = formatOrderLineSummary({
-    businessType: resolvedBusinessType,
-    size: selectedSize,
-    color: showColorPicker ? lineColor : null,
-    options: orderOptions,
-    attributes: display.attributes ?? null,
-  });
-
   const images = useMemo(
     () =>
       display.images && display.images.length > 0
         ? display.images
         : [display.image],
-    [display]
+    [display],
   );
 
   useEffect(() => {
     setCurrentIndex((i) =>
-      images.length === 0 ? 0 : Math.min(i, images.length - 1)
+      images.length === 0 ? 0 : Math.min(i, images.length - 1),
     );
   }, [images.length]);
 
@@ -176,18 +179,21 @@ export function ProductDetailSheet({
     return items.find((i) => cartLineIdentityKey(i) === key) ?? null;
   }, [items, display.id, selectedSize, storageColor, orderOptions]);
 
-  const quantity = cartItem?.quantity ?? 0;
+  const cartQuantity = cartItem?.quantity ?? 0;
 
   const discountPct = getDiscountPercent(display);
   const displayPrice = getEffectivePrice(display);
 
-  const canAddToCart =
-    canSelect && (!showColorPicker || lineColor !== null);
+  const selectionReady =
+    !outOfStock &&
+    selectedSize != null &&
+    selectedStock > 0 &&
+    (!showColorPicker || !hasCustomColors || selectedColor != null);
 
   const upsertQuantity = useCallback(
     (nextQuantity: number) => {
       if (!selectedSize || outOfStock) return;
-      if (showColorPicker && lineColor === null) return;
+      if (showColorPicker && hasCustomColors && selectedColor == null) return;
       if (selectedStock <= 0) return;
       if (cartItem) removeItem(cartItem);
       if (nextQuantity <= 0) return;
@@ -202,12 +208,14 @@ export function ProductDetailSheet({
         options: { ...orderOptions },
         quantity: capped,
       });
+      if (businessId && display.id) trackAddToCart(businessId, display.id);
     },
     [
       selectedSize,
       outOfStock,
       showColorPicker,
-      lineColor,
+      hasCustomColors,
+      selectedColor,
       selectedStock,
       cartItem,
       removeItem,
@@ -216,15 +224,33 @@ export function ProductDetailSheet({
       displayPrice,
       storageColor,
       orderOptions,
-    ]
+      businessId,
+    ],
   );
 
-  const handleAdd = () => {
-    if (!canAddToCart || lineColor === null) return;
-    const line = sizes.find((s) => s.size === selectedSize);
-    if (!line || line.stock === 0) return;
+  const validateSelection = (): boolean => {
+    if (outOfStock) return false;
+    if (showColorPicker && hasCustomColors && selectedColor == null) {
+      setSelectionHint("Выберите цвет");
+      return false;
+    }
+    if (selectedSize == null) {
+      setSelectionHint(`Выберите ${primaryLabel.toLowerCase()}`);
+      return false;
+    }
+    if (selectedStock <= 0) {
+      setSelectionHint("Нет в наличии для выбранного варианта");
+      return false;
+    }
+    setSelectionHint(null);
+    return true;
+  };
+
+  const handleAddToCart = () => {
+    if (!validateSelection()) return;
     recordRecentlyViewed({ businessId, product: display });
-    upsertQuantity(1);
+    const next = cartQuantity > 0 ? cartQuantity + pickQty : pickQty;
+    upsertQuantity(Math.min(next, selectedStock));
     toast("Добавлено в корзину");
   };
 
@@ -255,259 +281,257 @@ export function ProductDetailSheet({
     touchStartX.current = null;
   };
 
-  const handleDragZoneTouchStart = (e: React.TouchEvent) => {
-    touchStartY.current = e.touches[0]?.clientY ?? null;
-  };
-
-  const handleDragZoneTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartY.current == null) return;
-    const dy = e.changedTouches[0].clientY - touchStartY.current;
-    touchStartY.current = null;
-    if (dy > 56) onClose();
-  };
-
-  const openSupport = () => {
-    onClose();
-    window.dispatchEvent(new CustomEvent("sf:openSupport"));
-  };
-
   const host =
     typeof document !== "undefined"
-      ? document.getElementById("sf-theme-portal-root") ?? document.body
+      ? (document.getElementById("sf-theme-portal-root") ?? document.body)
       : null;
 
   if (!host) return null;
 
+  const maxPickQty = selectionReady ? Math.max(1, selectedStock - cartQuantity) : 1;
+
   return createPortal(
     <AnimatePresence>
       <motion.div
-        key="pds-back"
-        className="sf-pds-backdrop"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.2 }}
-        onClick={onClose}
-      />
-      <motion.div
-        key="pds-panel"
+        key="pdp-screen"
+        className="pdp-screen"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="sf-pds-title"
-        className="sf-pds-panel"
-        initial={{ y: "100%" }}
-        animate={{ y: 0 }}
-        exit={{ y: "100%" }}
-        transition={{ type: "spring", damping: 34, stiffness: 380 }}
-        onClick={(e) => e.stopPropagation()}
+        aria-labelledby="pdp-title"
+        initial={{ x: "100%" }}
+        animate={{ x: 0 }}
+        exit={{ x: "100%" }}
+        transition={{ type: "tween", duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
       >
-        <div
-          className="sf-pds-drag-zone"
-          onTouchStart={handleDragZoneTouchStart}
-          onTouchEnd={handleDragZoneTouchEnd}
-        >
-          <div className="sf-pds-handle" aria-hidden />
-        </div>
-        <div
-          className="sf-pds-gallery sf-pds-gallery--hero"
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-        >
+        <header className="pdp-topbar">
+          <button type="button" className="pdp-topbar__back" onClick={onClose} aria-label="Назад">
+            ←
+          </button>
+          <span className="pdp-topbar__title">Товар</span>
+          <span className="pdp-topbar__spacer" aria-hidden />
+        </header>
+
+        <div className="pdp-scroll">
           <div
-            className="sf-pds-gallery-track"
-            style={
-              images.length > 0
-                ? {
-                    width: `${images.length * 100}%`,
-                    transform: `translateX(-${(currentIndex * 100) / images.length}%)`,
-                  }
-                : undefined
-            }
+            className="pdp-gallery"
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
           >
-            {images.map((src, i) => (
-              <div
-                key={i}
-                className="sf-pds-gallery-slide"
-                style={
-                  images.length > 0
-                    ? { flex: `0 0 ${100 / images.length}%` }
-                    : undefined
-                }
-              >
-                <img src={src} alt="" />
-              </div>
-            ))}
-          </div>
-          {images.length > 1 ? (
-            <div className="sf-pds-dots" aria-hidden>
-              {images.map((_, i) => (
-                <span
+            <div
+              className="pdp-gallery__track"
+              style={
+                images.length > 0
+                  ? {
+                      width: `${images.length * 100}%`,
+                      transform: `translateX(-${(currentIndex * 100) / images.length}%)`,
+                    }
+                  : undefined
+              }
+            >
+              {images.map((src, i) => (
+                <div
                   key={i}
-                  className={i === currentIndex ? "active" : ""}
-                />
+                  className="pdp-gallery__slide"
+                  style={
+                    images.length > 0
+                      ? { flex: `0 0 ${100 / images.length}%` }
+                      : undefined
+                  }
+                >
+                  <img src={src} alt="" />
+                </div>
               ))}
             </div>
-          ) : null}
-        </div>
-        <div className="sf-pds-scroll">
-          <h2 id="sf-pds-title" className="sf-pds-title">
-            {display.name}
-          </h2>
-
-          <div className="sf-pds-price-row">
+            {images.length > 1 ? (
+              <div className="pdp-gallery__dots" aria-hidden>
+                {images.map((_, i) => (
+                  <span key={i} className={i === currentIndex ? "is-active" : ""} />
+                ))}
+              </div>
+            ) : null}
             {discountPct > 0 ? (
-              <>
-                <span className="sf-pds-price-old">
-                  {display.price} сом
-                </span>
-                <span className="sf-pds-price">{displayPrice} сом</span>
-              </>
-            ) : (
-              <span className="sf-pds-price">{display.price} сом</span>
-            )}
+              <span className="pdp-gallery__badge">−{discountPct}%</span>
+            ) : null}
           </div>
 
-          {display.description?.trim() ? (
-            <p className="sf-pds-desc">{display.description.trim()}</p>
-          ) : null}
+          <div className="pdp-body">
+            <h1 id="pdp-title" className="pdp-name">
+              {display.name}
+            </h1>
 
-          {variantSummary ? (
-            <p className="sf-pds-desc sf-pds-variant-summary">{variantSummary}</p>
-          ) : null}
-
-          {outOfStock ? (
-            <p className="sf-pds-desc" role="status">
-              Нет в наличии
-            </p>
-          ) : sizes.length > 0 ? (
-            <>
-              {showColorPicker && hasCustomColors ? (
-                <>
-                  <p className="sf-pds-section-label">Цвет</p>
-                  <div className="sf-pds-colors">
-                    {colors.map((c) => (
-                      <button
-                        key={c.name}
-                        type="button"
-                        aria-label={c.name}
-                        style={{ background: c.hex }}
-                        className={selectedColor === c.name ? "active" : ""}
-                        onClick={() => setSelectedColor(c.name)}
-                      />
-                    ))}
-                  </div>
-                </>
+            <div className="pdp-price-block">
+              <span className="pdp-price">{displayPrice} сом</span>
+              {discountPct > 0 ? (
+                <span className="pdp-price-old">{display.price} сом</span>
               ) : null}
-              <p className="sf-pds-section-label">{primaryLabel}</p>
-              <div className="sf-pds-tiers">
-                {sizes.map((s) => (
-                  <button
-                    key={s.size}
-                    type="button"
-                    disabled={s.stock === 0}
-                    className={selectedSize === s.size ? "active" : ""}
-                    onClick={() => setSelectedSize(s.size)}
-                  >
-                    {formatSizeLabel(resolvedBusinessType, s.size)}
-                    {s.stock > 0 ? ` · ${s.stock}` : ""}
-                  </button>
-                ))}
-              </div>
-              <VerticalOrderOptionsFields
-                businessType={resolvedBusinessType}
-                schema={orderOptionsSchema}
-                value={orderOptions}
-                onChange={setOrderOptions}
-              />
-            </>
-          ) : null}
-
-          {related.length > 0 ? (
-            <div className="sf-pds-related">
-              <p className="sf-pds-section-label">Смотрите также</p>
-              <div className="sf-pds-related-scroll">
-                {related.map((p) => (
-                  <button
-                    key={String(p.id)}
-                    type="button"
-                    className="sf-pds-related-card"
-                    onClick={() => onSelectProduct(p)}
-                  >
-                    <img src={getPrimaryImage(p)} alt="" />
-                    <div className="sf-pds-related-meta">
-                      <span>{p.name}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
             </div>
-          ) : null}
-        </div>
 
-        <div className="sf-pds-sticky-cta">
-          <div className="sf-pds-cta-row">
-            {!isStorefrontCommerceEnabled() ? (
-              <button
-                type="button"
-                className="sf-pds-add"
-                onClick={() =>
-                  openOpenInTelegramModal(payload?.telegramOpenUrl ?? null)
-                }
-              >
-                {outOfStock ? "Нет в наличии" : "В корзину"}
-              </button>
-            ) : quantity <= 0 ? (
-              <button
-                type="button"
-                className="sf-pds-add"
-                disabled={!canAddToCart}
-                onClick={handleAdd}
-              >
-                {outOfStock ? "Нет в наличии" : "В корзину"}
-              </button>
+            {display.description?.trim() ? (
+              <p className="pdp-desc">{display.description.trim()}</p>
+            ) : null}
+
+            {outOfStock ? (
+              <p className="pdp-stock pdp-stock--out" role="status">
+                Нет в наличии
+              </p>
             ) : (
-              <div className="sf-pds-qty">
-                <button
-                  type="button"
-                  aria-label="Меньше"
-                  onClick={() => upsertQuantity(quantity - 1)}
-                  disabled={outOfStock || !selectedSize || lineColor === null}
-                >
-                  −
-                </button>
-                <span>{quantity}</span>
-                <button
-                  type="button"
-                  aria-label="Больше"
-                  onClick={() => upsertQuantity(quantity + 1)}
-                  disabled={
-                    outOfStock ||
-                    !selectedSize ||
-                    lineColor === null ||
-                    quantity >= selectedStock
-                  }
-                >
-                  +
-                </button>
-              </div>
+              <>
+                {showColorPicker && hasCustomColors ? (
+                  <section className="pdp-section">
+                    <h2 className="pdp-section__label">Цвет</h2>
+                    <div className="pdp-colors">
+                      {colors.map((c) => (
+                        <button
+                          key={c.name}
+                          type="button"
+                          className={`pdp-color${selectedColor === c.name ? " is-active" : ""}`}
+                          aria-label={c.name}
+                          aria-pressed={selectedColor === c.name}
+                          style={{ background: c.hex }}
+                          onClick={() => {
+                            setSelectedColor(c.name);
+                            setSelectionHint(null);
+                          }}
+                        >
+                          <span className="pdp-color__name">{c.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+
+                {sizes.length > 0 ? (
+                  <section className="pdp-section">
+                    <h2 className="pdp-section__label">{primaryLabel}</h2>
+                    <div className="pdp-sizes">
+                      {sizes.map((s) => (
+                        <button
+                          key={s.size}
+                          type="button"
+                          disabled={s.stock === 0}
+                          className={`pdp-size${selectedSize === s.size ? " is-active" : ""}`}
+                          aria-pressed={selectedSize === s.size}
+                          onClick={() => {
+                            setSelectedSize(s.size);
+                            setSelectionHint(null);
+                          }}
+                        >
+                          {formatSizeLabel(resolvedBusinessType, s.size)}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+
+                <VerticalOrderOptionsFields
+                  businessType={resolvedBusinessType}
+                  schema={orderOptionsSchema}
+                  value={orderOptions}
+                  onChange={setOrderOptions}
+                />
+
+                <section className="pdp-section">
+                  <h2 className="pdp-section__label">Количество</h2>
+                  <div className="pdp-qty" role="group" aria-label="Количество">
+                    <button
+                      type="button"
+                      className="pdp-qty__btn"
+                      aria-label="Меньше"
+                      disabled={pickQty <= 1}
+                      onClick={() => setPickQty((q) => Math.max(1, q - 1))}
+                    >
+                      −
+                    </button>
+                    <span className="pdp-qty__value">{pickQty}</span>
+                    <button
+                      type="button"
+                      className="pdp-qty__btn"
+                      aria-label="Больше"
+                      disabled={!selectionReady || pickQty >= maxPickQty}
+                      onClick={() => setPickQty((q) => Math.min(maxPickQty, q + 1))}
+                    >
+                      +
+                    </button>
+                  </div>
+                </section>
+              </>
             )}
+
+            {selectionHint ? (
+              <p className="pdp-hint" role="alert">
+                {selectionHint}
+              </p>
+            ) : null}
+
+            {related.length > 0 ? (
+              <section className="pdp-section pdp-section--related">
+                <h2 className="pdp-section__label">Похожие товары</h2>
+                <div className="pdp-related">
+                  {related.map((p) => (
+                    <button
+                      key={String(p.id)}
+                      type="button"
+                      className="pdp-related__card"
+                      onClick={() => onSelectProduct(p)}
+                    >
+                      <img src={getPrimaryImage(p)} alt="" />
+                      <span>{p.name}</span>
+                      <strong>{getEffectivePrice(p)} сом</strong>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : null}
           </div>
         </div>
 
-        <div className="sf-pds-footer">
-          <button type="button" onClick={onClose}>
-            Закрыть
-          </button>
-          <button
-            type="button"
-            className="sf-pds-footer--primary"
-            onClick={openSupport}
-          >
-            Помощь
-          </button>
-        </div>
+        <footer className="pdp-sticky-bar">
+          <div className="pdp-sticky-bar__price">
+            <span className="pdp-sticky-bar__label">Итого</span>
+            <strong>{displayPrice * (cartQuantity > 0 ? cartQuantity : pickQty)} сом</strong>
+          </div>
+          {!isStorefrontCommerceEnabled() ? (
+            <button
+              type="button"
+              className="pdp-sticky-bar__cta"
+              onClick={() => openOpenInTelegramModal(payload?.telegramOpenUrl ?? null)}
+            >
+              {outOfStock ? "Нет в наличии" : addLabel}
+            </button>
+          ) : cartQuantity > 0 ? (
+            <div className="pdp-sticky-bar__cart-qty" role="group" aria-label="В корзине">
+              <button
+                type="button"
+                className="pdp-qty__btn"
+                aria-label="Уменьшить"
+                onClick={() => upsertQuantity(cartQuantity - 1)}
+              >
+                −
+              </button>
+              <span className="pdp-qty__value">{cartQuantity}</span>
+              <button
+                type="button"
+                className="pdp-qty__btn"
+                aria-label="Увеличить"
+                disabled={cartQuantity >= selectedStock || !selectionReady}
+                onClick={() => upsertQuantity(cartQuantity + 1)}
+              >
+                +
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="pdp-sticky-bar__cta"
+              disabled={outOfStock}
+              onClick={handleAddToCart}
+            >
+              {outOfStock ? "Нет в наличии" : addLabel}
+            </button>
+          )}
+        </footer>
       </motion.div>
     </AnimatePresence>,
-    host
+    host,
   );
 }
