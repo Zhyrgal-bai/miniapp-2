@@ -1,0 +1,238 @@
+/**
+ * ARCHA responsive & device compatibility layer.
+ * Loaded last — layout/touch/viewport only, no business logic.
+ */
+
+:root {
+  --archa-touch-min: 44px;
+  --archa-viewport-h: 100dvh;
+  --archa-viewport-min: 100svh;
+  --archa-keyboard-scroll-margin: calc(88px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Telegram / dynamic viewport height (set by telegramWebAppBootstrap) */
+.sf-root.sf-app {
+  min-height: var(--archa-viewport-h, 100dvh);
+  height: var(--archa-viewport-h, 100dvh);
+  max-height: var(--archa-viewport-h, 100dvh);
+}
+
+/* Prevent accidental horizontal page scroll */
+.sf-root.sf-app,
+.sf-commerce-shell,
+.px-screen {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+/* Keyboard: keep focused fields above sticky chrome */
+.sf-root input,
+.sf-root textarea,
+.sf-root select,
+.checkout-form-scroll input,
+.checkout-form-scroll textarea,
+.checkout-form-scroll select,
+.merchant-register__scroll input,
+.merchant-register__scroll textarea {
+  scroll-margin-bottom: var(--archa-keyboard-scroll-margin);
+}
+
+/* ── Sticky cart: single source of truth (wins over conflicting rules) ── */
+.sf-chrome-align-commerce.sf-sticky-cart-slot {
+  position: fixed !important;
+  left: 50%;
+  bottom: 0;
+  translate: -50% 0;
+  width: min(100%, calc(100vw - 24px));
+  z-index: 900 !important;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(0px, env(safe-area-inset-left, 0px));
+  padding-right: max(0px, env(safe-area-inset-right, 0px));
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+@media (max-width: 480px) {
+  .sf-chrome-align-commerce.sf-sticky-cart-slot {
+    width: min(100%, calc(100vw - 20px));
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* ── Touch targets: storefront chrome ── */
+.sf-app .app-header--store-brand .app-header__burger,
+.sf-app .app-header--store-brand .app-header__store-logo--btn {
+  width: var(--archa-touch-min);
+  height: var(--archa-touch-min);
+  min-width: var(--archa-touch-min);
+  min-height: var(--archa-touch-min);
+}
+
+.sf-root .sf-chip.sf-chip--filter {
+  min-height: var(--archa-touch-min);
+}
+
+.sf-root .sf-catalog-search__clear {
+  width: var(--archa-touch-min);
+  height: var(--archa-touch-min);
+}
+
+@media (max-width: 390px) {
+  .sf-root .sf-catalog-search__label {
+    min-height: var(--archa-touch-min);
+  }
+}
+
+.px-chip {
+  min-height: var(--archa-touch-min);
+}
+
+.px-related-card {
+  min-height: var(--archa-touch-min);
+}
+
+/* ── Modals & sheets: safe area + viewport units ── */
+.sf-tg-modal-backdrop {
+  padding: max(1rem, env(safe-area-inset-top, 0px))
+    max(1rem, env(safe-area-inset-right, 0px))
+    max(1rem, env(safe-area-inset-bottom, 0px))
+    max(1rem, env(safe-area-inset-left, 0px));
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+.sf-tg-modal__close {
+  min-height: var(--archa-touch-min);
+  padding: 0.75rem 1rem;
+}
+
+.sf-profile-sheet {
+  max-height: min(92dvh, 820px);
+  touch-action: pan-y;
+}
+
+.sf-profile-sheet__handle {
+  width: 48px;
+  height: 5px;
+  margin: 12px auto 6px;
+  padding: 8px 0;
+  background-clip: content-box;
+  cursor: grab;
+  touch-action: none;
+}
+
+.sf-profile-sheet__link-btn,
+.sf-profile-sheet__footer-btn {
+  min-height: var(--archa-touch-min);
+  padding: 10px 12px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* ── Cart qty controls ── */
+.cart-remove-btn,
+.cart-actions__btn {
+  width: var(--archa-touch-min);
+  height: var(--archa-touch-min);
+  min-width: var(--archa-touch-min);
+  min-height: var(--archa-touch-min);
+}
+
+/* ── Product detail modal (legacy web) ── */
+.pdm-overlay {
+  padding: max(16px, env(safe-area-inset-top, 0px))
+    max(16px, env(safe-area-inset-right, 0px))
+    max(16px, env(safe-area-inset-bottom, 0px))
+    max(16px, env(safe-area-inset-left, 0px));
+}
+
+.pdm-panel {
+  max-height: min(88dvh, 640px);
+}
+
+.pdm-gallery-nav {
+  width: var(--archa-touch-min);
+  height: var(--archa-touch-min);
+  min-width: var(--archa-touch-min);
+  min-height: var(--archa-touch-min);
+}
+
+/* ── Table booking sheet ── */
+.table-booking-modal {
+  max-height: min(88dvh, 640px);
+}
+
+.table-booking-modal__close {
+  width: var(--archa-touch-min);
+  height: var(--archa-touch-min);
+  min-width: var(--archa-touch-min);
+  min-height: var(--archa-touch-min);
+}
+
+.admin-modal__close,
+.sf-support-sheet__close {
+  width: var(--archa-touch-min);
+  height: var(--archa-touch-min);
+  min-width: var(--archa-touch-min);
+  min-height: var(--archa-touch-min);
+}
+
+.app-header__account-scroll .app-header__sheet-support-cap-cta {
+  min-height: var(--archa-touch-min);
+}
+
+/* ── Landscape phones: reduce sticky overlap ── */
+@media (orientation: landscape) and (max-height: 500px) {
+  .sf-chrome-align-commerce.sf-sticky-cart-slot {
+    padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .sf-sticky-cart.sf-sticky-cart--unified {
+    min-height: 48px;
+    padding-block: 6px;
+  }
+
+  .px-gallery {
+    min-height: min(40dvh, 280px);
+    max-height: 45dvh;
+  }
+
+  .px-sticky-spacer {
+    height: calc(72px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* ── Tablets: comfortable reading width ── */
+@media (min-width: 768px) {
+  .sf-commerce-shell {
+    max-width: min(100%, 960px);
+    margin-inline: auto;
+  }
+}
+
+@media (min-width: 1024px) {
+  .sf-commerce-shell {
+    max-width: min(100%, 1200px);
+  }
+}
+
+/* ── Fold / very narrow ── */
+@media (max-width: 320px) {
+  .sf-chrome-align-commerce.sf-sticky-cart-slot {
+    width: calc(100vw - 12px);
+  }
+
+  .px-main {
+    --px-pad: 12px;
+  }
+}
+
+/* Focus visible for keyboard / desktop accessibility */
+.sf-root button:focus-visible,
+.sf-root a:focus-visible,
+.sf-root input:focus-visible,
+.sf-root select:focus-visible,
+.sf-root textarea:focus-visible {
+  outline: 2px solid var(--sf-color-primary, Highlight);
+  outline-offset: 2px;
+}

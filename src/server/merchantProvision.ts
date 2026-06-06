@@ -7,6 +7,7 @@ import { encryptedBotTokenRow } from "./businessBotToken.js";
 import { createOwnerStaffRow } from "./businessStaffAccess.js";
 import { parseFinikRegistrationFields } from "../shared/finikRegistration.js";
 import { allocateUniqueBusinessSlug } from "../shared/storeSlug.js";
+import { normalizeProvisionBusinessType } from "../shared/businessTypes.js";
 
 function normalizeStoreName(raw: string): string {
   return raw.replace(/\s+/g, " ").trim();
@@ -63,12 +64,7 @@ export async function provisionMerchantStoreInTx(
       botTokenHash: tokenFields.botTokenHash,
       finikApiKey: useFinikPayment ? finik.finikApiKey : null,
       finikAccountId: useFinikPayment ? finik.finikAccountId : null,
-      businessType:
-        params.businessType === "coffee" ||
-        params.businessType === "fastfood" ||
-        params.businessType === "flowers"
-          ? (params.businessType as any)
-          : ("clothing" as any),
+      businessType: normalizeProvisionBusinessType(params.businessType) as any,
       isActive: giveTrial,
       isBlocked: false,
       subscriptionStatus: giveTrial

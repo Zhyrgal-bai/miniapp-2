@@ -7,8 +7,15 @@ import type { SchemaObject as DynamicSchemaObject } from "./DynamicFieldRenderer
 export function useResolvedBusinessType() {
   const { payload } = useStorefrontPayload();
   const payloadType = String(payload?.businessType ?? "").trim();
+  const payloadMerchantConfig =
+    payload?.merchantConfig != null &&
+    typeof payload.merchantConfig === "object" &&
+    !Array.isArray(payload.merchantConfig)
+      ? (payload.merchantConfig as Record<string, unknown>)
+      : {};
   const [schemaType, setSchemaType] = useState<string | null>(null);
   const [productSchema, setProductSchema] = useState<DynamicSchemaObject>({});
+  const [merchantConfig, setMerchantConfig] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,6 +28,7 @@ export function useResolvedBusinessType() {
           setProductSchema(
             schema.productSchema as unknown as DynamicSchemaObject,
           );
+          setMerchantConfig(schema.merchantConfig ?? {});
         }
       } catch {
         // storefront payload is the fallback
@@ -34,13 +42,18 @@ export function useResolvedBusinessType() {
   }, []);
 
   const businessType = schemaType || payloadType;
+  const resolvedMerchantConfig =
+    Object.keys(merchantConfig).length > 0 ? merchantConfig : payloadMerchantConfig;
   const resolved = isKnownBusinessType(businessType);
-  const profile = resolved ? verticalProfileFor(businessType) : null;
+  const profile = resolved
+    ? verticalProfileFor(businessType, resolvedMerchantConfig)
+    : null;
   const variantEditor = profile?.variantEditor ?? null;
 
   return {
     businessType,
     productSchema,
+    merchantConfig: resolvedMerchantConfig,
     loading,
     resolved,
     variantEditor,

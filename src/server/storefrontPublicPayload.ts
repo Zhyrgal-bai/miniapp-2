@@ -7,6 +7,7 @@ import {
 } from "./storefrontCache.js";
 import { safeParseStorefrontPublicApiResponse } from "../storefront/storefrontPublicApiResponseSchema.js";
 import { templateForBusinessType } from "../templates/index.js";
+import { filterStorefrontOrderOptionsSchema } from "../shared/businessCommerce.js";
 import type { BusinessType } from "@prisma/client";
 import {
   API_ERR_BUSINESS_NOT_FOUND,
@@ -81,6 +82,7 @@ export async function sendStorefrontPublicPayload(
         botToken: true,
         deliverySettings: true,
         storeAvailabilitySettings: true,
+        merchantConfig: true,
       },
     });
     if (rejectUnlessCanAcceptCustomerOrders(res, b)) {
@@ -151,9 +153,20 @@ export async function sendStorefrontPublicPayload(
     }
 
     const bt = String((b as any).businessType ?? "").trim() as BusinessType;
+    const merchantConfig =
+      (b as any).merchantConfig != null &&
+      typeof (b as any).merchantConfig === "object" &&
+      !Array.isArray((b as any).merchantConfig)
+        ? ((b as any).merchantConfig as Record<string, unknown>)
+        : {};
     if (bt) {
+      (payload as any).merchantConfig = merchantConfig;
       const tpl = templateForBusinessType(bt);
-      (payload as any).orderOptionsSchema = tpl.orderOptionsSchema ?? {};
+      const orderSchema = tpl.orderOptionsSchema ?? {};
+      (payload as any).orderOptionsSchema =
+        bt === "universal" && merchantConfig.enableOrderOptions !== true
+          ? {}
+          : filterStorefrontOrderOptionsSchema(bt, orderSchema);
     }
 
     const enabledTypes = new Set(payload.sections.map((s) => s.type));

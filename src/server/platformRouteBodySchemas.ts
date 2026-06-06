@@ -34,7 +34,7 @@ export const platformRegisterRequestShape = z
     telegramId: z.union([z.string(), z.number()]).optional(),
     finikApiKey: z.string().optional(),
     finikAccountId: z.string().optional(),
-    businessType: z.enum(["clothing", "coffee", "fastfood", "flowers"]),
+    businessType: z.enum(["universal", "clothing", "coffee", "fastfood", "flowers"]),
     ownerUsername: z.string().optional(),
     addressLine: z.string().optional(),
     city: z.string().optional(),

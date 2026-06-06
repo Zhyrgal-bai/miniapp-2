@@ -47,6 +47,7 @@ const ProductForm = () => {
   const {
     businessType: merchantBusinessType,
     productSchema,
+    merchantConfig,
     showClothingVariants,
     showTierStock,
     resolved: businessTypeReady,
@@ -149,7 +150,7 @@ const ProductForm = () => {
     }
 
     if (showTierStock) {
-      const axis = verticalProfileFor(merchantBusinessType).primaryAxisLabel;
+      const axis = verticalProfileFor(merchantBusinessType, merchantConfig).primaryAxisLabel;
       const tierErr = validateOptionRows(optionRows, axis);
       if (tierErr) {
         setFormError(tierErr);
@@ -375,6 +376,7 @@ const ProductForm = () => {
       {showTierStock && businessTypeReady ? (
         <DynamicVariantEditor
           businessType={merchantBusinessType}
+          merchantConfig={merchantConfig}
           rows={optionRows}
           onChange={setOptionRows}
         />

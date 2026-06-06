@@ -723,7 +723,7 @@ export async function submitPlatformRegisterRequest(payload: {
   botToken: string;
   phone: string;
   telegramId: number;
-  businessType: "clothing" | "coffee" | "fastfood" | "flowers";
+  businessType: "universal" | "clothing" | "coffee" | "fastfood" | "flowers";
   ownerUsername?: string;
   finikApiKey?: string;
   finikAccountId?: string;

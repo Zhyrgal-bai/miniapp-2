@@ -285,6 +285,7 @@ export const adminService = {
   async getMerchantSchemas(): Promise<{
     businessType: string;
     productSchema: Record<string, unknown>;
+    merchantConfig: Record<string, unknown>;
   }> {
     const data = await adminGet<unknown>("/api/merchant/schemas");
     const x =
@@ -298,6 +299,12 @@ export const adminService = {
         typeof x.productSchema === "object" &&
         !Array.isArray(x.productSchema)
           ? (x.productSchema as Record<string, unknown>)
+          : {},
+      merchantConfig:
+        x.merchantConfig != null &&
+        typeof x.merchantConfig === "object" &&
+        !Array.isArray(x.merchantConfig)
+          ? (x.merchantConfig as Record<string, unknown>)
           : {},
     };
   },

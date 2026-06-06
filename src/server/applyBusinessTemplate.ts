@@ -1,7 +1,5 @@
-import type { PrismaClient } from "@prisma/client";
+import type { BusinessType, PrismaClient } from "@prisma/client";
 import { templateForBusinessType } from "../templates/index.js";
-
-type BusinessType = "clothing" | "coffee" | "fastfood" | "flowers";
 
 type CategoryCreateResult = {
   id: number;

@@ -6,13 +6,20 @@ import {
 
 type Props = {
   businessType: string;
+  merchantConfig?: Record<string, unknown> | null;
   rows: VariantOptionRow[];
   onChange: (rows: VariantOptionRow[]) => void;
   disabled?: boolean;
 };
 
-export function DynamicVariantEditor({ businessType, rows, onChange, disabled }: Props) {
-  const profile = verticalProfileFor(businessType);
+export function DynamicVariantEditor({
+  businessType,
+  merchantConfig,
+  rows,
+  onChange,
+  disabled,
+}: Props) {
+  const profile = verticalProfileFor(businessType, merchantConfig);
   const axis = profile.primaryAxisLabel || "Вариант";
 
   const updateRow = (id: string, patch: Partial<VariantOptionRow>) => {

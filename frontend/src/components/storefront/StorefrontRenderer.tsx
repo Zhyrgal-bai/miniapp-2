@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Category, Product } from "../../types";
 import { api, TENANT_HEADER } from "../../services/api";
 import { useTheme } from "../../context/ThemeContext";
@@ -17,7 +17,7 @@ import "./storefrontFeed.css";
 import "../../storefront/commerceCards.css";
 import "../../storefront/motionTokens.css";
 import "../../storefront/mobileChrome.css";
-import { ProductDetailSheet } from "./product/ProductDetailSheet";
+import { ProductExperienceScreen } from "./product/ProductExperienceScreen";
 import "./storefrontKits.css";
 import {
   buildStorefrontLayoutCssVars,
@@ -130,6 +130,7 @@ export type ResolvedStorefrontPayload = {
   featuredProducts?: Product[];
   featuredPromo?: StorefrontFeaturedPromo | null;
   orderOptionsSchema?: Record<string, unknown>;
+  merchantConfig?: Record<string, unknown>;
 };
 
 export function StorefrontRenderer(props: {
@@ -263,9 +264,34 @@ export function StorefrontRenderer(props: {
     trackStoreView(bid);
   }, [props.payload.businessId]);
 
+  const catalogScrollYRef = useRef(0);
+
   const openProduct = useCallback((p: Product) => {
+    const root = document.querySelector<HTMLElement>(
+      ".sf-root.sf-app[data-sf-scroll-root]",
+    );
+    catalogScrollYRef.current = root?.scrollTop ?? window.scrollY;
     setSheetProduct(p);
   }, []);
+
+  const closeProduct = useCallback(() => {
+    setSheetProduct(null);
+  }, []);
+
+  useEffect(() => {
+    if (sheetProduct != null) return;
+    const y = catalogScrollYRef.current;
+    if (y <= 0) return;
+    const root = document.querySelector<HTMLElement>(
+      ".sf-root.sf-app[data-sf-scroll-root]",
+    );
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (root) root.scrollTop = y;
+        else window.scrollTo(0, y);
+      });
+    });
+  }, [sheetProduct]);
 
   useEffect(() => {
     if (sheetProduct) {
@@ -276,11 +302,11 @@ export function StorefrontRenderer(props: {
   }, [sheetProduct]);
 
   useEffect(() => {
-    const onExternalClose = () => setSheetProduct(null);
+    const onExternalClose = () => closeProduct();
     window.addEventListener("sf:productSheetClose", onExternalClose);
     return () =>
       window.removeEventListener("sf:productSheetClose", onExternalClose);
-  }, []);
+  }, [closeProduct]);
 
   const cssVars = useMemo(
     () =>
@@ -350,6 +376,30 @@ export function StorefrontRenderer(props: {
       ? String(identityTextCfg.searchPlaceholder)
       : "Поиск товаров…";
   const catalogLoading = catalog === null;
+
+  if (sheetProduct) {
+    return (
+      <ThemeVarsProvider theme={theme}>
+        <div
+          data-sf-kit={kit}
+          data-sf-layout={layoutPreset}
+          data-sf-motion={motionLevel}
+          data-sf-brand-tone={brandTone || "default"}
+          className="sf-root sf-root--product-experience"
+          style={cssVars as unknown as React.CSSProperties}
+        >
+          <ProductExperienceScreen
+            product={sheetProduct}
+            businessId={props.payload.businessId}
+            businessType={props.payload.businessType ?? undefined}
+            catalogProducts={catalog ?? []}
+            onClose={closeProduct}
+            onSelectProduct={openProduct}
+          />
+        </div>
+      </ThemeVarsProvider>
+    );
+  }
 
   return (
     <ThemeVarsProvider theme={theme}>
@@ -585,18 +635,6 @@ export function StorefrontRenderer(props: {
           ) : null}
         </StorefrontFeed>
       </div>
-
-      {sheetProduct ? (
-        <ProductDetailSheet
-          product={sheetProduct}
-          businessId={props.payload.businessId}
-          businessType={props.payload.businessType ?? undefined}
-          featuredProducts={featuredAll}
-          catalogProducts={catalog ?? []}
-          onClose={() => setSheetProduct(null)}
-          onSelectProduct={setSheetProduct}
-        />
-      ) : null}
     </ThemeVarsProvider>
   );
 }

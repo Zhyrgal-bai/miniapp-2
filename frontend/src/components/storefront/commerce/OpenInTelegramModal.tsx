@@ -1,7 +1,7 @@
-import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
 import { OpenInTelegramCta } from "./OpenInTelegramCta";
 import { OPEN_IN_TELEGRAM_MODAL_EVENT } from "../../../storefront/openInTelegramModal";
+import { useBodyScrollLock } from "../../../utils/bodyScrollLock";
 import "./openInTelegramModal.css";
 
 type ModalState = {
@@ -11,11 +11,13 @@ type ModalState = {
 
 export function OpenInTelegramModal(props: {
   defaultTelegramOpenUrl?: string | null;
-}): ReactElement | null {
+}): React.ReactElement | null {
   const [state, setState] = useState<ModalState>({
     open: false,
     telegramOpenUrl: props.defaultTelegramOpenUrl ?? null,
   });
+
+  useBodyScrollLock(state.open);
 
   useEffect(() => {
     const onOpen = (ev: Event) => {

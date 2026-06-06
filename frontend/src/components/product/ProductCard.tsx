@@ -144,8 +144,15 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   const [currentIndex, setCurrentIndex] = useState(0);
   const touchStartX = useRef<number | null>(null);
 
-  const resolvedBusinessType = businessType ?? product.businessType ?? null;
-  const showColorPicker = verticalUsesColorAxis(resolvedBusinessType);
+  const merchantConfig =
+    payload?.merchantConfig != null &&
+    typeof payload.merchantConfig === "object" &&
+    !Array.isArray(payload.merchantConfig)
+      ? (payload.merchantConfig as Record<string, unknown>)
+      : null;
+  const resolvedBusinessType =
+    businessType ?? product.businessType ?? payload?.businessType ?? null;
+  const showColorPicker = verticalUsesColorAxis(resolvedBusinessType, merchantConfig);
 
   const hasCustomColors = Boolean(
     showColorPicker &&
@@ -187,7 +194,11 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   }, [product, selectedColor]);
 
   const outOfStock = isOutOfStock(product);
-  const needsVariantPicker = productRequiresVariantPicker(product, resolvedBusinessType);
+  const needsVariantPicker = productRequiresVariantPicker(
+    product,
+    resolvedBusinessType,
+    merchantConfig,
+  );
   const showCardVariants = !onOpenDetail && !needsVariantPicker;
   const profile = useMemo(
     () => profileForBusinessType(businessType),
@@ -277,7 +288,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
 
   const upsertQuantity = (nextQuantity: number) => {
     const instant =
-      !needsVariantPicker ? resolveInstantAddLine(product, resolvedBusinessType) : null;
+      !needsVariantPicker ? resolveInstantAddLine(product, resolvedBusinessType, merchantConfig) : null;
     const size = instant?.size ?? selectedSize;
     const colorKey = instant?.color ?? lineColor;
     if (!size || outOfStock || colorKey === null) return;
@@ -306,7 +317,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
 
   const canAddToCart = (() => {
     if (needsVariantPicker) return false;
-    const instant = resolveInstantAddLine(product, resolvedBusinessType);
+    const instant = resolveInstantAddLine(product, resolvedBusinessType, merchantConfig);
     if (instant) {
       return (
         !outOfStock &&
@@ -350,7 +361,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
       return;
     }
     if (!canAddToCart) return;
-    const instant = resolveInstantAddLine(product, resolvedBusinessType);
+    const instant = resolveInstantAddLine(product, resolvedBusinessType, merchantConfig);
     if (instant) {
       if (businessId && product.id) recordRecentlyViewed({ businessId, product });
       upsertQuantity(1);

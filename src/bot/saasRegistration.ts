@@ -43,7 +43,7 @@ type BotRole =
   | { type: "env"; botIndex: number }
   | { type: "dynamic"; businessId: number };
 
-type BusinessType = "clothing" | "coffee" | "fastfood" | "flowers";
+type BusinessType = "universal" | "clothing" | "coffee" | "fastfood" | "flowers";
 
 const SUCCESS_REQUEST_SUBMITTED =
   "⏳ Заявка отправлена. Ожидайте подтверждения администратора";
@@ -504,19 +504,26 @@ function businessTypePickerMarkup() {
   return {
     inline_keyboard: [
       [
+        { text: "🌍 Универсальный", callback_data: "bt_universal" },
         { text: "👕 Одежда", callback_data: "bt_clothing" },
-        { text: "☕ Кофейня", callback_data: "bt_coffee" },
       ],
       [
+        { text: "☕ Кофейня", callback_data: "bt_coffee" },
         { text: "🍔 Фастфуд", callback_data: "bt_fastfood" },
-        { text: "🌸 Цветочный", callback_data: "bt_flowers" },
       ],
+      [{ text: "🌸 Цветочный", callback_data: "bt_flowers" }],
     ],
   };
 }
 
 function isBusinessType(v: unknown): v is BusinessType {
-  return v === "clothing" || v === "coffee" || v === "fastfood" || v === "flowers";
+  return (
+    v === "universal" ||
+    v === "clothing" ||
+    v === "coffee" ||
+    v === "fastfood" ||
+    v === "flowers"
+  );
 }
 
 /** Память сессии + сброс перед /start. Должно идти до `tgBot.start` и до SaaS-хвоста. */

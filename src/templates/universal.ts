@@ -1,0 +1,115 @@
+import { BusinessType } from "@prisma/client";
+import type { BusinessTemplateConfig } from "./types.js";
+
+export const universalTemplate: BusinessTemplateConfig = {
+  businessType: BusinessType.universal,
+  templateVersion: 1,
+  theme: {
+    templateId: "light",
+    themeConfig: {
+      primaryColor: "#2563eb",
+      bgColor: "#f8fafc",
+      cardColor: "#ffffff",
+      textColor: "#0f172a",
+      layout: "modern",
+      banner: {
+        enabled: true,
+        title: "Добро пожаловать",
+        subtitle: "Каталог товаров",
+      },
+    },
+  },
+  defaultCategories: [
+    { key: "catalog", name: "Каталог" },
+    { key: "popular", name: "Популярное" },
+    { key: "new", name: "Новинки" },
+  ],
+  productSchema: {
+    sku: { type: "text", label: "Артикул", required: false, maxLen: 64 },
+    brand: { type: "text", label: "Бренд", required: false, maxLen: 80 },
+    model: { type: "text", label: "Модель", required: false, maxLen: 80 },
+    weight: { type: "number", label: "Вес (г)", required: false, min: 0, max: 1_000_000 },
+    volume: { type: "number", label: "Объём (мл)", required: false, min: 0, max: 1_000_000 },
+    warranty: { type: "text", label: "Гарантия", required: false, maxLen: 120 },
+    kitContents: { type: "text", label: "Комплектация", required: false, maxLen: 512 },
+    vin: { type: "text", label: "VIN", required: false, maxLen: 32 },
+    compatibility: { type: "text", label: "Совместимость", required: false, maxLen: 512 },
+    serialNumber: { type: "text", label: "Серийный номер", required: false, maxLen: 64 },
+    specifications: {
+      type: "text",
+      label: "Характеристики",
+      required: false,
+      maxLen: 4096,
+    },
+  },
+  merchantSettingsSchema: {
+    enableSizes: {
+      type: "boolean",
+      label: "Размеры и варианты с остатками",
+      required: false,
+      default: false,
+    },
+    enableColors: {
+      type: "boolean",
+      label: "Цвета (матрица размер × цвет)",
+      required: false,
+      default: false,
+    },
+    enableVariants: {
+      type: "boolean",
+      label: "Произвольные варианты (объём, порция и т.д.)",
+      required: false,
+      default: false,
+    },
+    enableSku: { type: "boolean", label: "Артикул в карточке товара", required: false, default: true },
+    enableBrand: { type: "boolean", label: "Бренд", required: false, default: false },
+    enableModel: { type: "boolean", label: "Модель", required: false, default: false },
+    enableWeight: { type: "boolean", label: "Вес", required: false, default: false },
+    enableVolume: { type: "boolean", label: "Объём", required: false, default: false },
+    enableWarranty: { type: "boolean", label: "Гарантия", required: false, default: false },
+    enableKit: { type: "boolean", label: "Комплектация", required: false, default: false },
+    enableVin: { type: "boolean", label: "VIN", required: false, default: false },
+    enableCompatibility: {
+      type: "boolean",
+      label: "Совместимость",
+      required: false,
+      default: false,
+    },
+    enableSerial: {
+      type: "boolean",
+      label: "Серийный номер",
+      required: false,
+      default: false,
+    },
+    enableSpecifications: {
+      type: "boolean",
+      label: "Характеристики (текст)",
+      required: false,
+      default: false,
+    },
+    enableOrderOptions: {
+      type: "boolean",
+      label: "Опции при заказе на витрине",
+      required: false,
+      default: false,
+    },
+  },
+  orderOptionsSchema: {},
+  merchantConfig: {
+    enableSku: true,
+    sections: [
+      { key: "catalogFeatures", title: "Каталог и варианты", enabled: true },
+      { key: "productFields", title: "Поля товара", enabled: true },
+    ],
+  },
+  demoProducts: [
+    {
+      categoryKey: "catalog",
+      name: "Товар-пример",
+      price: 990,
+      image: "https://picsum.photos/seed/universal-demo/600/600",
+      description: "Универсальный шаблон — настройте поля и варианты под ваш бизнес.",
+      attributes: { sku: "DEMO-001" },
+    },
+  ],
+};

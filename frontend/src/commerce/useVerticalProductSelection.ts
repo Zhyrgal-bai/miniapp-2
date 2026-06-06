@@ -28,17 +28,24 @@ export type VerticalSelection = {
 export function useVerticalProductSelection(
   product: Product,
   businessType?: string | null,
-  options?: { autoSelectDefaults?: boolean },
+  options?: {
+    autoSelectDefaults?: boolean;
+    merchantConfig?: Record<string, unknown> | null;
+  },
 ): VerticalSelection & {
   setSelectedSize: (s: string | null) => void;
   setSelectedColor: (s: string | null) => void;
 } {
   const autoSelectDefaults = options?.autoSelectDefaults !== false;
+  const merchantConfig = options?.merchantConfig ?? null;
   const profile = useMemo(
-    () => verticalProfileFor(businessType ?? product.businessType),
-    [businessType, product.businessType],
+    () => verticalProfileFor(businessType ?? product.businessType, merchantConfig),
+    [businessType, product.businessType, merchantConfig],
   );
-  const showColorPicker = verticalUsesColorAxis(businessType ?? product.businessType);
+  const showColorPicker = verticalUsesColorAxis(
+    businessType ?? product.businessType,
+    merchantConfig,
+  );
 
   const variants = useMemo(() => getNormalizedVariants(product), [product]);
 

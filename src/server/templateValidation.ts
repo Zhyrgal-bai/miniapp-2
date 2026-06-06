@@ -2,6 +2,7 @@ import type { BusinessType } from "@prisma/client";
 import type { FieldSchema, SchemaObject } from "../templates/types.js";
 import { templateForBusinessType } from "../templates/index.js";
 import { stripProductAttributesToSchema } from "../shared/productAttributeNormalization.js";
+import { effectiveProductSchemaForBusiness } from "../shared/universalCommerce.js";
 import { logProductAttributesStripped } from "./structuredLog.js";
 
 export type ValidationResult<T> =
@@ -225,11 +226,20 @@ function safeSchemaFor(
   }
 }
 
+function productSchemaFor(
+  businessType: BusinessType,
+  merchantConfig?: Record<string, unknown> | null,
+): SchemaObject {
+  const full = safeSchemaFor(businessType, (t) => t.productSchema) as SchemaObject;
+  return effectiveProductSchemaForBusiness(String(businessType), full, merchantConfig);
+}
+
 export function validateProductAttributes(
   businessType: BusinessType,
   attributes: unknown,
+  merchantConfig?: Record<string, unknown> | null,
 ): ValidationResult<Record<string, unknown>> {
-  const schema = safeSchemaFor(businessType, (t) => t.productSchema);
+  const schema = productSchemaFor(businessType, merchantConfig);
   return validateObjectAgainstSchema(schema, attributes);
 }
 
@@ -243,8 +253,9 @@ export function validateProductAttributesForAdmin(
   businessType: BusinessType,
   attributes: unknown,
   logCtx?: AdminProductAttributesLogContext,
+  merchantConfig?: Record<string, unknown> | null,
 ): ValidationResult<Record<string, unknown>> {
-  const schema = safeSchemaFor(businessType, (t) => t.productSchema);
+  const schema = productSchemaFor(businessType, merchantConfig);
   const { value: stripped, strippedKeys, staleLegacyKeys } =
     stripProductAttributesToSchema(Object.keys(schema), attributes);
 

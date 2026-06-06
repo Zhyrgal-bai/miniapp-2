@@ -1,5 +1,5 @@
 .home-page {
-  min-height: 100vh;
+  min-height: 100dvh;
   padding: 0 var(--sf-mobile-pad, 16px);
   color: var(--sf-color-text);
   background: var(--sf-color-background);

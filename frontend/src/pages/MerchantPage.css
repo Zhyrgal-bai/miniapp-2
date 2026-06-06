@@ -6,7 +6,7 @@
 .mp-page {
   box-sizing: border-box;
   position: relative;
-  min-height: 100vh;
+  min-height: 100dvh;
   min-height: 100dvh;
   background: #050805;
   color: #f8fafc;
@@ -1704,7 +1704,7 @@
   flex-direction: column;
   max-height: min(
     90dvh,
-    calc(100vh - env(safe-area-inset-top, 0px) - 1.25rem)
+    calc(100dvh - env(safe-area-inset-top, 0px) - 1.25rem)
   );
   width: 100%;
   max-width: 26rem;
@@ -1720,7 +1720,7 @@
 
 @media (min-width: 640px) {
   .mp-settings-dialog-shell {
-    max-height: min(88vh, 40rem);
+    max-height: min(88dvh, 40rem);
     padding: 1.25rem 1.5rem 1.5rem !important;
   }
 }

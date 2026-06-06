@@ -21,6 +21,8 @@ import "./components/storefront/commerce/openInTelegramCta.css";
 import "./components/storefront/commerce/customerLocationPrompt.css";
 /** UX redesign tokens — last in cascade for storefront hierarchy. */
 import "./components/storefront/storefrontUxRedesign.css";
+/** Device / viewport / touch compatibility — must load last. */
+import "./design/responsiveCompat.css";
 import { bootstrapTelegramWebApp } from "./utils/telegramWebAppBootstrap";
 
 bootstrapTelegramWebApp();

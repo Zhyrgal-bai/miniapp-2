@@ -24,6 +24,7 @@ export function mergeProductAttributesWithVariants(
   attributes: unknown,
   variants?: unknown,
   logCtx?: { businessId?: number; productId?: number },
+  merchantConfig?: Record<string, unknown> | null,
 ): { ok: true; value: Record<string, unknown> } | { ok: false; error: string; details?: Record<string, string> } {
   const variantList =
     variants != null
@@ -36,7 +37,7 @@ export function mergeProductAttributesWithVariants(
 
   delete base.variants;
 
-  const vAttr = validateProductAttributesForAdmin(businessType, base, logCtx);
+  const vAttr = validateProductAttributesForAdmin(businessType, base, logCtx, merchantConfig);
   if (!vAttr.ok) {
     const out: { ok: false; error: string; details?: Record<string, string> } = {
       ok: false,

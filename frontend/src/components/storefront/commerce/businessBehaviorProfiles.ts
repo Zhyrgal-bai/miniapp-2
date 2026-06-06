@@ -90,6 +90,10 @@ export const BUSINESS_BEHAVIOR_PROFILES: Record<string, BusinessBehaviorProfile>
     cta: { ...BASE.cta, lowStockThreshold: 4 },
     motion: { intensity: "subtle" },
   },
+  universal: {
+    ...BASE,
+    id: "universal",
+  },
   clothing: {
     ...BASE,
     id: "clothing",

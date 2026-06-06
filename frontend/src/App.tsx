@@ -563,6 +563,17 @@ export default function App() {
     setIsMenuOpen(false);
   };
 
+  useEffect(() => {
+    const onNavigateCart = () => {
+      window.dispatchEvent(new CustomEvent("sf:productSheetClose"));
+      commitPage("cart");
+      setIsMenuOpen(false);
+    };
+    window.addEventListener("sf:navigateCart", onNavigateCart as EventListener);
+    return () =>
+      window.removeEventListener("sf:navigateCart", onNavigateCart as EventListener);
+  }, [commitPage]);
+
   const handleTelegramBack = useCallback(() => {
     if (isMenuOpen) {
       setIsMenuOpen(false);
@@ -776,6 +787,7 @@ export default function App() {
       className={`app${storeBrandHeader ? " app--store-brand" : ""}${commerceEnabled ? "" : " app--web-storefront"}`}
       data-sf-commerce={commerceEnabled ? "telegram" : "web"}
     >
+      {!productSheetOpen ? (
       <Header
         menuOpen={isMenuOpen}
         onMenuToggle={handleMenuToggle}
@@ -815,6 +827,7 @@ export default function App() {
             : undefined
         }
       />
+      ) : null}
 
       <SideMenu
         open={isMenuOpen}
@@ -844,7 +857,8 @@ export default function App() {
       <div className="content app__content">
         <div className="sf-commerce-shell" data-sf-shell={commerceShellMode}>
           {commerceEnabled &&
-          (page === "home" || page === "cart" || page === "checkout") ? (
+          (page === "home" || page === "cart" || page === "checkout") &&
+          !productSheetOpen ? (
             <PreorderBanner />
           ) : null}
           {page === "home" && <HomePage />}

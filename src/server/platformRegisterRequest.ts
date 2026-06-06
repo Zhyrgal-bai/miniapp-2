@@ -8,6 +8,10 @@ import {
   precheckBotTokenBeforeRegistrationPersist,
 } from "./registrationTokenGate.js";
 import {
+  isBusinessTypeId,
+  type BusinessTypeId,
+} from "../shared/businessTypes.js";
+import {
   parseBusinessAddressInput,
   type BusinessAddressInput,
 } from "../shared/businessAddress.js";
@@ -47,11 +51,9 @@ function normalizeTelegramId(raw: unknown): string | null {
   return null;
 }
 
-function normalizeBusinessType(
-  raw: unknown,
-): "clothing" | "coffee" | "fastfood" | "flowers" {
+function normalizeBusinessType(raw: unknown): BusinessTypeId {
   const v = typeof raw === "string" ? raw.trim().toLowerCase() : "";
-  return v === "coffee" || v === "fastfood" || v === "flowers" ? v : "clothing";
+  return isBusinessTypeId(v) ? v : "clothing";
 }
 
 export async function validateAndPersistPlatformRegistration(

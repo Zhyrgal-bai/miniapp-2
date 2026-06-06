@@ -19,8 +19,12 @@ function uniqueSizes(product: Product): string[] {
   return [...set];
 }
 
-function uniqueColors(product: Product, businessType?: string | null): string[] {
-  if (!verticalUsesColorAxis(businessType ?? product.businessType)) return [];
+function uniqueColors(
+  product: Product,
+  businessType?: string | null,
+  merchantConfig?: Record<string, unknown> | null,
+): string[] {
+  if (!verticalUsesColorAxis(businessType ?? product.businessType, merchantConfig)) return [];
   const set = new Set<string>();
   if (product.colors?.length) {
     for (const c of product.colors) {
@@ -39,10 +43,11 @@ function uniqueColors(product: Product, businessType?: string | null): string[] 
 export function productRequiresVariantPicker(
   product: Product,
   businessType?: string | null,
+  merchantConfig?: Record<string, unknown> | null,
 ): boolean {
   if (isOutOfStock(product)) return false;
   const sizes = uniqueSizes(product);
-  const colors = uniqueColors(product, businessType);
+  const colors = uniqueColors(product, businessType, merchantConfig);
   if (colors.length > 1) return true;
   if (sizes.length > 1) return true;
   return false;
@@ -52,8 +57,9 @@ export function productRequiresVariantPicker(
 export function resolveInstantAddLine(
   product: Product,
   businessType?: string | null,
+  merchantConfig?: Record<string, unknown> | null,
 ): { size: string; color: string } | null {
-  if (productRequiresVariantPicker(product, businessType)) return null;
+  if (productRequiresVariantPicker(product, businessType, merchantConfig)) return null;
   const variants = getNormalizedVariants(product);
   if (variants.length === 0) {
     return { size: "default", color: "default" };

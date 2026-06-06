@@ -9,14 +9,15 @@ const SCROLLABLE_OVERLAY_SELECTOR = [
   ".app-header__account-scroll",
   ".app-header__sheet",
   ".admin-modal__body",
-  ".sf-pds-scroll",
-  ".sf-pds-panel",
   ".sf-support-temu__scroll",
   ".sf-support-sheet",
   ".sf-support-sheet__list",
   ".checkout-form-scroll",
   ".merchant-register__scroll",
   ".sf-profile-sheet__scroll",
+  ".sf-tg-modal",
+  ".px-related-rail",
+  ".table-booking-sheet__body",
 ].join(", ");
 
 let lockCount = 0;

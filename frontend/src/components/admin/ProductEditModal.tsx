@@ -83,6 +83,7 @@ export default function ProductEditModal({
   const {
     businessType: merchantBusinessType,
     productSchema,
+    merchantConfig,
     showClothingVariants,
     showTierStock,
     resolved: businessTypeReady,
@@ -263,7 +264,7 @@ export default function ProductEditModal({
     }
 
     if (showTierStock) {
-      const axis = verticalProfileFor(merchantBusinessType).primaryAxisLabel;
+      const axis = verticalProfileFor(merchantBusinessType, merchantConfig).primaryAxisLabel;
       const tierErr = validateOptionRows(optionRows, axis);
       if (tierErr) {
         setSaveError(tierErr);
@@ -519,6 +520,7 @@ export default function ProductEditModal({
               {showTierStock && businessTypeReady ? (
                 <DynamicVariantEditor
                   businessType={merchantBusinessType}
+                  merchantConfig={merchantConfig}
                   rows={optionRows}
                   onChange={setOptionRows}
                 />

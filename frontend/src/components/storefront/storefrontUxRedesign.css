@@ -300,13 +300,8 @@
   border-radius: 6px;
 }
 
-/* ── Sticky cart — one bar, one action ── */
+/* ── Sticky cart — unified bar (position/z-index in responsiveCompat.css) ── */
 .sf-sticky-cart-slot {
-  position: sticky;
-  bottom: 0;
-  z-index: 120;
-  padding: var(--sf-ux-space-1) var(--sf-ux-space-2)
-    calc(var(--sf-ux-space-1) + env(safe-area-inset-bottom, 0px));
   pointer-events: none;
 }
 
@@ -364,84 +359,20 @@
   white-space: nowrap;
 }
 
-/* ── PDP bottom sheet ── */
-.pdp-overlay {
-  align-items: flex-end !important;
-  justify-content: center !important;
-  padding: 0 !important;
+/* ── Product Experience V2 — full screen takeover ── */
+.sf-root.sf-root--product-experience {
+  min-height: 100dvh;
+  padding-bottom: 0 !important;
 }
 
-.pdp-quickview {
-  width: 100% !important;
-  max-width: 100% !important;
-  max-height: min(92dvh, 780px) !important;
-  border-radius: var(--sf-ux-radius-sheet) var(--sf-ux-radius-sheet) 0 0 !important;
-  border-bottom: 0;
+.sf-app[data-sf-product-sheet="open"] .app__content {
+  padding-top: max(0px, env(safe-area-inset-top, 0px));
+  padding-bottom: 0;
 }
 
-.pdp-quickview__scroll {
-  padding-bottom: var(--sf-ux-space-1);
-}
-
-.pdp-body {
-  padding: var(--sf-ux-space-2);
-}
-
-.pdp-name {
-  font-size: var(--sf-ux-h1) !important;
-  font-weight: 700 !important;
-  margin-bottom: var(--sf-ux-space-1) !important;
-}
-
-.pdp-price {
-  font-size: var(--sf-ux-h1) !important;
-  color: var(--sf-ux-accent) !important;
-}
-
-.pdp-section {
-  padding: var(--sf-ux-space-1) 0;
-  margin-bottom: 0;
-  border-top: 1px solid color-mix(in srgb, var(--sf-color-border) 40%, transparent);
-}
-
-.pdp-section:first-of-type {
-  border-top: 0;
-}
-
-.pdp-section__label {
-  font-size: var(--sf-ux-caption) !important;
-  text-transform: none !important;
-  letter-spacing: normal !important;
-  font-weight: 600 !important;
-  color: var(--sf-ux-text-secondary) !important;
-}
-
-.pdp-size,
-.pdp-color {
-  border-radius: var(--sf-ux-radius-btn) !important;
-}
-
-.pdp-size.is-active {
-  background: color-mix(in srgb, var(--sf-ux-accent) 16%, var(--sf-color-card)) !important;
-  border-color: var(--sf-ux-accent) !important;
-  color: var(--sf-ux-accent) !important;
-}
-
-.pdp-quickview__footer {
-  padding: var(--sf-ux-space-2);
-  padding-bottom: calc(var(--sf-ux-space-2) + env(safe-area-inset-bottom, 0px));
-}
-
-.pdp-quickview__cta {
-  min-height: 52px !important;
-  border-radius: var(--sf-ux-radius-btn) !important;
-  background: var(--sf-ux-accent) !important;
-  font-size: var(--sf-ux-body) !important;
-  font-weight: 800 !important;
-}
-
-.pdp-gallery__dots span.is-active {
-  background: var(--sf-ux-accent) !important;
+.sf-app[data-sf-product-sheet="open"] .sf-commerce-shell {
+  padding-inline: 0;
+  max-width: none;
 }
 
 /* ── Compact store status strip ── */

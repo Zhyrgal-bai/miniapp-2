@@ -2,13 +2,20 @@ import { clothingTemplate } from "./clothing.js";
 import { coffeeTemplate } from "./coffee.js";
 import { fastfoodTemplate } from "./fastfood.js";
 import { flowersTemplate } from "./flowers.js";
+import { universalTemplate } from "./universal.js";
 import type { BusinessTemplateConfig } from "./types.js";
 
-export type BusinessType = "clothing" | "coffee" | "fastfood" | "flowers";
+export type BusinessType =
+  | "universal"
+  | "clothing"
+  | "coffee"
+  | "fastfood"
+  | "flowers";
 
 export const CURRENT_TEMPLATE_VERSION = 1;
 
 export const BUSINESS_TEMPLATES: Record<BusinessType, BusinessTemplateConfig> = {
+  universal: universalTemplate,
   clothing: clothingTemplate,
   coffee: coffeeTemplate,
   fastfood: fastfoodTemplate,

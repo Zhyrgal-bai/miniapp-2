@@ -26,39 +26,11 @@ const SS_SHOP = "miniapp-active-shop";
 /** То же ключ — в PlatformPage после возврата показать успех и перезагрузить список. */
 export const MERCHANT_REGISTER_SENT_KEY = "merchant-register-sent";
 
-type BusinessType = "clothing" | "coffee" | "fastfood" | "flowers";
+import { BUSINESS_TYPE_REGISTRATION_CARDS, type BusinessTypeId } from "@repo-shared/businessTypes";
 
-const BUSINESS_TYPES: Array<{
-  id: BusinessType;
-  emoji: string;
-  label: string;
-  description: string;
-}> = [
-  {
-    id: "clothing",
-    emoji: "👕",
-    label: "Одежда",
-    description: "Размеры, цвета, варианты и fashion-карточки",
-  },
-  {
-    id: "coffee",
-    emoji: "☕",
-    label: "Кофейня",
-    description: "Напитки, опции заказа и быстрый pickup",
-  },
-  {
-    id: "fastfood",
-    emoji: "🍔",
-    label: "Фастфуд",
-    description: "Комбо, модификаторы и доставка еды",
-  },
-  {
-    id: "flowers",
-    emoji: "🌸",
-    label: "Цветочный",
-    description: "Букеты, дата доставки и подарочная упаковка",
-  },
-];
+type BusinessType = BusinessTypeId;
+
+const BUSINESS_TYPES = BUSINESS_TYPE_REGISTRATION_CARDS;
 
 const STEP_LABELS = [
   "Тип бизнеса",

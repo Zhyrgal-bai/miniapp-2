@@ -15,7 +15,7 @@
 .pdm-panel {
   position: relative;
   width: min(100%, 400px);
-  max-height: min(88vh, 640px);
+  max-height: min(88dvh, 640px);
   overflow: auto;
   border-radius: var(--sf-radius-xl, 20px);
   padding: 16px 16px 20px;

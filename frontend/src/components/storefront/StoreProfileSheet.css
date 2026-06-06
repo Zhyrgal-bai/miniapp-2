@@ -13,7 +13,7 @@
   right: 0;
   bottom: 0;
   z-index: 11001;
-  max-height: min(92vh, 820px);
+  max-height: min(92dvh, 820px);
   display: flex;
   flex-direction: column;
   border-radius: 20px 20px 0 0;

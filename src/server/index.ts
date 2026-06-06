@@ -93,6 +93,7 @@ import {
   API_ERR_STORE_UNAVAILABLE,
 } from "../shared/apiClientMessages.js";
 import { templateForBusinessType } from "../templates/index.js";
+import { effectiveProductSchemaForBusiness } from "../shared/universalCommerce.js";
 import {
   StorefrontConfigSchema,
   StorefrontStyleCatalogPatchSchema,
@@ -1257,18 +1258,31 @@ app.get("/api/merchant/schemas", async (req: Request, res: Response) => {
     if (!merchant) return;
     const b = await prisma.business.findUnique({
       where: { id: merchant.businessId },
+      select: { businessType: true, merchantConfig: true },
     });
     const bt = (b as any)?.businessType;
     if (typeof bt !== "string" || bt.trim() === "") {
       return res.status(400).json({ error: "Магазин без businessType" });
     }
+    const merchantConfig =
+      (b as any)?.merchantConfig != null &&
+      typeof (b as any).merchantConfig === "object" &&
+      !Array.isArray((b as any).merchantConfig)
+        ? ((b as any).merchantConfig as Record<string, unknown>)
+        : {};
     const tpl = templateForBusinessType(bt as any);
+    const fullProductSchema = tpl.productSchema ?? {};
     res.json({
       businessType: bt,
       templateVersion: tpl.templateVersion ?? 1,
-      productSchema: tpl.productSchema ?? {},
+      productSchema: effectiveProductSchemaForBusiness(
+        bt,
+        fullProductSchema as any,
+        merchantConfig,
+      ),
       merchantSettingsSchema: tpl.merchantSettingsSchema ?? {},
       orderOptionsSchema: tpl.orderOptionsSchema ?? {},
+      merchantConfig,
     });
   } catch (e) {
     console.error("GET /api/merchant/schemas:", e);
@@ -3997,11 +4011,18 @@ app.post("/products", async (req: Request, res: Response) => {
     if (typeof businessType !== "string" || businessType.trim() === "") {
       return res.status(400).json({ error: "Магазин без businessType" });
     }
+    const merchantConfig =
+      (b2 as any)?.merchantConfig != null &&
+      typeof (b2 as any).merchantConfig === "object" &&
+      !Array.isArray((b2 as any).merchantConfig)
+        ? ((b2 as any).merchantConfig as Record<string, unknown>)
+        : {};
     const vAttr = mergeProductAttributesWithVariants(
       businessType as any,
       attributesWithCommerce,
       variants,
       { businessId: merchant.businessId },
+      merchantConfig,
     );
     if (!vAttr.ok) {
       return res.status(400).json({ error: vAttr.error, details: vAttr.details });
@@ -5833,6 +5854,12 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       if (typeof businessType !== "string" || businessType.trim() === "") {
         return res.status(400).json({ error: "Магазин без businessType" });
       }
+      const merchantConfig =
+        (b2 as any)?.merchantConfig != null &&
+        typeof (b2 as any).merchantConfig === "object" &&
+        !Array.isArray((b2 as any).merchantConfig)
+          ? ((b2 as any).merchantConfig as Record<string, unknown>)
+          : {};
       const baseAttrsRecord: Record<string, unknown> =
         attributes !== undefined &&
         typeof attributes === "object" &&
@@ -5854,6 +5881,7 @@ app.put("/products/:id", async (req: Request, res: Response) => {
         baseAttrsRecord,
         variants,
         { businessId: merchant.businessId, productId: id },
+        merchantConfig,
       );
       if (!vAttr.ok) {
         return res

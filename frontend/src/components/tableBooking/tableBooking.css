@@ -147,7 +147,7 @@
 .table-booking-modal {
   width: 100%;
   max-width: 520px;
-  max-height: min(88vh, 640px);
+  max-height: min(88dvh, 640px);
   overflow: auto;
   border-radius: 20px 20px 0 0;
   background: linear-gradient(180deg, #1a1a22 0%, #0f0f14 100%);

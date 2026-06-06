@@ -49,13 +49,13 @@
 }
 
 .layout {
-  min-height: 100vh;
+  min-height: 100dvh;
   background: var(--sf-color-background, #1a1220);
   padding: 0 var(--sf-mobile-pad, 16px);
 }
 
 .home {
-  min-height: 100vh;
+  min-height: 100dvh;
   background: var(--sf-color-background, #1a1220);
   padding: 0 var(--sf-mobile-pad, 16px);
 }

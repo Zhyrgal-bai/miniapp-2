@@ -1,4 +1,8 @@
 import type { BusinessType } from "@prisma/client";
+import {
+  resolveUniversalVerticalProfile,
+  UNIVERSAL_VERTICAL_BASE,
+} from "./universalCommerce.js";
 
 export type VerticalInventoryMode =
   | "sku_matrix"
@@ -22,6 +26,7 @@ export type VerticalCommerceProfile = {
 };
 
 export const VERTICAL_PROFILES: Record<BusinessType, VerticalCommerceProfile> = {
+  universal: UNIVERSAL_VERTICAL_BASE,
   clothing: {
     businessType: "clothing",
     inventoryMode: "sku_matrix",
@@ -104,8 +109,12 @@ export function isKnownBusinessType(
 
 export function verticalProfileFor(
   businessType: string | null | undefined,
+  merchantConfig?: Record<string, unknown> | null,
 ): VerticalCommerceProfile {
   const key = String(businessType ?? "").trim();
+  if (key === "universal") {
+    return resolveUniversalVerticalProfile(merchantConfig);
+  }
   if (key !== "" && VERTICAL_PROFILES[key as BusinessType]) {
     return VERTICAL_PROFILES[key as BusinessType];
   }
@@ -119,8 +128,12 @@ export function verticalProfileFor(
 
 export function verticalUsesColorAxis(
   businessType: string | null | undefined,
+  merchantConfig?: Record<string, unknown> | null,
 ): boolean {
   if (!isKnownBusinessType(businessType)) return false;
+  if (businessType === "universal") {
+    return resolveUniversalVerticalProfile(merchantConfig).secondaryAxisKey === "color";
+  }
   return VERTICAL_PROFILES[businessType].secondaryAxisKey === "color";
 }
 
@@ -209,6 +222,8 @@ export function labelPrimaryOption(
       return formatVolumeLabel(v);
     case "fastfood":
       return FASTFOOD_PORTION_LABELS[v] ?? v;
+    case "universal":
+      return v;
     default:
       return v;
   }
@@ -338,6 +353,10 @@ export function formatVariantSummary(input: {
       const portion = size || pickAttrString(attrs, "size");
       const label = portion ? (FASTFOOD_PORTION_LABELS[portion] ?? portion) : "";
       return label || VERTICAL_PROFILES.fastfood.cardPlaceholder;
+    }
+    case "universal": {
+      const label = size ? labelPrimaryOption("universal", size) : "";
+      return label || VERTICAL_PROFILES.universal.cardPlaceholder;
     }
     default:
       return size || UNKNOWN_VERTICAL_PROFILE.cardPlaceholder;

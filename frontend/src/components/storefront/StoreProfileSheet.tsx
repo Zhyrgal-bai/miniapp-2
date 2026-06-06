@@ -153,6 +153,12 @@ export function StoreProfileSheet({
             animate={{ y: 0 }}
             exit={{ y: "104%" }}
             transition={{ type: "spring", damping: 32, stiffness: 380 }}
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.42 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 96 || info.velocity.y > 520) onClose();
+            }}
           >
             <div className="sf-profile-sheet__handle" aria-hidden />
             <div className="sf-profile-sheet__scroll">

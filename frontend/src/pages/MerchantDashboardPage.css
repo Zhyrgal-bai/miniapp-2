@@ -1,5 +1,5 @@
 .mdb {
-  min-height: 100vh;
+  min-height: 100dvh;
   box-sizing: border-box;
   padding: 18px 16px 28px;
   background: linear-gradient(180deg, #0e0f12 0%, #17181f 52%, #121318 100%);
