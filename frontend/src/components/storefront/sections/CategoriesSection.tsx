@@ -17,6 +17,8 @@ export function CategoriesSection(props: {
   textConfig?: Record<string, unknown>;
   activeCategoryId?: number | null;
   onSelectCategory?: (categoryId: number | null) => void;
+  /** Скрыть заголовок — компактные pills под поиском. */
+  compact?: boolean;
 }): React.ReactElement | null {
   const cfgTitle = readTitle(props.config, "");
   const txtTitle =
@@ -32,9 +34,13 @@ export function CategoriesSection(props: {
   if (!props.categories?.length) return null;
 
   return (
-    <section className="sf-section sf-section--categories sf-section--padded sf-categories-sticky-wrap">
+    <section
+      className={`sf-section sf-section--categories sf-section--padded sf-categories-sticky-wrap${props.compact ? " sf-section--compact" : ""}`}
+    >
       <div className="sf-categories-sticky">
-        <div className="sf-section__title sf-section__title--compact">{title}</div>
+        {!props.compact ? (
+          <div className="sf-section__title sf-section__title--compact">{title}</div>
+        ) : null}
         <div
           className="sf-chips sf-chips--rail sf-chips--sticky"
           role={interactive ? "tablist" : undefined}

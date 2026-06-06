@@ -9,6 +9,7 @@ import MerchantDashboardPage from "./pages/MerchantDashboardPage";
 import MerchantRegisterPage from "./pages/MerchantRegisterPage";
 import MerchantFaqPage from "./pages/MerchantFaqPage";
 import RootAppOrPlatform from "./pages/RootAppOrPlatform";
+import StoreSlugAliasRedirect from "./pages/StoreSlugAliasRedirect";
 import AppErrorBoundary from "./components/ui/AppErrorBoundary";
 import "leaflet/dist/leaflet.css";
 import "./design/archaPremium.css";
@@ -18,6 +19,8 @@ import "./components/storefront/storefrontBones.css";
 import "./components/storefront/commerceShell.css";
 import "./components/storefront/commerce/openInTelegramCta.css";
 import "./components/storefront/commerce/customerLocationPrompt.css";
+/** UX redesign tokens — last in cascade for storefront hierarchy. */
+import "./components/storefront/storefrontUxRedesign.css";
 import { bootstrapTelegramWebApp } from "./utils/telegramWebAppBootstrap";
 
 bootstrapTelegramWebApp();
@@ -40,7 +43,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 path="/platform"
                 element={<Navigate to="/merchant" replace />}
               />
-              <Route path="/store/:slug" element={<App />} />
+              <Route path="/store/:slug" element={<StoreSlugAliasRedirect />} />
               <Route path="/s/:slug" element={<App />} />
               <Route path="/" element={<RootAppOrPlatform />} />
               <Route path="*" element={<App />} />

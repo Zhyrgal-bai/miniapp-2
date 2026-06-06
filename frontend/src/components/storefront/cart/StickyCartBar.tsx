@@ -8,6 +8,14 @@ function formatSom(v: number): string {
   return `${n}`.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 }
 
+function itemsLabel(qty: number): string {
+  const mod10 = qty % 10;
+  const mod100 = qty % 100;
+  if (mod10 === 1 && mod100 !== 11) return "товар";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "товара";
+  return "товаров";
+}
+
 export function StickyCartBar(props: {
   visible: boolean;
   onOpenCart: () => void;
@@ -32,6 +40,7 @@ export function StickyCartBar(props: {
     if (qty > prevQty.current) {
       setBump(true);
       const t = window.setTimeout(() => setBump(false), 260);
+      prevQty.current = qty;
       return () => window.clearTimeout(t);
     }
     prevQty.current = qty;
@@ -39,25 +48,28 @@ export function StickyCartBar(props: {
 
   if (!props.visible || qty <= 0) return null;
 
+  const checkoutLabel = readTxt("checkoutLabel", "Оформить");
+
   return (
     <div
       className="sf-chrome-align-commerce sf-sticky-cart-slot"
       data-sf-shell={shellMode}
       role="presentation"
     >
-      <div className={`sf-sticky-cart${bump ? " sf-sticky-cart--bump" : ""}`} role="region" aria-label="Корзина">
-        <button type="button" className="sf-sticky-cart__main" onClick={props.onOpenCart}>
-          <div className="sf-sticky-cart__title">{readTxt("menuCartLabel", "Корзина")}</div>
-          <div className="sf-sticky-cart__meta">
-            <span className="sf-sticky-cart__qty">{qty} шт.</span>
-            <span className="sf-sticky-cart__sum">{formatSom(total)} сом</span>
-          </div>
-        </button>
-        <button type="button" className="sf-sticky-cart__cta" onClick={props.onCheckout}>
-          {readTxt("checkoutLabel", "Оформить")}
-        </button>
-      </div>
+      <button
+        type="button"
+        className={`sf-sticky-cart sf-sticky-cart--unified${bump ? " sf-sticky-cart--bump" : ""}`}
+        aria-label={`Корзина: ${qty} ${itemsLabel(qty)}, ${formatSom(total)} сом`}
+        onClick={props.onCheckout}
+      >
+        <span className="sf-sticky-cart__unified-main">
+          <span className="sf-sticky-cart__unified-line">
+            🛒 {qty} {itemsLabel(qty)}
+          </span>
+          <span className="sf-sticky-cart__unified-sum">{formatSom(total)} сом</span>
+        </span>
+        <span className="sf-sticky-cart__unified-cta">{checkoutLabel} ›</span>
+      </button>
     </div>
   );
 }
-

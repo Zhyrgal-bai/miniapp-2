@@ -10,7 +10,7 @@ import {
 
 /**
  * Без tenant в URL — панель клиента `/merchant`.
- * С `?shop=` / `/store/:slug` / Telegram — приложение магазина.
+ * С `?shop=` / `/s/:slug` / Telegram — приложение магазина.
  */
 export default function RootAppOrPlatform() {
   const { pathname, search } = useLocation();

@@ -33,6 +33,7 @@ import {
   mergeTenantIntoLocation,
   parseStoreSlugFromPath,
   readStoreSlugString,
+  canonicalStorePath,
 } from "./utils/storeParams";
 import type { MyOrderRow } from "./types/myOrder";
 import "./App.css";
@@ -679,8 +680,30 @@ export default function App() {
     if (!sp.has("shop") && !sp.has("businessId")) return;
     const slug = String(payload.storefrontSlug).trim();
     if (!slug) return;
-    navigate({ pathname: `/store/${encodeURIComponent(slug)}`, search: "" }, { replace: true });
+    sp.delete("shop");
+    sp.delete("businessId");
+    const qs = sp.toString();
+    navigate(
+      { pathname: canonicalStorePath(slug), search: qs ? `?${qs}` : "" },
+      { replace: true },
+    );
   }, [shopIdString, payload?.storefrontSlug, location.search, location.pathname, navigate, slugPath]);
+
+  useEffect(() => {
+    const slug =
+      payload?.storefrontSlug != null && String(payload.storefrontSlug).trim() !== ""
+        ? String(payload.storefrontSlug).trim()
+        : null;
+    if (slug == null) return;
+    const href = `${window.location.origin}${canonicalStorePath(slug)}`;
+    let link = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "canonical";
+      document.head.appendChild(link);
+    }
+    link.href = href;
+  }, [payload?.storefrontSlug]);
 
   if (tenantBoot) {
     return (
@@ -723,7 +746,8 @@ export default function App() {
             Откройте Mini App через кнопку «Открыть» в Telegram. Старые ссылки{" "}
             <code className="shop-missing__code">?shop=ID</code> /{" "}
             <code className="shop-missing__code">?businessId=ID</code> поддерживаются и будут
-            автоматически перенаправлены.
+            автоматически перенаправлены на{" "}
+            <code className="shop-missing__code">/s/slug</code>.
           </p>
           {storefrontError ? (
             <p className="shop-missing__hint" style={{ marginTop: 6 }}>

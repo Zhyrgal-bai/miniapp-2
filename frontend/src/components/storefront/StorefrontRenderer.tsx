@@ -300,6 +300,23 @@ export function StorefrontRenderer(props: {
     });
   }, [props.payload.sections]);
 
+  const categoriesSection = useMemo(
+    () => sections.find((sec) => sec.type === "categories") ?? null,
+    [sections],
+  );
+
+  const feedSections = useMemo(
+    () =>
+      sections.filter(
+        (sec) =>
+          sec.type !== "categories" &&
+          sec.type !== "footer" &&
+          sec.type !== "reviews" &&
+          sec.type !== "faq",
+      ),
+    [sections],
+  );
+
   const firstFeaturedSectionId = useMemo(
     () => sections.find((sec) => sec.type === "featuredProducts")?.id ?? null,
     [sections],
@@ -362,6 +379,26 @@ export function StorefrontRenderer(props: {
               onClear={() => setActiveCategoryId(null)}
             />
           </div>
+          {categoriesSection && (props.payload.categories?.length ?? 0) > 0 ? (
+            <div className="sf-feed__chunk sf-feed__chunk--categories sf-feed__chunk--stack">
+              <CategoriesSection
+                compact
+                config={categoriesSection.config}
+                categories={props.payload.categories ?? []}
+                textConfig={props.payload.storefrontTextConfig ?? undefined}
+                activeCategoryId={activeCategoryId}
+                onSelectCategory={(id) => {
+                  setActiveCategoryId(id);
+                  if (id != null) {
+                    recordViewCategory({
+                      businessId: props.payload.businessId,
+                      categoryId: id,
+                    });
+                  }
+                }}
+              />
+            </div>
+          ) : null}
           {isWebBrowse ? (
             <div className="sf-feed__chunk sf-feed__chunk--web-info sf-feed__chunk--stack">
               <WebStorefrontInfoBar
@@ -376,7 +413,7 @@ export function StorefrontRenderer(props: {
               <TableBookingCta onPress={openTableBooking} />
             </div>
           ) : null}
-          {sections.map((s) => {
+          {feedSections.map((s) => {
             const chunk = (() => {
               switch (s.type) {
                 case "hero":
@@ -421,24 +458,7 @@ export function StorefrontRenderer(props: {
                     />
                   );
                 case "categories":
-                  return (
-                    <CategoriesSection
-                      key={s.id}
-                      config={s.config}
-                      categories={props.payload.categories ?? []}
-                      textConfig={props.payload.storefrontTextConfig ?? undefined}
-                      activeCategoryId={activeCategoryId}
-                      onSelectCategory={(id) => {
-                        setActiveCategoryId(id);
-                        if (id != null) {
-                          recordViewCategory({
-                            businessId: props.payload.businessId,
-                            categoryId: id,
-                          });
-                        }
-                      }}
-                    />
-                  );
+                  return null;
                 case "featuredProducts": {
                   const pairDiscovery = s.id === firstFeaturedSectionId;
                   const cfgTitle =

@@ -73,6 +73,18 @@ function parseStartParamTenant(raw: string | undefined): {
   return {};
 }
 
+/** Canonical public storefront path: `/s/{slug}`. */
+export function canonicalStorePath(slug: string): string {
+  const normalized = normalizeStoreSlug(slug) ?? slug.trim().toLowerCase();
+  return `/s/${encodeURIComponent(normalized)}`;
+}
+
+/** Legacy alias `/store/{slug}` (redirects to canonical `/s/`). */
+export function isStoreSlugAliasPath(pathname: string): boolean {
+  const p = String(pathname ?? "").replace(/\/+$/, "");
+  return /^\/store\/[^/]+$/i.test(p);
+}
+
 /** `/store/my-shop` or `/s/my-shop` -> `my-shop` (decoded segment). */
 export function parseStoreSlugFromPath(pathname: string): string | undefined {
   const p = String(pathname ?? "").replace(/\/+$/, "");
@@ -192,7 +204,7 @@ export function buildCatalogRequestParams(pathname?: string): Record<string, str
 
 /**
  * Объединяет текущий query с каноническим tenant.
- * Предпочитает `/store/:slug` если известен `storefrontSlug`, иначе legacy `?shop=`.
+ * Предпочитает `/s/:slug` если известен `storefrontSlug`, иначе legacy `?shop=`.
  */
 export function mergeTenantIntoLocation(opts: {
   pathname: string;
@@ -212,9 +224,8 @@ export function mergeTenantIntoLocation(opts: {
   const qs = p.toString();
 
   if (slug) {
-    const enc = encodeURIComponent(slug);
     const keepPath = opts.pathname === "/faq" || opts.pathname === "/about";
-    const pathname = keepPath ? opts.pathname : `/store/${enc}`;
+    const pathname = keepPath ? opts.pathname : canonicalStorePath(slug);
     return {
       pathname,
       search: qs ? `?${qs}` : "",

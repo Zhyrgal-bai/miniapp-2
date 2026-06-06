@@ -6,7 +6,7 @@ import { readShopIdString, readStoreSlugString } from "../utils/storeParams";
 import { useCartStore } from "../store/useCartStore";
 
 export type ShopContextValue = {
-  /** `Business.id` тенанта из `/store/:slug`, `?shop=` / `?businessId=` или Telegram Mini App */
+  /** `Business.id` тенанта из `/s/:slug`, `?shop=` / `?businessId=` или Telegram Mini App */
   businessId: number | null;
   shopIdString: string | undefined;
   /** Публичный slug витрины (после резолва slug-маршрута). */

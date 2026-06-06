@@ -318,24 +318,25 @@ export function ProductDetailSheet({
         key="pdp-overlay"
         className="pdp-overlay"
         role="presentation"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.2 }}
-        onClick={onClose}
-      >
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          onClick={onClose}
+        >
         <motion.div
           key="pdp-quickview"
           className="pdp-quickview"
           role="dialog"
           aria-modal="true"
           aria-labelledby="pdp-title"
-          initial={{ opacity: 0, scale: 0.94, y: 12 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.96, y: 8 }}
-          transition={{ type: "tween", duration: 0.24, ease: [0.32, 0.72, 0, 1] }}
+          initial={{ opacity: 0, y: "100%" }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: "100%" }}
+          transition={{ type: "tween", duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
           onClick={(e) => e.stopPropagation()}
         >
+          <div className="pdp-quickview__handle" aria-hidden />
           <button
             type="button"
             className="pdp-quickview__close"

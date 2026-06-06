@@ -527,11 +527,33 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
     </button>
   );
 
+  const storefrontQuickAdd =
+    onOpenDetail && commerceEnabled && !outOfStock ? (
+      quantity <= 0 ? (
+        <button
+          type="button"
+          className="product-add-btn product-add-btn--storefront-icon"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleAddToCart();
+          }}
+          disabled={cta.disabled}
+          aria-label={cta.label || addLabel}
+          title={cta.label || addLabel}
+        >
+          +
+        </button>
+      ) : (
+        purchaseControl
+      )
+    ) : null;
+
   return (
     <div
       className={[
         "product-card",
         outOfStock ? "out" : "",
+        onOpenDetail ? "product-card--storefront" : "",
         `product-card--variant-${cfg.variant}`,
         `product-card--ratio-${cfg.imageRatio}`,
         `product-card--fit-${cfg.imageFit}`,
@@ -672,7 +694,14 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
           </>
         )}
 
-        {archetype === "fashion" ? (
+        {onOpenDetail ? (
+          <div className="product-bottom product-bottom--storefront">
+            {PriceBlock}
+            <div className="product-actions">
+              {!commerceEnabled ? webIconAddButton : storefrontQuickAdd}
+            </div>
+          </div>
+        ) : archetype === "fashion" ? (
           <div className="product-bottom product-bottom--fashion">
             <div className="product-price-stack">
               <div className="product-price-label">PRICE</div>

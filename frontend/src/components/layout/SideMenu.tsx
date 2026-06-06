@@ -116,7 +116,7 @@ export default function SideMenu({
   myOrdersAttentionDot = false,
   onNavToMyOrders,
   onNavToFavorites,
-  onNavToAbout,
+  onNavToAbout: _onNavToAbout,
   onNavToSupport,
   onNavToFaq: _onNavToFaq,
   onOpenStoreProfile,
@@ -164,7 +164,6 @@ export default function SideMenu({
   const homeActive = currentPage === "home";
   const myOrdersActive = currentPage === "my-orders";
   const favoritesActive = currentPage === "favorites";
-  const aboutActive = currentPage === "about-shop";
   const supportActive = currentPage === "support";
 
   return (
@@ -293,19 +292,21 @@ export default function SideMenu({
                   </button>
                 ) : null}
 
-                <button
-                  type="button"
-                  className={`app-drawer__link${aboutActive ? " app-drawer__link--active" : ""}`}
-                  onClick={() => {
-                    onNavToAbout();
-                    onClose();
-                  }}
-                >
-                  <span className="app-drawer__link-icon" aria-hidden>
-                    ℹ️
-                  </span>
-                  {readTxt("titleAboutShop", "О магазине")}
-                </button>
+                {commerceEnabled ? (
+                  <button
+                    type="button"
+                    className="app-drawer__link"
+                    onClick={() => {
+                      onOpenStoreProfile();
+                      onClose();
+                    }}
+                  >
+                    <span className="app-drawer__link-icon" aria-hidden>
+                      🏪
+                    </span>
+                    {readTxt("menuStoreProfileLabel", "Профиль магазина")}
+                  </button>
+                ) : null}
 
                 {showTableBooking ? (
                   <button
@@ -330,51 +331,6 @@ export default function SideMenu({
                       variant="hero"
                     />
                   </div>
-                ) : null}
-
-                {commerceEnabled ? (
-                  <>
-                    <div className="app-drawer__divider" aria-hidden />
-                    <button
-                      type="button"
-                      className="app-drawer__link"
-                      onClick={() => {
-                        onOpenStoreProfile("delivery");
-                        onClose();
-                      }}
-                    >
-                      <span className="app-drawer__link-icon" aria-hidden>
-                        🚚
-                      </span>
-                      Доставка
-                    </button>
-                    <button
-                      type="button"
-                      className="app-drawer__link"
-                      onClick={() => {
-                        onNavToSupport();
-                        onClose();
-                      }}
-                    >
-                      <span className="app-drawer__link-icon" aria-hidden>
-                        ↩
-                      </span>
-                      Возвраты
-                    </button>
-                    <button
-                      type="button"
-                      className="app-drawer__link"
-                      onClick={() => {
-                        onNavToSupport();
-                        onClose();
-                      }}
-                    >
-                      <span className="app-drawer__link-icon" aria-hidden>
-                        🎫
-                      </span>
-                      Тикеты
-                    </button>
-                  </>
                 ) : null}
 
                 {admin && (

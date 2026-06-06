@@ -127,7 +127,7 @@ function readOnboardingCompleted(): boolean {
   return localStorage.getItem(LS_ONBOARDING_COMPLETED) === "true";
 }
 
-/** Панель клиента Mini App: маршрут `/merchant` (витрины: `/store/:slug` или legacy `/?shop=ID`). */
+/** Панель клиента Mini App: маршрут `/merchant` (витрины: `/s/:slug` или legacy `/?shop=ID`). */
 export default function PlatformPage() {
   const navigate = useNavigate();
 

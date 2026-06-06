@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatEtaRange } from "@repo-shared/storeAvailabilitySettings";
 import type { PublicStoreAvailability } from "@repo-shared/storeAvailabilitySettings";
 import { loadCustomerLocation } from "../../storefront/customerLocationStorage";
@@ -19,9 +19,14 @@ type Props = {
   onOpenProfile?: () => void;
 };
 
+type Segment = {
+  key: string;
+  icon?: React.ReactNode;
+  text: string;
+};
+
 export function StorefrontCompactStrip({
   businessId,
-  storeName,
   storeCity,
   availability,
   onOpenProfile,
@@ -44,50 +49,50 @@ export function StorefrontCompactStrip({
       ? formatEtaRange(availability.deliveryEta)
       : null;
 
-  const title = String(storeName ?? "").trim();
-  if (title === "" && availability == null && locationLabel == null) return null;
+  const segments = useMemo((): Segment[] => {
+    const out: Segment[] = [];
+    if (availability?.label) {
+      out.push({
+        key: "status",
+        icon: (
+          <span
+            className={`sf-compact-strip__dot ${STATUS_DOT[availability.status] ?? "sf-compact-strip__dot--open"}`}
+            aria-hidden
+          />
+        ),
+        text: availability.label,
+      });
+    }
+    if (locationLabel) {
+      out.push({ key: "loc", icon: "📍", text: locationLabel });
+    }
+    if (deliveryEta) {
+      out.push({ key: "eta", icon: "🚚", text: deliveryEta });
+    }
+    return out;
+  }, [availability, locationLabel, deliveryEta]);
 
-  const statusClass =
-    availability != null ? STATUS_DOT[availability.status] : "sf-compact-strip__dot--open";
+  if (segments.length === 0) return null;
 
   return (
     <button
       type="button"
-      className="sf-compact-strip sf-section sf-section--padded"
-      aria-label="Информация о магазине"
+      className="sf-compact-strip sf-compact-strip--inline sf-section sf-section--padded"
+      aria-label="Статус магазина и доставка"
       onClick={onOpenProfile}
       disabled={onOpenProfile == null}
     >
-      <div className="sf-compact-strip__shell archa-glass">
-        {title !== "" ? (
-          <div className="sf-compact-strip__name">{title}</div>
-        ) : null}
-        <div className="sf-compact-strip__rows">
-          {availability ? (
-            <div className="sf-compact-strip__row">
-              <span className={`sf-compact-strip__dot ${statusClass}`} aria-hidden />
-              <span className="sf-compact-strip__text">{availability.label}</span>
-              {availability.detail ? (
-                <span className="sf-compact-strip__meta">{availability.detail}</span>
-              ) : null}
-            </div>
-          ) : null}
-          {locationLabel ? (
-            <div className="sf-compact-strip__row">
-              <span className="sf-compact-strip__icon" aria-hidden>
-                📍
+      <div className="sf-compact-strip__shell">
+        <div className="sf-compact-strip__line">
+          {segments.map((seg, i) => (
+            <span key={seg.key} className="sf-compact-strip__segment-wrap">
+              {i > 0 ? <span className="sf-compact-strip__sep" aria-hidden>·</span> : null}
+              <span className="sf-compact-strip__segment">
+                {seg.icon}
+                <span className="sf-compact-strip__segment-text">{seg.text}</span>
               </span>
-              <span className="sf-compact-strip__text">{locationLabel}</span>
-            </div>
-          ) : null}
-          {deliveryEta ? (
-            <div className="sf-compact-strip__row">
-              <span className="sf-compact-strip__icon" aria-hidden>
-                🚚
-              </span>
-              <span className="sf-compact-strip__text">{deliveryEta}</span>
-            </div>
-          ) : null}
+            </span>
+          ))}
         </div>
       </div>
     </button>
