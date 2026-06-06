@@ -28,6 +28,7 @@ type AppNavPage =
   | "admin"
   | "faq"
   | "about-shop"
+  | "favorites"
   | "my-orders"
   | "support"
   | "table-booking";
@@ -52,9 +53,12 @@ type SideMenuProps = {
   /** Красная точка у «Мои заказы», если есть заказы, требующие внимания. */
   myOrdersAttentionDot?: boolean;
   onNavToMyOrders: () => void;
+  onNavToFavorites: () => void;
+  onNavToAbout: () => void;
   /** Центр поддержки (чат по заказу), не FAQ. */
   onNavToSupport: () => void;
   onNavToFaq: () => void;
+  onOpenStoreProfile: (section?: "delivery" | "schedule") => void;
   onNavToTableBooking: () => void;
   onNavToAdmin: (section: AdminSection) => void;
 };
@@ -107,12 +111,15 @@ export default function SideMenu({
   onClose,
   currentPage,
   onNavToHome,
-  onNavToCart,
-  cartCount = 0,
+  onNavToCart: _onNavToCart,
+  cartCount: _cartCount = 0,
   myOrdersAttentionDot = false,
   onNavToMyOrders,
+  onNavToFavorites,
+  onNavToAbout,
   onNavToSupport,
-  onNavToFaq,
+  onNavToFaq: _onNavToFaq,
+  onOpenStoreProfile,
   onNavToTableBooking,
   onNavToAdmin,
 }: SideMenuProps) {
@@ -155,9 +162,9 @@ export default function SideMenu({
   useBodyScrollLock(open);
 
   const homeActive = currentPage === "home";
-  const cartActive = currentPage === "cart";
   const myOrdersActive = currentPage === "my-orders";
-  const faqActive = currentPage === "faq";
+  const favoritesActive = currentPage === "favorites";
+  const aboutActive = currentPage === "about-shop";
   const supportActive = currentPage === "support";
 
   return (
@@ -221,6 +228,20 @@ export default function SideMenu({
               </div>
 
               <nav className="app-drawer__nav" aria-label="Разделы">
+                <button
+                  type="button"
+                  className={`app-drawer__link${homeActive ? " app-drawer__link--active" : ""}`}
+                  onClick={() => {
+                    onNavToHome();
+                    onClose();
+                  }}
+                >
+                  <span className="app-drawer__link-icon" aria-hidden>
+                    🛍
+                  </span>
+                  {readTxt("menuShopLabel", ru.menu.shop)}
+                </button>
+
                 {commerceEnabled ? (
                   <button
                     type="button"
@@ -240,52 +261,19 @@ export default function SideMenu({
                   </button>
                 ) : null}
 
-                <button
-                  type="button"
-                  className={`app-drawer__link${homeActive ? " app-drawer__link--active" : ""}`}
-                  onClick={() => {
-                    onNavToHome();
-                    onClose();
-                  }}
-                >
-                  <span className="app-drawer__link-icon" aria-hidden>
-                    🛍
-                  </span>
-                  {readTxt("menuShopLabel", ru.menu.shop)}
-                </button>
-
                 {commerceEnabled ? (
                   <button
                     type="button"
-                    className={`app-drawer__link${cartActive ? " app-drawer__link--active" : ""}`}
+                    className={`app-drawer__link${favoritesActive ? " app-drawer__link--active" : ""}`}
                     onClick={() => {
-                      onNavToCart();
-                      onClose();
-                    }}
-                  >
-                    <span className="app-drawer__link-icon app-drawer__link-icon--with-badge" aria-hidden>
-                      🛒
-                      {cartCount > 0 && (
-                        <span className="app-drawer__cart-badge">{cartCount}</span>
-                      )}
-                    </span>
-                    {readTxt("menuCartLabel", ru.menu.cart)}
-                  </button>
-                ) : null}
-
-                {showTableBooking ? (
-                  <button
-                    type="button"
-                    className={`app-drawer__link${currentPage === "table-booking" ? " app-drawer__link--active" : ""}`}
-                    onClick={() => {
-                      onNavToTableBooking();
+                      onNavToFavorites();
                       onClose();
                     }}
                   >
                     <span className="app-drawer__link-icon" aria-hidden>
-                      🍽
+                      ❤️
                     </span>
-                    Забронировать столик
+                    Избранное
                   </button>
                 ) : null}
 
@@ -305,6 +293,36 @@ export default function SideMenu({
                   </button>
                 ) : null}
 
+                <button
+                  type="button"
+                  className={`app-drawer__link${aboutActive ? " app-drawer__link--active" : ""}`}
+                  onClick={() => {
+                    onNavToAbout();
+                    onClose();
+                  }}
+                >
+                  <span className="app-drawer__link-icon" aria-hidden>
+                    ℹ️
+                  </span>
+                  {readTxt("titleAboutShop", "О магазине")}
+                </button>
+
+                {showTableBooking ? (
+                  <button
+                    type="button"
+                    className={`app-drawer__link${currentPage === "table-booking" ? " app-drawer__link--active" : ""}`}
+                    onClick={() => {
+                      onNavToTableBooking();
+                      onClose();
+                    }}
+                  >
+                    <span className="app-drawer__link-icon" aria-hidden>
+                      🍽
+                    </span>
+                    Забронировать столик
+                  </button>
+                ) : null}
+
                 {!commerceEnabled ? (
                   <div className="app-drawer__web-cta">
                     <OpenInTelegramCta
@@ -312,6 +330,51 @@ export default function SideMenu({
                       variant="hero"
                     />
                   </div>
+                ) : null}
+
+                {commerceEnabled ? (
+                  <>
+                    <div className="app-drawer__divider" aria-hidden />
+                    <button
+                      type="button"
+                      className="app-drawer__link"
+                      onClick={() => {
+                        onOpenStoreProfile("delivery");
+                        onClose();
+                      }}
+                    >
+                      <span className="app-drawer__link-icon" aria-hidden>
+                        🚚
+                      </span>
+                      Доставка
+                    </button>
+                    <button
+                      type="button"
+                      className="app-drawer__link"
+                      onClick={() => {
+                        onNavToSupport();
+                        onClose();
+                      }}
+                    >
+                      <span className="app-drawer__link-icon" aria-hidden>
+                        ↩
+                      </span>
+                      Возвраты
+                    </button>
+                    <button
+                      type="button"
+                      className="app-drawer__link"
+                      onClick={() => {
+                        onNavToSupport();
+                        onClose();
+                      }}
+                    >
+                      <span className="app-drawer__link-icon" aria-hidden>
+                        🎫
+                      </span>
+                      Тикеты
+                    </button>
+                  </>
                 ) : null}
 
                 {admin && (
@@ -339,22 +402,6 @@ export default function SideMenu({
                     })}
                   </>
                 )}
-
-                <div className="app-drawer__divider" aria-hidden />
-
-                <button
-                  type="button"
-                  className={`app-drawer__link${faqActive ? " app-drawer__link--active" : ""}`}
-                  onClick={() => {
-                    onNavToFaq();
-                    onClose();
-                  }}
-                >
-                  <span className="app-drawer__link-icon" aria-hidden>
-                    ❓
-                  </span>
-                  {readTxt("menuFaqLabel", ru.menu.faq)}
-                </button>
               </nav>
             </div>
 
@@ -378,6 +425,9 @@ export default function SideMenu({
                   )}
                 </div>
               </div>
+              <button type="button" className="app-drawer__close-btn" onClick={onClose}>
+                Закрыть
+              </button>
             </div>
           </motion.aside>
         </>

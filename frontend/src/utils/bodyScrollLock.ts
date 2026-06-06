@@ -16,6 +16,7 @@ const SCROLLABLE_OVERLAY_SELECTOR = [
   ".sf-support-sheet__list",
   ".checkout-form-scroll",
   ".merchant-register__scroll",
+  ".sf-profile-sheet__scroll",
 ].join(", ");
 
 let lockCount = 0;

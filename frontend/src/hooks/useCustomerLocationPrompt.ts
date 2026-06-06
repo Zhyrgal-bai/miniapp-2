@@ -3,9 +3,11 @@ import {
   isLatitudeInKgRange,
   isLongitudeInKgRange,
 } from "@repo-shared/businessAddress";
+import { reverseGeocodeKg } from "../utils/nominatimGeocode";
 import { isStorefrontCommerceEnabled } from "../hooks/useStorefrontCommerceMode";
 import {
   hasCustomerLocationConsentDecision,
+  hydrateCustomerLocationFromTelegramCloud,
   loadCustomerLocation,
   markCustomerLocationDenied,
   markCustomerLocationGranted,
@@ -13,11 +15,8 @@ import {
 } from "../storefront/customerLocationStorage";
 
 export type CustomerLocationPromptState = {
-  /** Показать модальное окно согласия. */
   promptVisible: boolean;
-  /** Идёт запрос GPS. */
   requesting: boolean;
-  /** Ошибка после «Разрешить» (браузер / GPS). */
   requestError: string | null;
   record: CustomerLocationRecord | null;
   onAllow: () => void;
@@ -32,6 +31,11 @@ const GEO_OPTIONS: PositionOptions = {
 
 function roundCoord(n: number): number {
   return Math.round(n * 1_000_000) / 1_000_000;
+}
+
+function houseFromAddressLine(line: string): string | null {
+  const m = line.match(/\b(\d+[a-zA-Zа-яА-ЯёЁ/-]*)\s*$/);
+  return m?.[1] ?? null;
 }
 
 export function useCustomerLocationPrompt(
@@ -60,6 +64,13 @@ export function useCustomerLocationPrompt(
       setPromptVisible(false);
     }
   }, [businessId, commerceEnabled]);
+
+  useEffect(() => {
+    if (businessId == null || businessId <= 0) return;
+    void hydrateCustomerLocationFromTelegramCloud(businessId).then((record) => {
+      if (record != null) syncFromStorage();
+    });
+  }, [businessId, syncFromStorage]);
 
   useEffect(() => {
     syncFromStorage();
@@ -95,26 +106,41 @@ export function useCustomerLocationPrompt(
     setRequesting(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const lat = roundCoord(pos.coords.latitude);
-        const lng = roundCoord(pos.coords.longitude);
-        if (!isLatitudeInKgRange(lat) || !isLongitudeInKgRange(lng)) {
+        void (async () => {
+          const lat = roundCoord(pos.coords.latitude);
+          const lng = roundCoord(pos.coords.longitude);
+          if (!isLatitudeInKgRange(lat) || !isLongitudeInKgRange(lng)) {
+            setRequesting(false);
+            setRequestError(
+              "Координаты вне Кыргызстана. Проверьте GPS или выберите «Позже».",
+            );
+            return;
+          }
+
+          const geo = await reverseGeocodeKg(lat, lng);
+          const address = geo.ok
+            ? {
+                formattedAddress: geo.value.displayAddress,
+                city: geo.value.city,
+                country: "Кыргызстан",
+                street: geo.value.addressLine,
+                houseNumber: houseFromAddressLine(geo.value.addressLine),
+              }
+            : null;
+
+          const next = markCustomerLocationGranted(businessId, {
+            latitude: lat,
+            longitude: lng,
+            accuracyM: Number.isFinite(pos.coords.accuracy)
+              ? pos.coords.accuracy
+              : null,
+            address,
+          });
+          setRecord(next);
+          setPromptVisible(false);
           setRequesting(false);
-          setRequestError(
-            "Кыргызстан. Проверьте GPS или выберите «Не сейчас».",
-          );
-          return;
-        }
-        const next = markCustomerLocationGranted(businessId, {
-          latitude: lat,
-          longitude: lng,
-          accuracyM: Number.isFinite(pos.coords.accuracy)
-            ? pos.coords.accuracy
-            : null,
-        });
-        setRecord(next);
-        setPromptVisible(false);
-        setRequesting(false);
-        setRequestError(null);
+          setRequestError(null);
+        })();
       },
       (err) => {
         setRequesting(false);

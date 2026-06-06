@@ -27,7 +27,11 @@ import {
   haversineDistanceKm,
   type MerchantDeliverySettings,
 } from "@repo-shared/merchantDeliverySettings";
-import { readCustomerLocationCoords } from "../storefront/customerLocationStorage";
+import {
+  markCustomerLocationGranted,
+  readCustomerLocationAddress,
+} from "../storefront/customerLocationStorage";
+import { reverseGeocodeKg } from "../utils/nominatimGeocode";
 import { checkoutLocationLabel } from "../utils/checkoutLocationLabel";
 
 type Props = {
@@ -44,6 +48,7 @@ type NominatimSearchItem = {
 type FieldErrors = {
   name?: string;
   phone?: string;
+  address?: string;
 };
 
 const ADDRESS_SEARCH_DEBOUNCE_MS = 450;
@@ -189,6 +194,18 @@ export default function CheckoutPage({ onBack }: Props) {
   }, [businessId]);
 
   useEffect(() => {
+    if (businessId == null || businessId <= 0) return;
+    if (deliveryType === "pickup" || pickupOnly) return;
+    const saved = readCustomerLocationAddress(businessId);
+    if (saved == null) return;
+    if (lat == null && saved.latitude != null) setLat(saved.latitude);
+    if (lng == null && saved.longitude != null) setLng(saved.longitude);
+    if (address.trim() === "" && saved.formattedAddress) {
+      setAddress(saved.formattedAddress);
+    }
+  }, [businessId, deliveryType, pickupOnly, lat, lng, address]);
+
+  useEffect(() => {
     if (pickupOnly) setDeliveryType("pickup");
   }, [pickupOnly]);
 
@@ -213,7 +230,7 @@ export default function CheckoutPage({ onBack }: Props) {
     if (deliveryType === "pickup") return null;
     const store = payload?.storeAddress;
     if (store == null) return null;
-    const saved = businessId != null ? readCustomerLocationCoords(businessId) : null;
+    const saved = businessId != null ? readCustomerLocationAddress(businessId) : null;
     const customerLat = lat ?? saved?.latitude ?? null;
     const customerLng = lng ?? saved?.longitude ?? null;
     if (customerLat == null || customerLng == null) return null;
@@ -412,6 +429,9 @@ export default function CheckoutPage({ onBack }: Props) {
   const handleAddressChange = useCallback(
     (value: string) => {
       setAddress(value);
+      if (fieldErrors.address) {
+        setFieldErrors((prev) => ({ ...prev, address: undefined }));
+      }
       const trimmed = value.trim();
       if (trimmed.length < 3) {
         if (addressSearchTimerRef.current) {
@@ -431,7 +451,7 @@ export default function CheckoutPage({ onBack }: Props) {
         void runAddressSearch(trimmed);
       }, ADDRESS_SEARCH_DEBOUNCE_MS);
     },
-    [runAddressSearch],
+    [runAddressSearch, fieldErrors.address],
   );
 
   const selectAddress = useCallback((item: NominatimSearchItem) => {
@@ -452,6 +472,7 @@ export default function CheckoutPage({ onBack }: Props) {
       setCheckoutError(t("checkout.geoUnsupported"));
       return;
     }
+    if (businessId == null || businessId <= 0) return;
     if (addressSearchTimerRef.current) {
       clearTimeout(addressSearchTimerRef.current);
       addressSearchTimerRef.current = null;
@@ -469,23 +490,25 @@ export default function CheckoutPage({ onBack }: Props) {
 
         void (async () => {
           try {
-            const url = new URL("https://nominatim.openstreetmap.org/reverse");
-            url.searchParams.set("format", "jsonv2");
-            url.searchParams.set("lat", String(nextLat));
-            url.searchParams.set("lon", String(nextLng));
-            url.searchParams.set("accept-language", "ru");
-
-            const res = await fetch(url.toString(), {
-              headers: { Accept: "application/json" },
-            });
-            const data = (await res.json().catch(() => ({}))) as {
-              display_name?: string;
-            };
-            if (
-              typeof data.display_name === "string" &&
-              data.display_name.trim()
-            ) {
-              setAddress(data.display_name.trim().slice(0, 2000));
+            const geo = await reverseGeocodeKg(nextLat, nextLng);
+            if (geo.ok) {
+              setAddress(geo.value.displayAddress.slice(0, 2000));
+              markCustomerLocationGranted(businessId, {
+                latitude: nextLat,
+                longitude: nextLng,
+                accuracyM: Number.isFinite(pos.coords.accuracy)
+                  ? pos.coords.accuracy
+                  : null,
+                address: {
+                  formattedAddress: geo.value.displayAddress,
+                  city: geo.value.city,
+                  country: "Кыргызстан",
+                  street: geo.value.addressLine,
+                  houseNumber: null,
+                },
+              });
+            } else {
+              setCheckoutError(geo.error);
             }
           } catch {
             setCheckoutError(t("checkout.geoAddressFail"));
@@ -500,7 +523,7 @@ export default function CheckoutPage({ onBack }: Props) {
       },
       { enableHighAccuracy: true, timeout: 20_000, maximumAge: 60_000 },
     );
-  }, []);
+  }, [businessId]);
 
   const handleCheckPromo = async () => {
     if (!promo.trim()) return;
@@ -519,6 +542,9 @@ export default function CheckoutPage({ onBack }: Props) {
     else if (!validateKgPhone(phone.trim())) {
       next.phone = t("checkout.phoneInvalid");
       if (phoneFromSavedOrder) setPhoneFromSavedOrder(false);
+    }
+    if (deliveryType !== "pickup" && !pickupOnly && !address.trim()) {
+      next.address = t("checkout.addressRequired");
     }
     setFieldErrors(next);
     return Object.keys(next).length === 0;
@@ -824,30 +850,29 @@ export default function CheckoutPage({ onBack }: Props) {
             )}
           </div>
 
-          {!phoneFromSavedOrder && (
-            <div className="checkout-field">
-              <label className="checkout-field__label" htmlFor="checkout-phone">
-                {t("checkout.phone")}
-              </label>
-              <input
-                id="checkout-phone"
-                className={fieldErrors.phone ? "checkout-field--error" : ""}
-                placeholder="+996 XXX XXX XXX"
-                value={phone}
-                onChange={(e) => {
-                  setPhone(e.target.value);
-                  if (fieldErrors.phone) {
-                    setFieldErrors((prev) => ({ ...prev, phone: undefined }));
-                  }
-                }}
-                inputMode="tel"
-                autoComplete="tel"
-              />
-              {fieldErrors.phone && (
-                <p className="checkout-field__error">{fieldErrors.phone}</p>
-              )}
-            </div>
-          )}
+          <div className="checkout-field">
+            <label className="checkout-field__label" htmlFor="checkout-phone">
+              {t("checkout.phone")}
+            </label>
+            <input
+              id="checkout-phone"
+              className={fieldErrors.phone ? "checkout-field--error" : ""}
+              placeholder="+996 XXX XXX XXX"
+              value={phone}
+              onChange={(e) => {
+                setPhone(e.target.value);
+                if (phoneFromSavedOrder) setPhoneFromSavedOrder(false);
+                if (fieldErrors.phone) {
+                  setFieldErrors((prev) => ({ ...prev, phone: undefined }));
+                }
+              }}
+              inputMode="tel"
+              autoComplete="tel"
+            />
+            {fieldErrors.phone && (
+              <p className="checkout-field__error">{fieldErrors.phone}</p>
+            )}
+          </div>
 
           {deliveryType !== "pickup" && !pickupOnly ? (
           <div className="checkout-field">
@@ -858,6 +883,7 @@ export default function CheckoutPage({ onBack }: Props) {
               <div className="checkout-address-suggest">
                 <input
                   id="checkout-address"
+                  className={fieldErrors.address ? "checkout-field--error" : ""}
                   placeholder={t("checkout.address")}
                   value={address}
                   onChange={(e) => handleAddressChange(e.target.value)}
@@ -908,7 +934,7 @@ export default function CheckoutPage({ onBack }: Props) {
                 >
                   {loadingLocation
                     ? t("checkout.geoLoading")
-                    : t("checkout.geoBtn")}
+                    : "📍 Использовать текущее местоположение"}
                 </button>
                 <button
                   type="button"
@@ -947,6 +973,9 @@ export default function CheckoutPage({ onBack }: Props) {
                 </p>
               )}
             </div>
+            {fieldErrors.address && (
+              <p className="checkout-field__error">{fieldErrors.address}</p>
+            )}
           </div>
           ) : null}
 

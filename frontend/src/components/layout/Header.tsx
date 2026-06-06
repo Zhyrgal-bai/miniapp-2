@@ -35,6 +35,8 @@ type HeaderProps = {
   logoUrl?: string | null;
   /** Premium identity header (витрина). */
   storeBrandMode?: boolean;
+  /** Открыть профиль магазина (bottom sheet). */
+  onOpenStoreProfile?: () => void;
   /** Показать блок «Магазин» (OWNER/ADMIN). */
   isMerchantStaff?: boolean;
   accountMenu?: HeaderAccountCallbacks;
@@ -58,6 +60,7 @@ export default function Header({
   storeName,
   logoUrl,
   storeBrandMode = false,
+  onOpenStoreProfile,
   isMerchantStaff = false,
   accountMenu,
   merchantMenu,
@@ -362,6 +365,24 @@ export default function Header({
   );
 
   if (useStoreBrand) {
+    const storeProfileButton = onOpenStoreProfile ? (
+      <motion.button
+        type="button"
+        className="app-header__store-logo app-header__store-logo--btn"
+        aria-label="Профиль магазина"
+        onClick={onOpenStoreProfile}
+        whileTap={{ scale: 0.94 }}
+      >
+        {logoSrc !== "" ? (
+          <img src={logoSrc} alt="" width={40} height={40} />
+        ) : (
+          <span className="app-header__store-logo-fallback">{storeInitials}</span>
+        )}
+      </motion.button>
+    ) : (
+      userButton
+    );
+
     return (
       <header className="app-header app-header--store-brand">
         {sheetPortal}
@@ -370,17 +391,10 @@ export default function Header({
             {burgerButton}
           </div>
           <div className="app-header__brand-slot app-header__brand-slot--center">
-            <div className="app-header__store-logo" aria-hidden={logoSrc !== ""}>
-              {logoSrc !== "" ? (
-                <img src={logoSrc} alt="" width={40} height={40} />
-              ) : (
-                <span className="app-header__store-logo-fallback">{storeInitials}</span>
-              )}
-            </div>
             <h1 className="app-header__store-name">{centerTitle}</h1>
           </div>
           <div className="app-header__brand-slot app-header__brand-slot--right">
-            {userButton}
+            {storeProfileButton}
           </div>
         </div>
       </header>

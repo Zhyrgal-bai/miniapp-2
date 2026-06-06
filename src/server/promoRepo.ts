@@ -4,6 +4,41 @@ export function normalizePromoCode(code: string): string {
   return code.trim().toUpperCase();
 }
 
+/** Маркер промокода в Order.tracking до успешной оплаты. */
+export const PROMO_TRACKING_PREFIX = "__promo__:";
+
+export function promoTrackingValue(code: string): string {
+  return `${PROMO_TRACKING_PREFIX}${normalizePromoCode(code)}`;
+}
+
+export function promoCodeFromOrderTracking(
+  tracking: string | null | undefined,
+): string | null {
+  if (tracking == null || !tracking.startsWith(PROMO_TRACKING_PREFIX)) {
+    return null;
+  }
+  const code = tracking.slice(PROMO_TRACKING_PREFIX.length).trim();
+  return code !== "" ? code : null;
+}
+
+export async function consumePromoForPaidOrder(
+  client: PrismaClient,
+  orderId: number,
+): Promise<void> {
+  const order = await client.order.findUnique({
+    where: { id: orderId },
+    select: { id: true, businessId: true, tracking: true },
+  });
+  if (order == null) return;
+  const code = promoCodeFromOrderTracking(order.tracking);
+  if (code == null) return;
+  await consumePromoDb(client, order.businessId, code);
+  await client.order.update({
+    where: { id: orderId },
+    data: { tracking: null },
+  });
+}
+
 export type PromoRow = {
   code: string;
   discount: number;

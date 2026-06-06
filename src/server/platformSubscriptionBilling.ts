@@ -254,6 +254,15 @@ function resolvePlanCode(input: {
 export async function findPendingSubscriptionFinikPayment(
   businessId: number,
 ): Promise<{ id: number; source: string; finikPaymentId: string | null } | null> {
+  const staleBefore = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  await prisma.subscriptionFinikPayment.updateMany({
+    where: {
+      businessId,
+      status: "pending",
+      createdAt: { lt: staleBefore },
+    },
+    data: { status: "failed" },
+  });
   return prisma.subscriptionFinikPayment.findFirst({
     where: { businessId, status: "pending" },
     orderBy: { createdAt: "desc" },

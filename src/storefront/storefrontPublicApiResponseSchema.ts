@@ -124,6 +124,16 @@ const StoreAvailabilityWireSchema = z.object({
   deliveryEnabled: z.boolean(),
   closedCheckoutNotice: z.string().nullable(),
   nextOpenLabel: z.string().nullable(),
+  weeklySchedule: z
+    .array(
+      z.object({
+        dayKey: z.enum(["mon", "tue", "wed", "thu", "fri", "sat", "sun"]),
+        dayLabel: z.string(),
+        hoursLabel: z.string(),
+        closed: z.boolean(),
+      }),
+    )
+    .optional(),
 });
 
 const FeaturedProductWireSchema = z

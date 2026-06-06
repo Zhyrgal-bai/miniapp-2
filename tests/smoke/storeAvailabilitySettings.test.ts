@@ -75,4 +75,10 @@ describe("storeAvailabilitySettings", () => {
     expect(formatEtaRange(pub.deliveryEta)).toMatch(/25–40/);
     expect(pub.deliveryZones.length).toBeGreaterThan(0);
   });
+
+  it("public payload includes weekly schedule", () => {
+    const pub = storeAvailabilityToPublic(defaultStoreAvailabilitySettings());
+    expect(pub.weeklySchedule).toHaveLength(7);
+    expect(pub.weeklySchedule[0]?.dayLabel).toBe("Пн");
+  });
 });

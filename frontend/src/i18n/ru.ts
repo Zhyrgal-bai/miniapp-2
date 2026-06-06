@@ -82,6 +82,7 @@ export const ru = {
     nameRequired: "Укажите имя",
     phoneRequired: "Укажите номер телефона",
     phoneInvalid: "Введите номер: +996XXXXXXXXX или 0556XXXXXX",
+    addressRequired: "Укажите адрес доставки",
     addressSearch: "Поиск…",
     geoUnsupported: "Геолокация не поддерживается",
     geoDenied: "Разрешите доступ к геолокации",

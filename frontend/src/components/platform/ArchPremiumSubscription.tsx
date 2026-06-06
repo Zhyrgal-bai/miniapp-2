@@ -507,7 +507,8 @@ export function ArchPremiumSubscription({
                 </button>
               ) : null}
 
-              {(renewOpen || !showRenew) && panel.displayStatus !== "TRIAL" ? (
+              {(renewOpen || !showRenew) &&
+              (panel.displayStatus !== "TRIAL" || renewOpen) ? (
                 <>
                   <p className="archa-sub__pay-lead">
                     {showRenew

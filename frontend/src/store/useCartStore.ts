@@ -29,9 +29,59 @@ type CartStore = {
 
 export { cartLineIdentityKey, cartLinesEqual };
 
+const CART_STORAGE_KEY = "sf-cart-v1";
+
+type CartPersist = Pick<CartStore, "tenantShopId" | "reservationId" | "items">;
+
+function loadPersistedCart(): CartPersist {
+  if (typeof localStorage === "undefined") {
+    return { tenantShopId: null, reservationId: null, items: [] };
+  }
+  try {
+    const raw = localStorage.getItem(CART_STORAGE_KEY);
+    if (raw == null || raw === "") {
+      return { tenantShopId: null, reservationId: null, items: [] };
+    }
+    const parsed = JSON.parse(raw) as Partial<CartPersist>;
+    if (!Array.isArray(parsed.items)) {
+      return { tenantShopId: null, reservationId: null, items: [] };
+    }
+    return {
+      tenantShopId:
+        typeof parsed.tenantShopId === "string" ? parsed.tenantShopId : null,
+      reservationId:
+        typeof parsed.reservationId === "number" &&
+        Number.isFinite(parsed.reservationId)
+          ? parsed.reservationId
+          : null,
+      items: parsed.items.filter(
+        (item): item is CartItem =>
+          item != null &&
+          typeof item === "object" &&
+          typeof (item as CartItem).name === "string" &&
+          typeof (item as CartItem).price === "number" &&
+          typeof (item as CartItem).quantity === "number",
+      ),
+    };
+  } catch {
+    return { tenantShopId: null, reservationId: null, items: [] };
+  }
+}
+
+function persistCart(state: CartPersist): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+const initialCart = loadPersistedCart();
+
 export const useCartStore = create<CartStore>((set, get) => ({
-  tenantShopId: null,
-  reservationId: null,
+  tenantShopId: initialCart.tenantShopId,
+  reservationId: initialCart.reservationId,
 
   syncTenantShopId: (shopId) =>
     set((state) => ({
@@ -46,7 +96,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
 
   setReservationId: (id) => set({ reservationId: id }),
 
-  items: [],
+  items: initialCart.items,
 
   addItem: (item) =>
     set((state) => {
@@ -72,3 +122,11 @@ export const useCartStore = create<CartStore>((set, get) => ({
   getTotal: () =>
     get().items.reduce((sum, item) => sum + item.price * item.quantity, 0),
 }));
+
+useCartStore.subscribe((state) => {
+  persistCart({
+    tenantShopId: state.tenantShopId,
+    reservationId: state.reservationId,
+    items: state.items,
+  });
+});

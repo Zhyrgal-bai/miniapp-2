@@ -93,3 +93,25 @@ export async function probeCheckoutSchema(
 
   return { ok: missing.length === 0, missing };
 }
+
+const CHECKOUT_SCHEMA_CACHE_TTL_MS = 5 * 60 * 1000;
+let checkoutSchemaCache: {
+  result: CheckoutSchemaProbeResult;
+  expiresAt: number;
+} | null = null;
+
+/** Cached probe for hot checkout path; full probe still used on /ready. */
+export async function getCachedCheckoutSchemaProbe(
+  db: PrismaClient,
+): Promise<CheckoutSchemaProbeResult> {
+  const now = Date.now();
+  if (checkoutSchemaCache != null && checkoutSchemaCache.expiresAt > now) {
+    return checkoutSchemaCache.result;
+  }
+  const result = await probeCheckoutSchema(db);
+  checkoutSchemaCache = {
+    result,
+    expiresAt: now + CHECKOUT_SCHEMA_CACHE_TTL_MS,
+  };
+  return result;
+}

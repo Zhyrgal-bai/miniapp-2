@@ -10,6 +10,7 @@ import CheckoutPage from "./pages/CheckoutPage";
 import AdminApp from "./pages/admin/AdminApp";
 import FAQ from "./pages/FAQ";
 import AboutShopPage from "./pages/AboutShopPage";
+import FavoritesPage from "./pages/FavoritesPage";
 import MyOrders from "./pages/MyOrders";
 import SupportHubPage from "./pages/SupportHubPage";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -65,6 +66,8 @@ import { isStorefrontCommerceEnabled } from "./hooks/useStorefrontCommerceMode";
 import { useCustomerLocationPrompt } from "./hooks/useCustomerLocationPrompt";
 import { CustomerLocationPrompt } from "./components/storefront/commerce/CustomerLocationPrompt";
 import { OpenInTelegramModal } from "./components/storefront/commerce/OpenInTelegramModal";
+import { StoreProfileSheet } from "./components/storefront/StoreProfileSheet";
+import { extractStoreProfileContacts } from "./storefront/storeProfileContacts";
 import { openOpenInTelegramModal } from "./storefront/openInTelegramModal";
 
 type AppNavPage =
@@ -74,6 +77,7 @@ type AppNavPage =
   | "admin"
   | "faq"
   | "about-shop"
+  | "favorites"
   | "my-orders"
   | "support"
   | "table-booking";
@@ -117,6 +121,10 @@ export default function App() {
   }, [storeDisplayName]);
   const [page, setPage] = useState<AppNavPage>(initialPageFromPath);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [storeProfileOpen, setStoreProfileOpen] = useState(false);
+  const [storeProfileSection, setStoreProfileSection] = useState<
+    "delivery" | "schedule" | null
+  >(null);
   const [myOrdersAttention, setMyOrdersAttention] = useState(false);
   /** Вход «Мои заказы» из профиля — сброс баннера. */
   const [myOrdersPlainNonce, setMyOrdersPlainNonce] = useState(0);
@@ -526,12 +534,43 @@ export default function App() {
       window.removeEventListener("sf:openTableBooking", onOpenBooking as EventListener);
   }, [commitPage]);
 
+  useEffect(() => {
+    const onOpenProfile = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ section?: "delivery" | "schedule" }>).detail;
+      setStoreProfileSection(detail?.section ?? null);
+      setStoreProfileOpen(true);
+      setIsMenuOpen(false);
+    };
+    window.addEventListener("sf:openStoreProfile", onOpenProfile as EventListener);
+    return () =>
+      window.removeEventListener("sf:openStoreProfile", onOpenProfile as EventListener);
+  }, []);
+
+  const openStoreProfile = useCallback((section?: "delivery" | "schedule") => {
+    setStoreProfileSection(section ?? null);
+    setStoreProfileOpen(true);
+    setIsMenuOpen(false);
+  }, []);
+
+  const storeProfileContacts = useMemo(
+    () => extractStoreProfileContacts(payload?.sections),
+    [payload?.sections],
+  );
+
   const handleNav = (target: AppNavPage) => {
     commitPage(target);
     setIsMenuOpen(false);
   };
 
   const handleTelegramBack = useCallback(() => {
+    if (isMenuOpen) {
+      setIsMenuOpen(false);
+      return;
+    }
+    if (productSheetOpen) {
+      window.dispatchEvent(new CustomEvent("sf:productSheetClose"));
+      return;
+    }
     if (page === "admin" || adminByHash) {
       window.location.hash = "";
       commitPage("home");
@@ -545,16 +584,23 @@ export default function App() {
       commitPage("home");
       return;
     }
-    if (page === "table-booking") {
+    if (page === "table-booking" || page === "favorites") {
       commitPage("home");
+      return;
+    }
+    if (storeProfileOpen) {
+      setStoreProfileOpen(false);
       return;
     }
     if (page !== "home") {
       commitPage("home");
     }
-  }, [page, adminByHash, commitPage]);
+  }, [page, adminByHash, commitPage, storeProfileOpen, isMenuOpen, productSheetOpen]);
 
-  useTelegramBackButton(page !== "home", handleTelegramBack);
+  useTelegramBackButton(
+    page !== "home" || storeProfileOpen || isMenuOpen || productSheetOpen,
+    handleTelegramBack,
+  );
 
   const handleFloatingCartClick = () => {
     if (page !== "cart") {
@@ -715,6 +761,11 @@ export default function App() {
         storeName={storeDisplayName || undefined}
         logoUrl={theme.logoUrl}
         storeBrandMode={storeBrandHeader}
+        onOpenStoreProfile={
+          commerceEnabled && storeBrandHeader
+            ? () => openStoreProfile()
+            : undefined
+        }
         isMerchantStaff={adminAllowed}
         accountMenu={
           commerceEnabled
@@ -750,8 +801,11 @@ export default function App() {
         cartCount={totalQuantity}
         myOrdersAttentionDot={myOrdersAttention}
         onNavToMyOrders={() => handleNav("my-orders")}
+        onNavToFavorites={() => handleNav("favorites")}
         onNavToSupport={() => handleNav("support")}
+        onNavToAbout={() => handleNav("about-shop")}
         onNavToFaq={() => handleNav("faq")}
+        onOpenStoreProfile={openStoreProfile}
         onNavToTableBooking={() => handleNav("table-booking")}
         onNavToAdmin={goAdminSection}
       />
@@ -775,6 +829,7 @@ export default function App() {
           )}
           {page === "faq" && <FAQ />}
           {page === "about-shop" && <AboutShopPage />}
+          {commerceEnabled && page === "favorites" && <FavoritesPage />}
           {commerceEnabled && page === "my-orders" && (
             <MyOrders profilePlainNonce={myOrdersPlainNonce} />
           )}
@@ -833,9 +888,29 @@ export default function App() {
         open={customerLocationPrompt.promptVisible}
         requesting={customerLocationPrompt.requesting}
         error={customerLocationPrompt.requestError}
+        storeName={storeDisplayName || null}
         onAllow={customerLocationPrompt.onAllow}
         onDismiss={customerLocationPrompt.onDismiss}
       />
+      {commerceEnabled ? (
+        <StoreProfileSheet
+          open={storeProfileOpen}
+          onClose={() => {
+            setStoreProfileOpen(false);
+            setStoreProfileSection(null);
+          }}
+          storeName={storeDisplayName || undefined}
+          logoUrl={theme.logoUrl}
+          storeAddress={payload?.storeAddress}
+          availability={payload?.storeAvailability ?? null}
+          textConfig={payload?.storefrontTextConfig ?? undefined}
+          contacts={storeProfileContacts}
+          initialSection={storeProfileSection}
+          onOpenSupport={() => handleNav("support")}
+          onOpenAbout={() => handleNav("about-shop")}
+          onOpenFaq={() => handleNav("faq")}
+        />
+      ) : null}
       <OpenInTelegramModal
         defaultTelegramOpenUrl={payload?.telegramOpenUrl ?? null}
       />

@@ -251,6 +251,77 @@
   max-width: 100%;
 }
 
+.sf-app .app-header__store-logo--btn {
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sf-app .app-header__store-logo--btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--sf-color-primary) 65%, transparent);
+  outline-offset: 2px;
+}
+
+.sf-app .app-header--store-brand .app-header__store-name {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-drawer__close-btn {
+  width: 100%;
+  margin-top: 10px;
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--sf-color-text, #fff) 12%, transparent);
+  background: color-mix(in srgb, var(--sf-color-surface, #111) 88%, transparent);
+  color: color-mix(in srgb, var(--sf-color-text, #fff) 82%, transparent);
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.favorites-page__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.favorites-page__item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sf-color-surfaceAlt, #1a1a1a) 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sf-color-text, #fff) 8%, transparent);
+}
+
+.favorites-page__name {
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.favorites-page__price {
+  font-size: 0.88rem;
+  color: color-mix(in srgb, var(--sf-color-text, #fff) 72%, transparent);
+}
+
+.faq-page__lead {
+  margin: -8px 0 16px;
+  font-size: 0.88rem;
+  color: color-mix(in srgb, var(--sf-color-text, #fff) 68%, transparent);
+}
+
 .sf-app .app-header--store-brand .app-header__store-tagline {
   display: none;
 }

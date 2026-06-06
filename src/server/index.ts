@@ -135,7 +135,7 @@ import {
   runCheckoutStep,
   surfaceCheckoutError,
 } from "./checkoutErrorSurface.js";
-import { probeCheckoutSchema } from "./checkoutSchemaProbe.js";
+import { probeCheckoutSchema, getCachedCheckoutSchemaProbe } from "./checkoutSchemaProbe.js";
 import {
   logCommerceEvent,
   logCheckoutReject,
@@ -230,10 +230,10 @@ import {
   upsertPaymentSettings,
 } from "./paymentRepo.js";
 import {
-  consumePromoDb,
   createPromoDb,
   deletePromoByCodeDb,
   listPromosFromDb,
+  promoTrackingValue,
   tryApplyPromoDb,
 } from "./promoRepo.js";
 import { notifyAfterOrderStatusChangeFromApi } from "./orderTelegramNotify.js";
@@ -3074,6 +3074,9 @@ app.get("/", (_req: Request, res: Response, next: NextFunction) => {
 });
 
 app.get("/test-telegram", async (req: Request, res: Response) => {
+  if (process.env.NODE_ENV === "production") {
+    return res.status(404).json({ error: "Not found" });
+  }
   try {
     if (!bot) {
       return res.status(500).json({ error: "BOT_UNDEFINED" });
@@ -5043,7 +5046,7 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
     ...(corrId ? { correlationId: corrId } : {}),
   });
 
-  const schemaProbe = await probeCheckoutSchema(prisma);
+  const schemaProbe = await getCachedCheckoutSchemaProbe(prisma);
   if (!schemaProbe.ok) {
     logCheckoutReject({
       businessId: tenantBusinessId,
@@ -5291,6 +5294,9 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
               preorderStatus:
                 reservationIdForOrder != null ? "PREORDER_DRAFT" : null,
               prepStatus: tableSessionIdParsed != null ? "PREPARING" : "NONE",
+              ...(promoRaw
+                ? { tracking: promoTrackingValue(promoRaw) }
+                : {}),
               items: {
                 create: itemCreates,
               },
@@ -5553,7 +5559,10 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
         )
       : 0;
 
-    if (!isUnpaidReservationPreorder) {
+    const deferMerchantNotifyUntilPaid =
+      paymentMethod === "finik" && !isUnpaidReservationPreorder;
+
+    if (!isUnpaidReservationPreorder && !deferMerchantNotifyUntilPaid) {
       void notifyAdminNewOrderTelegram({
         orderId: orderForResponse.id,
         orderNumber: orderForResponse.orderNumber,
@@ -5571,15 +5580,6 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
         body: `${displayName} · ${orderForResponse.total} сом`,
         href: "#/admin/orders",
       });
-    }
-
-    if (promoRaw) {
-      try {
-        await consumePromoDb(prisma, order.businessId, promoRaw);
-        invalidateStorefrontCache(order.businessId);
-      } catch (e) {
-        console.error("consumePromo after /orders:", e);
-      }
     }
 
     res.json({ ...orderForResponse, paymentUrl });

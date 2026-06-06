@@ -7,8 +7,10 @@ import {
   adminMiniAppNotifyKeyboard,
 } from "../bot/bot.js";
 import type { OrderStatus } from "./orderStatus.js";
-import { orderDisplayLabel } from "./orderNumber.js";
+import { orderDisplayLabel, formatNewOrderTelegramMessage } from "./orderNumber.js";
 import { buildMerchantAdminOrdersWebAppUrl } from "./miniAppUrls.js";
+import { createMerchantNotification } from "./merchantNotificationsService.js";
+import { prisma } from "./db.js";
 
 function customerTextForStatus(
   status: OrderStatus,
@@ -135,4 +137,57 @@ export async function notifyAfterOrderStatusChangeFromApi(order: {
   } else {
     await sendTelegramText(adminChat, adminLine, order.businessId);
   }
+}
+
+/** Уведомление мерчанту о новом заказе (после успешной оплаты Finik). */
+export async function notifyMerchantOnNewPaidOrder(orderId: number): Promise<void> {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { items: { select: { quantity: true } } },
+  });
+  if (order == null) return;
+
+  const displayName = order.name?.trim() || "Гость";
+  const phone = order.phone?.trim() || "—";
+  const itemCount = order.items.reduce(
+    (sum, i) => sum + Math.max(0, Number(i.quantity ?? 0)),
+    0,
+  );
+
+  void createMerchantNotification({
+    businessId: order.businessId,
+    kind: "ORDER_NEW",
+    title: `Новый заказ ${orderDisplayLabel(order)}`,
+    body: `${displayName} · ${order.total} сом`,
+    href: "#/admin/orders",
+  });
+
+  const chatId = getNotifyTargetChatId(order.businessId);
+  if (chatId == null) return;
+
+  const displayNum =
+    order.orderNumber?.trim() ||
+    orderDisplayLabel({ id: order.id, orderNumber: null });
+  const message = formatNewOrderTelegramMessage({
+    orderNumber: displayNum,
+    customerName: displayName,
+    phone,
+    total: order.total,
+    itemCount: itemCount > 0 ? itemCount : 1,
+  });
+
+  const adminUrl = await buildMerchantAdminOrdersWebAppUrl(order.businessId);
+  const replyMarkup = adminMiniAppNotifyKeyboard(adminUrl);
+  const tBot = getBotForOwner(order.businessId) ?? bot;
+  if (tBot) {
+    try {
+      await tBot.telegram.sendMessage(chatId, message, {
+        reply_markup: replyMarkup,
+      });
+    } catch (e) {
+      console.error("notifyMerchantOnNewPaidOrder (bot):", e);
+    }
+    return;
+  }
+  await sendTelegramText(chatId, message, order.businessId);
 }

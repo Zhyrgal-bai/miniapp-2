@@ -586,6 +586,21 @@ async function applyFinikPaymentSuccess(
   const { onOrderPaidConfirmed } = await import("./orderInventoryHooks.js");
   await onOrderPaidConfirmed(order.id);
 
+  if (!FINIK_PAID_ORDER_STATUSES.has(cur)) {
+    const { consumePromoForPaidOrder } = await import("./promoRepo.js");
+    const { invalidateStorefrontCache } = await import("./storefrontCache.js");
+    try {
+      await consumePromoForPaidOrder(prisma, order.id);
+      invalidateStorefrontCache(order.businessId);
+    } catch (e) {
+      console.error("[finik] consumePromoForPaidOrder:", e);
+    }
+    const { notifyMerchantOnNewPaidOrder } = await import(
+      "./orderTelegramNotify.js"
+    );
+    void notifyMerchantOnNewPaidOrder(order.id);
+  }
+
   if (order.reservationId != null) {
     const { scheduleReservationPreorderAfterPayment } = await import(
       "./reservationPreorderKitchenScheduler.js"

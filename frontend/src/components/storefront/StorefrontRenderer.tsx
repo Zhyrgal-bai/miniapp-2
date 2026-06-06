@@ -31,15 +31,9 @@ import {
   type StorefrontCardViewportTier,
 } from "../../storefront/catalogCardPresets";
 import { StorefrontFeed } from "./StorefrontFeed";
-import {
-  hasIdentityBandExtras,
-  StorefrontIdentityBand,
-} from "./StorefrontIdentityBand";
-import { StorefrontStoreCard } from "./StorefrontStoreCard";
-import "./storefrontStoreCard.css";
-import { StoreAvailabilityPremiumBlock } from "./StoreAvailabilityPremiumBlock";
-import type { PublicStoreAvailability } from "@repo-shared/storeAvailabilitySettings";
 import { CatalogSearchBar } from "./CatalogSearchBar";
+import { StorefrontCompactStrip } from "./StorefrontCompactStrip";
+import "./StorefrontCompactStrip.css";
 import "./catalogSearchBar.css";
 import { filterProductsBySearch } from "../../utils/filterProductsBySearch";
 import { getStorefrontCommerceMode } from "../../hooks/useStorefrontCommerceMode";
@@ -49,8 +43,23 @@ import { enrichProductsFromCatalog } from "../../utils/enrichProductsFromCatalog
 import { businessTypeSupportsTableReservations } from "@repo-shared/tableReservation";
 import { TableBookingCta } from "../tableBooking/TableBookingCta";
 import "../tableBooking/tableBooking.css";
+import type { PublicStoreAvailability } from "@repo-shared/storeAvailabilitySettings";
 
 type StorefrontKitId = "minimal" | "luxury" | "fashion" | "neon" | "default";
+
+const FEED_SECTION_PRIORITY: Partial<Record<StorefrontSectionType, number>> = {
+  categories: 10,
+  promo: 20,
+  hero: 30,
+  featuredProducts: 40,
+  reviews: 50,
+  faq: 60,
+  footer: 70,
+};
+
+function openStoreProfile(): void {
+  window.dispatchEvent(new CustomEvent("sf:openStoreProfile"));
+}
 
 export type StorefrontSectionType =
   | "hero"
@@ -266,6 +275,13 @@ export function StorefrontRenderer(props: {
     }
   }, [sheetProduct]);
 
+  useEffect(() => {
+    const onExternalClose = () => setSheetProduct(null);
+    window.addEventListener("sf:productSheetClose", onExternalClose);
+    return () =>
+      window.removeEventListener("sf:productSheetClose", onExternalClose);
+  }, []);
+
   const cssVars = useMemo(
     () =>
       buildStorefrontLayoutCssVars(
@@ -276,7 +292,12 @@ export function StorefrontRenderer(props: {
 
   const sections = useMemo(() => {
     const s = Array.isArray(props.payload.sections) ? props.payload.sections : [];
-    return [...s].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    return [...s].sort((a, b) => {
+      const pa = FEED_SECTION_PRIORITY[a.type] ?? 99;
+      const pb = FEED_SECTION_PRIORITY[b.type] ?? 99;
+      if (pa !== pb) return pa - pb;
+      return (a.order ?? 0) - (b.order ?? 0);
+    });
   }, [props.payload.sections]);
 
   const firstFeaturedSectionId = useMemo(
@@ -306,14 +327,6 @@ export function StorefrontRenderer(props: {
   }, [styleCfg, catalog]);
 
   const identityTextCfg = props.payload.storefrontTextConfig ?? undefined;
-  const showIdentityBand = useMemo(
-    () =>
-      hasIdentityBandExtras(
-        identityTextCfg as Record<string, unknown> | undefined,
-        styleCfg,
-      ),
-    [identityTextCfg, styleCfg],
-  );
   const searchPlaceholder =
     typeof identityTextCfg?.searchPlaceholder === "string" &&
     String(identityTextCfg.searchPlaceholder).trim() !== ""
@@ -332,19 +345,13 @@ export function StorefrontRenderer(props: {
         style={cssVars as unknown as React.CSSProperties}
       >
         <StorefrontFeed>
-          {props.payload.storeAvailability ? (
-            <div className="sf-feed__chunk sf-feed__chunk--availability sf-feed__chunk--stack">
-              <StoreAvailabilityPremiumBlock
-                availability={props.payload.storeAvailability}
-              />
-            </div>
-          ) : null}
-          <div className="sf-feed__chunk sf-feed__chunk--store-card sf-feed__chunk--stack">
-            <StorefrontStoreCard
+          <div className="sf-feed__chunk sf-feed__chunk--compact sf-feed__chunk--stack">
+            <StorefrontCompactStrip
+              businessId={props.payload.businessId}
               storeName={props.payload.storeName}
-              storeAddress={props.payload.storeAddress}
-              logoUrl={theme.logoUrl}
-              textConfig={identityTextCfg}
+              storeCity={props.payload.storeAddress?.city}
+              availability={props.payload.storeAvailability ?? null}
+              onOpenProfile={openStoreProfile}
             />
           </div>
           <div className="sf-feed__chunk sf-feed__chunk--search sf-feed__chunk--stack sf-feed__chunk--sticky-search">
@@ -355,16 +362,6 @@ export function StorefrontRenderer(props: {
               onClear={() => setActiveCategoryId(null)}
             />
           </div>
-          {showIdentityBand ? (
-            <div className="sf-feed__chunk sf-feed__chunk--identity sf-feed__chunk--stack">
-              <StorefrontIdentityBand
-                storeName={props.payload.storeName}
-                storeAddress={props.payload.storeAddress}
-                textConfig={identityTextCfg}
-                styleConfig={styleCfg}
-              />
-            </div>
-          ) : null}
           {isWebBrowse ? (
             <div className="sf-feed__chunk sf-feed__chunk--web-info sf-feed__chunk--stack">
               <WebStorefrontInfoBar

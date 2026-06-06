@@ -91,6 +91,13 @@ export type PublicDeliveryZone = {
   eta: EtaRange;
 };
 
+export type PublicWeeklyScheduleRow = {
+  dayKey: WeekdayKey;
+  dayLabel: string;
+  hoursLabel: string;
+  closed: boolean;
+};
+
 export type PublicStoreAvailability = {
   status: StoreAvailabilityStatus;
   isOpen: boolean;
@@ -104,6 +111,7 @@ export type PublicStoreAvailability = {
   deliveryEnabled: boolean;
   closedCheckoutNotice: string | null;
   nextOpenLabel: string | null;
+  weeklySchedule: PublicWeeklyScheduleRow[];
 };
 
 const DEFAULT_TIMEZONE = "Asia/Bishkek";
@@ -586,5 +594,14 @@ export function storeAvailabilityToPublic(
     deliveryEnabled: settings.deliveryEnabled,
     closedCheckoutNotice: buildClosedCheckoutNotice(settings, now),
     nextOpenLabel: nextOpenLabel(settings, now),
+    weeklySchedule: WEEKDAY_KEYS.map((dayKey) => {
+      const row = settings.schedule[dayKey];
+      return {
+        dayKey,
+        dayLabel: WEEKDAY_SHORT_RU[dayKey],
+        hoursLabel: row.closed ? "Выходной" : `${row.open} – ${row.close}`,
+        closed: row.closed,
+      };
+    }),
   };
 }
