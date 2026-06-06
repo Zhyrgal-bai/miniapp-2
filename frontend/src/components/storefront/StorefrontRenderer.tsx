@@ -37,6 +37,8 @@ import {
 } from "./StorefrontIdentityBand";
 import { StorefrontStoreCard } from "./StorefrontStoreCard";
 import "./storefrontStoreCard.css";
+import { StoreAvailabilityPremiumBlock } from "./StoreAvailabilityPremiumBlock";
+import type { PublicStoreAvailability } from "@repo-shared/storeAvailabilitySettings";
 import { CatalogSearchBar } from "./CatalogSearchBar";
 import "./catalogSearchBar.css";
 import { filterProductsBySearch } from "../../utils/filterProductsBySearch";
@@ -103,6 +105,10 @@ export type ResolvedStorefrontPayload = {
   storeAddress?: StorefrontStoreAddress;
   telegramOpenUrl?: string;
   deliveryPolicy?: StorefrontDeliveryPolicy;
+  storeAvailability?: PublicStoreAvailability;
+  deliveryEta?: PublicStoreAvailability["deliveryEta"];
+  pickupEta?: PublicStoreAvailability["pickupEta"];
+  deliveryZones?: PublicStoreAvailability["deliveryZones"];
   businessType: string;
   templateId: string | null;
   storefrontConfigVersion: number;
@@ -326,6 +332,13 @@ export function StorefrontRenderer(props: {
         style={cssVars as unknown as React.CSSProperties}
       >
         <StorefrontFeed>
+          {props.payload.storeAvailability ? (
+            <div className="sf-feed__chunk sf-feed__chunk--availability sf-feed__chunk--stack">
+              <StoreAvailabilityPremiumBlock
+                availability={props.payload.storeAvailability}
+              />
+            </div>
+          ) : null}
           <div className="sf-feed__chunk sf-feed__chunk--store-card sf-feed__chunk--stack">
             <StorefrontStoreCard
               storeName={props.payload.storeName}

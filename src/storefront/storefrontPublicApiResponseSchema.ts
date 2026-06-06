@@ -96,6 +96,36 @@ const DeliveryPolicyWireSchema = z.object({
   pickupOnly: z.boolean(),
 });
 
+const EtaRangeWireSchema = z.object({
+  minMinutes: z.number(),
+  maxMinutes: z.number(),
+});
+
+const StoreAvailabilityWireSchema = z.object({
+  status: z.enum(["OPEN", "CLOSED", "OPENING_SOON", "CLOSING_SOON"]),
+  isOpen: z.boolean(),
+  label: z.string(),
+  detail: z.string(),
+  timezone: z.string(),
+  deliveryEta: EtaRangeWireSchema,
+  pickupEta: EtaRangeWireSchema,
+  deliveryZones: z.array(
+    z.object({
+      id: z.string(),
+      title: z.string(),
+      distanceLabel: z.string(),
+      etaLabel: z.string(),
+      minKm: z.number(),
+      maxKm: z.number().nullable(),
+      eta: EtaRangeWireSchema,
+    }),
+  ),
+  pickupEnabled: z.boolean(),
+  deliveryEnabled: z.boolean(),
+  closedCheckoutNotice: z.string().nullable(),
+  nextOpenLabel: z.string().nullable(),
+});
+
 const FeaturedProductWireSchema = z
   .object({
     id: z.number(),
@@ -137,6 +167,10 @@ export const StorefrontPublicApiResponseSchema = z
     /** Deep link: t.me/bot?startapp=slug — для CTA «Открыть в Telegram» в веб-витрине. */
     telegramOpenUrl: z.string().url().optional(),
     deliveryPolicy: DeliveryPolicyWireSchema.optional(),
+    storeAvailability: StoreAvailabilityWireSchema.optional(),
+    deliveryEta: EtaRangeWireSchema.optional(),
+    pickupEta: EtaRangeWireSchema.optional(),
+    deliveryZones: StoreAvailabilityWireSchema.shape.deliveryZones.optional(),
   })
   .passthrough();
 

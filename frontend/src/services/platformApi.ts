@@ -341,11 +341,22 @@ export type MerchantDeliverySettingsDTO = {
   distanceTiers: Array<{ maxKm: number | null; priceSom: number }>;
 };
 
+export type {
+  StoreAvailabilitySettings,
+  PublicStoreAvailability,
+} from "@repo-shared/storeAvailabilitySettings";
+import type { StoreAvailabilitySettings } from "@repo-shared/storeAvailabilitySettings";
+import {
+  defaultStoreAvailabilitySettings,
+  parseStoreAvailabilitySettings,
+} from "@repo-shared/storeAvailabilitySettings";
+
 export type PlatformStoreSettingsDTO = {
   businessId: number;
   name: string;
   storeAddress: BusinessStoreAddressDTO | null;
   deliverySettings: MerchantDeliverySettingsDTO;
+  storeAvailabilitySettings: StoreAvailabilitySettings;
   finikConfigured: boolean;
   finikReady: boolean;
   finikHasApiKey: boolean;
@@ -395,6 +406,7 @@ export async function fetchPlatformStoreSettings(params: {
       longitude?: number;
     } | null;
     deliverySettings?: MerchantDeliverySettingsDTO;
+    storeAvailabilitySettings?: StoreAvailabilitySettings;
   }>(
     apiAbsoluteUrl(`/api/platform/store-settings?${q.toString()}`),
     { method: "GET", businessId: params.businessId, json: false },
@@ -467,11 +479,19 @@ export async function fetchPlatformStoreSettings(params: {
             : [],
         }
       : defaultDelivery;
+  const availParsed = parseStoreAvailabilitySettings(
+    j.storeAvailabilitySettings,
+    typeof j.businessType === "string" ? j.businessType : "",
+  );
+  const storeAvailabilitySettings = availParsed.ok
+    ? availParsed.value
+    : defaultStoreAvailabilitySettings();
   return {
     businessId: bid,
     name: String(j.name ?? ""),
     storeAddress,
     deliverySettings,
+    storeAvailabilitySettings,
     finikConfigured: finikReady,
     finikReady,
     finikHasApiKey: Boolean(j.finikHasApiKey ?? finikReady),
@@ -571,6 +591,7 @@ export async function savePlatformStoreSettings(payload: {
   latitude?: number | string;
   longitude?: number | string;
   deliverySettings?: MerchantDeliverySettingsDTO;
+  storeAvailabilitySettings?: StoreAvailabilitySettings;
 }): Promise<PlatformStoreSettingsSaveResult> {
   void payload.telegramId;
   const body: Record<string, unknown> = {
@@ -586,6 +607,8 @@ export async function savePlatformStoreSettings(payload: {
   if (payload.longitude !== undefined) body.longitude = payload.longitude;
   if (payload.deliverySettings !== undefined)
     body.deliverySettings = payload.deliverySettings;
+  if (payload.storeAvailabilitySettings !== undefined)
+    body.storeAvailabilitySettings = payload.storeAvailabilitySettings;
 
   const j = await adminFetchJson<{
     error?: string;

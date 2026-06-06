@@ -38,6 +38,12 @@ import {
   parseMerchantDeliverySettings,
   type MerchantDeliverySettings,
 } from "../shared/merchantDeliverySettings.js";
+import {
+  defaultStoreAvailabilitySettings,
+  parseStoreAvailabilitySettings,
+  type StoreAvailabilitySettings,
+} from "../shared/storeAvailabilitySettings.js";
+import { invalidateStorefrontCache } from "./storefrontCache.js";
 
 export type PlatformStoreSettingsDTO = {
   businessId: number;
@@ -60,6 +66,7 @@ export type PlatformStoreSettingsDTO = {
   trialEndsAt: string | null;
   storeAddress: BusinessAddressPublic | null;
   deliverySettings: MerchantDeliverySettings;
+  storeAvailabilitySettings: StoreAvailabilitySettings;
 };
 
 export async function getPlatformStoreSettingsForMerchant(input: {
@@ -95,6 +102,7 @@ export async function getPlatformStoreSettingsForMerchant(input: {
       latitude: true,
       longitude: true,
       deliverySettings: true,
+      storeAvailabilitySettings: true,
     },
   });
   if (b == null) {
@@ -154,6 +162,13 @@ export async function getPlatformStoreSettingsForMerchant(input: {
         const p = parseMerchantDeliverySettings((b as any).deliverySettings);
         return p.ok ? p.value : defaultMerchantDeliverySettings();
       })(),
+      storeAvailabilitySettings: (() => {
+        const p = parseStoreAvailabilitySettings(
+          (b as any).storeAvailabilitySettings,
+          String((b as any).businessType ?? ""),
+        );
+        return p.ok ? p.value : defaultStoreAvailabilitySettings();
+      })(),
     },
   };
 }
@@ -169,6 +184,7 @@ export type PlatformStoreSettingsUpdateBody = {
   latitude?: unknown;
   longitude?: unknown;
   deliverySettings?: unknown;
+  storeAvailabilitySettings?: unknown;
 };
 
 export async function updatePlatformStoreSettingsForMerchant(input: {
@@ -233,6 +249,7 @@ export async function updatePlatformStoreSettingsForMerchant(input: {
     input.body.latitude !== undefined ||
     input.body.longitude !== undefined;
   const hasDeliverySettings = input.body.deliverySettings !== undefined;
+  const hasStoreAvailability = input.body.storeAvailabilitySettings !== undefined;
 
   if (
     !hasName &&
@@ -241,7 +258,8 @@ export async function updatePlatformStoreSettingsForMerchant(input: {
     !hasTok &&
     !hasMerchantConfig &&
     !hasAddress &&
-    !hasDeliverySettings
+    !hasDeliverySettings &&
+    !hasStoreAvailability
   ) {
     return {
       ok: false,
@@ -259,6 +277,26 @@ export async function updatePlatformStoreSettingsForMerchant(input: {
       where: { id: input.businessId },
       data: { deliverySettings: parsed.value as any },
     });
+    invalidateStorefrontCache(input.businessId);
+  }
+
+  if (hasStoreAvailability) {
+    const bizTypeRow = await prisma.business.findUnique({
+      where: { id: input.businessId },
+      select: { businessType: true },
+    });
+    const parsed = parseStoreAvailabilitySettings(
+      input.body.storeAvailabilitySettings,
+      String(bizTypeRow?.businessType ?? ""),
+    );
+    if (!parsed.ok) {
+      return { ok: false, statusCode: 400, error: parsed.error };
+    }
+    await prisma.business.update({
+      where: { id: input.businessId },
+      data: { storeAvailabilitySettings: parsed.value as any },
+    });
+    invalidateStorefrontCache(input.businessId);
   }
 
   if (hasAddress) {
@@ -280,6 +318,7 @@ export async function updatePlatformStoreSettingsForMerchant(input: {
         longitude: addr.value.longitude,
       },
     });
+    invalidateStorefrontCache(input.businessId);
   }
 
   if (hasName) {

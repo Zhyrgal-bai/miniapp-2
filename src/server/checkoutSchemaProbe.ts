@@ -71,6 +71,10 @@ const COLUMN_PROBES: Array<{ key: string; sql: Prisma.Sql }> = [
     key: "Business.deliverySettings",
     sql: Prisma.sql`SELECT "deliverySettings" FROM "Business" LIMIT 0`,
   },
+  {
+    key: "Business.storeAvailabilitySettings",
+    sql: Prisma.sql`SELECT "storeAvailabilitySettings" FROM "Business" LIMIT 0`,
+  },
 ];
 
 /** Verify checkout-critical tables/columns exist (production migration drift). */

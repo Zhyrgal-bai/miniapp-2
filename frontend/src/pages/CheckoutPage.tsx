@@ -536,6 +536,12 @@ export default function CheckoutPage({ onBack }: Props) {
       return;
     }
 
+    const closedNotice = payload?.storeAvailability?.closedCheckoutNotice;
+    if (closedNotice != null && closedNotice.trim() !== "") {
+      const proceed = window.confirm(`${closedNotice}\n\nПродолжить?`);
+      if (!proceed) return;
+    }
+
     const tg = getTelegramUser();
     const uid = getTelegramWebAppUserId();
     const userId = Number.isFinite(uid) ? uid : Number(tg?.id);

@@ -52,4 +52,20 @@ describe("archaSubscriptionPlans", () => {
     expect(d.getMonth()).toBe(1);
     expect(d.getDate()).toBe(28);
   });
+
+  it("buildTrialSubscriptionJourney uses plan registry prices", async () => {
+    const {
+      buildTrialSubscriptionJourney,
+      formatSaasPriceSom,
+      SAAS_SUBSCRIPTION_PRICE_FIRST_MONTH,
+    } = await import("../../src/shared/saasSubscriptionPricing.js");
+    const steps = buildTrialSubscriptionJourney();
+    expect(steps).toHaveLength(4);
+    expect(steps[0]?.id).toBe("trial");
+    expect(steps[1]?.priceLabel).toBe(
+      formatSaasPriceSom(SAAS_SUBSCRIPTION_PRICE_FIRST_MONTH),
+    );
+    expect(steps[2]?.priceLabel).toMatch(/\/ месяц$/);
+    expect(steps[3]?.subtitle).toMatch(/12 месяцев \+ 1 бесплатно/);
+  });
 });

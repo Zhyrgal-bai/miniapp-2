@@ -42,6 +42,10 @@ function envPriceSom(key: string, fallback: number): number {
 }
 
 const MONTHLY_PRICE = envPriceSom("ARCHA_PLAN_MONTHLY_SOM", 5500);
+export const ARCHA_FIRST_MONTH_PRICE_SOM = envPriceSom(
+  "ARCHA_FIRST_MONTH_SOM",
+  1500,
+);
 
 function buildPlans(): readonly ArchaSubscriptionPlanDefinition[] {
   const monthly: ArchaSubscriptionPlanDefinition = {

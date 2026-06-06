@@ -14,11 +14,9 @@ import {
 import { PlatformStoreCard } from "../components/platform/PlatformStoreCard";
 import {
   businessTypeLabel,
-  formatDaysRemaining,
   formatRuDateShort,
   merchantAdminNavigateTarget,
   miniAppOpenUrl,
-  subscriptionBadge,
 } from "./platform/platformUi";
 import {
   LaunchWizard,
@@ -74,6 +72,9 @@ import { useBodyScrollLock } from "../utils/bodyScrollLock";
 import { shareMiniAppLink } from "../utils/miniAppShare";
 import { defaultMerchantDeliverySettings } from "@repo-shared/merchantDeliverySettings";
 import type { MerchantDeliverySettings } from "@repo-shared/merchantDeliverySettings";
+import { defaultStoreAvailabilitySettings } from "@repo-shared/storeAvailabilitySettings";
+import type { StoreAvailabilitySettings } from "@repo-shared/storeAvailabilitySettings";
+import { MerchantStoreAvailabilityPanel } from "../components/platform/MerchantStoreAvailabilityPanel";
 import { MerchantDeliverySettingsPanel } from "../components/platform/MerchantDeliverySettingsPanel";
 import { MerchantStoreAddressEditor } from "../components/platform/MerchantStoreAddressEditor";
 import type { BusinessStoreAddressDTO } from "../services/platformApi";
@@ -101,30 +102,6 @@ function miniAppNavigatePath(b: Pick<PlatformMyBusinessDTO, "id" | "slug">): str
   const s = typeof b.slug === "string" ? b.slug.trim() : "";
   if (s !== "") return `/s/${encodeURIComponent(s)}`;
   return `/?shop=${encodeURIComponent(String(b.id))}`;
-}
-
-function subscriptionDaysLeftNumber(iso: string | null): number | null {
-  if (iso == null || iso.trim() === "") return null;
-  const end = new Date(iso).getTime();
-  if (Number.isNaN(end)) return null;
-  return Math.ceil((end - Date.now()) / 86400000);
-}
-
-function settingsPrimarySubscriptionEnd(snap: PlatformStoreSettingsDTO): {
-  endIso: string | null;
-  kind: "trial" | "paid" | null;
-} {
-  const status = snap.subscriptionStatus?.toLowerCase() ?? "";
-  if (status === "trialing" && snap.trialEndsAt) {
-    return { endIso: snap.trialEndsAt, kind: "trial" };
-  }
-  if (snap.subscriptionEndsAt) {
-    return { endIso: snap.subscriptionEndsAt, kind: "paid" };
-  }
-  if (snap.trialEndsAt) {
-    return { endIso: snap.trialEndsAt, kind: "trial" };
-  }
-  return { endIso: null, kind: null };
 }
 
 function adminBusinessToCard(row: PlatformAdminBusinessDTO): PlatformMyBusinessDTO {
@@ -185,6 +162,8 @@ export default function PlatformPage() {
     useState<MerchantStoreAddressDraft>(emptyMerchantStoreAddressDraft());
   const [deliverySettingsDraft, setDeliverySettingsDraft] =
     useState<MerchantDeliverySettings>(defaultMerchantDeliverySettings());
+  const [storeAvailabilityDraft, setStoreAvailabilityDraft] =
+    useState<StoreAvailabilitySettings>(defaultStoreAvailabilitySettings());
   const [finikKeyDraft, setFinikKeyDraft] = useState("");
   const [finikAccountIdDraft, setFinikAccountIdDraft] = useState("");
   const [finikSecretDraft, setFinikSecretDraft] = useState("");
@@ -501,6 +480,9 @@ export default function PlatformPage() {
         }
         setMerchantConfigDraft(s.merchantConfig ?? {});
         setDeliverySettingsDraft(s.deliverySettings ?? defaultMerchantDeliverySettings());
+        setStoreAvailabilityDraft(
+          s.storeAvailabilitySettings ?? defaultStoreAvailabilitySettings(),
+        );
         setFinikKeyDraft("");
         setFinikSecretDraft("");
         setFinikMsg(null);
@@ -1122,6 +1104,11 @@ export default function PlatformPage() {
     const deliveryChanged =
       JSON.stringify(deliverySettingsDraft) !==
       JSON.stringify(settingsSnap.deliverySettings ?? defaultMerchantDeliverySettings());
+    const availabilityChanged =
+      JSON.stringify(storeAvailabilityDraft) !==
+      JSON.stringify(
+        settingsSnap.storeAvailabilitySettings ?? defaultStoreAvailabilitySettings(),
+      );
     const merchantConfigChanged =
       isPlatformAdmin &&
       Object.keys(settingsSnap.merchantSettingsSchema ?? {}).length > 0 &&
@@ -1140,6 +1127,7 @@ export default function PlatformPage() {
       latitude?: number;
       longitude?: number;
       deliverySettings?: MerchantDeliverySettings;
+      storeAvailabilitySettings?: StoreAvailabilitySettings;
     } = {
       telegramId: merchantTelegramId,
       businessId: settingsBusinessId,
@@ -1153,6 +1141,7 @@ export default function PlatformPage() {
       }
     }
     if (deliveryChanged) payload.deliverySettings = deliverySettingsDraft;
+    if (availabilityChanged) payload.storeAvailabilitySettings = storeAvailabilityDraft;
     if (newTok !== "" && isPlatformAdmin) payload.newBotToken = newTok;
     if (merchantConfigChanged) payload.merchantConfig = merchantConfigDraft;
 
@@ -1162,6 +1151,7 @@ export default function PlatformPage() {
       payload.merchantConfig === undefined &&
       payload.addressLine === undefined &&
       payload.deliverySettings === undefined &&
+      payload.storeAvailabilitySettings === undefined &&
       !addressChanged
     ) {
       setSettingsErr("Нет изменений для сохранения.");
@@ -1203,6 +1193,9 @@ export default function PlatformPage() {
         deliverySettings: deliveryChanged
           ? deliverySettingsDraft
           : settingsSnap.deliverySettings,
+        storeAvailabilitySettings: availabilityChanged
+          ? storeAvailabilityDraft
+          : settingsSnap.storeAvailabilitySettings,
         finikConfigured: out.finikConfigured,
         finikReady: out.finikConfigured,
         pendingBotTokenChange: out.pendingBotTokenChange,
@@ -2285,99 +2278,28 @@ export default function PlatformPage() {
                   </p>
                 ) : null}
 
-                {settingsSnap != null ? (() => {
-                  const subBadge = subscriptionBadge(
-                    settingsSnap.subscriptionStatus,
-                  );
-                  const primaryEnd = settingsPrimarySubscriptionEnd(settingsSnap);
-                  const daysLeft = subscriptionDaysLeftNumber(primaryEnd.endIso);
-                  const endLabel = formatRuDateShort(primaryEnd.endIso);
-                  const progressPct =
-                    daysLeft != null && daysLeft >= 0
-                      ? Math.min(100, Math.max(4, (daysLeft / 30) * 100))
-                      : 0;
-                  const progressClass =
-                    daysLeft != null && daysLeft < 0
-                      ? "mp-settings-hero__progress-fill--danger"
-                      : daysLeft != null && daysLeft <= 7
-                        ? "mp-settings-hero__progress-fill--warn"
-                        : "";
-
-                  return (
-                    <MerchantStoreSettingsSection
-                      icon="💎"
-                      title="Подписка"
-                      badge={
-                        <span className={subBadge.className}>
-                          {subBadge.label}
-                        </span>
-                      }
-                    >
-                      {endLabel != null ? (
-                        <>
-                          <div className="mp-settings-hero__metrics">
-                            <div>
-                              {daysLeft != null && daysLeft >= 0 ? (
-                                <>
-                                  <div className="mp-settings-hero__days">
-                                    {daysLeft}
-                                  </div>
-                                  <div className="mp-settings-hero__days-label">
-                                    {daysLeft === 1
-                                      ? "день остался"
-                                      : daysLeft >= 2 && daysLeft <= 4
-                                        ? "дня осталось"
-                                        : "дней осталось"}
-                                  </div>
-                                </>
-                              ) : (
-                                <>
-                                  <div className="mp-settings-hero__days">—</div>
-                                  <div className="mp-settings-hero__days-label">
-                                    {formatDaysRemaining(primaryEnd.endIso) ??
-                                      "срок не указан"}
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                            <div className="mp-settings-hero__until">
-                              <span className="mp-settings-hero__until-kind">
-                                {primaryEnd.kind === "trial"
-                                  ? "Пробный период"
-                                  : "Оплаченный период"}
-                              </span>
-                              до {endLabel}
-                            </div>
-                          </div>
-                          {daysLeft != null && daysLeft >= 0 ? (
-                            <div
-                              className="mp-settings-hero__progress"
-                              role="progressbar"
-                              aria-valuenow={daysLeft}
-                              aria-valuemin={0}
-                              aria-valuemax={30}
-                              aria-label="Оставшийся срок подписки"
-                            >
-                              <div
-                                className={[
-                                  "mp-settings-hero__progress-fill",
-                                  progressClass,
-                                ]
-                                  .filter(Boolean)
-                                  .join(" ")}
-                                style={{ width: `${progressPct}%` }}
-                              />
-                            </div>
-                          ) : null}
-                        </>
-                      ) : (
-                        <p className="mp-settings-section__desc">
-                          Срок подписки не указан.
-                        </p>
-                      )}
-                    </MerchantStoreSettingsSection>
-                  );
-                })() : null}
+                {settingsBusinessId != null &&
+                Number.isFinite(merchantTelegramId) ? (
+                  <MerchantStoreSettingsSection
+                    icon="💎"
+                    title="Подписка"
+                  >
+                    <MerchantSubscriptionPanel
+                      variant="settings"
+                      businessId={settingsBusinessId}
+                      telegramId={merchantTelegramId}
+                      onPaid={() => {
+                        void loadBusinesses({ background: true });
+                        void fetchPlatformStoreSettings({
+                          telegramId: merchantTelegramId,
+                          businessId: settingsBusinessId,
+                        })
+                          .then(setSettingsSnap)
+                          .catch(() => undefined);
+                      }}
+                    />
+                  </MerchantStoreSettingsSection>
+                ) : null}
 
                 <MerchantStoreSettingsSection
                   icon="🏪"
@@ -2447,6 +2369,18 @@ export default function PlatformPage() {
                     value={deliverySettingsDraft}
                     onChange={setDeliverySettingsDraft}
                     disabled={settingsSnap == null}
+                  />
+                </MerchantStoreSettingsSection>
+
+                <MerchantStoreSettingsSection
+                  icon="🕐"
+                  title="График и ETA"
+                  description="Часы работы, время доставки и самовывоза для витрины и checkout."
+                >
+                  <MerchantStoreAvailabilityPanel
+                    value={storeAvailabilityDraft}
+                    businessType={settingsSnap?.businessType ?? ""}
+                    onChange={setStoreAvailabilityDraft}
                   />
                 </MerchantStoreSettingsSection>
 

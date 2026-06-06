@@ -7,6 +7,7 @@ import type { NextFunction, Request, Response } from "express";
 import multer from "multer";
 import {
   BusinessStaffRole,
+  DeliveryMode,
   MembershipRole,
   OrderStatus as PrismaOrderStatus,
   Prisma,
@@ -144,6 +145,13 @@ import {
 } from "./structuredLog.js";
 import { initializeOrderDelivery } from "./deliveryService.js";
 import { resolveCheckoutDeliveryQuote } from "./deliveryQuoteService.js";
+import {
+  defaultStoreAvailabilitySettings,
+  etaMidMinutes,
+  parseStoreAvailabilitySettings,
+  resolveDeliveryEtaForKm,
+} from "../shared/storeAvailabilitySettings.js";
+import { haversineDistanceKm } from "../shared/merchantDeliverySettings.js";
 import { onOrderStatusChanged } from "./orderInventoryHooks.js";
 import { attachStaffRoutes } from "./staffRoutes.js";
 import {
@@ -1101,6 +1109,7 @@ app.post("/api/platform/store-settings", async (req: Request, res: Response) => 
       latitude: raw.latitude,
       longitude: raw.longitude,
       deliverySettings: raw.deliverySettings,
+      storeAvailabilitySettings: raw.storeAvailabilitySettings,
     };
     const out = await updatePlatformStoreSettingsForMerchant({
       telegramId,
@@ -4984,6 +4993,7 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
       ...businessSubscriptionGateSelect,
       businessType: true,
       deliverySettings: true,
+      storeAvailabilitySettings: true,
       latitude: true,
       longitude: true,
     },
@@ -5320,10 +5330,33 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
 
       const deliveryMode = deliveryModeParsed;
       const rawPrep = (body as { preparationMinutes?: unknown }).preparationMinutes;
+      const availParsed = parseStoreAvailabilitySettings(
+        biz!.storeAvailabilitySettings,
+        String(biz!.businessType ?? ""),
+      );
+      const availSettings = availParsed.ok
+        ? availParsed.value
+        : defaultStoreAvailabilitySettings();
+      let distanceKmForEta: number | null = null;
+      if (
+        biz!.latitude != null &&
+        biz!.longitude != null &&
+        orderLat != null &&
+        orderLng != null
+      ) {
+        distanceKmForEta = haversineDistanceKm(
+          { latitude: biz!.latitude, longitude: biz!.longitude },
+          { latitude: orderLat, longitude: orderLng },
+        );
+      }
+      const etaRange =
+        deliveryModeParsed === DeliveryMode.PICKUP
+          ? availSettings.pickupEta
+          : resolveDeliveryEtaForKm(availSettings, distanceKmForEta);
       const preparationMinutes =
         rawPrep != null && Number.isFinite(Number(rawPrep))
           ? Number(rawPrep)
-          : null;
+          : etaMidMinutes(etaRange);
 
       await runCheckoutStep(
         "delivery_init",

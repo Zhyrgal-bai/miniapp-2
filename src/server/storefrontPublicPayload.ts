@@ -26,6 +26,11 @@ import {
   parseMerchantDeliverySettings,
   defaultMerchantDeliverySettings,
 } from "../shared/merchantDeliverySettings.js";
+import {
+  parseStoreAvailabilitySettings,
+  storeAvailabilityToPublic,
+  defaultStoreAvailabilitySettings,
+} from "../shared/storeAvailabilitySettings.js";
 
 /** Public GET /api/storefront payload (shared by numeric id and slug routes). */
 export async function sendStorefrontPublicPayload(
@@ -75,6 +80,7 @@ export async function sendStorefrontPublicPayload(
         longitude: true,
         botToken: true,
         deliverySettings: true,
+        storeAvailabilitySettings: true,
       },
     });
     if (rejectUnlessCanAcceptCustomerOrders(res, b)) {
@@ -130,6 +136,18 @@ export async function sendStorefrontPublicPayload(
       (payload as any).deliveryPolicy = merchantDeliverySettingsToPublic(
         deliveryParsed.ok ? deliveryParsed.value : defaultMerchantDeliverySettings(),
       );
+      const availParsed = parseStoreAvailabilitySettings(
+        b.storeAvailabilitySettings,
+        String(b.businessType ?? ""),
+      );
+      const availSettings = availParsed.ok
+        ? availParsed.value
+        : defaultStoreAvailabilitySettings();
+      const storeAvailability = storeAvailabilityToPublic(availSettings);
+      (payload as any).storeAvailability = storeAvailability;
+      (payload as any).deliveryEta = storeAvailability.deliveryEta;
+      (payload as any).pickupEta = storeAvailability.pickupEta;
+      (payload as any).deliveryZones = storeAvailability.deliveryZones;
     }
 
     const bt = String((b as any).businessType ?? "").trim() as BusinessType;

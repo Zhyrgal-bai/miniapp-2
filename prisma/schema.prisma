@@ -131,6 +131,9 @@ model Business {
   /// Phase 4: правила доставки (pricing mode, min order, тарифы).
   deliverySettings Json? @default("{}")
 
+  /// Phase 7: график работы, ETA, зоны доставки.
+  storeAvailabilitySettings Json? @default("{}")
+
   templateVersion Int @default(1)
 
   storefrontConfig Json? @default("{}")
