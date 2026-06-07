@@ -138,25 +138,6 @@
   min-height: var(--archa-touch-min);
 }
 
-/* ── Product detail modal (legacy web) ── */
-.pdm-overlay {
-  padding: max(16px, env(safe-area-inset-top, 0px))
-    max(16px, env(safe-area-inset-right, 0px))
-    max(16px, env(safe-area-inset-bottom, 0px))
-    max(16px, env(safe-area-inset-left, 0px));
-}
-
-.pdm-panel {
-  max-height: min(88dvh, 640px);
-}
-
-.pdm-gallery-nav {
-  width: var(--archa-touch-min);
-  height: var(--archa-touch-min);
-  min-width: var(--archa-touch-min);
-  min-height: var(--archa-touch-min);
-}
-
 /* ── Table booking sheet ── */
 .table-booking-modal {
   max-height: min(88dvh, 640px);

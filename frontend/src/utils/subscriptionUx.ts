@@ -1,4 +1,5 @@
 import type { MerchantSubscriptionPanelPayload, MerchantSubscriptionUiStatus } from "../services/platformApi";
+import { ru } from "../i18n/ru";
 
 export const SUBSCRIPTION_STATUS_CLASS: Record<
   MerchantSubscriptionUiStatus,
@@ -19,7 +20,7 @@ export function subscriptionTariffLabel(
   }
   const raw = panel.subscriptionPlanLabel?.trim() ?? "";
   if (raw === "" || raw === "—") {
-    if (panel.displayStatus === "GRACE") return "Grace period";
+    if (panel.displayStatus === "GRACE") return ru.platform.gracePeriod;
     if (panel.displayStatus === "EXPIRED") return "Подписка не активна";
     return panel.displayStatusLabel;
   }

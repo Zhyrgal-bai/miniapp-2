@@ -7,7 +7,7 @@
   --sf-z-sticky-cart: 900;
   --sf-z-floating-cart: 950;
   --sf-z-header: 1300;
-  --sf-z-product-sheet: 2800;
+  --sf-z-product-experience: 2800;
 }
 
 .sf-commerce-shell {
@@ -25,8 +25,8 @@
 }
 
 /* Hide bottom chrome when product sheet is open */
-.sf-root.sf-app[data-sf-product-sheet="open"] .sf-sticky-cart-slot,
-.sf-root.sf-app[data-sf-product-sheet="open"] .floating-cart {
+.sf-root.sf-app[data-sf-product-experience="open"] .sf-sticky-cart-slot,
+.sf-root.sf-app[data-sf-product-experience="open"] .floating-cart {
   opacity: 0;
   pointer-events: none;
   transform: translateY(12px);

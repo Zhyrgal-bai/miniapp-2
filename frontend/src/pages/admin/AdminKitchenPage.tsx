@@ -9,6 +9,7 @@ import {
 } from "../../services/venueApi";
 import { useVenueLiveStream } from "../../hooks/useVenueLiveStream";
 import { formatAdminApiError } from "../../utils/adminApiError";
+import { ru } from "../../i18n/ru";
 import "./adminKitchen.css";
 
 const COLS: { prep: OrderPrepStatus; title: string }[] = [
@@ -114,7 +115,7 @@ export default function AdminKitchenPage(): ReactElement {
   return (
     <div className="admin-dash-page kitchen-board-page">
       <header className="admin-dash-page__head">
-        <h1 className="admin-dash-page__title">👨‍🍳 Kitchen Board</h1>
+        <h1 className="admin-dash-page__title">👨‍🍳 {ru.admin.kitchenBoard}</h1>
         <p className="admin-dash-page__subtitle">Заказы в работе</p>
       </header>
 

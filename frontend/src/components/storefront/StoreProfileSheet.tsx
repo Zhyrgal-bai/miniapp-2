@@ -1,12 +1,11 @@
 import { useEffect, useMemo } from "react";
-import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
 import { formatEtaRange } from "@repo-shared/storeAvailabilitySettings";
 import type { PublicStoreAvailability } from "@repo-shared/storeAvailabilitySettings";
 import { buildCloudinaryResponsiveUrl } from "../../utils/cloudinaryTransforms";
 import { storeBrandInitials } from "../layout/storeBrandHeaderUtils";
-import { useBodyScrollLock } from "../../utils/bodyScrollLock";
 import { getTelegramWebApp } from "../../utils/telegram";
+import { ArchaOverlay } from "../ui/ArchaOverlay";
+import "../ui/archaOverlay.css";
 import "./StoreProfileSheet.css";
 
 export type StoreProfileContact = {
@@ -63,18 +62,7 @@ export function StoreProfileSheet({
   onOpenAbout,
   onOpenFaq,
   initialSection,
-}: Props): React.ReactElement | null {
-  useBodyScrollLock(open);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
+}: Props): React.ReactElement {
   useEffect(() => {
     if (!open || initialSection == null) return;
     const id =
@@ -127,41 +115,33 @@ export function StoreProfileSheet({
     window.open("https://t.me/settings", "_blank", "noopener,noreferrer");
   };
 
-  if (portalRoot == null) return null;
-
-  return createPortal(
-    <AnimatePresence>
-      {open ? (
-        <>
-          <motion.div
-            key="profile-backdrop"
-            className="sf-profile-sheet__backdrop"
-            role="presentation"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.22 }}
-            onClick={onClose}
-          />
-          <motion.div
-            key="profile-sheet"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Профиль магазина"
-            className="sf-profile-sheet"
-            initial={{ y: "104%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "104%" }}
-            transition={{ type: "spring", damping: 32, stiffness: 380 }}
-            drag="y"
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0, bottom: 0.42 }}
-            onDragEnd={(_, info) => {
-              if (info.offset.y > 96 || info.velocity.y > 520) onClose();
-            }}
+  return (
+    <ArchaOverlay
+      open={open}
+      onClose={onClose}
+      ariaLabel="Профиль магазина"
+      portalTarget={portalRoot}
+      panelClassName="sf-profile-sheet"
+      scrollClassName="sf-profile-sheet__scroll"
+      footer={
+        <footer className="sf-profile-sheet__footer">
+          <button
+            type="button"
+            className="sf-profile-sheet__footer-btn"
+            onClick={openTelegramSettings}
           >
-            <div className="sf-profile-sheet__handle" aria-hidden />
-            <div className="sf-profile-sheet__scroll">
+            Настройки Telegram
+          </button>
+          <button
+            type="button"
+            className="sf-profile-sheet__close archa-btn-ghost"
+            onClick={onClose}
+          >
+            Закрыть
+          </button>
+        </footer>
+      }
+    >
               <header className="sf-profile-sheet__hero archa-glass archa-glass--glow">
                 <div className="sf-profile-sheet__brand">
                   {logoSrc ? (
@@ -337,28 +317,6 @@ export function StoreProfileSheet({
                   </section>
                 ) : null}
               </nav>
-            </div>
-
-            <footer className="sf-profile-sheet__footer">
-              <button
-                type="button"
-                className="sf-profile-sheet__footer-btn"
-                onClick={openTelegramSettings}
-              >
-                Настройки Telegram
-              </button>
-              <button
-                type="button"
-                className="sf-profile-sheet__close archa-btn-ghost"
-                onClick={onClose}
-              >
-                Закрыть
-              </button>
-            </footer>
-          </motion.div>
-        </>
-      ) : null}
-    </AnimatePresence>,
-    portalRoot,
+    </ArchaOverlay>
   );
 }

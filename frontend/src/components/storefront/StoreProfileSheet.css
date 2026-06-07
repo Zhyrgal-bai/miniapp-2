@@ -1,42 +1,14 @@
-.sf-profile-sheet__backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 11000;
-  background: color-mix(in srgb, #050508 52%, transparent);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-.sf-profile-sheet {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 11001;
-  max-height: min(92dvh, 820px);
-  display: flex;
-  flex-direction: column;
-  border-radius: 20px 20px 0 0;
+.sf-profile-sheet.archa-overlay__panel--sheet {
   background: color-mix(in srgb, var(--sf-color-surface, #111) 94%, transparent);
   border: 1px solid color-mix(in srgb, var(--sf-color-primary, #39ff88) 18%, transparent);
   box-shadow: 0 -12px 48px color-mix(in srgb, black 35%, transparent);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-.sf-profile-sheet__handle {
-  flex-shrink: 0;
-  width: 40px;
-  height: 4px;
-  margin: 10px auto 4px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--sf-color-text, #fff) 28%, transparent);
+.sf-root .archa-overlay__backdrop {
+  background: color-mix(in srgb, var(--sf-color-background, #050508) 52%, transparent);
 }
 
 .sf-profile-sheet__scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
   padding: 0 14px 12px;
 }
 

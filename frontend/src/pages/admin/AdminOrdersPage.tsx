@@ -12,6 +12,7 @@ import {
 import { showErrorToast, showSuccessToast } from "../../store/toast.store";
 import { formatAdminApiError } from "../../utils/adminApiError";
 import { refreshTelegramSessionAssessment } from "../../utils/telegramSession";
+import { ru } from "../../i18n/ru";
 
 const FILTER_TABS = [
   "ALL",
@@ -273,7 +274,7 @@ export default function AdminOrdersPage() {
       <header className="admin-dash-page__head">
         <h1 className="admin-dash-page__title">Заказы</h1>
         <p className="admin-dash-page__subtitle">
-          Premium operations — обновление каждые 3 с.
+          {ru.admin.premiumOpsRefresh}
         </p>
       </header>
 

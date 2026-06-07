@@ -7,13 +7,11 @@
   box-sizing: border-box;
   position: relative;
   min-height: 100dvh;
-  min-height: 100dvh;
-  background: #050805;
-  color: #f8fafc;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    sans-serif;
+  background: var(--archa-bg);
+  color: var(--archa-text);
+  font-family: var(--archa-font);
   -webkit-font-smoothing: antialiased;
-  border-top: 3px solid #7fff3a;
+  border-top: 3px solid var(--archa-green-glow);
   padding-bottom: 5rem;
   overflow-x: hidden;
 }

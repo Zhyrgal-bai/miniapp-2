@@ -37,7 +37,6 @@ import {
 } from "./utils/storeParams";
 import type { MyOrderRow } from "./types/myOrder";
 import "./App.css";
-import "./components/ui/Admin.css";
 import Header from "./components/layout/Header";
 import {
   SF_ADMIN_SUPPORT_TAB_KEY,
@@ -229,7 +228,7 @@ export default function App() {
 
   const sfAppRef = useRef<HTMLDivElement | null>(null);
   const [stickyCartHeight, setStickyCartHeight] = useState(0);
-  const [productSheetOpen, setProductSheetOpen] = useState(false);
+  const [productExperienceOpen, setProductExperienceOpen] = useState(false);
 
   useLayoutEffect(() => {
     const stickyVisible = commerceEnabled && page === "home" && totalQuantity > 0;
@@ -259,13 +258,13 @@ export default function App() {
   }, [page, totalQuantity, commerceEnabled]);
 
   useEffect(() => {
-    const onOpen = () => setProductSheetOpen(true);
-    const onClose = () => setProductSheetOpen(false);
-    window.addEventListener("sf:productSheetOpen", onOpen as EventListener);
-    window.addEventListener("sf:productSheetClose", onClose as EventListener);
+    const onOpen = () => setProductExperienceOpen(true);
+    const onClose = () => setProductExperienceOpen(false);
+    window.addEventListener("sf:productExperienceOpen", onOpen as EventListener);
+    window.addEventListener("sf:productExperienceClose", onClose as EventListener);
     return () => {
-      window.removeEventListener("sf:productSheetOpen", onOpen as EventListener);
-      window.removeEventListener("sf:productSheetClose", onClose as EventListener);
+      window.removeEventListener("sf:productExperienceOpen", onOpen as EventListener);
+      window.removeEventListener("sf:productExperienceClose", onClose as EventListener);
     };
   }, []);
 
@@ -565,7 +564,7 @@ export default function App() {
 
   useEffect(() => {
     const onNavigateCart = () => {
-      window.dispatchEvent(new CustomEvent("sf:productSheetClose"));
+      window.dispatchEvent(new CustomEvent("sf:productExperienceClose"));
       commitPage("cart");
       setIsMenuOpen(false);
     };
@@ -579,8 +578,8 @@ export default function App() {
       setIsMenuOpen(false);
       return;
     }
-    if (productSheetOpen) {
-      window.dispatchEvent(new CustomEvent("sf:productSheetClose"));
+    if (productExperienceOpen) {
+      window.dispatchEvent(new CustomEvent("sf:productExperienceClose"));
       return;
     }
     if (page === "admin" || adminByHash) {
@@ -607,10 +606,10 @@ export default function App() {
     if (page !== "home") {
       commitPage("home");
     }
-  }, [page, adminByHash, commitPage, storeProfileOpen, isMenuOpen, productSheetOpen]);
+  }, [page, adminByHash, commitPage, storeProfileOpen, isMenuOpen, productExperienceOpen]);
 
   useTelegramBackButton(
-    page !== "home" || storeProfileOpen || isMenuOpen || productSheetOpen,
+    page !== "home" || storeProfileOpen || isMenuOpen || productExperienceOpen,
     handleTelegramBack,
   );
 
@@ -787,7 +786,7 @@ export default function App() {
       className={`app${storeBrandHeader ? " app--store-brand" : ""}${commerceEnabled ? "" : " app--web-storefront"}`}
       data-sf-commerce={commerceEnabled ? "telegram" : "web"}
     >
-      {!productSheetOpen ? (
+      {!productExperienceOpen ? (
       <Header
         menuOpen={isMenuOpen}
         onMenuToggle={handleMenuToggle}
@@ -858,7 +857,7 @@ export default function App() {
         <div className="sf-commerce-shell" data-sf-shell={commerceShellMode}>
           {commerceEnabled &&
           (page === "home" || page === "cart" || page === "checkout") &&
-          !productSheetOpen ? (
+          !productExperienceOpen ? (
             <PreorderBanner />
           ) : null}
           {page === "home" && <HomePage />}
@@ -902,7 +901,7 @@ export default function App() {
       {commerceEnabled ? (
         <FloatingCart
           visible={
-            !productSheetOpen &&
+            !productExperienceOpen &&
             page !== "support" &&
             page !== "checkout" &&
             page !== "table-booking" &&
@@ -916,7 +915,7 @@ export default function App() {
 
       {commerceEnabled ? (
         <StickyCartBar
-          visible={page === "home" && !productSheetOpen}
+          visible={page === "home" && !productExperienceOpen}
           onOpenCart={handleFloatingCartClick}
           onCheckout={handleCheckoutQuick}
         />
@@ -963,7 +962,7 @@ export default function App() {
         data-sf-scroll-root=""
         className="sf-root sf-app"
         data-sf-store-brand={storeBrandHeader ? "1" : undefined}
-        data-sf-product-sheet={productSheetOpen ? "open" : undefined}
+        data-sf-product-experience={productExperienceOpen ? "open" : undefined}
         style={sfVars as unknown as React.CSSProperties}
       >
         <div id="sf-theme-portal-root" data-sf-portal-host />

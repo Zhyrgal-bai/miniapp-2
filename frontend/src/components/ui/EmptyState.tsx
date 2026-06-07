@@ -9,6 +9,7 @@ export type EmptyStateProps = {
   secondaryLabel?: string;
   onSecondary?: () => void;
   compact?: boolean;
+  variant?: "storefront" | "platform";
 };
 
 export function EmptyState(props: EmptyStateProps): React.ReactElement {
@@ -21,11 +22,14 @@ export function EmptyState(props: EmptyStateProps): React.ReactElement {
     secondaryLabel,
     onSecondary,
     compact = false,
+    variant = "storefront",
   } = props;
 
   return (
     <div
-      className={`sf-empty-state${compact ? " sf-empty-state--compact" : ""}`}
+      className={`sf-empty-state${compact ? " sf-empty-state--compact" : ""}${
+        variant === "platform" ? " sf-empty-state--platform" : ""
+      }`}
       role="status"
     >
       <div className="sf-empty-state__icon" aria-hidden>

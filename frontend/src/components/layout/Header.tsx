@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import { getTelegramUser } from "../../utils/telegram";
-import { useBodyScrollLock } from "../../utils/bodyScrollLock";
 import { telegramDisplayInitial } from "../../utils/telegramUserMark";
 import { APP_NAME } from "../../config/brand";
 import { buildCloudinaryResponsiveUrl } from "../../utils/cloudinaryTransforms";
 import { storeBrandInitials } from "./storeBrandHeaderUtils";
+import { ArchaOverlay } from "../ui/ArchaOverlay";
+import "../ui/archaOverlay.css";
 import "./app-shell.css";
 
 export type HeaderAccountCallbacks = {
@@ -82,76 +82,60 @@ export default function Header({
 
   const showAccountPanel = Boolean(accountMenu);
 
-  useBodyScrollLock(userMenuOpen && showAccountPanel);
-
-  useEffect(() => {
-    if (!userMenuOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setUserMenuOpen(false);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [userMenuOpen]);
-
   const closeMenu = () => setUserMenuOpen(false);
 
-  const sheetPortal =
-    typeof document !== "undefined" && showAccountPanel && accountMenu
-      ? createPortal(
-          <AnimatePresence>
-            {userMenuOpen ? (
-              <>
-                <motion.div
-                  key="acct-sheet-backdrop"
-                  role="presentation"
-                  className="app-header__sheet-backdrop"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  onClick={closeMenu}
-                />
-                <motion.div
-                  key="acct-sheet"
-                  role="dialog"
-                  aria-modal="true"
-                  aria-label="Аккаунт и поддержка"
-                  className="app-header__sheet"
-                  initial={{ y: "104%" }}
-                  animate={{ y: 0 }}
-                  exit={{ y: "104%" }}
-                  transition={{ type: "spring", damping: 32, stiffness: 380 }}
-                >
-                  <div className="app-header__sheet-handle" aria-hidden />
-
-                  <div className="app-header__account-profile">
-                    <div className="app-header__account-avatar" aria-hidden>
-                      {user?.photo_url ? (
-                        <img src={user.photo_url} alt="" width={48} height={48} />
-                      ) : (
-                        <span className="app-header__account-avatar-fallback">
-                          {initial}
-                        </span>
-                      )}
-                    </div>
-                    <div className="app-header__account-meta">
-                      <div className="app-header__account-name">
-                        {displayName ?? "Гость"}
-                      </div>
-                      {user?.username ? (
-                        <div className="app-header__account-handle">
-                          @{user.username}
-                        </div>
-                      ) : (
-                        <div className="app-header__account-handle">Telegram</div>
-                      )}
-                      {shopLine ? (
-                        <div className="app-header__account-store">{shopLine}</div>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="app-header__account-scroll">
+  const accountSheet =
+    showAccountPanel && accountMenu ? (
+      <ArchaOverlay
+        open={userMenuOpen}
+        onClose={closeMenu}
+        ariaLabel="Аккаунт и поддержка"
+        layer="header"
+        panelClassName="app-header__sheet"
+        scrollClassName="app-header__account-scroll"
+        header={
+          <div className="app-header__account-profile">
+            <div className="app-header__account-avatar" aria-hidden>
+              {user?.photo_url ? (
+                <img src={user.photo_url} alt="" width={48} height={48} />
+              ) : (
+                <span className="app-header__account-avatar-fallback">{initial}</span>
+              )}
+            </div>
+            <div className="app-header__account-meta">
+              <div className="app-header__account-name">{displayName ?? "Гость"}</div>
+              {user?.username ? (
+                <div className="app-header__account-handle">@{user.username}</div>
+              ) : (
+                <div className="app-header__account-handle">Telegram</div>
+              )}
+              {shopLine ? (
+                <div className="app-header__account-store">{shopLine}</div>
+              ) : null}
+            </div>
+          </div>
+        }
+        footer={
+          <div className="app-header__sheet-support-cap">
+            <div className="app-header__sheet-support-cap-main">
+              <span className="app-header__sheet-support-cap-title">Чат поддержки</span>
+              <span className="app-header__sheet-support-cap-sub">
+                Заказы · доставка · возвраты
+              </span>
+            </div>
+            <button
+              type="button"
+              className="app-header__sheet-support-cap-cta"
+              onClick={() => {
+                closeMenu();
+                accountMenu.onOpenSupportHub();
+              }}
+            >
+              Открыть
+            </button>
+          </div>
+        }
+      >
                     <div className="app-header__account-section">
                       <button
                         type="button"
@@ -274,35 +258,8 @@ export default function Header({
                         </button>
                       </div>
                     ) : null}
-                  </div>
-
-                  <div className="app-header__sheet-support-cap">
-                    <div className="app-header__sheet-support-cap-main">
-                      <span className="app-header__sheet-support-cap-title">
-                        Чат поддержки
-                      </span>
-                      <span className="app-header__sheet-support-cap-sub">
-                        Заказы · доставка · возвраты
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      className="app-header__sheet-support-cap-cta"
-                      onClick={() => {
-                        closeMenu();
-                        accountMenu.onOpenSupportHub();
-                      }}
-                    >
-                      Открыть
-                    </button>
-                  </div>
-                </motion.div>
-              </>
-            ) : null}
-          </AnimatePresence>,
-          document.getElementById("sf-theme-portal-root") ?? document.body
-        )
-      : null;
+      </ArchaOverlay>
+    ) : null;
 
   const burgerButton = (
     <div className="app-header__burger-wrap">
@@ -385,7 +342,7 @@ export default function Header({
 
     return (
       <header className="app-header app-header--store-brand">
-        {sheetPortal}
+        {accountSheet}
         <div className="app-header__brand-card">
           <div className="app-header__brand-slot app-header__brand-slot--left">
             {burgerButton}
@@ -403,7 +360,7 @@ export default function Header({
 
   return (
     <header className="app-header">
-      {sheetPortal}
+      {accountSheet}
 
       <div className="app-header__cell app-header__cell--left">{burgerButton}</div>
 

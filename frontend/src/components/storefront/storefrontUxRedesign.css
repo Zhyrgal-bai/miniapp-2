@@ -365,12 +365,12 @@
   padding-bottom: 0 !important;
 }
 
-.sf-app[data-sf-product-sheet="open"] .app__content {
+.sf-app[data-sf-product-experience="open"] .app__content {
   padding-top: max(0px, env(safe-area-inset-top, 0px));
   padding-bottom: 0;
 }
 
-.sf-app[data-sf-product-sheet="open"] .sf-commerce-shell {
+.sf-app[data-sf-product-experience="open"] .sf-commerce-shell {
   padding-inline: 0;
   max-width: none;
 }

@@ -1,0 +1,134 @@
+/**
+ * Shared overlay shell — bottom sheet + centered modal.
+ * Theme via CSS variables; storefront panels may override surface colors.
+ */
+
+.archa-overlay__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10999;
+  background: color-mix(
+    in srgb,
+    var(--archa-overlay-backdrop, #050508) 52%,
+    transparent
+  );
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.archa-overlay__panel {
+  position: fixed;
+  z-index: 11000;
+  display: flex;
+  flex-direction: column;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.archa-overlay__panel--sheet {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: min(92dvh, 820px);
+  border-radius: 20px 20px 0 0;
+  background: color-mix(in srgb, var(--archa-graphite) 94%, transparent);
+  border: 1px solid var(--archa-glass-border);
+  box-shadow: 0 -12px 48px rgba(0, 0, 0, 0.35);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.archa-overlay__panel--modal {
+  left: 50%;
+  top: 50%;
+  width: min(92vw, 420px);
+  max-height: min(88dvh, 640px);
+  transform: translate(-50%, -50%);
+  border-radius: var(--archa-radius-lg, 1.25rem);
+  background: color-mix(in srgb, var(--archa-graphite) 96%, transparent);
+  border: 1px solid var(--archa-glass-border);
+  box-shadow: var(--archa-shadow-card);
+}
+
+.archa-overlay__handle {
+  flex-shrink: 0;
+  width: 40px;
+  height: 4px;
+  margin: 10px auto 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--archa-text) 28%, transparent);
+}
+
+.archa-overlay__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.archa-overlay__footer {
+  flex-shrink: 0;
+}
+
+.archa-overlay__header {
+  flex-shrink: 0;
+}
+
+/* Layer z-index stacks (match legacy overlays) */
+.archa-overlay__backdrop--layer-header {
+  z-index: 2400;
+}
+
+.archa-overlay__panel--layer-header {
+  z-index: 2410;
+}
+
+.archa-overlay__backdrop--layer-support {
+  z-index: 2600;
+}
+
+.archa-overlay__panel--layer-support {
+  z-index: 2610;
+}
+
+.archa-overlay__backdrop--platform,
+.archa-overlay__backdrop--layer-platform {
+  z-index: 2147483000;
+}
+
+/* Storefront-themed header account sheet */
+.app-header__sheet.archa-overlay__panel--sheet {
+  max-height: min(88dvh, 640px);
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  border-radius: var(--sf-card-radius, var(--sf-radius-xl, 22px))
+    var(--sf-card-radius, var(--sf-radius-xl, 22px)) 0 0;
+  overflow: hidden;
+  background: color-mix(
+    in srgb,
+    var(--sf-color-card, var(--app-surface)) 97%,
+    var(--sf-color-background, var(--app-base)) 3%
+  );
+  border: 1px solid color-mix(in srgb, var(--sf-color-border, var(--app-border)) 50%, transparent);
+  border-bottom: none;
+  box-shadow: var(--sf-shadow-card, 0 -8px 40px color-mix(in srgb, black 22%, transparent));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.sf-support-sheet.archa-overlay__panel--sheet {
+  max-height: min(72dvh, 480px);
+  padding: 8px 16px max(16px, env(safe-area-inset-bottom, 0px));
+  border-radius: var(--sf-card-radius, 20px) var(--sf-card-radius, 20px) 0 0;
+  background: var(--sf-color-card);
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 45%, transparent);
+  border-bottom: none;
+  box-shadow: var(--sf-shadow-card, 0 -8px 32px color-mix(in srgb, black 18%, transparent));
+}
+
+.sf-root .archa-overlay__backdrop--layer-header {
+  background: color-mix(in srgb, var(--sf-color-text, var(--app-text)) 32%, transparent);
+}
+
+.sf-root .archa-overlay__backdrop--layer-support {
+  background: color-mix(in srgb, var(--sf-color-text) 28%, transparent);
+}

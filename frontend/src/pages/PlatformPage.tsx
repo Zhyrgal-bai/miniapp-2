@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { getTelegramWebApp } from "../utils/telegram";
@@ -12,6 +11,9 @@ import {
   type PlatformMenuItem,
 } from "../components/platform/PlatformShell";
 import { PlatformStoreCard } from "../components/platform/PlatformStoreCard";
+import { PlatformEmptyCard } from "../components/platform/PlatformEmptyCard";
+import { ArchaOverlay } from "../components/ui/ArchaOverlay";
+import "../components/ui/archaOverlay.css";
 import {
   businessTypeLabel,
   formatRuDateShort,
@@ -68,7 +70,6 @@ import { MERCHANT_REGISTER_SENT_KEY } from "./MerchantRegisterPage";
 import "./MerchantPage.css";
 import type { RegistrationStatusPayload } from "../services/platformApi";
 import { ru } from "../i18n/ru";
-import { useBodyScrollLock } from "../utils/bodyScrollLock";
 import { shareMiniAppLink } from "../utils/miniAppShare";
 import { defaultMerchantDeliverySettings } from "@repo-shared/merchantDeliverySettings";
 import type { MerchantDeliverySettings } from "@repo-shared/merchantDeliverySettings";
@@ -434,8 +435,6 @@ export default function PlatformPage() {
     if (zero && !prevZeroStores.current) setOnboardingStep(1);
     prevZeroStores.current = zero;
   }, [onboardingBaseOk, businesses.length]);
-
-  useBodyScrollLock(operatorUnlockOpen || rejectModalRequestId != null);
 
   useEffect(() => {
     if (settingsBusinessId == null) {
@@ -1575,80 +1574,39 @@ export default function PlatformPage() {
               </p>
             ) : null}
             {!error && businesses.length === 0 ? (
-              <motion.div
-                className={`mp-v2-card mp-v2-empty ${
-                  registrationStatus?.status === "pending"
-                    ? "mp-v2-empty--pending"
-                    : registrationStatus?.status === "rejected"
-                      ? "mp-v2-empty--rejected"
-                      : ""
-                }`}
-                role="status"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-              >
-                {registrationStatus?.status === "pending" ? (
-                  <>
-                    <div className="mp-v2-empty-icon" aria-hidden>
-                      ⏳
-                    </div>
-                    <h3>Заявка на рассмотрении</h3>
-                    <p>
-                      «{registrationStatus.storeName ?? "Магазин"}» — оператор проверит
-                      данные. Уведомление придёт в Telegram.
-                    </p>
-                  </>
-                ) : registrationStatus?.status === "rejected" ? (
-                  <>
-                    <div className="mp-v2-empty-icon" aria-hidden>
-                      ✕
-                    </div>
-                    <h3>Заявка отклонена</h3>
-                    <p>
-                      {registrationStatus.storeName
-                        ? `«${registrationStatus.storeName}»`
-                        : "Последняя заявка"}
-                      {registrationStatus.rejectReason
-                        ? `: ${registrationStatus.rejectReason}`
-                        : "."}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={(ev) => {
-                        ev.preventDefault();
-                        ev.stopPropagation();
-                        goToMerchantRegister();
-                      }}
-                      className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg mt-8"
-                    >
-                      Подать новую заявку
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <div className="mp-v2-empty-icon" aria-hidden>
-                      🏪
-                    </div>
-                    <h3>Запустите свой магазин</h3>
-                    <p>
-                      Создайте витрину в Mini App — заявка уйдёт на проверку, затем
-                      откроется полный доступ.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={(ev) => {
-                        ev.preventDefault();
-                        ev.stopPropagation();
-                        goToMerchantRegister();
-                      }}
-                      className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg mt-8"
-                    >
-                      Создать магазин
-                    </button>
-                  </>
-                )}
-              </motion.div>
+              registrationStatus?.status === "pending" ? (
+                <PlatformEmptyCard
+                  tone="pending"
+                  icon="⏳"
+                  title="Заявка на рассмотрении"
+                  description={`«${registrationStatus.storeName ?? "Магазин"}» — оператор проверит данные. Уведомление придёт в Telegram.`}
+                />
+              ) : registrationStatus?.status === "rejected" ? (
+                <PlatformEmptyCard
+                  tone="rejected"
+                  icon="✕"
+                  title="Заявка отклонена"
+                  description={`${
+                    registrationStatus.storeName
+                      ? `«${registrationStatus.storeName}»`
+                      : "Последняя заявка"
+                  }${
+                    registrationStatus.rejectReason
+                      ? `: ${registrationStatus.rejectReason}`
+                      : "."
+                  }`}
+                  actionLabel="Подать новую заявку"
+                  onAction={goToMerchantRegister}
+                />
+              ) : (
+                <PlatformEmptyCard
+                  icon="🏪"
+                  title="Запустите свой магазин"
+                  description="Создайте витрину в Mini App — заявка уйдёт на проверку, затем откроется полный доступ."
+                  actionLabel="Создать магазин"
+                  onAction={goToMerchantRegister}
+                />
+              )
             ) : null}
             {isPlatformAdmin ? (
               <div className="mp-panel mb-4">
@@ -1923,107 +1881,105 @@ export default function PlatformPage() {
         </div>
       ) : null}
 
-      {rejectModalRequestId != null ? (
-        <div className="mp-settings-backdrop">
-          <div
-            className="mp-settings-dialog-shell"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="reject-request-title"
+      <ArchaOverlay
+        open={rejectModalRequestId != null}
+        onClose={() => {
+          setRejectModalRequestId(null);
+          setRejectReasonDraft("");
+        }}
+        variant="platform-modal"
+        ariaLabel={ru.platform.rejectTitle}
+        panelClassName="mp-settings-dialog-shell"
+      >
+        <h2 id="reject-request-title" className="text-lg font-semibold text-white">
+          {ru.platform.rejectTitle}
+        </h2>
+        <p className="mt-2 text-sm text-slate-400">{ru.platform.rejectHint}</p>
+        <textarea
+          className={`${archa.input} mt-4 min-h-[96px]`}
+          value={rejectReasonDraft}
+          onChange={(e) => setRejectReasonDraft(e.target.value)}
+          placeholder={ru.platform.rejectPlaceholder}
+        />
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            className="mp-btn mp-btn--secondary mp-btn--block"
+            onClick={() => {
+              setRejectModalRequestId(null);
+              setRejectReasonDraft("");
+            }}
           >
-            <h2 id="reject-request-title" className="text-lg font-semibold text-white">
-              {ru.platform.rejectTitle}
-            </h2>
-            <p className="mt-2 text-sm text-slate-400">{ru.platform.rejectHint}</p>
-            <textarea
-              className={`${archa.input} mt-4 min-h-[96px]`}
-              value={rejectReasonDraft}
-              onChange={(e) => setRejectReasonDraft(e.target.value)}
-              placeholder={ru.platform.rejectPlaceholder}
-            />
-            <div className="mt-4 flex gap-2">
-              <button
-                type="button"
-                className="mp-btn mp-btn--secondary mp-btn--block"
-                onClick={() => {
-                  setRejectModalRequestId(null);
-                  setRejectReasonDraft("");
-                }}
-              >
-                {ru.common.cancel}
-              </button>
-              <button
-                type="button"
-                className="mp-btn mp-btn--primary mp-btn--block"
-                disabled={operatorRequestBusyId != null}
-                onClick={() => void handleRejectRequest()}
-              >
-                {ru.common.reject}
-              </button>
-            </div>
-          </div>
+            {ru.common.cancel}
+          </button>
+          <button
+            type="button"
+            className="mp-btn mp-btn--primary mp-btn--block"
+            disabled={operatorRequestBusyId != null}
+            onClick={() => void handleRejectRequest()}
+          >
+            {ru.common.reject}
+          </button>
         </div>
-      ) : null}
+      </ArchaOverlay>
 
-      {operatorUnlockOpen ? (
-        <div className="mp-settings-backdrop">
-          <div
-            className="mp-settings-dialog-shell"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="operator-unlock-title"
+      <ArchaOverlay
+        open={operatorUnlockOpen}
+        onClose={() => {
+          setOperatorUnlockOpen(false);
+          setOperatorPassword("");
+          setOperatorUnlockError(null);
+        }}
+        variant="platform-modal"
+        ariaLabel={ru.platform.operatorUnlock}
+        panelClassName="mp-settings-dialog-shell"
+      >
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <h2 id="operator-unlock-title" className="text-lg font-semibold text-white">
+            {ru.platform.operatorUnlock}
+          </h2>
+          <button
+            type="button"
+            className="rounded-xl border border-white/[0.08] px-2.5 py-1.5 text-sm text-[#9CA3AF] transition hover:border-white/15 hover:bg-white/[0.06] hover:text-[#E5E7EB]"
+            onClick={() => {
+              setOperatorUnlockOpen(false);
+              setOperatorPassword("");
+              setOperatorUnlockError(null);
+            }}
+            aria-label="Закрыть"
           >
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <h2
-                id="operator-unlock-title"
-                className="text-lg font-semibold text-white"
-              >
-                {ru.platform.operatorUnlock}
-              </h2>
-              <button
-                type="button"
-                className="rounded-xl border border-white/[0.08] px-2.5 py-1.5 text-sm text-[#9CA3AF] transition hover:border-white/15 hover:bg-white/[0.06] hover:text-[#E5E7EB]"
-                onClick={() => {
-                  setOperatorUnlockOpen(false);
-                  setOperatorPassword("");
-                  setOperatorUnlockError(null);
-                }}
-                aria-label="Закрыть"
-              >
-                ✕
-              </button>
-            </div>
-            <form className="flex flex-col gap-4" onSubmit={(e) => void handleOperatorUnlock(e)}>
-              <div>
-                <label className="mp-muted mb-1 block text-sm" htmlFor="operator-password">
-                  Пароль оператора
-                </label>
-                <input
-                  id="operator-password"
-                  type="password"
-                  autoComplete="current-password"
-                  value={operatorPassword}
-                  onChange={(e) => setOperatorPassword(e.target.value)}
-                  className={archa.input}
-                  disabled={operatorUnlockBusy}
-                />
-              </div>
-              {operatorUnlockError ? (
-                <p className="text-sm text-red-300" role="alert">
-                  {operatorUnlockError}
-                </p>
-              ) : null}
-              <button
-                type="submit"
-                className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg"
-                disabled={operatorUnlockBusy}
-              >
-                {operatorUnlockBusy ? "Проверка…" : ru.platform.operatorUnlockSubmit}
-              </button>
-            </form>
-          </div>
+            ✕
+          </button>
         </div>
-      ) : null}
+        <form className="flex flex-col gap-4" onSubmit={(e) => void handleOperatorUnlock(e)}>
+          <div>
+            <label className="mp-muted mb-1 block text-sm" htmlFor="operator-password">
+              Пароль оператора
+            </label>
+            <input
+              id="operator-password"
+              type="password"
+              autoComplete="current-password"
+              value={operatorPassword}
+              onChange={(e) => setOperatorPassword(e.target.value)}
+              className={archa.input}
+              disabled={operatorUnlockBusy}
+            />
+          </div>
+          {operatorUnlockError ? (
+            <p className="text-sm text-red-300" role="alert">
+              {operatorUnlockError}
+            </p>
+          ) : null}
+          <button
+            type="submit"
+            className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg"
+            disabled={operatorUnlockBusy}
+          >
+            {operatorUnlockBusy ? "Проверка…" : ru.platform.operatorUnlockSubmit}
+          </button>
+        </form>
+      </ArchaOverlay>
 
       <AnimatePresence>
         {showOnboardingLayer ? (
@@ -2202,35 +2158,13 @@ export default function PlatformPage() {
         ) : null}
       </AnimatePresence>
 
-      {typeof document !== "undefined"
-        ? createPortal(
-            <AnimatePresence>
-              {settingsBusinessId != null ? (
-                <motion.div
-                  key="platform-settings-modal"
-                  className="mp-settings-backdrop"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.22 }}
-                  role="presentation"
-                  onClick={(ev) => {
-                    if (ev.target === ev.currentTarget) closeSettingsModal();
-                  }}
-                >
-                  <motion.div
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="platform-settings-title"
-                    className="mp-settings-dialog-shell"
-                    initial={{ opacity: 0, scale: 0.94, y: 16 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.96, y: 12 }}
-                    transition={{ type: "spring", damping: 26, stiffness: 340 }}
-                    onClick={(ev) => {
-                      ev.stopPropagation();
-                    }}
-                  >
+      <ArchaOverlay
+        open={settingsBusinessId != null}
+        onClose={closeSettingsModal}
+        variant="platform-modal"
+        ariaLabel="Настройки магазина"
+        panelClassName="mp-settings-dialog-shell"
+      >
             <div className="mp-settings-header">
               <div>
                 <h2
@@ -2670,13 +2604,7 @@ export default function PlatformPage() {
                 </div>
               </form>
             )}
-                  </motion.div>
-                </motion.div>
-              ) : null}
-            </AnimatePresence>,
-            document.body,
-          )
-        : null}
+      </ArchaOverlay>
     </>
   );
 }

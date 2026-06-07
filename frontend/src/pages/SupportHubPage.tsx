@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStorefrontPayload } from "../components/storefront/runtime/StorefrontPayloadContext";
-import { useBodyScrollLock } from "../utils/bodyScrollLock";
+import { ArchaOverlay } from "../components/ui/ArchaOverlay";
+import "../components/ui/archaOverlay.css";
 import { fetchMyOrders } from "../services/myOrdersApi";
 import { useShop } from "../context/ShopContext";
 import { showErrorToast, showSuccessToast } from "../store/toast.store";
@@ -95,8 +96,6 @@ export default function SupportHubPage({
   const [ticketDraft, setTicketDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [orderPickerOpen, setOrderPickerOpen] = useState(false);
-
-  useBodyScrollLock(orderPickerOpen);
 
   const [returnReason, setReturnReason] = useState<ReturnReason>("OTHER");
   const [returnItemId, setReturnItemId] = useState<number | "">("");
@@ -730,40 +729,34 @@ export default function SupportHubPage({
         </>
       )}
 
-      {orderPickerOpen ? (
-        <div
-          className="sf-support-sheet-backdrop"
-          role="presentation"
-          onClick={() => setOrderPickerOpen(false)}
-        />
-      ) : null}
-      {orderPickerOpen ? (
-        <div className="sf-support-sheet" role="dialog" aria-label="Выбор заказа">
-          <div className="sf-support-sheet__handle" aria-hidden />
-          <div className="sf-support-sheet__title">Ваш заказ</div>
-          <ul className="sf-support-sheet__list">
-            {orders.map((o) => (
-              <li key={o.id}>
-                <button
-                  type="button"
-                  className={`sf-support-sheet__item${o.id === selectedId ? " sf-support-sheet__item--current" : ""}`}
-                  onClick={() => {
-                    setSelectedId(o.id);
-                    setOrderPickerOpen(false);
-                  }}
-                >
-                  <span className="sf-support-sheet__item-id">
-                    {orderDisplayLabel(o)}
-                  </span>
-                  <span className="sf-support-sheet__item-meta">
-                    {o.total} сом · {commercePhaseLabelRu(orderCommercePhase(o.status))}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+      <ArchaOverlay
+        open={orderPickerOpen}
+        onClose={() => setOrderPickerOpen(false)}
+        ariaLabel="Выбор заказа"
+        layer="support"
+        panelClassName="sf-support-sheet"
+      >
+        <div className="sf-support-sheet__title">Ваш заказ</div>
+        <ul className="sf-support-sheet__list">
+          {orders.map((o) => (
+            <li key={o.id}>
+              <button
+                type="button"
+                className={`sf-support-sheet__item${o.id === selectedId ? " sf-support-sheet__item--current" : ""}`}
+                onClick={() => {
+                  setSelectedId(o.id);
+                  setOrderPickerOpen(false);
+                }}
+              >
+                <span className="sf-support-sheet__item-id">{orderDisplayLabel(o)}</span>
+                <span className="sf-support-sheet__item-meta">
+                  {o.total} сом · {commercePhaseLabelRu(orderCommercePhase(o.status))}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </ArchaOverlay>
     </div>
   );
 }

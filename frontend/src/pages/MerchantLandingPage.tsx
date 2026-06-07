@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { ARCHA_BRAND } from "../config/brandAssets";
+import { ru } from "../i18n/ru";
 import "../design/archaPremium.css";
 import "./MerchantLandingPage.css";
 
@@ -115,7 +116,7 @@ export default function MerchantLandingPage() {
               {ARCHA_BRAND.heroTagline}
             </motion.p>
             <motion.p className="archa-landing__hero-sub" variants={fadeUp}>
-              Premium commerce infrastructure for Telegram — built in Kyrgyzstan.
+              {ru.platform.landingSub}
             </motion.p>
             <motion.div className="archa-landing__hero-actions" variants={fadeUp}>
               <button

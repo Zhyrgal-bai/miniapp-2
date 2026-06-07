@@ -35,6 +35,8 @@ export const ru = {
     insights: "Инсайты",
     fashionTemplate: "Мода",
     sizeNew: "Новый",
+    kitchenBoard: "Кухня",
+    premiumOpsRefresh: "Операции — обновление каждые 3 с.",
   },
   common: {
     loading: "Загрузка…",
@@ -130,6 +132,11 @@ export const ru = {
     expired: "Истекла",
     pastDue: "Просрочена",
     canceled: "Отменена",
+    gracePeriod: "Льготный период",
+    gracePeriodHint:
+      "Льготный период: магазин работает, но подписка просрочена. Продлите как можно скорее.",
+    landingSub:
+      "Инфраструктура для интернет-магазинов в Telegram — сделано в Кыргызстане.",
   },
   badges: {
     new: "Новинка",

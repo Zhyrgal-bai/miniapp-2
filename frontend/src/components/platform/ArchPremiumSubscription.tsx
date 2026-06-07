@@ -23,6 +23,7 @@ import {
   SUBSCRIPTION_STATUS_CLASS,
   subscriptionTariffLabel,
 } from "../../utils/subscriptionUx";
+import { ru } from "../../i18n/ru";
 import {
   formatDaysRemaining,
   formatRuDateShort,
@@ -214,7 +215,7 @@ export function ArchPremiumSubscription({
     panel?.displayStatus === "TRIAL"
       ? "Пробный период"
       : panel?.inGracePeriod
-        ? "Grace period"
+        ? ru.platform.gracePeriod
         : "Осталось";
 
   const content = (
@@ -284,8 +285,7 @@ export function ArchPremiumSubscription({
 
           {panel.inGracePeriod ? (
             <p className="archa-sub__hint archa-sub__hint--grace" role="status">
-              Grace period: магазин работает, но подписка просрочена. Продлите
-              как можно скорее.
+              {ru.platform.gracePeriodHint}
             </p>
           ) : null}
 
