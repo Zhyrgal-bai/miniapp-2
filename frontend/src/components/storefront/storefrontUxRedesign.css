@@ -427,9 +427,10 @@
   box-shadow: 0 0 8px color-mix(in srgb, var(--sf-ux-success) 50%, transparent);
 }
 
-/* ── Hide catalog footer slider on home (noise) ── */
+/* ── Bottom product rail (catalog footer slider) ── */
 .sf-root .sf-feed__chunk--catalog-footer {
-  display: none;
+  padding-top: var(--sf-ux-space-2);
+  padding-bottom: calc(var(--sf-ux-space-2) + env(safe-area-inset-bottom, 0px));
 }
 
 @media (max-width: 320px) {
