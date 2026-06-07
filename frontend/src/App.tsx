@@ -268,6 +268,13 @@ export default function App() {
     };
   }, []);
 
+  /** M1: leaving home must not leave chrome stuck in product-experience mode. */
+  useEffect(() => {
+    if (page === "home") return;
+    setProductExperienceOpen(false);
+    window.dispatchEvent(new CustomEvent("sf:productExperienceClose"));
+  }, [page]);
+
   const sfKit = kitFromTemplateId(templateId ?? payload?.templateId ?? null);
 
   const sfVars = useMemo(
@@ -558,6 +565,10 @@ export default function App() {
   );
 
   const handleNav = (target: AppNavPage) => {
+    if (target !== "home") {
+      window.dispatchEvent(new CustomEvent("sf:productExperienceClose"));
+      setProductExperienceOpen(false);
+    }
     commitPage(target);
     setIsMenuOpen(false);
   };
@@ -614,6 +625,8 @@ export default function App() {
   );
 
   const handleFloatingCartClick = () => {
+    window.dispatchEvent(new CustomEvent("sf:productExperienceClose"));
+    setProductExperienceOpen(false);
     if (page !== "cart") {
       commitPage("cart");
     }
@@ -621,6 +634,8 @@ export default function App() {
   };
 
   const handleCheckoutQuick = () => {
+    window.dispatchEvent(new CustomEvent("sf:productExperienceClose"));
+    setProductExperienceOpen(false);
     if (page !== "checkout") {
       commitPage("checkout");
     }

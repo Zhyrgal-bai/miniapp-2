@@ -29,6 +29,39 @@ type CartStore = {
 
 export { cartLineIdentityKey, cartLinesEqual };
 
+/** Pure tenant switch — exported for smoke tests (C1 slug-resolve cart wipe). */
+export function nextCartStateAfterTenantSync(
+  state: Pick<CartStore, "tenantShopId" | "reservationId" | "items">,
+  shopId: string | null,
+): Pick<CartStore, "tenantShopId" | "reservationId" | "items"> {
+  if (shopId == null) return state;
+  if (state.tenantShopId === shopId) return state;
+  return {
+    tenantShopId: shopId,
+    reservationId: null,
+    items: [],
+  };
+}
+
+/** Validates a persisted cart line — drops corrupt localStorage rows (M3). */
+export function isValidPersistedCartItem(item: unknown): item is CartItem {
+  if (item == null || typeof item !== "object") return false;
+  const row = item as CartItem;
+  return (
+    typeof row.productId === "number" &&
+    Number.isFinite(row.productId) &&
+    row.productId > 0 &&
+    typeof row.name === "string" &&
+    row.name.trim() !== "" &&
+    typeof row.price === "number" &&
+    Number.isFinite(row.price) &&
+    row.price >= 0 &&
+    typeof row.quantity === "number" &&
+    Number.isFinite(row.quantity) &&
+    row.quantity > 0
+  );
+}
+
 const CART_STORAGE_KEY = "sf-cart-v1";
 
 type CartPersist = Pick<CartStore, "tenantShopId" | "reservationId" | "items">;
@@ -54,14 +87,7 @@ function loadPersistedCart(): CartPersist {
         Number.isFinite(parsed.reservationId)
           ? parsed.reservationId
           : null,
-      items: parsed.items.filter(
-        (item): item is CartItem =>
-          item != null &&
-          typeof item === "object" &&
-          typeof (item as CartItem).name === "string" &&
-          typeof (item as CartItem).price === "number" &&
-          typeof (item as CartItem).quantity === "number",
-      ),
+      items: parsed.items.filter(isValidPersistedCartItem),
     };
   } catch {
     return { tenantShopId: null, reservationId: null, items: [] };
@@ -84,15 +110,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
   reservationId: initialCart.reservationId,
 
   syncTenantShopId: (shopId) =>
-    set((state) => ({
-      tenantShopId: shopId,
-      reservationId:
-        state.tenantShopId === shopId ? state.reservationId : null,
-      items:
-        state.tenantShopId === shopId || state.items.length === 0
-          ? state.items
-          : [],
-    })),
+    set((state) => nextCartStateAfterTenantSync(state, shopId)),
 
   setReservationId: (id) => set({ reservationId: id }),
 

@@ -140,6 +140,8 @@ export function StorefrontRenderer(props: {
   const kit = kitFromTemplateId(props.payload.templateId) as StorefrontKitId;
   const [catalog, setCatalog] = useState<Product[] | null>(null);
   const [activeProduct, setActiveProduct] = useState<Product | null>(null);
+  const activeProductRef = useRef<Product | null>(null);
+  activeProductRef.current = activeProduct;
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -304,8 +306,12 @@ export function StorefrontRenderer(props: {
   useEffect(() => {
     const onExternalClose = () => closeProduct();
     window.addEventListener("sf:productExperienceClose", onExternalClose);
-    return () =>
+    return () => {
       window.removeEventListener("sf:productExperienceClose", onExternalClose);
+      if (activeProductRef.current != null) {
+        window.dispatchEvent(new CustomEvent("sf:productExperienceClose"));
+      }
+    };
   }, [closeProduct]);
 
   const cssVars = useMemo(

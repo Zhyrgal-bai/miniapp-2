@@ -9,7 +9,8 @@ import { cleanInput, validateKgPhone } from "../utils/orderInputSanitize";
 import MapPicker from "../components/checkout/MapPicker";
 import "../components/ui/CheckoutPage.css";
 import { buildCatalogRequestParams } from "../utils/storeParams";
-import { setPendingFinikOrder } from "../utils/pendingFinikOrder";
+import { isCheckoutSubmitBlocked } from "../commerce/checkoutSubmitGuard";
+import { setPendingFinikOrder, shouldReleaseCheckoutSubmitOnResume, hasPendingFinikCheckout } from "../utils/pendingFinikOrder";
 import { openTelegramExternalLink } from "../utils/telegramWebAppBootstrap";
 import { t } from "../i18n";
 import { trackCheckoutStart } from "../services/storefrontAnalytics";
@@ -143,6 +144,17 @@ export default function CheckoutPage({ onBack }: Props) {
   >(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const submitRef = useRef<() => void>(() => {});
+  /** Sync guard — blocks double-tap before React `submitting` state updates (C2). */
+  const submitLockRef = useRef(false);
+
+  /** M5: remount after Finik redirect must stay locked until payment resolves. */
+  useEffect(() => {
+    if (!hasPendingFinikCheckout()) return;
+    submitLockRef.current = true;
+    setSubmitting(true);
+    setFinikRedirectMessage(t("checkout.paymentAwaiting"));
+  }, []);
+
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [catalogById, setCatalogById] = useState<Map<number, Product>>(
     () => new Map(),
@@ -551,6 +563,7 @@ export default function CheckoutPage({ onBack }: Props) {
   };
 
   const handleSubmit = async () => {
+    if (isCheckoutSubmitBlocked(submitLockRef.current, submitting)) return;
     if (items.length === 0) return;
     if (cartStockIssue) {
       setCheckoutError(cartStockIssue);
@@ -574,10 +587,18 @@ export default function CheckoutPage({ onBack }: Props) {
     const promoCode = cleanInput(promo);
     const phoneTrimmed = phone.trim();
 
+    submitLockRef.current = true;
+    setSubmitting(true);
+    setCheckoutError(null);
+
     let payTotal = goodsAfterPromo + deliveryFeeSom;
     if (promoCode) {
       const applied = await applyPromoCode();
-      if (applied == null) return;
+      if (applied == null) {
+        submitLockRef.current = false;
+        setSubmitting(false);
+        return;
+      }
       payTotal = applied + deliveryFeeSom;
     } else {
       setPromoPreview(null);
@@ -591,8 +612,6 @@ export default function CheckoutPage({ onBack }: Props) {
       (tg?.first_name ? cleanInput(tg.first_name) : "") ||
       "Гость";
 
-    setSubmitting(true);
-    setCheckoutError(null);
     let redirecting = false;
     try {
       const tenantParams =
@@ -662,7 +681,6 @@ export default function CheckoutPage({ onBack }: Props) {
         window.setTimeout(() => {
           openTelegramExternalLink(payUrl);
           setFinikRedirectMessage(null);
-          setSubmitting(false);
         }, 400);
         return;
       }
@@ -672,6 +690,7 @@ export default function CheckoutPage({ onBack }: Props) {
       setCheckoutError(orderErrorMessage(err));
     } finally {
       if (!redirecting) {
+        submitLockRef.current = false;
         setSubmitting(false);
       }
     }
@@ -699,6 +718,7 @@ export default function CheckoutPage({ onBack }: Props) {
       setFieldErrors({});
       setFinikRedirectMessage(null);
       setSubmitting(false);
+      submitLockRef.current = false;
     };
     window.addEventListener("sf:finikPaymentPaid", onPaid as EventListener);
     return () =>
@@ -707,10 +727,16 @@ export default function CheckoutPage({ onBack }: Props) {
 
   useEffect(() => {
     const onVis = () => {
-      if (document.visibilityState === "visible") {
-        setFinikRedirectMessage(null);
-        setSubmitting(false);
+      if (document.visibilityState !== "visible") return;
+      if (!shouldReleaseCheckoutSubmitOnResume()) {
+        submitLockRef.current = true;
+        setSubmitting(true);
+        setFinikRedirectMessage((msg) => msg ?? t("checkout.paymentAwaiting"));
+        return;
       }
+      setFinikRedirectMessage(null);
+      setSubmitting(false);
+      submitLockRef.current = false;
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);

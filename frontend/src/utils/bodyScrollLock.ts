@@ -21,6 +21,14 @@ const SCROLLABLE_OVERLAY_SELECTOR = [
   ".table-booking-sheet__body",
 ].join(", ");
 
+/** Visible overlay backdrops that expect scroll lock to stay active (M2). */
+const OPEN_OVERLAY_BACKDROP_SELECTOR = [
+  ".archa-overlay__backdrop",
+  ".sf-tg-modal-backdrop",
+  ".admin-modal-overlay",
+  ".table-booking-modal-backdrop",
+].join(", ");
+
 let lockCount = 0;
 let savedScrollY = 0;
 let savedScrollRoot: HTMLElement | null = null;
@@ -94,8 +102,24 @@ function applyUnlock(): void {
   clearLegacyBodyLockStyles();
 }
 
+/** True when a modal/sheet backdrop is still mounted. */
+export function hasVisibleScrollLockOverlay(): boolean {
+  if (typeof document === "undefined") return false;
+  return Boolean(document.querySelector(OPEN_OVERLAY_BACKDROP_SELECTOR));
+}
+
+/** Re-apply DOM lock if refcount > 0 but class was cleared externally (M2). */
+export function resyncBodyScrollLockDom(): void {
+  if (lockCount <= 0) return;
+  const root = resolveScrollRoot();
+  if (!root.classList.contains(LOCK_CLASS)) {
+    applyLock();
+  }
+}
+
 /** Force-clear any stuck lock (e.g. after returning from Finik or TMA resume). */
 export function resetBodyScrollLock(): void {
+  if (hasVisibleScrollLockOverlay()) return;
   lockCount = 0;
   document.querySelectorAll(`.${LOCK_CLASS}`).forEach((el) => {
     el.classList.remove(LOCK_CLASS);
@@ -128,6 +152,17 @@ function unlockBodyScroll(): void {
 export function useBodyScrollLock(active: boolean): void {
   useEffect(() => {
     if (!active) return;
-    return lockBodyScroll();
+    const unlock = lockBodyScroll();
+
+    const onVis = () => {
+      if (document.visibilityState !== "visible") return;
+      resyncBodyScrollLockDom();
+    };
+    document.addEventListener("visibilitychange", onVis);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      unlock();
+    };
   }, [active]);
 }

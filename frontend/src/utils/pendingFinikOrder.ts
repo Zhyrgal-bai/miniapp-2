@@ -59,3 +59,13 @@ export function clearPendingFinikOrder(): void {
     /* */
   }
 }
+
+/** Keep checkout submit locked while Finik payment is in flight (C3). */
+export function shouldReleaseCheckoutSubmitOnResume(): boolean {
+  return readPendingFinikOrder() == null;
+}
+
+/** Restore checkout lock after remount / return from Finik (M5). */
+export function hasPendingFinikCheckout(): boolean {
+  return readPendingFinikOrder() != null;
+}
