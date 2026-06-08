@@ -10,6 +10,7 @@ export const SUBSCRIPTION_STATUS_CLASS: Record<
   EXPIRING: "archa-sub__badge--expiring",
   GRACE: "archa-sub__badge--grace",
   EXPIRED: "archa-sub__badge--expired",
+  PENDING_PAYMENT: "archa-sub__badge--pending",
 };
 
 export function subscriptionTariffLabel(
@@ -31,15 +32,26 @@ export function finikAvailabilityMessage(
   panel: MerchantSubscriptionPanelPayload,
 ): { kind: "info" | "warn"; text: string } | null {
   if (panel.isBlocked || !panel.isOwner) return null;
-  if (panel.platformFinikReady) return null;
-  if (panel.displayStatus === "TRIAL") {
+  if (panel.platformFinikPayReady) return null;
+  if (panel.platformFinikReady) {
     return {
-      kind: "info",
-      text: "После окончания пробного периода вы сможете оплатить подписку через Finik.",
+      kind: "warn",
+      text: "Finik подключён частично — оплата временно недоступна. Напишите в поддержку платформы.",
     };
   }
   return {
     kind: "warn",
     text: "Онлайн-оплата временно недоступна. Напишите в поддержку платформы.",
   };
+}
+
+export function platformFinikStatusLabel(
+  panel: Pick<
+    MerchantSubscriptionPanelPayload,
+    "platformFinikReady" | "platformFinikPayReady"
+  >,
+): string {
+  if (panel.platformFinikPayReady) return "🟢 Finik подключён";
+  if (panel.platformFinikReady) return "🟡 Finik: оплата недоступна";
+  return "🔴 Finik не подключён";
 }

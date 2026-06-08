@@ -93,6 +93,24 @@ export function finikHasSecret(finikSecret: string | null | undefined): boolean 
   return typeof finikSecret === "string" && finikSecret.trim().length > 0;
 }
 
+/** Checkout витрины: без mock и без ключей — оплата запрещена. */
+export const MERCHANT_FINIK_CHECKOUT_UNAVAILABLE =
+  "Онлайн-оплата временно недоступна. Магазин ещё не подключил Finik.";
+
+export function isMerchantStorefrontFinikCheckoutAllowed(business: {
+  finikApiKey: string | null | undefined;
+  finikAccountId: string | null | undefined;
+  finikSecret: string | null | undefined;
+}): boolean {
+  if (!isFinikCredentialsReady(business.finikApiKey, business.finikAccountId)) {
+    return false;
+  }
+  if (finikUseMockForBusiness(business)) {
+    return false;
+  }
+  return canCreateFinikPayment(business);
+}
+
 /** Mock create session: нет mock env, API Key или Account ID. */
 export function finikUseMockForBusiness(business: {
   finikApiKey: string | null | undefined;

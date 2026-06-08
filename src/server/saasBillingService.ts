@@ -7,6 +7,7 @@ import {
   approximateAccessDays,
   legacyPlanDaysToCode,
   planSpecForCode,
+  resolveSubscriptionExtensionBaseStart,
   subscriptionEndAfterPlan,
   type ArchaSubscriptionPlanCode,
 } from "../shared/archaSubscriptionPlans.js";
@@ -82,6 +83,8 @@ export async function extendBusinessSubscription(
     where: { id: input.businessId },
     select: {
       subscriptionEndsAt: true,
+      subscriptionStatus: true,
+      trialEndsAt: true,
       isBlocked: true,
       botToken: true,
     },
@@ -89,10 +92,12 @@ export async function extendBusinessSubscription(
   if (b == null) return null;
 
   const previousEndsAt = b.subscriptionEndsAt;
-  const baseStart =
-    previousEndsAt != null && previousEndsAt.getTime() > now.getTime()
-      ? previousEndsAt
-      : now;
+  const baseStart = resolveSubscriptionExtensionBaseStart({
+    now,
+    subscriptionEndsAt: b.subscriptionEndsAt,
+    subscriptionStatus: String(b.subscriptionStatus),
+    trialEndsAt: b.trialEndsAt,
+  });
 
   let subscriptionEndsAt: Date;
   if (input.planCode != null) {

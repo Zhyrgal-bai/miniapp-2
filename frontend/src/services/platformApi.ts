@@ -158,7 +158,7 @@ export async function postOperatorReauth(
 export type PlatformSubscriptionPaymentResult = {
   paymentUrl: string;
   subscriptionPaymentId: number;
-  planCode: "MONTHLY" | "HALF_YEAR" | "YEARLY";
+  planCode: MerchantSubscriptionPlanCode;
   planDays: number;
   accessDaysGranted: number;
   amountSom: number;
@@ -167,7 +167,7 @@ export type PlatformSubscriptionPaymentResult = {
 export async function postPlatformSubscriptionPaymentCreate(params: {
   telegramId: number;
   businessId: number;
-  planCode: "MONTHLY" | "HALF_YEAR" | "YEARLY";
+  planCode: MerchantSubscriptionPlanCode;
 }): Promise<PlatformSubscriptionPaymentResult> {
   void params.telegramId;
   const j = await adminFetchJson<{
@@ -191,7 +191,10 @@ export async function postPlatformSubscriptionPaymentCreate(params: {
     typeof j.paymentUrl === "string" &&
     j.paymentUrl.trim() !== "" &&
     typeof j.subscriptionPaymentId === "number" &&
-    (code === "MONTHLY" || code === "HALF_YEAR" || code === "YEARLY") &&
+    (code === "FIRST_MONTH" ||
+      code === "MONTHLY" ||
+      code === "THREE_MONTH" ||
+      code === "YEARLY") &&
     typeof j.amountSom === "number"
   ) {
     return {
@@ -216,18 +219,27 @@ export type MerchantSubscriptionUiStatus =
   | "TRIAL"
   | "GRACE"
   | "EXPIRED"
-  | "EXPIRING";
+  | "EXPIRING"
+  | "PENDING_PAYMENT";
+
+export type MerchantSubscriptionPlanCode =
+  | "FIRST_MONTH"
+  | "MONTHLY"
+  | "THREE_MONTH"
+  | "YEARLY";
 
 export type MerchantSubscriptionPlanDTO = {
-  code: "MONTHLY" | "HALF_YEAR" | "YEARLY";
+  code: MerchantSubscriptionPlanCode;
   title: string;
   subtitle: string;
   paidMonths: number;
   bonusMonths: number;
+  bonusDays: number;
   totalMonths: number;
   amountSom: number;
   badge?: string;
   featured?: boolean;
+  popular?: boolean;
 };
 
 export type SubscriptionHistoryEntryType = "finik_payment" | "operator_extension";
@@ -263,8 +275,11 @@ export type MerchantSubscriptionPanelPayload = {
   isBlocked: boolean;
   isActive: boolean;
   platformFinikReady: boolean;
+  platformFinikPayReady: boolean;
   canPay: boolean;
   isOwner: boolean;
+  firstMonthEligible: boolean;
+  hasPendingPayment: boolean;
   plans: MerchantSubscriptionPlanDTO[];
 };
 
@@ -283,7 +298,8 @@ export async function fetchMerchantSubscriptionPanel(
       j.displayStatus !== "TRIAL" &&
       j.displayStatus !== "EXPIRED" &&
       j.displayStatus !== "GRACE" &&
-      j.displayStatus !== "EXPIRING")
+      j.displayStatus !== "EXPIRING" &&
+      j.displayStatus !== "PENDING_PAYMENT")
   ) {
     throw new Error("Некорректный ответ сервера");
   }

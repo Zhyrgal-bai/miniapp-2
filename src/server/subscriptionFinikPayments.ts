@@ -13,6 +13,7 @@ import {
 import {
   legacyPlanDaysToCode,
   parseArchaSubscriptionPlanCode,
+  type ArchaSubscriptionPlanCode,
 } from "../shared/archaSubscriptionPlans.js";
 
 function telegramIdFromTrustedHeader(req: Request): string | null {
@@ -42,7 +43,7 @@ export function parseSubscriptionPlanInput(body: {
   planCode?: unknown;
 }):
   | { plan: 30 | 90; planCode?: undefined }
-  | { planCode: "MONTHLY" | "HALF_YEAR" | "YEARLY"; plan?: undefined }
+  | { planCode: ArchaSubscriptionPlanCode; plan?: undefined }
   | null {
   const planCode = parseArchaSubscriptionPlanCode(body.planCode);
   if (planCode != null) return { planCode };
@@ -131,7 +132,7 @@ export async function createSubscriptionFinikPaymentSession(input: {
   telegramId: string;
   businessId: number;
   plan?: 30 | 90;
-  planCode?: "MONTHLY" | "HALF_YEAR" | "YEARLY";
+  planCode?: ArchaSubscriptionPlanCode;
 }): Promise<CreateSubscriptionFinikSessionResult> {
   return createPlatformSubscriptionPaymentSession(input);
 }
@@ -294,7 +295,7 @@ export function mountSubscriptionFinikPaymentRoutes(app: Express): void {
       const planInput = parseSubscriptionPlanInput(body);
       if (planInput == null) {
         res.status(400).json({
-          error: "Параметр planCode: MONTHLY, HALF_YEAR, YEARLY или plan: 30 | 90",
+          error: "Параметр planCode: FIRST_MONTH, MONTHLY, THREE_MONTH, YEARLY или plan: 30 | 90",
         });
         return;
       }
@@ -336,9 +337,11 @@ export function mountSubscriptionFinikPaymentRoutes(app: Express): void {
     async (req: Request, res: Response) => {
       try {
         const rawBody =
-          typeof req.body === "object" && req.body !== null
-            ? JSON.stringify(req.body)
-            : String(req.body ?? "");
+          typeof req.rawBody === "string" && req.rawBody.trim() !== ""
+            ? req.rawBody
+            : typeof req.body === "object" && req.body !== null
+              ? JSON.stringify(req.body)
+              : String(req.body ?? "");
         const body = req.body as Record<string, unknown>;
         const out = await applyPlatformSubscriptionFinikWebhook(
           req,

@@ -7,6 +7,7 @@ import {
 } from "@repo-shared/storeTheme";
 import { fetchBusinessPublic, saveBusinessThemePut } from "../../../../services/businessThemeApi";
 import { putStorefrontTextBrandingPatch } from "../../../../services/storefrontTextBrandingApi";
+import { apiAbsoluteUrl, withTenantHeaders } from "../../../../services/api";
 import { formatAdminApiError } from "../../../../utils/adminApiError";
 import { archa } from "../../../archa/archaUi";
 import { storeBrandInitials } from "../../../layout/storeBrandHeaderUtils";
@@ -71,6 +72,28 @@ export function MerchantSettingsStorefrontPanel(props: Props): ReactElement {
       setBannerTitle(t.banner.title);
       setBannerSubtitle(t.banner.subtitle);
       setLogoUrl(t.logoUrl ?? "");
+      const sfUrl = apiAbsoluteUrl(`/api/storefront/${props.businessId}`);
+      const sfRes = await fetch(sfUrl, {
+        cache: "no-store",
+        headers: withTenantHeaders(undefined, sfUrl, {
+          businessId: props.businessId,
+        }),
+      });
+      if (sfRes.ok) {
+        const sf = (await sfRes.json()) as {
+          storefrontTextConfig?: Record<string, unknown>;
+        };
+        const txt = sf.storefrontTextConfig;
+        if (txt != null && typeof txt === "object") {
+          const tag = txt.brandTagline;
+          const drawer = txt.drawerTagline;
+          if (typeof tag === "string") {
+            setBrandTagline(tag);
+          } else if (typeof drawer === "string") {
+            setBrandTagline(drawer);
+          }
+        }
+      }
     } catch (e) {
       setError(formatAdminApiError(e));
     } finally {

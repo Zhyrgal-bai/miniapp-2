@@ -3,6 +3,7 @@ import { archa } from "../../../archa/archaUi";
 import {
   fetchMerchantBotStatus,
   postMerchantBotCheck,
+  postMerchantBotReconnect,
   type MerchantBotRecoveryPayload,
 } from "../../../../services/platformApi";
 import { formatAdminApiError } from "../../../../utils/adminApiError";
@@ -26,6 +27,7 @@ export function MerchantSettingsBotPanel(props: Props): ReactElement {
   const [step, setStep] = useState<WizardStep>(1);
   const [status, setStatus] = useState<MerchantBotRecoveryPayload | null>(null);
   const [checkBusy, setCheckBusy] = useState(false);
+  const [reconnectBusy, setReconnectBusy] = useState(false);
   const [checkErr, setCheckErr] = useState<string | null>(null);
   const [checkOk, setCheckOk] = useState<string | null>(null);
 
@@ -66,10 +68,37 @@ export function MerchantSettingsBotPanel(props: Props): ReactElement {
     }
   };
 
+  const runReconnect = async () => {
+    setReconnectBusy(true);
+    setCheckErr(null);
+    setCheckOk(null);
+    try {
+      const s = await postMerchantBotReconnect(props.businessId);
+      setStatus(s);
+      setCheckOk(
+        s.status === "connected"
+          ? "Webhook переподключён, бот работает."
+          : "Переподключение выполнено — при необходимости проверьте снова.",
+      );
+      if (s.status === "connected") setStep(4);
+    } catch (e) {
+      setCheckErr(formatAdminApiError(e));
+    } finally {
+      setReconnectBusy(false);
+    }
+  };
+
   const handleSaveAndContinue = async () => {
     const ok = await props.onSaveToken();
     if (ok) setStep(3);
   };
+
+  const anyBusy = checkBusy || reconnectBusy || props.saving;
+  const canReconnect =
+    status != null &&
+    !status.isBlocked &&
+    status.status !== "not_configured" &&
+    status.status !== "token_error";
 
   return (
     <div className="mp-bot-wizard">
@@ -135,25 +164,14 @@ export function MerchantSettingsBotPanel(props: Props): ReactElement {
             <button type="button" className="mp-btn mp-btn--ghost" onClick={() => setStep(1)}>
               ← Назад
             </button>
-            {!props.isPlatformAdmin ? (
-              <button
-                type="button"
-                className="mp-btn mp-btn--primary"
-                disabled={props.disabled || props.saving || props.tokenDraft.trim() === ""}
-                onClick={() => void handleSaveAndContinue()}
-              >
-                {props.saving ? "Сохранение…" : "Сохранить и продолжить"}
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="mp-btn mp-btn--primary"
-                disabled={props.tokenDraft.trim() === ""}
-                onClick={() => setStep(3)}
-              >
-                Далее →
-              </button>
-            )}
+            <button
+              type="button"
+              className="mp-btn mp-btn--primary"
+              disabled={props.disabled || anyBusy || props.tokenDraft.trim() === ""}
+              onClick={() => void handleSaveAndContinue()}
+            >
+              {props.saving ? "Сохранение…" : "Сохранить и продолжить"}
+            </button>
           </div>
         </div>
       ) : null}
@@ -165,10 +183,15 @@ export function MerchantSettingsBotPanel(props: Props): ReactElement {
             Нажмите «Проверить» — мы убедимся, что бот отвечает и webhook настроен.
           </p>
           {status ? (
-            <p className="mp-settings-field__hint">
-              Статус: <strong>{status.label}</strong>
-              {status.botUsername ? ` (@${status.botUsername})` : ""}
-            </p>
+            <>
+              <p className="mp-settings-field__hint">
+                Статус: <strong>{status.label}</strong>
+                {status.botUsername ? ` (@${status.botUsername})` : ""}
+              </p>
+              {status.detail ? (
+                <p className="mp-settings-field__hint">{status.detail}</p>
+              ) : null}
+            </>
           ) : null}
           {checkErr ? (
             <p className="mp-settings-alert mp-settings-alert--error" role="alert">
@@ -187,10 +210,18 @@ export function MerchantSettingsBotPanel(props: Props): ReactElement {
             <button
               type="button"
               className="mp-btn mp-btn--primary"
-              disabled={checkBusy || props.businessId <= 0}
+              disabled={anyBusy || props.businessId <= 0}
               onClick={() => void runCheck()}
             >
               {checkBusy ? "Проверка…" : "Проверить подключение"}
+            </button>
+            <button
+              type="button"
+              className="mp-btn mp-btn--secondary"
+              disabled={anyBusy || !canReconnect}
+              onClick={() => void runReconnect()}
+            >
+              {reconnectBusy ? "Подключение…" : "Переподключить webhook"}
             </button>
           </div>
         </div>
@@ -213,10 +244,18 @@ export function MerchantSettingsBotPanel(props: Props): ReactElement {
             <button
               type="button"
               className="mp-btn mp-btn--ghost"
-              disabled={checkBusy}
+              disabled={anyBusy}
               onClick={() => void runCheck()}
             >
               {checkBusy ? "Проверка…" : "Проверить снова"}
+            </button>
+            <button
+              type="button"
+              className="mp-btn mp-btn--secondary"
+              disabled={anyBusy || !canReconnect}
+              onClick={() => void runReconnect()}
+            >
+              {reconnectBusy ? "Подключение…" : "Переподключить webhook"}
             </button>
           </div>
         </div>

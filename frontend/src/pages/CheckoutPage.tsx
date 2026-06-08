@@ -569,6 +569,12 @@ export default function CheckoutPage({ onBack }: Props) {
       setCheckoutError(cartStockIssue);
       return;
     }
+    if (payload?.finikCheckoutReady === false) {
+      setCheckoutError(
+        "Онлайн-оплата временно недоступна. Магазин ещё не подключил Finik.",
+      );
+      return;
+    }
     if (!validateForm()) return;
     if (!deliveryQuote.ok) {
       setCheckoutError(deliveryQuote.error);
@@ -779,6 +785,14 @@ export default function CheckoutPage({ onBack }: Props) {
         </p>
       ) : null}
       <h2 className="checkout-page-title">{t("checkout.title")}</h2>
+
+      {payload?.finikCheckoutReady === false ? (
+        <div className="checkout-error-banner" role="alert">
+          <p>
+            Онлайн-оплата временно недоступна. Магазин ещё не подключил Finik.
+          </p>
+        </div>
+      ) : null}
 
       {checkoutError != null && (
         <div className="checkout-error-banner" role="alert">
@@ -1089,7 +1103,8 @@ export default function CheckoutPage({ onBack }: Props) {
             submitting ||
             finikRedirectMessage != null ||
             Boolean(cartStockIssue) ||
-            !deliveryQuote.ok
+            !deliveryQuote.ok ||
+            payload?.finikCheckoutReady === false
           }
         >
           {submitting ? t("checkout.submitting") : t("checkout.submit")}

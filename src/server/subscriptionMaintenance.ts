@@ -157,12 +157,17 @@ async function tryAutoRenewInvoice(
     return;
   }
 
-  const planCode =
+  let planCode =
     (b.subscriptionPlanCode?.trim().toUpperCase() as
+      | "FIRST_MONTH"
       | "MONTHLY"
+      | "THREE_MONTH"
       | "HALF_YEAR"
       | "YEARLY"
       | undefined) ?? "MONTHLY";
+  if (planCode === "FIRST_MONTH") {
+    planCode = "MONTHLY";
+  }
 
   const out = await createPlatformSubscriptionPaymentSession({
     telegramId: ownerTg,

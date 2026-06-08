@@ -31,9 +31,11 @@ export const SAAS_SUBSCRIPTION_PLANS = ARCHA_SUBSCRIPTION_PLANS.map((p) => ({
   amountSom: p.amountSom,
   paidMonths: p.paidMonths,
   bonusMonths: p.bonusMonths,
+  bonusDays: p.bonusDays ?? 0,
   totalMonths: p.paidMonths + p.bonusMonths,
   badge: p.badge,
   featured: p.featured,
+  popular: p.popular,
 }));
 
 export function formatSaasPriceSom(amount: number): string {
@@ -65,45 +67,43 @@ export type SubscriptionJourneyStep = {
   phase: "current" | "next" | "later";
 };
 
-/** Шаги customer journey для экрана trial (цены из реестра тарифов). */
+/** @deprecated Journey больше не используется в UI подписки. */
 export function buildTrialSubscriptionJourney(): SubscriptionJourneyStep[] {
   const monthly = SAAS_SUBSCRIPTION_PLANS.find((p) => p.code === "MONTHLY");
+  const three = SAAS_SUBSCRIPTION_PLANS.find((p) => p.code === "THREE_MONTH");
   const yearly = SAAS_SUBSCRIPTION_PLANS.find((p) => p.code === "YEARLY");
   const monthlySom = monthly?.amountSom ?? SAAS_SUBSCRIPTION_PRICE_30_D;
-  const yearlySom = yearly?.amountSom ?? monthlySom * 12;
-  const yearlySubtitle =
-    yearly != null
-      ? `${yearly.paidMonths} месяцев + ${yearly.bonusMonths} бесплатно`
-      : "12 месяцев + 1 бесплатно";
 
   return [
     {
-      id: "trial",
-      icon: "🟢",
-      title: "Пробный период",
+      id: "first_month",
+      icon: "🥉",
+      title: "Первый месяц",
+      priceLabel: formatArchaPriceSom(SAAS_SUBSCRIPTION_PRICE_FIRST_MONTH),
       phase: "current",
     },
     {
-      id: "first_month",
-      icon: "💳",
-      title: "Первый месяц",
-      priceLabel: formatArchaPriceSom(SAAS_SUBSCRIPTION_PRICE_FIRST_MONTH),
-      phase: "next",
-    },
-    {
       id: "standard",
-      icon: "💎",
+      icon: "📅",
       title: "Стандарт",
       priceLabel: `${formatArchaPriceSom(monthlySom)} / месяц`,
-      phase: "later",
+      phase: "current",
+    },
+    {
+      id: "three_month",
+      icon: "🥈",
+      title: "3 месяца",
+      subtitle: three?.subtitle,
+      priceLabel: three != null ? formatArchaPriceSom(three.amountSom) : undefined,
+      phase: "current",
     },
     {
       id: "yearly",
-      icon: "⭐",
-      title: "Годовая",
-      subtitle: yearlySubtitle,
-      priceLabel: formatArchaPriceSom(yearlySom),
-      phase: "later",
+      icon: "💎",
+      title: "Годовой",
+      subtitle: yearly?.subtitle,
+      priceLabel: yearly != null ? formatArchaPriceSom(yearly.amountSom) : undefined,
+      phase: "current",
     },
   ];
 }

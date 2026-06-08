@@ -141,7 +141,7 @@ export const platformSubscriptionPaymentBodySchema = z
     businessId: z.coerce.number().int().positive(),
     plan: z.union([z.literal(30), z.literal(90)]).optional(),
     planCode: z
-      .enum(["MONTHLY", "HALF_YEAR", "YEARLY"])
+      .enum(["FIRST_MONTH", "MONTHLY", "THREE_MONTH", "HALF_YEAR", "YEARLY"])
       .optional(),
   })
   .refine((v) => v.plan != null || v.planCode != null, {

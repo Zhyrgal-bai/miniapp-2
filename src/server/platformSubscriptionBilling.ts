@@ -23,13 +23,16 @@ import {
 } from "../shared/platformFinik.js";
 import { FINIK_LEGACY_HTTP_UNAVAILABLE_ERROR } from "../shared/finikReady.js";
 import {
-  ARCHA_SUBSCRIPTION_PLANS,
   legacyPlanDaysToCode,
   approximateAccessDays,
+  isFirstMonthPlanEligible,
+  merchantVisibleSubscriptionPlans,
   parseArchaSubscriptionPlanCode,
   planCodeLabel,
   planSpecForCode,
+  resolveSubscriptionExtensionBaseStart,
   subscriptionEndAfterPlan,
+  totalPlanMonths,
   type ArchaSubscriptionPlanCode,
 } from "../shared/archaSubscriptionPlans.js";
 
@@ -38,7 +41,8 @@ export type MerchantSubscriptionUiStatus =
   | "TRIAL"
   | "GRACE"
   | "EXPIRED"
-  | "EXPIRING";
+  | "EXPIRING"
+  | "PENDING_PAYMENT";
 
 export type MerchantSubscriptionPanelPayload = {
   businessId: number;
@@ -58,9 +62,24 @@ export type MerchantSubscriptionPanelPayload = {
   isBlocked: boolean;
   isActive: boolean;
   platformFinikReady: boolean;
+  platformFinikPayReady: boolean;
   canPay: boolean;
   isOwner: boolean;
-  plans: typeof ARCHA_SUBSCRIPTION_PLANS;
+  firstMonthEligible: boolean;
+  hasPendingPayment: boolean;
+  plans: Array<{
+    code: ArchaSubscriptionPlanCode;
+    title: string;
+    subtitle: string;
+    paidMonths: number;
+    bonusMonths: number;
+    bonusDays: number;
+    totalMonths: number;
+    amountSom: number;
+    badge?: string;
+    featured?: boolean;
+    popular?: boolean;
+  }>;
 };
 
 const MS_DAY = 24 * 60 * 60 * 1000;
@@ -78,9 +97,13 @@ function calendarDaysAhead(end: Date, now: Date): number | null {
 export function resolveMerchantSubscriptionUiStatus(
   b: SubscriptionGateFields,
   now = new Date(),
+  hasPendingPayment = false,
 ): MerchantSubscriptionUiStatus {
   if (b.isBlocked) {
     return "EXPIRED";
+  }
+  if (hasPendingPayment) {
+    return "PENDING_PAYMENT";
   }
   if (isInSubscriptionGracePeriod(b, now)) {
     return "GRACE";
@@ -115,8 +138,9 @@ const STATUS_LABEL: Record<MerchantSubscriptionUiStatus, string> = {
   ACTIVE: "Активна",
   TRIAL: "Пробный период",
   GRACE: "Grace period",
-  EXPIRING: "Истекает",
+  EXPIRING: "Скоро истекает",
   EXPIRED: "Просрочена",
+  PENDING_PAYMENT: "Ожидает оплаты",
 };
 
 function primaryEndDate(b: {
@@ -179,7 +203,22 @@ export async function buildMerchantSubscriptionPanel(input: {
   }
 
   const now = new Date();
-  const displayStatus = resolveMerchantSubscriptionUiStatus(b, now);
+
+  const [completedFinikCount, pendingPayment] = await Promise.all([
+    prisma.subscriptionFinikPayment.count({
+      where: { businessId: input.businessId, status: "completed" },
+    }),
+    findPendingSubscriptionFinikPayment(input.businessId),
+  ]);
+  const hasCompletedFinikPayment = completedFinikCount > 0;
+  const firstMonthEligible = isFirstMonthPlanEligible(hasCompletedFinikPayment);
+  const hasPendingPayment = pendingPayment != null;
+
+  const displayStatus = resolveMerchantSubscriptionUiStatus(
+    b,
+    now,
+    hasPendingPayment,
+  );
   const endDate = primaryEndDate(b);
   let daysLeft: number | null = null;
   let countdownMs: number | null = null;
@@ -212,13 +251,30 @@ export async function buildMerchantSubscriptionPanel(input: {
       isBlocked: b.isBlocked,
       isActive: b.isActive,
       platformFinikReady: isPlatformFinikReady(),
+      platformFinikPayReady:
+        isPlatformFinikReady() && isPlatformFinikLegacyHttpReady(),
       canPay:
         isOwner &&
         isPlatformFinikReady() &&
         isPlatformFinikLegacyHttpReady() &&
-        !b.isBlocked,
+        !b.isBlocked &&
+        !hasPendingPayment,
       isOwner,
-      plans: ARCHA_SUBSCRIPTION_PLANS,
+      firstMonthEligible,
+      hasPendingPayment,
+      plans: merchantVisibleSubscriptionPlans({ firstMonthEligible }).map((p) => ({
+        code: p.code,
+        title: p.title,
+        subtitle: p.subtitle,
+        paidMonths: p.paidMonths,
+        bonusMonths: p.bonusMonths,
+        bonusDays: p.bonusDays ?? 0,
+        totalMonths: totalPlanMonths(p),
+        amountSom: p.amountSom,
+        ...(p.badge != null ? { badge: p.badge } : {}),
+        ...(p.featured === true ? { featured: true as const } : {}),
+        ...(p.popular === true ? { popular: true as const } : {}),
+      })),
     },
   };
 }
@@ -287,7 +343,35 @@ export async function createPlatformSubscriptionPaymentSession(input: {
     return {
       ok: false,
       statusCode: 400,
-      error: "Укажите planCode: MONTHLY, HALF_YEAR или YEARLY",
+      error: "Укажите planCode: FIRST_MONTH, MONTHLY, THREE_MONTH или YEARLY",
+    };
+  }
+
+  const completedFinikCount = await prisma.subscriptionFinikPayment.count({
+    where: { businessId, status: "completed" },
+  });
+  const firstMonthEligible = isFirstMonthPlanEligible(completedFinikCount > 0);
+
+  if (planCode === "FIRST_MONTH" && !firstMonthEligible) {
+    return {
+      ok: false,
+      statusCode: 400,
+      error:
+        "Промо «Первый месяц» уже использовано. Выберите другой тариф.",
+    };
+  }
+  if (planCode === "HALF_YEAR" && input.source !== "auto_renew") {
+    return {
+      ok: false,
+      statusCode: 400,
+      error: "Тариф «6 месяцев» больше недоступен. Выберите MONTHLY, THREE_MONTH или YEARLY.",
+    };
+  }
+  if (planCode === "FIRST_MONTH" && input.source === "auto_renew") {
+    return {
+      ok: false,
+      statusCode: 400,
+      error: "Автопродление использует тариф «Стандарт».",
     };
   }
 
@@ -323,7 +407,13 @@ export async function createPlatformSubscriptionPaymentSession(input: {
 
   const business = await prisma.business.findUnique({
     where: { id: businessId },
-    select: { id: true, isBlocked: true },
+    select: {
+      id: true,
+      isBlocked: true,
+      subscriptionStatus: true,
+      trialEndsAt: true,
+      subscriptionEndsAt: true,
+    },
   });
   if (business == null) {
     return { ok: false, statusCode: 404, error: "Магазин не найден" };
@@ -348,9 +438,15 @@ export async function createPlatformSubscriptionPaymentSession(input: {
 
   const spec = planSpecForCode(planCode);
   const paymentSource = input.source ?? "finik";
-  const baseForMeta = new Date();
-  const endForMeta = subscriptionEndAfterPlan(baseForMeta, spec.planCode);
-  const accessDaysMeta = approximateAccessDays(baseForMeta, endForMeta);
+  const now = new Date();
+  const extensionBase = resolveSubscriptionExtensionBaseStart({
+    now,
+    subscriptionEndsAt: business.subscriptionEndsAt,
+    subscriptionStatus: String(business.subscriptionStatus),
+    trialEndsAt: business.trialEndsAt,
+  });
+  const endForMeta = subscriptionEndAfterPlan(extensionBase, spec.planCode);
+  const accessDaysMeta = approximateAccessDays(now, endForMeta);
 
   const row = await prisma.subscriptionFinikPayment.create({
     data: {
@@ -618,6 +714,26 @@ export async function applyPlatformSubscriptionFinikWebhook(
     "succeeded",
   ]);
 
+  const failedStatuses = new Set([
+    "failed",
+    "cancelled",
+    "canceled",
+    "declined",
+    "rejected",
+    "expired",
+    "error",
+  ]);
+
+  if (failedStatuses.has(status)) {
+    if (subRow.status === "pending") {
+      await prisma.subscriptionFinikPayment.update({
+        where: { id: subRow.id },
+        data: { status: "failed" },
+      });
+    }
+    return { ok: true, ignored: true };
+  }
+
   if (!successStatuses.has(status)) {
     return { ok: true, ignored: true };
   }
@@ -632,11 +748,21 @@ export async function applyPlatformSubscriptionFinikWebhook(
 
   const outcome = await prisma.$transaction(async (tx) => {
     const claimed = await tx.subscriptionFinikPayment.updateMany({
-      where: { id: subRow!.id, status: "pending" },
+      where: {
+        id: subRow!.id,
+        status: { in: ["pending", "failed"] },
+      },
       data: { status: "completed" },
     });
     if (claimed.count !== 1) {
-      return { kind: "duplicate" as const };
+      const fresh = await tx.subscriptionFinikPayment.findUnique({
+        where: { id: subRow!.id },
+        select: { status: true },
+      });
+      if (fresh?.status === "completed") {
+        return { kind: "duplicate" as const };
+      }
+      return { kind: "ignored" as const };
     }
 
     const ext = await extendBusinessSubscription({
@@ -655,6 +781,9 @@ export async function applyPlatformSubscriptionFinikWebhook(
 
   if (outcome.kind === "duplicate") {
     return { ok: true, duplicate: true };
+  }
+  if (outcome.kind === "ignored") {
+    return { ok: true, ignored: true };
   }
 
   const ext = outcome.ext;

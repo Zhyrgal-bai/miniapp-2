@@ -254,8 +254,10 @@ import {
 import { createStorefrontFinikCheckoutSession } from "./finik/createStorefrontFinikCheckoutSession.js";
 import {
   FINIK_LEGACY_HTTP_UNAVAILABLE_ERROR,
+  MERCHANT_FINIK_CHECKOUT_UNAVAILABLE,
   canCreateFinikPayment,
   isFinikCredentialsReady,
+  isMerchantStorefrontFinikCheckoutAllowed,
 } from "../shared/finikReady.js";
 import {
   mountSubscriptionFinikPaymentRoutes,
@@ -5020,10 +5022,16 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
       storeAvailabilitySettings: true,
       latitude: true,
       longitude: true,
+      finikApiKey: true,
+      finikAccountId: true,
+      finikSecret: true,
     },
   });
   if (rejectUnlessCanAcceptCustomerOrders(res, biz)) {
     return;
+  }
+  if (!isMerchantStorefrontFinikCheckoutAllowed(biz!)) {
+    return res.status(503).json({ error: MERCHANT_FINIK_CHECKOUT_UNAVAILABLE });
   }
   const businessType = biz!.businessType;
   if (typeof businessType !== "string" || businessType.trim() === "") {

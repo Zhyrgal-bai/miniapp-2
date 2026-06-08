@@ -27,6 +27,7 @@ import {
   parseMerchantDeliverySettings,
   defaultMerchantDeliverySettings,
 } from "../shared/merchantDeliverySettings.js";
+import { isMerchantStorefrontFinikCheckoutAllowed } from "../shared/finikReady.js";
 import {
   parseStoreAvailabilitySettings,
   storeAvailabilityToPublic,
@@ -80,6 +81,9 @@ export async function sendStorefrontPublicPayload(
         latitude: true,
         longitude: true,
         botToken: true,
+        finikApiKey: true,
+        finikAccountId: true,
+        finikSecret: true,
         deliverySettings: true,
         storeAvailabilitySettings: true,
         merchantConfig: true,
@@ -150,6 +154,11 @@ export async function sendStorefrontPublicPayload(
       (payload as any).deliveryEta = storeAvailability.deliveryEta;
       (payload as any).pickupEta = storeAvailability.pickupEta;
       (payload as any).deliveryZones = storeAvailability.deliveryZones;
+      (payload as any).finikCheckoutReady = isMerchantStorefrontFinikCheckoutAllowed({
+        finikApiKey: b.finikApiKey,
+        finikAccountId: b.finikAccountId,
+        finikSecret: b.finikSecret,
+      });
     }
 
     const bt = String((b as any).businessType ?? "").trim() as BusinessType;

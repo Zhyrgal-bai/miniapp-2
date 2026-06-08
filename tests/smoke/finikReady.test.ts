@@ -9,6 +9,7 @@ import {
   isFinikLegacyHttpReady,
   isFinikOfficialPrivateKeyConfigured,
   isFinikUseMockEnabled,
+  isMerchantStorefrontFinikCheckoutAllowed,
 } from "../../src/shared/finikReady.js";
 
 describe("finikReady", () => {
@@ -151,5 +152,35 @@ describe("finikReady", () => {
       "https://api.example.com/finik/webhook/42",
     );
     expect(buildFinikWebhookUrl("", 1)).toBeNull();
+  });
+
+  it("storefront checkout blocked without keys or mock adapter", () => {
+    delete process.env.FINIK_USE_MOCK;
+    delete process.env.FINIK_RSA_PRIVATE_KEY;
+    const noKeys = {
+      finikApiKey: null,
+      finikAccountId: null,
+      finikSecret: null,
+    };
+    expect(isMerchantStorefrontFinikCheckoutAllowed(noKeys)).toBe(false);
+
+    process.env.FINIK_USE_MOCK = "1";
+    expect(
+      isMerchantStorefrontFinikCheckoutAllowed({
+        finikApiKey: "k",
+        finikAccountId: "a",
+        finikSecret: "s",
+      }),
+    ).toBe(false);
+
+    delete process.env.FINIK_USE_MOCK;
+    process.env.FINIK_RSA_PRIVATE_KEY = "pem";
+    expect(
+      isMerchantStorefrontFinikCheckoutAllowed({
+        finikApiKey: "k",
+        finikAccountId: "a",
+        finikSecret: null,
+      }),
+    ).toBe(true);
   });
 });

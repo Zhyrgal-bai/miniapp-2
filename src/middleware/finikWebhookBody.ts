@@ -20,7 +20,11 @@ function pathname(req: Request): string {
 function isFinikWebhookPost(req: Request): boolean {
   if (req.method !== "POST") return false;
   const p = pathname(req);
-  return p === "/finik/webhook" || p.startsWith("/finik/webhook/");
+  return (
+    p === "/finik/webhook" ||
+    p.startsWith("/finik/webhook/") ||
+    p === "/api/platform/subscription-finik-webhook"
+  );
 }
 
 const rawParser = express.raw({

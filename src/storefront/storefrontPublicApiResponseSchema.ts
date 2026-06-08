@@ -181,6 +181,7 @@ export const StorefrontPublicApiResponseSchema = z
     deliveryEta: EtaRangeWireSchema.optional(),
     pickupEta: EtaRangeWireSchema.optional(),
     deliveryZones: StoreAvailabilityWireSchema.shape.deliveryZones.optional(),
+    finikCheckoutReady: z.boolean().optional(),
   })
   .passthrough();
 

@@ -131,11 +131,50 @@ export type ResolvedStorefrontPayload = {
   storefrontTextConfig?: Record<string, unknown>;
   storefrontStyleConfig?: Record<string, unknown>;
   categories?: Category[];
+  finikCheckoutReady?: boolean;
   featuredProducts?: Product[];
   featuredPromo?: StorefrontFeaturedPromo | null;
   orderOptionsSchema?: Record<string, unknown>;
   merchantConfig?: Record<string, unknown>;
 };
+
+type CategoryNode = {
+  id: number;
+  name: string;
+  parentId?: number | null;
+  children?: CategoryNode[];
+};
+
+function collectCategoryIds(node: CategoryNode): Set<number> {
+  const ids = new Set<number>();
+  const walk = (n: CategoryNode) => {
+    ids.add(n.id);
+    for (const child of n.children ?? []) walk(child);
+  };
+  walk(node);
+  return ids;
+}
+
+function findCategoryNode(
+  categories: CategoryNode[],
+  id: number,
+): CategoryNode | null {
+  for (const c of categories) {
+    if (c.id === id) return c;
+    const nested = findCategoryNode(c.children ?? [], id);
+    if (nested != null) return nested;
+  }
+  return null;
+}
+
+function categoryFilterIds(
+  categories: CategoryNode[] | undefined,
+  activeCategoryId: number,
+): Set<number> {
+  const node = findCategoryNode(categories ?? [], activeCategoryId);
+  if (node == null) return new Set([activeCategoryId]);
+  return collectCategoryIds(node);
+}
 
 export function StorefrontRenderer(props: {
   payload: ResolvedStorefrontPayload;
@@ -202,9 +241,15 @@ export function StorefrontRenderer(props: {
   const filterByCategory = useCallback(
     (list: Product[]) => {
       if (activeCategoryId == null) return list;
-      return list.filter((p) => p.categoryId === activeCategoryId);
+      const allowed = categoryFilterIds(
+        props.payload.categories as CategoryNode[] | undefined,
+        activeCategoryId,
+      );
+      return list.filter(
+        (p) => p.categoryId != null && allowed.has(Number(p.categoryId)),
+      );
     },
-    [activeCategoryId],
+    [activeCategoryId, props.payload.categories],
   );
 
   const filterCatalog = useCallback(

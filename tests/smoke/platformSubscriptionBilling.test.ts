@@ -52,6 +52,21 @@ describe("resolveMerchantSubscriptionUiStatus", () => {
     expect(s).toBe("EXPIRED");
   });
 
+  it("returns PENDING_PAYMENT when pending Finik invoice exists", () => {
+    const s = resolveMerchantSubscriptionUiStatus(
+      {
+        isBlocked: false,
+        subscriptionStatus: SubscriptionStatus.ACTIVE,
+        trialEndsAt: null,
+        subscriptionEndsAt: new Date("2026-12-01T00:00:00.000Z"),
+        gracePeriodEndsAt: null,
+      },
+      now,
+      true,
+    );
+    expect(s).toBe("PENDING_PAYMENT");
+  });
+
   it("returns EXPIRED when blocked", () => {
     const s = resolveMerchantSubscriptionUiStatus(
       {

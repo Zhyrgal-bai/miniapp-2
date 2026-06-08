@@ -425,9 +425,11 @@ export default function PlatformPage() {
   const onboardingBaseOk = !onboardingDone && !loading && !error;
   useEffect(() => {
     const zero = onboardingBaseOk && businesses.length === 0;
-    if (zero && !prevZeroStores.current) setOnboardingStep(1);
+    if (zero && !prevZeroStores.current && onboardingStep !== "success") {
+      setOnboardingStep(1);
+    }
     prevZeroStores.current = zero;
-  }, [onboardingBaseOk, businesses.length]);
+  }, [onboardingBaseOk, businesses.length, onboardingStep]);
 
   useEffect(() => {
     if (settingsBusinessId == null) {
@@ -1541,7 +1543,7 @@ export default function PlatformPage() {
               </div>
             ) : null}
 
-        {successFlash ? (
+        {successFlash && onboardingStep !== "success" ? (
           <p className="mp-flash mp-flash--ok" role="status">
             ⏳ Заявка отправлена. Ожидайте подтверждения администратора
           </p>
@@ -2110,10 +2112,14 @@ export default function PlatformPage() {
                   >
                     <div>
                       <h2 className="text-2xl font-bold text-white">
-                        ✅ Магазин создан
+                        {businesses[0] != null
+                          ? "✅ Магазин создан"
+                          : "⏳ Заявка отправлена"}
                       </h2>
                       <p className="mp-onboard-muted mt-3 text-base leading-relaxed">
-                        👉 Откройте его или настройте
+                        {businesses[0] != null
+                          ? "👉 Откройте его или настройте"
+                          : "Оператор проверит заявку. Уведомление придёт в Telegram."}
                       </p>
                     </div>
                     <div className="flex flex-col gap-3">

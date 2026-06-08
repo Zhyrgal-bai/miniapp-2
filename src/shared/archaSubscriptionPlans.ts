@@ -1,13 +1,26 @@
-/** Единый реестр SaaS-тарифов ARCHA (календарные месяцы, не фиксированные дни). */
+/** Единый реестр SaaS-тарифов ARCHA (календарные месяцы + bonusDays). */
 
 export const ARCHA_SUBSCRIPTION_PLAN_CODES = [
+  "FIRST_MONTH",
   "MONTHLY",
+  "THREE_MONTH",
   "HALF_YEAR",
   "YEARLY",
 ] as const;
 
 export type ArchaSubscriptionPlanCode =
   (typeof ARCHA_SUBSCRIPTION_PLAN_CODES)[number];
+
+/** Тарифы merchant UI (без legacy HALF_YEAR). */
+export const ARCHA_MERCHANT_VISIBLE_PLAN_CODES = [
+  "FIRST_MONTH",
+  "MONTHLY",
+  "THREE_MONTH",
+  "YEARLY",
+] as const;
+
+export type ArchaMerchantVisiblePlanCode =
+  (typeof ARCHA_MERCHANT_VISIBLE_PLAN_CODES)[number];
 
 export const ARCHA_SUBSCRIPTION_GRACE_DAYS = 7;
 export const ARCHA_AUTO_RENEW_INVOICE_DAYS_BEFORE = 3;
@@ -20,11 +33,14 @@ export type ArchaSubscriptionPlanDefinition = {
   subtitle: string;
   /** Оплачиваемые календарные месяцы. */
   paidMonths: number;
-  /** Бонусные месяцы (YEARLY: +1). */
+  /** Бонусные календарные месяцы (YEARLY: +2). */
   bonusMonths: number;
+  /** Бонусные дни (THREE_MONTH: +15). */
+  bonusDays?: number;
   amountSom: number;
   badge?: string;
   featured?: boolean;
+  popular?: boolean;
 };
 
 function envPriceSom(key: string, fallback: number): number {
@@ -47,34 +63,64 @@ export const ARCHA_FIRST_MONTH_PRICE_SOM = envPriceSom(
   1500,
 );
 
+function discountedPlanPrice(months: number, discountPercent: number): number {
+  return Math.round(MONTHLY_PRICE * months * (1 - discountPercent / 100));
+}
+
 function buildPlans(): readonly ArchaSubscriptionPlanDefinition[] {
+  const firstMonth: ArchaSubscriptionPlanDefinition = {
+    code: "FIRST_MONTH",
+    title: "Первый месяц",
+    subtitle: "Для новых магазинов",
+    paidMonths: 1,
+    bonusMonths: 0,
+    amountSom: ARCHA_FIRST_MONTH_PRICE_SOM,
+    badge: "Промо",
+  };
   const monthly: ArchaSubscriptionPlanDefinition = {
     code: "MONTHLY",
-    title: "1 месяц",
-    subtitle: "Ежемесячная подписка",
+    title: "Стандарт",
+    subtitle: "5500 сом / месяц",
     paidMonths: 1,
     bonusMonths: 0,
     amountSom: MONTHLY_PRICE,
   };
+  const threeMonth: ArchaSubscriptionPlanDefinition = {
+    code: "THREE_MONTH",
+    title: "3 месяца",
+    subtitle: "−5% · +15 дней бонус",
+    paidMonths: 3,
+    bonusMonths: 0,
+    bonusDays: 15,
+    amountSom: envPriceSom(
+      "ARCHA_PLAN_THREE_MONTH_SOM",
+      discountedPlanPrice(3, 5),
+    ),
+    badge: "−5%",
+    popular: true,
+  };
   const halfYear: ArchaSubscriptionPlanDefinition = {
     code: "HALF_YEAR",
     title: "6 месяцев",
-    subtitle: "Полгода без лишних продлений",
+    subtitle: "Legacy — только auto-renew",
     paidMonths: 6,
     bonusMonths: 0,
     amountSom: envPriceSom("ARCHA_PLAN_HALF_YEAR_SOM", MONTHLY_PRICE * 6),
   };
   const yearly: ArchaSubscriptionPlanDefinition = {
     code: "YEARLY",
-    title: "12 месяцев",
-    subtitle: "12 оплаченных месяцев + 1 месяц в подарок",
+    title: "Годовой",
+    subtitle: "12 месяцев + 2 бесплатно · скидка 20%",
     paidMonths: 12,
-    bonusMonths: 1,
-    amountSom: envPriceSom("ARCHA_PLAN_YEARLY_SOM", MONTHLY_PRICE * 12),
-    badge: "+1 месяц",
+    bonusMonths: 2,
+    amountSom: envPriceSom(
+      "ARCHA_PLAN_YEARLY_SOM",
+      discountedPlanPrice(12, 20),
+    ),
+    badge: "−20%",
     featured: true,
   };
-  return [monthly, halfYear, yearly] as const;
+  return [firstMonth, monthly, threeMonth, halfYear, yearly] as const;
 }
 
 export const ARCHA_SUBSCRIPTION_PLANS: readonly ArchaSubscriptionPlanDefinition[] =
@@ -111,8 +157,36 @@ export function addCalendarMonths(from: Date, months: number): Date {
   return d;
 }
 
+export function addCalendarDays(from: Date, days: number): Date {
+  return new Date(from.getTime() + days * MS_DAY);
+}
+
 export function totalPlanMonths(plan: ArchaSubscriptionPlanDefinition): number {
   return plan.paidMonths + plan.bonusMonths;
+}
+
+/** База продления: активная подписка → trialEndsAt на trial → now. */
+export function resolveSubscriptionExtensionBaseStart(input: {
+  now: Date;
+  subscriptionEndsAt: Date | null;
+  subscriptionStatus: string;
+  trialEndsAt: Date | null;
+}): Date {
+  const t = input.now.getTime();
+  if (
+    input.subscriptionEndsAt != null &&
+    input.subscriptionEndsAt.getTime() > t
+  ) {
+    return input.subscriptionEndsAt;
+  }
+  if (
+    input.subscriptionStatus.trim().toUpperCase() === "TRIALING" &&
+    input.trialEndsAt != null &&
+    input.trialEndsAt.getTime() > t
+  ) {
+    return input.trialEndsAt;
+  }
+  return input.now;
 }
 
 /** Конец подписки после продления тарифом от baseStart. */
@@ -124,18 +198,18 @@ export function subscriptionEndAfterPlan(
   if (plan == null) {
     throw new Error(`Unknown subscription plan: ${planCode}`);
   }
-  const afterPaid = addCalendarMonths(baseStart, plan.paidMonths);
+  let end = addCalendarMonths(baseStart, plan.paidMonths);
   if (plan.bonusMonths > 0) {
-    return addCalendarMonths(afterPaid, plan.bonusMonths);
+    end = addCalendarMonths(end, plan.bonusMonths);
   }
-  return afterPaid;
+  if (plan.bonusDays != null && plan.bonusDays > 0) {
+    end = addCalendarDays(end, plan.bonusDays);
+  }
+  return end;
 }
 
-/** Приблизительные дни доступа (для legacy planDays / UI). */
-export function approximateAccessDays(
-  baseStart: Date,
-  end: Date,
-): number {
+/** Приблизительные дни доступа от start до end (для Finik meta / UI). */
+export function approximateAccessDays(baseStart: Date, end: Date): number {
   return Math.max(
     1,
     Math.round((end.getTime() - baseStart.getTime()) / MS_DAY),
@@ -146,6 +220,7 @@ export function planSpecForCode(code: ArchaSubscriptionPlanCode): {
   planCode: ArchaSubscriptionPlanCode;
   paidMonths: number;
   bonusMonths: number;
+  bonusDays: number;
   totalMonths: number;
   amountSom: number;
 } {
@@ -157,6 +232,7 @@ export function planSpecForCode(code: ArchaSubscriptionPlanCode): {
     planCode: p.code,
     paidMonths: p.paidMonths,
     bonusMonths: p.bonusMonths,
+    bonusDays: p.bonusDays ?? 0,
     totalMonths: totalPlanMonths(p),
     amountSom: p.amountSom,
   };
@@ -164,9 +240,31 @@ export function planSpecForCode(code: ArchaSubscriptionPlanCode): {
 
 export function planCodeLabel(code: string | null | undefined): string {
   if (code == null || code.trim() === "") return "—";
+  const c = code.trim().toUpperCase();
+  if (c === "FIRST_MONTH") return "Первый месяц";
+  if (c === "THREE_MONTH") return "3 месяца";
   const p = getArchaSubscriptionPlan(code);
   if (p == null) return code;
-  return p.code === "YEARLY" ? "YEARLY (+1 мес.)" : p.code;
+  if (p.code === "YEARLY") return "Годовой (+2 мес.)";
+  if (p.code === "MONTHLY") return "Стандарт";
+  return p.code;
+}
+
+/** Планы для merchant UI с учётом eligibility первого месяца. */
+export function merchantVisibleSubscriptionPlans(input: {
+  firstMonthEligible: boolean;
+}): ArchaSubscriptionPlanDefinition[] {
+  const codes: ArchaMerchantVisiblePlanCode[] = input.firstMonthEligible
+    ? ["FIRST_MONTH", "MONTHLY", "THREE_MONTH", "YEARLY"]
+    : ["MONTHLY", "THREE_MONTH", "YEARLY"];
+  return codes
+    .map((c) => getArchaSubscriptionPlan(c))
+    .filter((p): p is ArchaSubscriptionPlanDefinition => p != null);
+}
+
+/** Первый месяц 1500 — только до первой успешной Finik-оплаты. */
+export function isFirstMonthPlanEligible(hasCompletedFinikPayment: boolean): boolean {
+  return !hasCompletedFinikPayment;
 }
 
 export function formatArchaPriceSom(amount: number): string {
@@ -177,9 +275,4 @@ export function archaPricePerMonthLabel(amountSom: number, months: number): stri
   if (months <= 0) return "";
   const perMonth = Math.round(amountSom / months);
   return `~${perMonth.toLocaleString("ru-RU")} сом/мес.`;
-}
-
-/** @deprecated Используйте addCalendarMonths / subscriptionEndAfterPlan. */
-export function addCalendarDays(from: Date, days: number): Date {
-  return new Date(from.getTime() + days * MS_DAY);
 }
