@@ -220,6 +220,16 @@
   color: color-mix(in srgb, var(--sf-color-text) 94%, transparent);
 }
 
+.retail-card__hint {
+  margin: 0;
+  font-size: clamp(0.625rem, 2.7cqi, 0.72rem);
+  line-height: 1.3;
+  color: color-mix(in srgb, var(--sf-color-text) 60%, transparent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .retail-card__price {
   flex: 0 0 auto;
   display: flex;
@@ -545,4 +555,60 @@
 .sf-root[data-sf-vertical="fastfood"] .product-card--retail-v1 .retail-card__cta--primary {
   border-radius: 12px;
   font-weight: 700;
+}
+
+.sf-root[data-sf-vertical="electronics"] .product-card--retail-v1 {
+  --retail-media-ratio: 1 / 1;
+  --retail-radius: 12px;
+}
+
+.sf-root[data-sf-vertical="electronics"] .product-card--retail-v1 .retail-card__img {
+  object-fit: contain;
+  padding: 6px;
+  background: color-mix(in srgb, var(--sf-color-surface) 88%, transparent);
+}
+
+.sf-root[data-sf-vertical="electronics"] .product-card--retail-v1 .retail-card__hint {
+  color: color-mix(in srgb, var(--sf-color-text) 68%, transparent);
+}
+
+.sf-root[data-sf-vertical="autoparts"] .product-card--retail-v1 {
+  --retail-media-ratio: 1 / 1;
+  --retail-radius: 12px;
+}
+
+.sf-root[data-sf-vertical="autoparts"] .product-card--retail-v1 .retail-card__img {
+  object-fit: contain;
+  padding: 6px;
+  background: color-mix(in srgb, var(--sf-color-surface) 90%, transparent);
+}
+
+.sf-root[data-sf-vertical="autoparts"] .product-card--retail-v1 .retail-card__cta--primary {
+  background: color-mix(in srgb, var(--sf-color-primary) 92%, #111);
+}
+
+.sf-root[data-sf-vertical="cosmetics"] .product-card--retail-v1 {
+  --retail-media-ratio: 4 / 5;
+  --retail-radius: 12px;
+}
+
+.sf-root[data-sf-vertical="cosmetics"] .product-card--retail-v1 .retail-card__title {
+  font-weight: 600;
+}
+
+.sf-root[data-sf-vertical="cosmetics"] .product-card--retail-v1 .retail-card__hint {
+  color: color-mix(in srgb, var(--sf-color-primary) 55%, var(--sf-color-text));
+}
+
+.sf-root[data-sf-vertical="furniture"] .product-card--retail-v1 {
+  --retail-media-ratio: 16 / 10;
+  --retail-radius: 12px;
+}
+
+.sf-root[data-sf-vertical="furniture"] .product-card--retail-v1 .retail-card__title {
+  -webkit-line-clamp: 2;
+}
+
+.sf-root[data-sf-vertical="furniture"] .product-card--retail-v1 .retail-card__price-current {
+  font-weight: 800;
 }

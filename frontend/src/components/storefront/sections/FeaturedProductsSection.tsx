@@ -20,6 +20,7 @@ export function FeaturedProductsSection(props: {
   kit?: "minimal" | "luxury" | "fashion" | "neon" | "default";
   businessId?: number;
   businessType?: string;
+  templateDescriptor?: Record<string, unknown> | null;
   onOpenProduct?: (product: Product) => void;
   /** Сразу под сеткой (например ленты discovery) — внутри той же секции и паддингов. */
   afterGrid?: ReactNode;
@@ -64,6 +65,7 @@ export function FeaturedProductsSection(props: {
             kit={props.kit}
             businessId={props.businessId}
             businessType={props.businessType}
+            templateDescriptor={props.templateDescriptor ?? null}
           />
         )}
         {props.afterGrid != null ? props.afterGrid : null}

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactElement } from "react";
 import type { Product } from "../../../types";
-import ProductCard from "../../product/ProductCard";
 import ProductGrid from "../../product/ProductGrid";
+import { ProductCardHost } from "../product/host/ProductCardHost";
 import { buildUnifiedCommerceFeed } from "../../../storefront/unifiedFeed";
 import { useCommerceSessionRevision } from "../runtime/useCommerceSessionRevision";
 import { fetchStorefrontRecommendations } from "../../../services/storefrontRecommendations";
@@ -13,6 +13,7 @@ type Kit = "minimal" | "luxury" | "fashion" | "neon" | "default";
 export type CommerceDiscoveryFeedProps = {
   kit: Kit;
   businessType: string;
+  templateDescriptor?: Record<string, unknown> | null;
   businessId: number;
   featuredProducts: Product[];
   primaryProducts: Product[];
@@ -179,6 +180,7 @@ export function CommerceDiscoveryFeed(
                     kit={props.kit}
                     businessId={props.businessId}
                     businessType={props.businessType}
+                    templateDescriptor={props.templateDescriptor ?? null}
                   />
                 )}
               </div>
@@ -202,7 +204,7 @@ export function CommerceDiscoveryFeed(
                   className="sf-commerce-rail__item"
                   role="listitem"
                 >
-                  <ProductCard
+                  <ProductCardHost
                     product={p}
                     showToast={() => undefined}
                     onOpenDetail={props.onOpenProduct}
@@ -211,6 +213,7 @@ export function CommerceDiscoveryFeed(
                     kit={props.kit}
                     businessId={props.businessId}
                     businessType={props.businessType}
+                    templateDescriptor={props.templateDescriptor ?? null}
                   />
                 </div>
               ))}

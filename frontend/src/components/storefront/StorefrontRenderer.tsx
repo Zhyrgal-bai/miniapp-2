@@ -32,6 +32,7 @@ import {
 } from "../../storefront/catalogCardPresets";
 import { applyImagePresentationForBusinessType } from "../../storefront/imagePresentationPresets";
 import { storefrontVerticalExperience } from "../../storefront/verticalExperience";
+import { resolveCatalogBehavior } from "../../storefront/templates/templateRegistry";
 import { StorefrontFeed } from "./StorefrontFeed";
 import { CatalogSearchBar } from "./CatalogSearchBar";
 import { StorefrontCompactStrip } from "./StorefrontCompactStrip";
@@ -134,6 +135,7 @@ export type ResolvedStorefrontPayload = {
   featuredPromo?: StorefrontFeaturedPromo | null;
   orderOptionsSchema?: Record<string, unknown>;
   merchantConfig?: Record<string, unknown>;
+  templateDescriptor?: Record<string, unknown>;
 };
 
 type CategoryNode = {
@@ -207,18 +209,36 @@ export function StorefrontRenderer(props: {
 
   const mergedCardConfig = useMemo(
     () => {
+      const behavior = resolveCatalogBehavior({
+        businessType: props.payload.businessType,
+        templateDescriptor: props.payload.templateDescriptor ?? null,
+      });
       const rawCfg =
         props.payload.storefrontCardConfig &&
         typeof props.payload.storefrontCardConfig === "object"
           ? { ...(props.payload.storefrontCardConfig as Record<string, unknown>) }
           : {};
+      if (typeof rawCfg.cardHint !== "string" || rawCfg.cardHint.trim() === "") {
+        rawCfg.cardHint = behavior.cardPlaceholder;
+      }
+      if (typeof rawCfg.imageRatio !== "string" || rawCfg.imageRatio.trim() === "") {
+        rawCfg.imageRatio = behavior.imageRatioHint;
+      }
+      if (typeof rawCfg.imageFit !== "string" || rawCfg.imageFit.trim() === "") {
+        rawCfg.imageFit = behavior.imageFitHint;
+      }
       if (typeof rawCfg.catalogCardPreset !== "string" || rawCfg.catalogCardPreset.trim() === "") {
         rawCfg.catalogCardPreset = defaultCatalogCardPresetForBusinessType(props.payload.businessType);
       }
       const merged = mergeStorefrontCardConfigWithResponsive(rawCfg, cardViewportTier);
       return applyImagePresentationForBusinessType(merged, props.payload.businessType, rawCfg);
     },
-    [props.payload.storefrontCardConfig, cardViewportTier, props.payload.businessType],
+    [
+      props.payload.storefrontCardConfig,
+      props.payload.businessType,
+      props.payload.templateDescriptor,
+      cardViewportTier,
+    ],
   );
 
   const verticalExperience = useMemo(
@@ -587,6 +607,7 @@ export function StorefrontRenderer(props: {
                         kit={kit}
                         businessId={props.payload.businessId}
                         businessType={props.payload.businessType}
+                        templateDescriptor={props.payload.templateDescriptor ?? null}
                         onOpenProduct={openProduct}
                       />
                     );
@@ -596,6 +617,7 @@ export function StorefrontRenderer(props: {
                       variant="embedded"
                       kit={kit}
                       businessType={props.payload.businessType}
+                      templateDescriptor={props.payload.templateDescriptor ?? null}
                       businessId={props.payload.businessId}
                       featuredProducts={featuredAll}
                       primaryProducts={featuredFiltered}
@@ -656,6 +678,7 @@ export function StorefrontRenderer(props: {
                 variant="standalone"
                 kit={kit}
                 businessType={props.payload.businessType}
+                templateDescriptor={props.payload.templateDescriptor ?? null}
                 businessId={props.payload.businessId}
                 featuredProducts={featuredAll}
                 primaryProducts={primaryDisplayProducts}
@@ -697,6 +720,7 @@ export function StorefrontRenderer(props: {
           product={activeProduct}
           businessId={props.payload.businessId}
           businessType={props.payload.businessType ?? undefined}
+          templateDescriptor={props.payload.templateDescriptor ?? null}
           catalogProducts={catalog ?? []}
           onClose={closeProduct}
           onSelectProduct={openProduct}

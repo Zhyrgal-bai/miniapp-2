@@ -139,6 +139,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   const { payload } = useStorefrontPayload();
   const cfg = useMemo(() => normalizeCardConfig(cardConfig), [cardConfig]);
   const customAddLabel = readTextConfigString(textConfig ?? undefined, "addToCartLabel").trim();
+  const cardHint = readTextConfigString(textConfig ?? undefined, "cardHint").trim();
   const addLabel = customAddLabel !== "" ? customAddLabel : "Добавить";
   const isStorefrontCatalog = Boolean(onOpenDetail);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
@@ -755,6 +756,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
             </div>
             <div className="retail-card__meta">
               <h3 className="retail-card__title">{product.name}</h3>
+              {cardHint !== "" ? <p className="retail-card__hint">{cardHint}</p> : null}
               <div className="retail-card__price">
                 {discountPct > 0 ? (
                   <>
@@ -903,6 +905,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
         >
           {product.name}
         </h3>
+        {cardHint !== "" ? <p className="product-subtitle">{cardHint}</p> : null}
 
         {outOfStock ? (
           <div className="out-of-stock">НЕТ В НАЛИЧИИ</div>

@@ -25,6 +25,19 @@ export type ProductExperienceScreenProps = {
   onSelectProduct: (p: Product) => void;
   /** Quick View shell — compact layout inside centered modal. */
   quickView?: boolean;
+  heroFacts?: string[];
+  noticeText?: string | null;
+  addLabelOverride?: string | null;
+  layoutId?:
+    | "generic"
+    | "clothing"
+    | "flowers"
+    | "coffee"
+    | "fastfood"
+    | "electronics"
+    | "autoparts"
+    | "cosmetics"
+    | "furniture";
 };
 
 function formatSom(v: number): string {
@@ -39,6 +52,10 @@ export function ProductExperienceScreen({
   onClose,
   onSelectProduct,
   quickView = false,
+  heroFacts = [],
+  noticeText = null,
+  addLabelOverride = null,
+  layoutId = "generic",
 }: ProductExperienceScreenProps): React.ReactElement {
   const { payload } = useStorefrontPayload();
   const commerceEnabled = isStorefrontCommerceEnabled();
@@ -53,10 +70,12 @@ export function ProductExperienceScreen({
   const sizeBeforeColor = verticalExperience === "clothing";
 
   const addLabel =
-    typeof payload?.storefrontTextConfig?.addToCartLabel === "string" &&
-    String(payload.storefrontTextConfig.addToCartLabel).trim() !== ""
-      ? String(payload.storefrontTextConfig.addToCartLabel)
-      : verticalPdpAddLabel(resolvedBusinessType);
+    typeof addLabelOverride === "string" && addLabelOverride.trim() !== ""
+      ? addLabelOverride.trim()
+      : typeof payload?.storefrontTextConfig?.addToCartLabel === "string" &&
+          String(payload.storefrontTextConfig.addToCartLabel).trim() !== ""
+        ? String(payload.storefrontTextConfig.addToCartLabel)
+        : verticalPdpAddLabel(resolvedBusinessType);
 
   const merchantConfig =
     payload?.merchantConfig != null &&
@@ -183,6 +202,7 @@ export function ProductExperienceScreen({
         "px-screen",
         isWeb ? "px-screen--web" : "px-screen--telegram",
         quickView ? "px-screen--quick-view" : "",
+        `px-screen--layout-${layoutId}`,
       ]
         .filter(Boolean)
         .join(" ")}
@@ -268,6 +288,15 @@ export function ProductExperienceScreen({
                 <span className="px-head__price-old">{formatSom(px.display.price)} сом</span>
               ) : null}
             </div>
+            {heroFacts.length > 0 ? (
+              <div className="px-head__facts" role="list" aria-label="Характеристики">
+                {heroFacts.map((fact, idx) => (
+                  <span key={`${fact}-${idx}`} role="listitem" className="px-head__fact">
+                    {fact}
+                  </span>
+                ))}
+              </div>
+            ) : null}
             <p
               className={`px-head__status${px.outOfStock ? " px-head__status--out" : ""}`}
               role="status"
@@ -276,6 +305,9 @@ export function ProductExperienceScreen({
             </p>
             {px.display.description?.trim() ? (
               <p className="px-head__desc">{px.display.description.trim()}</p>
+            ) : null}
+            {typeof noticeText === "string" && noticeText.trim() !== "" ? (
+              <p className="px-head__notice">{noticeText}</p>
             ) : null}
           </header>
 
