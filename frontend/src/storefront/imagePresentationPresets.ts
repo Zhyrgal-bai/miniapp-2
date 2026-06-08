@@ -23,6 +23,15 @@ export function imagePresentationForBusinessType(
   if (t === "coffee" || t === "fastfood") {
     return { imageRatio: "square", imageFit: "cover" };
   }
+  if (t === "electronics" || t === "autoparts") {
+    return { imageRatio: "square", imageFit: "contain" };
+  }
+  if (t === "cosmetics") {
+    return { imageRatio: "portrait", imageFit: "cover" };
+  }
+  if (t === "furniture") {
+    return { imageRatio: "landscape", imageFit: "cover" };
+  }
   if (t === "universal") {
     return { imageRatio: "square", imageFit: "contain" };
   }

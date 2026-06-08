@@ -762,7 +762,15 @@ export async function submitPlatformRegisterRequest(payload: {
   botToken: string;
   phone: string;
   telegramId: number;
-  businessType: "universal" | "clothing" | "coffee" | "fastfood" | "flowers";
+  businessType:
+    | "clothing"
+    | "coffee"
+    | "fastfood"
+    | "flowers"
+    | "electronics"
+    | "autoparts"
+    | "cosmetics"
+    | "furniture";
   ownerUsername?: string;
   finikApiKey?: string;
   finikAccountId?: string;
@@ -882,6 +890,49 @@ export type LaunchWizardPayload = {
   currentStepIndex: number;
   steps: LaunchWizardStep[];
 };
+
+export type TemplateRolloutSafetyPayload = {
+  stage: "compatibility" | "migration" | "decommission";
+  totalBusinesses: number;
+  universalBusinesses: number;
+  universalShare: number;
+  canDecommissionUniversal: boolean;
+};
+
+export async function fetchTemplateRolloutSafety(): Promise<TemplateRolloutSafetyPayload> {
+  const j = await adminFetchJson<TemplateRolloutSafetyPayload>(
+    apiAbsoluteUrl("/api/platform/admin/template-rollout-safety"),
+    { method: "GET", json: false },
+  );
+  return {
+    stage:
+      j.stage === "migration" || j.stage === "decommission"
+        ? j.stage
+        : "compatibility",
+    totalBusinesses: Number(j.totalBusinesses ?? 0),
+    universalBusinesses: Number(j.universalBusinesses ?? 0),
+    universalShare: Number(j.universalShare ?? 0),
+    canDecommissionUniversal: Boolean(j.canDecommissionUniversal),
+  };
+}
+
+export type TemplateRiskControlsPayload = {
+  generatedAt: string;
+  checkpoints: Array<{ id: string; ok: boolean; detail: string }>;
+  rollbackPlan: string[];
+};
+
+export async function fetchTemplateRiskControls(): Promise<TemplateRiskControlsPayload> {
+  const j = await adminFetchJson<TemplateRiskControlsPayload>(
+    apiAbsoluteUrl("/api/platform/admin/template-risk-controls"),
+    { method: "GET", json: false },
+  );
+  return {
+    generatedAt: typeof j.generatedAt === "string" ? j.generatedAt : "",
+    checkpoints: Array.isArray(j.checkpoints) ? j.checkpoints : [],
+    rollbackPlan: Array.isArray(j.rollbackPlan) ? j.rollbackPlan : [],
+  };
+}
 
 export type StoreReadinessPayload = {
   score: number;

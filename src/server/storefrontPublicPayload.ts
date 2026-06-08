@@ -176,6 +176,14 @@ export async function sendStorefrontPublicPayload(
         bt === "universal" && merchantConfig.enableOrderOptions !== true
           ? {}
           : filterStorefrontOrderOptionsSchema(bt, orderSchema);
+      (payload as any).templateDescriptor = {
+        businessType: tpl.businessType,
+        cardRendererId: tpl.cardRendererId,
+        modalRendererId: tpl.modalRendererId,
+        variantPolicy: tpl.variantPolicy,
+        catalogBehavior: tpl.catalogBehavior,
+        modalBehavior: tpl.modalBehavior,
+      };
     }
 
     const enabledTypes = new Set(payload.sections.map((s) => s.type));

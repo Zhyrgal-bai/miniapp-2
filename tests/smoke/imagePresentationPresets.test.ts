@@ -30,10 +30,32 @@ describe("imagePresentationForBusinessType", () => {
     });
   });
 
-  it("universal (electronics/autoparts) → contain", () => {
+  it("universal → contain", () => {
     expect(imagePresentationForBusinessType("universal")).toEqual({
       imageRatio: "square",
       imageFit: "contain",
+    });
+  });
+
+  it("electronics/autoparts → contain", () => {
+    expect(imagePresentationForBusinessType("electronics")).toEqual({
+      imageRatio: "square",
+      imageFit: "contain",
+    });
+    expect(imagePresentationForBusinessType("autoparts")).toEqual({
+      imageRatio: "square",
+      imageFit: "contain",
+    });
+  });
+
+  it("cosmetics/furniture have dedicated image defaults", () => {
+    expect(imagePresentationForBusinessType("cosmetics")).toEqual({
+      imageRatio: "portrait",
+      imageFit: "cover",
+    });
+    expect(imagePresentationForBusinessType("furniture")).toEqual({
+      imageRatio: "landscape",
+      imageFit: "cover",
     });
   });
 });

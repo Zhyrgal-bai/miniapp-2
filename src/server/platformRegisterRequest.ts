@@ -8,8 +8,8 @@ import {
   precheckBotTokenBeforeRegistrationPersist,
 } from "./registrationTokenGate.js";
 import {
-  isBusinessTypeId,
-  type BusinessTypeId,
+  normalizeRegistrationBusinessType,
+  type TargetBusinessTypeId,
 } from "../shared/businessTypes.js";
 import {
   parseBusinessAddressInput,
@@ -51,9 +51,8 @@ function normalizeTelegramId(raw: unknown): string | null {
   return null;
 }
 
-function normalizeBusinessType(raw: unknown): BusinessTypeId {
-  const v = typeof raw === "string" ? raw.trim().toLowerCase() : "";
-  return isBusinessTypeId(v) ? v : "clothing";
+function normalizeBusinessType(raw: unknown): TargetBusinessTypeId {
+  return normalizeRegistrationBusinessType(raw);
 }
 
 export async function validateAndPersistPlatformRegistration(

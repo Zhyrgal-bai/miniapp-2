@@ -49,6 +49,11 @@ export function useResolvedBusinessType() {
     ? verticalProfileFor(businessType, resolvedMerchantConfig)
     : null;
   const variantEditor = profile?.variantEditor ?? null;
+  const showDynamicVariantEditor =
+    resolved &&
+    (variantEditor === "tier_stock" ||
+      variantEditor === "bouquet_tiers" ||
+      variantEditor === "clothing_matrix");
 
   return {
     businessType,
@@ -61,5 +66,6 @@ export function useResolvedBusinessType() {
     showTierStock:
       resolved &&
       (variantEditor === "tier_stock" || variantEditor === "bouquet_tiers"),
+    showDynamicVariantEditor,
   };
 }

@@ -1,4 +1,4 @@
-import type { BusinessType } from "@prisma/client";
+import type { BusinessTypeId } from "../shared/businessTypes.js";
 import type { ThemePatchPayload } from "../shared/storeTheme.js";
 
 export type SchemaFieldType =
@@ -81,8 +81,54 @@ export type TemplateDemoProduct = {
   attributes?: Record<string, unknown>;
 };
 
-export type BusinessTemplateConfig = {
-  businessType: BusinessType;
+export type TemplateCardRendererId =
+  | "clothing"
+  | "flowers"
+  | "coffee"
+  | "fastfood"
+  | "electronics"
+  | "autoparts"
+  | "cosmetics"
+  | "furniture"
+  | "generic";
+
+export type TemplateModalRendererId = "product-experience-v2" | "generic-v2";
+
+export type TemplateVariantEditor =
+  | "clothing_matrix"
+  | "tier_stock"
+  | "bouquet_tiers"
+  | "none";
+
+export type TemplateVariantPolicy = {
+  mode: "sku_matrix" | "single_axis" | "metadata_only";
+  /** Storage adapter currently maps to OrderItem.size/ProductStock.size. */
+  primaryAxisKey: "size";
+  primaryAxisLabel: string;
+  /** Storage adapter currently maps to OrderItem.color; null disables selector. */
+  secondaryAxisKey: "color" | null;
+  secondaryAxisLabel: string | null;
+  showFashionVariantMatrix: boolean;
+  showOrderOptionsOnStorefront: boolean;
+  variantEditor: TemplateVariantEditor;
+  defaultPrimaryValues: string[];
+};
+
+export type TemplateCatalogBehavior = {
+  cardPlaceholder: string;
+  supportsTableReservations: boolean;
+  imageRatioHint: "portrait" | "square" | "landscape";
+  imageFitHint: "cover" | "contain";
+};
+
+export type TemplateModalBehavior = {
+  mode: "centered_v2";
+  maxWidth: "sm" | "md" | "lg";
+  stickyActionBar: boolean;
+};
+
+export type BusinessTemplateDescriptor = {
+  businessType: BusinessTypeId;
   templateVersion: number;
   theme: TemplateThemeConfig;
   defaultCategories: CategoryTemplateNode[];
@@ -91,5 +137,13 @@ export type BusinessTemplateConfig = {
   merchantSettingsSchema: SchemaObject;
   orderOptionsSchema: SchemaObject;
   demoProducts: TemplateDemoProduct[];
+  variantPolicy: TemplateVariantPolicy;
+  cardRendererId: TemplateCardRendererId;
+  modalRendererId: TemplateModalRendererId;
+  catalogBehavior: TemplateCatalogBehavior;
+  modalBehavior: TemplateModalBehavior;
 };
+
+/** Backward-compatible alias during migration to template registry contracts. */
+export type BusinessTemplateConfig = BusinessTemplateDescriptor;
 

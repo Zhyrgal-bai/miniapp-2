@@ -86,6 +86,7 @@ export default function ProductEditModal({
     merchantConfig,
     showClothingVariants,
     showTierStock,
+    showDynamicVariantEditor,
     resolved: businessTypeReady,
   } = useResolvedBusinessType();
   const [attributes, setAttributes] = useState<Record<string, unknown>>({});
@@ -517,7 +518,7 @@ export default function ProductEditModal({
                 onChange={setAttributes}
               />
 
-              {showTierStock && businessTypeReady ? (
+              {showDynamicVariantEditor && !showClothingVariants && businessTypeReady ? (
                 <DynamicVariantEditor
                   businessType={merchantBusinessType}
                   merchantConfig={merchantConfig}

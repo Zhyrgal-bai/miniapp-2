@@ -17,8 +17,7 @@ import "./storefrontFeed.css";
 import "../../storefront/commerceCards.css";
 import "../../storefront/motionTokens.css";
 import "../../storefront/mobileChrome.css";
-import { ProductExperienceScreen } from "./product/ProductExperienceScreen";
-import { ProductQuickViewShell } from "./product/ProductQuickViewShell";
+import { ProductModalHost } from "./product/host/ProductModalHost";
 import "./storefrontKits.css";
 import {
   buildStorefrontLayoutCssVars,
@@ -31,7 +30,6 @@ import {
   mergeStorefrontCardConfigWithResponsive,
   type StorefrontCardViewportTier,
 } from "../../storefront/catalogCardPresets";
-import { getPrimaryImage } from "../../utils/product";
 import { applyImagePresentationForBusinessType } from "../../storefront/imagePresentationPresets";
 import { storefrontVerticalExperience } from "../../storefront/verticalExperience";
 import { StorefrontFeed } from "./StorefrontFeed";
@@ -459,8 +457,6 @@ export function StorefrontRenderer(props: {
       : "Поиск товаров…";
   const catalogLoading = catalog === null;
 
-  const quickViewAmbientSrc = activeProduct ? getPrimaryImage(activeProduct) : null;
-
   return (
     <ThemeVarsProvider theme={theme}>
       <div
@@ -696,23 +692,15 @@ export function StorefrontRenderer(props: {
           ) : null}
         </StorefrontFeed>
 
-        {activeProduct ? (
-          <ProductQuickViewShell
-            open
-            onClose={closeProduct}
-            ambientImageSrc={quickViewAmbientSrc}
-          >
-            <ProductExperienceScreen
-              product={activeProduct}
-              businessId={props.payload.businessId}
-              businessType={props.payload.businessType ?? undefined}
-              catalogProducts={catalog ?? []}
-              onClose={closeProduct}
-              onSelectProduct={openProduct}
-              quickView
-            />
-          </ProductQuickViewShell>
-        ) : null}
+        <ProductModalHost
+          open={activeProduct != null}
+          product={activeProduct}
+          businessId={props.payload.businessId}
+          businessType={props.payload.businessType ?? undefined}
+          catalogProducts={catalog ?? []}
+          onClose={closeProduct}
+          onSelectProduct={openProduct}
+        />
       </div>
     </ThemeVarsProvider>
   );

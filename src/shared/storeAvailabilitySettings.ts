@@ -180,7 +180,11 @@ export type StoreAvailabilityPresetId =
   | "clothing"
   | "fastfood"
   | "flowers"
-  | "flowers_24_7";
+  | "flowers_24_7"
+  | "electronics"
+  | "autoparts"
+  | "cosmetics"
+  | "furniture";
 
 export function storeAvailabilityPreset(
   id: StoreAvailabilityPresetId,
@@ -205,6 +209,14 @@ export function storeAvailabilityPreset(
       return { ...base, schedule: allDays("08:00", "21:00") };
     case "flowers_24_7":
       return { ...base, schedule: allDays("00:00", "23:59") };
+    case "electronics":
+      return { ...base, schedule: allDays("10:00", "21:00") };
+    case "autoparts":
+      return { ...base, schedule: allDays("09:00", "19:00", true) };
+    case "cosmetics":
+      return { ...base, schedule: allDays("10:00", "21:00") };
+    case "furniture":
+      return { ...base, schedule: allDays("10:00", "20:00") };
     default:
       return base;
   }
@@ -218,6 +230,10 @@ export function presetForBusinessType(
   if (t === "clothing") return "clothing";
   if (t === "fastfood") return "fastfood";
   if (t === "flowers") return "flowers";
+  if (t === "electronics") return "electronics";
+  if (t === "autoparts") return "autoparts";
+  if (t === "cosmetics") return "cosmetics";
+  if (t === "furniture") return "furniture";
   return "coffee";
 }
 

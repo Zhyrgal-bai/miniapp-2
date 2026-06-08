@@ -19,6 +19,10 @@ const FIELD_ORDER: Record<string, string[]> = {
   flowers: ["deliveryDate", "packaging", "occasion", "postcardText"],
   coffee: ["hotOrCold", "sugar", "syrups"],
   fastfood: ["combo", "spicy", "addons"],
+  electronics: ["serialNumber"],
+  autoparts: ["vin", "compatibility"],
+  cosmetics: ["skinType"],
+  furniture: ["assemblyRequired"],
 };
 
 const VALUE_LABELS: Record<string, Record<string, string>> = {
@@ -28,6 +32,14 @@ const VALUE_LABELS: Record<string, Record<string, string>> = {
   spicy: { no: "Не острое", mild: "Средне", hot: "Остро" },
   packaging: { paper: "Бумага", box: "Коробка" },
   addons: { cheese: "Сыр", bacon: "Бекон", sauce: "Соус" },
+  skinType: {
+    all: "Для всех",
+    dry: "Сухая",
+    normal: "Нормальная",
+    oily: "Жирная",
+    combo: "Комбинированная",
+    sensitive: "Чувствительная",
+  },
 };
 
 function labelForValue(fieldKey: string, raw: string): string {
@@ -54,6 +66,19 @@ function sectionTitle(
     if (key === "combo") return "Комбо";
     if (key === "spicy") return "Острота";
     if (key === "addons") return "Добавки";
+  }
+  if (vertical === "electronics") {
+    if (key === "serialNumber") return "Серийный номер";
+  }
+  if (vertical === "autoparts") {
+    if (key === "vin") return "VIN";
+    if (key === "compatibility") return "Совместимость";
+  }
+  if (vertical === "cosmetics") {
+    if (key === "skinType") return "Тип кожи";
+  }
+  if (vertical === "furniture") {
+    if (key === "assemblyRequired") return "Нужна сборка";
   }
   return fieldLabel;
 }

@@ -1,8 +1,7 @@
-import { BusinessType } from "@prisma/client";
 import type { BusinessTemplateConfig } from "./types.js";
 
 export const fastfoodTemplate: BusinessTemplateConfig = {
-  businessType: BusinessType.fastfood,
+  businessType: "fastfood",
   templateVersion: 1,
   theme: {
     templateId: "red",
@@ -66,5 +65,29 @@ export const fastfoodTemplate: BusinessTemplateConfig = {
       attributes: { size: ["S", "M", "L"] },
     },
   ],
+  variantPolicy: {
+    mode: "single_axis",
+    primaryAxisKey: "size",
+    primaryAxisLabel: "Порция",
+    secondaryAxisKey: null,
+    secondaryAxisLabel: null,
+    showFashionVariantMatrix: false,
+    showOrderOptionsOnStorefront: true,
+    variantEditor: "tier_stock",
+    defaultPrimaryValues: [],
+  },
+  cardRendererId: "fastfood",
+  modalRendererId: "product-experience-v2",
+  catalogBehavior: {
+    cardPlaceholder: "Средняя порция",
+    supportsTableReservations: true,
+    imageRatioHint: "square",
+    imageFitHint: "cover",
+  },
+  modalBehavior: {
+    mode: "centered_v2",
+    maxWidth: "md",
+    stickyActionBar: true,
+  },
 };
 

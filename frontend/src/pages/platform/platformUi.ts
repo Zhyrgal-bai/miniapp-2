@@ -21,6 +21,10 @@ export function businessTypeLabel(type: string | undefined): string {
     coffee: "Кофейня",
     fastfood: "Фастфуд",
     flowers: "Цветы",
+    electronics: "Электроника",
+    autoparts: "Автозапчасти",
+    cosmetics: "Косметика",
+    furniture: "Мебель",
   };
   return type != null && map[type] != null ? map[type] : type ?? "Магазин";
 }

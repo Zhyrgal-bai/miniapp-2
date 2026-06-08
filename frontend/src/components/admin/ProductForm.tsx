@@ -50,6 +50,7 @@ const ProductForm = () => {
     merchantConfig,
     showClothingVariants,
     showTierStock,
+    showDynamicVariantEditor,
     resolved: businessTypeReady,
   } = useResolvedBusinessType();
   const [colorDrafts, setColorDrafts] = useState<ClothingColorDraft[]>([
@@ -373,7 +374,7 @@ const ProductForm = () => {
         </>
       ) : null}
 
-      {showTierStock && businessTypeReady ? (
+      {showDynamicVariantEditor && !showClothingVariants && businessTypeReady ? (
         <DynamicVariantEditor
           businessType={merchantBusinessType}
           merchantConfig={merchantConfig}

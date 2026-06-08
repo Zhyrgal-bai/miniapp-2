@@ -58,6 +58,7 @@ import { applyOwnerBotTokenSelfService } from "./platformMerchantChangeService.j
 import { validateAndPersistPlatformRegistration } from "./platformRegisterRequest.js";
 import { getMerchantRegistrationStatus } from "./registrationStatusService.js";
 import {
+  buildTemplateRegistryDescriptor,
   validateOrderOptionsForCheckout,
   validateProductAttributes,
 } from "./templateValidation.js";
@@ -190,6 +191,10 @@ import {
   normalizePublicStoreSlug,
   sendStorefrontPublicPayload,
 } from "./storefrontPublicPayload.js";
+import { buildUniversalMigrationReport } from "./migrations/universalMigrationReport.js";
+import { runUniversalHybridMigration } from "./migrations/universalMigrationRunner.js";
+import { computeRolloutSafetyStatus } from "./migrations/rolloutSafety.js";
+import { buildTemplateMigrationRiskSnapshot } from "./migrations/riskControls.js";
 import {
   adminBlockBusiness,
   adminDeactivateBusiness,
@@ -1315,6 +1320,7 @@ app.get("/api/merchant/schemas", async (req: Request, res: Response) => {
     res.json({
       businessType: bt,
       templateVersion: tpl.templateVersion ?? 1,
+      templateDescriptor: buildTemplateRegistryDescriptor(bt as any),
       productSchema: effectiveProductSchemaForBusiness(
         bt,
         fullProductSchema as any,
@@ -2394,6 +2400,64 @@ app.get("/api/platform/admin/template-info", async (req: Request, res: Response)
     });
   } catch (e) {
     console.error("GET /api/platform/admin/template-info:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.get(
+  "/api/platform/admin/universal-migration-report",
+  async (req: Request, res: Response) => {
+    try {
+      if (!(await requireOperatorUnlock(req, res))) return;
+      const report = await buildUniversalMigrationReport();
+      res.json({ ok: true, ...report });
+    } catch (e) {
+      console.error(
+        "GET /api/platform/admin/universal-migration-report:",
+        e,
+      );
+      res.status(500).json({ error: "Ошибка сервера" });
+    }
+  },
+);
+
+app.post(
+  "/api/platform/admin/universal-migration/run",
+  async (req: Request, res: Response) => {
+    try {
+      if (!(await requireOperatorRecentReauth(req, res))) return;
+      const dryRun = (req.body as { dryRun?: unknown }).dryRun !== false;
+      const limitRaw = Number((req.body as { limit?: unknown }).limit);
+      const limit = Number.isFinite(limitRaw) ? Math.trunc(limitRaw) : undefined;
+      const result = await runUniversalHybridMigration(
+        limit == null ? { dryRun } : { dryRun, limit },
+      );
+      res.json({ ok: true, ...result });
+    } catch (e) {
+      console.error("POST /api/platform/admin/universal-migration/run:", e);
+      res.status(500).json({ error: "Ошибка сервера" });
+    }
+  },
+);
+
+app.get("/api/platform/admin/template-rollout-safety", async (req: Request, res: Response) => {
+  try {
+    if (!(await requireOperatorUnlock(req, res))) return;
+    const status = await computeRolloutSafetyStatus();
+    res.json({ ok: true, ...status });
+  } catch (e) {
+    console.error("GET /api/platform/admin/template-rollout-safety:", e);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.get("/api/platform/admin/template-risk-controls", async (req: Request, res: Response) => {
+  try {
+    if (!(await requireOperatorUnlock(req, res))) return;
+    const snapshot = await buildTemplateMigrationRiskSnapshot();
+    res.json({ ok: true, ...snapshot });
+  } catch (e) {
+    console.error("GET /api/platform/admin/template-risk-controls:", e);
     res.status(500).json({ error: "Ошибка сервера" });
   }
 });

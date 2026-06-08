@@ -123,8 +123,11 @@ export function defaultCatalogCardPresetForBusinessType(
 ): CatalogCardPresetId {
   const businessType = String(businessTypeRaw ?? "").trim().toLowerCase();
   if (businessType.includes("fashion") || businessType.includes("clothing")) return "premium_showcase";
+  if (businessType.includes("cosmetics")) return "premium_showcase";
   if (businessType.includes("coffee") || businessType.includes("fastfood")) return "snackable_mobile";
   if (businessType.includes("flower")) return "modern_cards";
+  if (businessType.includes("electronics") || businessType.includes("autoparts")) return "modern_cards";
+  if (businessType.includes("furniture")) return "luxury_grid";
   return "marketplace";
 }
 

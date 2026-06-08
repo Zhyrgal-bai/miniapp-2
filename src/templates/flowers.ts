@@ -1,8 +1,7 @@
-import { BusinessType } from "@prisma/client";
 import type { BusinessTemplateConfig } from "./types.js";
 
 export const flowersTemplate: BusinessTemplateConfig = {
-  businessType: BusinessType.flowers,
+  businessType: "flowers",
   templateVersion: 1,
   theme: {
     templateId: "luxury",
@@ -65,5 +64,29 @@ export const flowersTemplate: BusinessTemplateConfig = {
       attributes: { packaging: ["paper", "box"], postcard: true },
     },
   ],
+  variantPolicy: {
+    mode: "single_axis",
+    primaryAxisKey: "size",
+    primaryAxisLabel: "Букет",
+    secondaryAxisKey: null,
+    secondaryAxisLabel: null,
+    showFashionVariantMatrix: false,
+    showOrderOptionsOnStorefront: true,
+    variantEditor: "bouquet_tiers",
+    defaultPrimaryValues: [],
+  },
+  cardRendererId: "flowers",
+  modalRendererId: "product-experience-v2",
+  catalogBehavior: {
+    cardPlaceholder: "21 роза",
+    supportsTableReservations: false,
+    imageRatioHint: "portrait",
+    imageFitHint: "cover",
+  },
+  modalBehavior: {
+    mode: "centered_v2",
+    maxWidth: "md",
+    stickyActionBar: true,
+  },
 };
 

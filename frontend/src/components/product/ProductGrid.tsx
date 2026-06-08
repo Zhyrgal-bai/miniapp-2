@@ -1,5 +1,5 @@
 import type { Product } from "../../types";
-import ProductCard from "./ProductCard";
+import { ProductCardHost } from "../storefront/product/host/ProductCardHost";
 import { EmptyState } from "../ui/EmptyState";
 import "../ui/emptyState.css";
 import "../ui/ProductGrid.css";
@@ -79,7 +79,7 @@ export default function ProductGrid({
         .join(" ")}
     >
       {products.map((p) => (
-        <ProductCard
+        <ProductCardHost
           key={p.id}
           product={p}
           showToast={showToast}

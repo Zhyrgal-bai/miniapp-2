@@ -1,8 +1,7 @@
-import { BusinessType } from "@prisma/client";
 import type { BusinessTemplateConfig } from "./types.js";
 
 export const clothingTemplate: BusinessTemplateConfig = {
-  businessType: BusinessType.clothing,
+  businessType: "clothing",
   templateVersion: 1,
   theme: {
     templateId: "luxury",
@@ -65,5 +64,29 @@ export const clothingTemplate: BusinessTemplateConfig = {
       attributes: { size: ["40", "41", "42"], brand: "Demo" },
     },
   ],
+  variantPolicy: {
+    mode: "sku_matrix",
+    primaryAxisKey: "size",
+    primaryAxisLabel: "Размер",
+    secondaryAxisKey: "color",
+    secondaryAxisLabel: "Цвет",
+    showFashionVariantMatrix: true,
+    showOrderOptionsOnStorefront: false,
+    variantEditor: "clothing_matrix",
+    defaultPrimaryValues: [],
+  },
+  cardRendererId: "clothing",
+  modalRendererId: "product-experience-v2",
+  catalogBehavior: {
+    cardPlaceholder: "Выберите размер и цвет",
+    supportsTableReservations: false,
+    imageRatioHint: "portrait",
+    imageFitHint: "cover",
+  },
+  modalBehavior: {
+    mode: "centered_v2",
+    maxWidth: "md",
+    stickyActionBar: true,
+  },
 };
 

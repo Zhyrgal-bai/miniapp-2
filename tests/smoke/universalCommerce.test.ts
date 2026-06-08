@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { BusinessType } from "@prisma/client";
 import { isKnownBusinessType, verticalProfileFor } from "../../src/shared/businessCommerce.js";
 import {
   filterUniversalProductSchema,
@@ -17,7 +16,7 @@ describe("universal commerce template", () => {
 
   it("loads universal template with product and merchant settings schemas", () => {
     const tpl = templateForBusinessType("universal");
-    expect(tpl.businessType).toBe(BusinessType.universal);
+    expect(tpl.businessType).toBe("universal");
     expect(tpl.productSchema.sku).toBeDefined();
     expect(tpl.merchantSettingsSchema.enableSizes).toBeDefined();
     expect(tpl.demoProducts.length).toBeGreaterThan(0);
@@ -55,7 +54,7 @@ describe("universal commerce template", () => {
 
   it("validates universal product attributes against enabled fields only", () => {
     const result = validateProductAttributesForAdmin(
-      BusinessType.universal,
+      "universal" as any,
       { sku: "ABC-1", brand: "Acme", staleKey: "x" },
       undefined,
       { enableSku: true },

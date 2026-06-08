@@ -136,6 +136,17 @@ const StoreAvailabilityWireSchema = z.object({
     .optional(),
 });
 
+const TemplateDescriptorWireSchema = z
+  .object({
+    businessType: z.string(),
+    cardRendererId: z.string(),
+    modalRendererId: z.string(),
+    variantPolicy: z.record(z.string(), z.unknown()).optional(),
+    catalogBehavior: z.record(z.string(), z.unknown()).optional(),
+    modalBehavior: z.record(z.string(), z.unknown()).optional(),
+  })
+  .passthrough();
+
 const FeaturedProductWireSchema = z
   .object({
     id: z.number(),
@@ -173,6 +184,7 @@ export const StorefrontPublicApiResponseSchema = z
     featuredProducts: z.array(FeaturedProductWireSchema).optional(),
     featuredPromo: FeaturedPromoWireSchema.optional(),
     orderOptionsSchema: z.record(z.string(), z.unknown()).optional(),
+    templateDescriptor: TemplateDescriptorWireSchema.optional(),
     storeAddress: StoreAddressWireSchema.optional(),
     /** Deep link: t.me/bot?startapp=slug — для CTA «Открыть в Telegram» в веб-витрине. */
     telegramOpenUrl: z.string().url().optional(),

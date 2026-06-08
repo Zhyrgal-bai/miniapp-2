@@ -1,8 +1,7 @@
-import { BusinessType } from "@prisma/client";
 import type { BusinessTemplateConfig } from "./types.js";
 
 export const universalTemplate: BusinessTemplateConfig = {
-  businessType: BusinessType.universal,
+  businessType: "universal",
   templateVersion: 1,
   theme: {
     templateId: "light",
@@ -112,4 +111,28 @@ export const universalTemplate: BusinessTemplateConfig = {
       attributes: { sku: "DEMO-001" },
     },
   ],
+  variantPolicy: {
+    mode: "metadata_only",
+    primaryAxisKey: "size",
+    primaryAxisLabel: "Вариант",
+    secondaryAxisKey: null,
+    secondaryAxisLabel: null,
+    showFashionVariantMatrix: false,
+    showOrderOptionsOnStorefront: false,
+    variantEditor: "none",
+    defaultPrimaryValues: [],
+  },
+  cardRendererId: "generic",
+  modalRendererId: "generic-v2",
+  catalogBehavior: {
+    cardPlaceholder: "Выберите параметры",
+    supportsTableReservations: false,
+    imageRatioHint: "square",
+    imageFitHint: "contain",
+  },
+  modalBehavior: {
+    mode: "centered_v2",
+    maxWidth: "md",
+    stickyActionBar: true,
+  },
 };

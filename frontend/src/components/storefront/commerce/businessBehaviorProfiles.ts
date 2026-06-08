@@ -90,6 +90,66 @@ export const BUSINESS_BEHAVIOR_PROFILES: Record<string, BusinessBehaviorProfile>
     cta: { ...BASE.cta, lowStockThreshold: 4 },
     motion: { intensity: "subtle" },
   },
+  electronics: {
+    ...BASE,
+    id: "electronics",
+    cta: {
+      ...BASE.cta,
+      labels: {
+        ...BASE.cta.labels,
+        add: "В корзину",
+        buyNow: "Купить сейчас",
+      },
+      lowStockThreshold: 2,
+      preferBuyNow: true,
+    },
+    motion: { intensity: "smooth" },
+  },
+  autoparts: {
+    ...BASE,
+    id: "autoparts",
+    cta: {
+      ...BASE.cta,
+      labels: {
+        ...BASE.cta.labels,
+        add: "Подобрать",
+        buyNow: "Оформить",
+      },
+      lowStockThreshold: 2,
+      preferBuyNow: true,
+    },
+    motion: { intensity: "smooth" },
+  },
+  cosmetics: {
+    ...BASE,
+    id: "cosmetics",
+    cta: {
+      ...BASE.cta,
+      labels: {
+        ...BASE.cta.labels,
+        add: "В корзину",
+        buyNow: "Купить",
+      },
+      lowStockThreshold: 3,
+      preferBuyNow: true,
+    },
+    motion: { intensity: "subtle" },
+  },
+  furniture: {
+    ...BASE,
+    id: "furniture",
+    cta: {
+      ...BASE.cta,
+      labels: {
+        ...BASE.cta.labels,
+        add: "В корзину",
+        buyNow: "Оформить",
+      },
+      lowStockThreshold: 1,
+      preferBuyNow: true,
+    },
+    motion: { intensity: "smooth" },
+  },
   universal: {
     ...BASE,
     id: "universal",

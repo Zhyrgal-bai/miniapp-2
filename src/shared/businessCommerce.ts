@@ -1,8 +1,9 @@
-import type { BusinessType } from "@prisma/client";
+import type { BusinessTypeId } from "./businessTypes.js";
 import {
   resolveUniversalVerticalProfile,
   UNIVERSAL_VERTICAL_BASE,
 } from "./universalCommerce.js";
+import { getBusinessTemplateDescriptor } from "../templates/registry/businessTemplateRegistry.js";
 
 export type VerticalInventoryMode =
   | "sku_matrix"
@@ -10,7 +11,7 @@ export type VerticalInventoryMode =
   | "metadata_only";
 
 export type VerticalCommerceProfile = {
-  businessType: BusinessType;
+  businessType: BusinessTypeId;
   inventoryMode: VerticalInventoryMode;
   /** Maps to OrderItem.size / ProductStock.size (storage adapter) */
   primaryAxisKey: "size";
@@ -25,60 +26,35 @@ export type VerticalCommerceProfile = {
   cardPlaceholder: string;
 };
 
-export const VERTICAL_PROFILES: Record<BusinessType, VerticalCommerceProfile> = {
+function profileFromDescriptor(
+  businessType: Exclude<BusinessTypeId, "universal">,
+): VerticalCommerceProfile {
+  const d = getBusinessTemplateDescriptor(businessType);
+  return {
+    businessType,
+    inventoryMode: d.variantPolicy.mode,
+    primaryAxisKey: d.variantPolicy.primaryAxisKey,
+    primaryAxisLabel: d.variantPolicy.primaryAxisLabel,
+    secondaryAxisKey: d.variantPolicy.secondaryAxisKey,
+    secondaryAxisLabel: d.variantPolicy.secondaryAxisLabel,
+    showFashionVariantMatrix: d.variantPolicy.showFashionVariantMatrix,
+    showOrderOptionsOnStorefront: d.variantPolicy.showOrderOptionsOnStorefront,
+    variantEditor: d.variantPolicy.variantEditor,
+    defaultPrimaryValues: d.variantPolicy.defaultPrimaryValues,
+    cardPlaceholder: d.catalogBehavior.cardPlaceholder,
+  };
+}
+
+export const VERTICAL_PROFILES: Record<BusinessTypeId, VerticalCommerceProfile> = {
   universal: UNIVERSAL_VERTICAL_BASE,
-  clothing: {
-    businessType: "clothing",
-    inventoryMode: "sku_matrix",
-    primaryAxisKey: "size",
-    primaryAxisLabel: "Размер",
-    secondaryAxisKey: "color",
-    secondaryAxisLabel: "Цвет",
-    showFashionVariantMatrix: true,
-    showOrderOptionsOnStorefront: false,
-    variantEditor: "clothing_matrix",
-    defaultPrimaryValues: [],
-    cardPlaceholder: "Выберите размер и цвет",
-  },
-  coffee: {
-    businessType: "coffee",
-    inventoryMode: "single_axis",
-    primaryAxisKey: "size",
-    primaryAxisLabel: "Объём",
-    secondaryAxisKey: null,
-    secondaryAxisLabel: null,
-    showFashionVariantMatrix: false,
-    showOrderOptionsOnStorefront: true,
-    variantEditor: "tier_stock",
-    defaultPrimaryValues: [],
-    cardPlaceholder: "350 мл • горячий",
-  },
-  flowers: {
-    businessType: "flowers",
-    inventoryMode: "single_axis",
-    primaryAxisKey: "size",
-    primaryAxisLabel: "Букет",
-    secondaryAxisKey: null,
-    secondaryAxisLabel: null,
-    showFashionVariantMatrix: false,
-    showOrderOptionsOnStorefront: true,
-    variantEditor: "bouquet_tiers",
-    defaultPrimaryValues: [],
-    cardPlaceholder: "21 роза",
-  },
-  fastfood: {
-    businessType: "fastfood",
-    inventoryMode: "single_axis",
-    primaryAxisKey: "size",
-    primaryAxisLabel: "Порция",
-    secondaryAxisKey: null,
-    secondaryAxisLabel: null,
-    showFashionVariantMatrix: false,
-    showOrderOptionsOnStorefront: true,
-    variantEditor: "tier_stock",
-    defaultPrimaryValues: [],
-    cardPlaceholder: "Средняя порция",
-  },
+  clothing: profileFromDescriptor("clothing"),
+  flowers: profileFromDescriptor("flowers"),
+  coffee: profileFromDescriptor("coffee"),
+  fastfood: profileFromDescriptor("fastfood"),
+  electronics: profileFromDescriptor("electronics"),
+  autoparts: profileFromDescriptor("autoparts"),
+  cosmetics: profileFromDescriptor("cosmetics"),
+  furniture: profileFromDescriptor("furniture"),
 };
 
 /** Safe profile when businessType is missing — no clothing assumptions. */
@@ -102,7 +78,7 @@ const KNOWN_BUSINESS_TYPES = new Set<string>(
 
 export function isKnownBusinessType(
   businessType: string | null | undefined,
-): businessType is BusinessType {
+): businessType is BusinessTypeId {
   const key = String(businessType ?? "").trim();
   return key !== "" && KNOWN_BUSINESS_TYPES.has(key);
 }
@@ -115,8 +91,8 @@ export function verticalProfileFor(
   if (key === "universal") {
     return resolveUniversalVerticalProfile(merchantConfig);
   }
-  if (key !== "" && VERTICAL_PROFILES[key as BusinessType]) {
-    return VERTICAL_PROFILES[key as BusinessType];
+  if (key !== "" && VERTICAL_PROFILES[key as BusinessTypeId]) {
+    return VERTICAL_PROFILES[key as BusinessTypeId];
   }
   if (key !== "" && typeof console !== "undefined") {
     console.warn(
@@ -222,6 +198,11 @@ export function labelPrimaryOption(
       return formatVolumeLabel(v);
     case "fastfood":
       return FASTFOOD_PORTION_LABELS[v] ?? v;
+    case "electronics":
+    case "autoparts":
+    case "cosmetics":
+    case "furniture":
+      return v;
     case "universal":
       return v;
     default:
@@ -294,6 +275,28 @@ export function formatOrderOptionsSummary(
         if (options.combo === true) parts.push("Комбо");
         break;
       }
+      case "electronics": {
+        const serial = pickAttrString(options, "serialNumber");
+        if (serial) parts.push(`Серийный: ${serial}`);
+        break;
+      }
+      case "autoparts": {
+        const vin = pickAttrString(options, "vin");
+        if (vin) parts.push(`VIN: ${vin}`);
+        const comp = pickAttrString(options, "compatibility");
+        if (comp) parts.push(`Совместимость: ${comp}`);
+        break;
+      }
+      case "cosmetics": {
+        const skinType = pickAttrString(options, "skinType");
+        if (skinType) parts.push(`Тип кожи: ${skinType}`);
+        break;
+      }
+      case "furniture": {
+        const assembly = options.assemblyRequired;
+        if (assembly === true) parts.push("Нужна сборка");
+        break;
+      }
       default:
         break;
     }
@@ -354,6 +357,27 @@ export function formatVariantSummary(input: {
       const label = portion ? (FASTFOOD_PORTION_LABELS[portion] ?? portion) : "";
       return label || VERTICAL_PROFILES.fastfood.cardPlaceholder;
     }
+    case "electronics": {
+      const model = pickAttrString(attrs, "model");
+      const label = size || model;
+      return label || VERTICAL_PROFILES.electronics.cardPlaceholder;
+    }
+    case "autoparts": {
+      const sku = pickAttrString(attrs, "sku");
+      const comp = pickAttrString(attrs, "compatibility");
+      const label = size || sku || comp;
+      return label || VERTICAL_PROFILES.autoparts.cardPlaceholder;
+    }
+    case "cosmetics": {
+      const vol = pickAttrString(attrs, "volume");
+      const label = size || vol;
+      return label || VERTICAL_PROFILES.cosmetics.cardPlaceholder;
+    }
+    case "furniture": {
+      const dims = pickAttrString(attrs, "dimensions");
+      const label = size || dims;
+      return label || VERTICAL_PROFILES.furniture.cardPlaceholder;
+    }
     case "universal": {
       const label = size ? labelPrimaryOption("universal", size) : "";
       return label || VERTICAL_PROFILES.universal.cardPlaceholder;
@@ -408,6 +432,14 @@ export function orderOptionKeysExcludedFromStorefront(
       return new Set(["bouquetCount"]);
     case "fastfood":
       return new Set(["size"]);
+    case "electronics":
+      return new Set(["serialNumber"]);
+    case "autoparts":
+      return new Set(["vin", "compatibility"]);
+    case "cosmetics":
+      return new Set(["skinType"]);
+    case "furniture":
+      return new Set(["assemblyRequired"]);
     default:
       return new Set(["size", "color"]);
   }

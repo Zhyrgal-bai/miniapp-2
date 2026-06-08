@@ -286,6 +286,7 @@ export const adminService = {
     businessType: string;
     productSchema: Record<string, unknown>;
     merchantConfig: Record<string, unknown>;
+    templateDescriptor?: Record<string, unknown>;
   }> {
     const data = await adminGet<unknown>("/api/merchant/schemas");
     const x =
@@ -306,6 +307,12 @@ export const adminService = {
         !Array.isArray(x.merchantConfig)
           ? (x.merchantConfig as Record<string, unknown>)
           : {},
+      templateDescriptor:
+        x.templateDescriptor != null &&
+        typeof x.templateDescriptor === "object" &&
+        !Array.isArray(x.templateDescriptor)
+          ? (x.templateDescriptor as Record<string, unknown>)
+          : undefined,
     };
   },
   async getProducts(): Promise<Product[]> {

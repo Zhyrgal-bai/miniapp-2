@@ -26,9 +26,12 @@ const SS_SHOP = "miniapp-active-shop";
 /** То же ключ — в PlatformPage после возврата показать успех и перезагрузить список. */
 export const MERCHANT_REGISTER_SENT_KEY = "merchant-register-sent";
 
-import { BUSINESS_TYPE_REGISTRATION_CARDS, type BusinessTypeId } from "@repo-shared/businessTypes";
+import {
+  BUSINESS_TYPE_REGISTRATION_CARDS,
+  type TargetBusinessTypeId,
+} from "@repo-shared/businessTypes";
 
-type BusinessType = BusinessTypeId;
+type BusinessType = TargetBusinessTypeId;
 
 const BUSINESS_TYPES = BUSINESS_TYPE_REGISTRATION_CARDS;
 

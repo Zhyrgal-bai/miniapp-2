@@ -4,6 +4,7 @@ import { templateForBusinessType } from "../templates/index.js";
 import { stripProductAttributesToSchema } from "../shared/productAttributeNormalization.js";
 import { effectiveProductSchemaForBusiness } from "../shared/universalCommerce.js";
 import { logProductAttributesStripped } from "./structuredLog.js";
+import { getBusinessTemplateDescriptor } from "../templates/registry/businessTemplateRegistry.js";
 
 export type ValidationResult<T> =
   | { ok: true; value: T }
@@ -224,6 +225,27 @@ function safeSchemaFor(
     });
     return {};
   }
+}
+
+export function buildTemplateRegistryDescriptor(
+  businessType: BusinessType,
+): {
+  businessType: string;
+  cardRendererId: string;
+  modalRendererId: string;
+  variantPolicy: Record<string, unknown>;
+  catalogBehavior: Record<string, unknown>;
+  modalBehavior: Record<string, unknown>;
+} {
+  const d = getBusinessTemplateDescriptor(businessType as any);
+  return {
+    businessType: d.businessType,
+    cardRendererId: d.cardRendererId,
+    modalRendererId: d.modalRendererId,
+    variantPolicy: d.variantPolicy as unknown as Record<string, unknown>,
+    catalogBehavior: d.catalogBehavior as unknown as Record<string, unknown>,
+    modalBehavior: d.modalBehavior as unknown as Record<string, unknown>,
+  };
 }
 
 function productSchemaFor(

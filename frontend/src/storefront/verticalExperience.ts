@@ -4,9 +4,22 @@ export type StorefrontVerticalExperience =
   | "flowers"
   | "coffee"
   | "fastfood"
+  | "electronics"
+  | "autoparts"
+  | "cosmetics"
+  | "furniture"
   | "default";
 
-const VERTICAL_SET = new Set<string>(["clothing", "flowers", "coffee", "fastfood"]);
+const VERTICAL_SET = new Set<string>([
+  "clothing",
+  "flowers",
+  "coffee",
+  "fastfood",
+  "electronics",
+  "autoparts",
+  "cosmetics",
+  "furniture",
+]);
 
 export function storefrontVerticalExperience(
   businessType: string | null | undefined,
@@ -33,6 +46,10 @@ export function verticalCatalogCtaLabel(
     if (v === "clothing") return "Смотреть";
     if (v === "flowers") return "Выбрать букет";
     if (v === "coffee" || v === "fastfood") return "Заказать";
+    if (v === "electronics") return "Смотреть характеристики";
+    if (v === "autoparts") return "Проверить совместимость";
+    if (v === "cosmetics") return "Смотреть состав";
+    if (v === "furniture") return "Смотреть детали";
     return "Выбрать";
   }
   const v = storefrontVerticalExperience(businessType);
@@ -40,6 +57,10 @@ export function verticalCatalogCtaLabel(
   if (v === "flowers") return "Заказать букет";
   if (v === "coffee") return "Заказать";
   if (v === "fastfood") return "В заказ";
+  if (v === "electronics") return "В корзину";
+  if (v === "autoparts") return "Подобрать";
+  if (v === "cosmetics") return "В корзину";
+  if (v === "furniture") return "В корзину";
   return "В корзину";
 }
 
@@ -50,5 +71,9 @@ export function verticalPdpAddLabel(businessType: string | null | undefined): st
   if (v === "flowers") return "Отправить подарок";
   if (v === "coffee") return "Добавить в заказ";
   if (v === "fastfood") return "Добавить в заказ";
+  if (v === "electronics") return "Добавить в корзину";
+  if (v === "autoparts") return "Добавить к заказу";
+  if (v === "cosmetics") return "Добавить в корзину";
+  if (v === "furniture") return "Добавить в корзину";
   return "Добавить в корзину";
 }

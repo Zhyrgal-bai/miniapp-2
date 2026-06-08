@@ -1,8 +1,7 @@
-import { BusinessType } from "@prisma/client";
 import type { BusinessTemplateConfig } from "./types.js";
 
 export const coffeeTemplate: BusinessTemplateConfig = {
-  businessType: BusinessType.coffee,
+  businessType: "coffee",
   templateVersion: 1,
   theme: {
     templateId: "light",
@@ -66,5 +65,29 @@ export const coffeeTemplate: BusinessTemplateConfig = {
       attributes: { sugar: ["normal", "less"] },
     },
   ],
+  variantPolicy: {
+    mode: "single_axis",
+    primaryAxisKey: "size",
+    primaryAxisLabel: "Объём",
+    secondaryAxisKey: null,
+    secondaryAxisLabel: null,
+    showFashionVariantMatrix: false,
+    showOrderOptionsOnStorefront: true,
+    variantEditor: "tier_stock",
+    defaultPrimaryValues: [],
+  },
+  cardRendererId: "coffee",
+  modalRendererId: "product-experience-v2",
+  catalogBehavior: {
+    cardPlaceholder: "350 мл • горячий",
+    supportsTableReservations: true,
+    imageRatioHint: "square",
+    imageFitHint: "cover",
+  },
+  modalBehavior: {
+    mode: "centered_v2",
+    maxWidth: "md",
+    stickyActionBar: true,
+  },
 };
 
