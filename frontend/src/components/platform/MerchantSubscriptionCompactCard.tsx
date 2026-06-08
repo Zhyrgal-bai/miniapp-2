@@ -4,6 +4,7 @@ import {
   type MerchantSubscriptionPanelPayload,
 } from "../../services/platformApi";
 import {
+  isFreeStartStatus,
   resolveFreeOrdersProgressModel,
   resolveMerchantGrowthBanner,
 } from "../../utils/subscriptionUx";
@@ -19,14 +20,11 @@ function statusLine(panel: MerchantSubscriptionPanelPayload): string {
   if (panel.displayStatus === "PENDING_PAYMENT") {
     return "Ожидает оплаты";
   }
-  if (panel.displayStatus === "FREE") {
-    return "Бесплатные заказы";
+  if (panel.displayStatus === "TRIAL" || panel.displayStatus === "FREE") {
+    return "Бесплатный старт";
   }
   if (panel.displayStatus === "QUOTA_EXHAUSTED") {
-    return "Лимит исчерпан";
-  }
-  if (panel.displayStatus === "TRIAL") {
-    return "Пробный период";
+    return "Бесплатный этап завершён";
   }
   return panel.displayStatusLabel;
 }
@@ -35,13 +33,11 @@ function daysLine(panel: MerchantSubscriptionPanelPayload): string | null {
   if (panel.displayStatus === "PENDING_PAYMENT") {
     return "Подтверждение оплаты Finik";
   }
-  if (
-    panel.displayStatus === "FREE" ||
-    panel.displayStatus === "QUOTA_EXHAUSTED"
-  ) {
+  if (isFreeStartStatus(panel.displayStatus)) {
     const used = panel.freeOrdersUsed ?? 0;
     const limit = panel.freeOrdersLimit ?? 5;
-    return `Бесплатные заказы: ${used}/${limit}`;
+    const remaining = Math.max(0, limit - used);
+    return `Использовано ${used}/${limit} · Осталось ${remaining}`;
   }
   if (panel.daysLeft != null && panel.daysLeft >= 0) {
     const n = panel.daysLeft;
@@ -87,8 +83,7 @@ export function MerchantSubscriptionCompactCard({ businessId, onOpen, panel }: P
   const effectivePanel = panel ?? loadedPanel;
   const progress =
     effectivePanel != null &&
-    (effectivePanel.displayStatus === "FREE" ||
-      effectivePanel.displayStatus === "QUOTA_EXHAUSTED")
+    isFreeStartStatus(effectivePanel.displayStatus)
       ? resolveFreeOrdersProgressModel(effectivePanel)
       : null;
   const growthBanner =

@@ -17,10 +17,12 @@ import { getTelegramWebApp } from "../../utils/telegram";
 import { useLiveCountdown } from "../../hooks/useLiveCountdown";
 import {
   finikAvailabilityMessage,
+  isFreeStartStatus,
   platformFinikStatusLabel,
   resolveFirstMonthPlan,
   resolveFreeOrdersProgressModel,
   resolveMerchantGrowthBanner,
+  subscriptionStatusBadgeLabel,
   SUBSCRIPTION_STATUS_CLASS,
 } from "../../utils/subscriptionUx";
 import { ru } from "../../i18n/ru";
@@ -66,14 +68,6 @@ function historySourceLabel(source: string): string | null {
   if (source === "operator") return "оператор";
   if (source === "manual") return "оплата";
   return null;
-}
-
-function statusBadgeLabel(panel: MerchantSubscriptionPanelPayload): string {
-  if (panel.displayStatus === "FREE") return "🎁 Бесплатные заказы";
-  if (panel.displayStatus === "QUOTA_EXHAUSTED") return "⛔ Лимит исчерпан";
-  if (panel.displayStatus === "TRIAL") return "🟢 Пробный период";
-  if (panel.displayStatus === "PENDING_PAYMENT") return "⏳ Ожидает оплаты";
-  return panel.displayStatusLabel;
 }
 
 function unitLabel(value: number, one: string, few: string, many: string): string {
@@ -193,9 +187,10 @@ export function ArchPremiumSubscription({
   const { parts: countdownParts } = useLiveCountdown(endIso);
   const finikMsg = panel != null ? finikAvailabilityMessage(panel) : null;
   const growthBanner = panel != null ? resolveMerchantGrowthBanner(panel) : null;
+  const freeLikeStage = panel != null && isFreeStartStatus(panel.displayStatus);
   const freeProgress =
     panel != null &&
-    (panel.displayStatus === "FREE" || panel.displayStatus === "QUOTA_EXHAUSTED")
+    isFreeStartStatus(panel.displayStatus)
       ? resolveFreeOrdersProgressModel(panel)
       : null;
   const firstMonthPlan = panel != null ? resolveFirstMonthPlan(panel) : null;
@@ -303,6 +298,12 @@ export function ArchPremiumSubscription({
     !panel.hasPendingPayment &&
     panel.displayStatus !== "PENDING_PAYMENT" &&
     (panel.displayStatus === "ACTIVE" || panel.displayStatus === "EXPIRING");
+  const headTitle =
+    panel != null && freeLikeStage ? "Путь роста магазина" : "Подписка ARCHA";
+  const headSub =
+    panel != null && freeLikeStage
+      ? "Бесплатный старт: примите первые заказы и перейдите на первый месяц без пауз."
+      : "Управляйте магазином без ограничений.";
 
   const content = (
     <>
@@ -310,10 +311,8 @@ export function ArchPremiumSubscription({
         <div className="archa-sub__head-copy">
           {!embedded ? (
             <>
-              <h2 className="archa-sub__head-title">Подписка ARCHA</h2>
-              <p className="archa-sub__head-sub">
-                Управляйте магазином без ограничений.
-              </p>
+              <h2 className="archa-sub__head-title">{headTitle}</h2>
+              <p className="archa-sub__head-sub">{headSub}</p>
             </>
           ) : null}
         </div>
@@ -362,35 +361,91 @@ export function ArchPremiumSubscription({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
         >
-          <div className="archa-sub__status-row">
-            <span
+          {freeLikeStage && freeProgress != null ? (
+            <div
               className={[
-                "archa-sub__badge",
-                SUBSCRIPTION_STATUS_CLASS[panel.displayStatus],
+                "archa-sub__journey-header",
+                `archa-sub__journey-header--${freeProgress.tier}`,
               ].join(" ")}
             >
-              {statusBadgeLabel(panel)}
-            </span>
-            <span
-              className={[
-                "archa-sub__finik",
-                panel.platformFinikPayReady
-                  ? "archa-sub__finik--ok"
-                  : panel.platformFinikReady
-                    ? "archa-sub__finik--warn"
-                    : "archa-sub__finik--bad",
-              ].join(" ")}
-            >
-              {platformFinikStatusLabel(panel)}
-            </span>
-            {!panel.storeOpenForCustomers ? (
-              <span className="archa-sub__store-closed">
-                Витрина закрыта
+              <p className="archa-sub__journey-kicker">Бесплатный старт</p>
+              <div className="archa-sub__journey-title-row">
+                <p className="archa-sub__journey-title">Первые продажи</p>
+                <p className="archa-sub__journey-ratio">
+                  {freeProgress.used}/{freeProgress.limit}
+                </p>
+              </div>
+              <div className="archa-sub__journey-track" aria-hidden>
+                <span
+                  className="archa-sub__journey-fill"
+                  style={{ width: `${freeProgress.percent}%` }}
+                />
+              </div>
+              <div className="archa-sub__journey-meta">
+                <span>Использовано: {freeProgress.used}/{freeProgress.limit}</span>
+                <span>Осталось: {freeProgress.remaining}</span>
+              </div>
+              <div className="archa-sub__journey-next">
+                <span>Первый месяц</span>
+                <strong>{firstMonthPriceLabel ?? "1500 сом"}</strong>
+              </div>
+              <div className="archa-sub__status-row archa-sub__status-row--minor">
+                <span
+                  className={[
+                    "archa-sub__badge",
+                    SUBSCRIPTION_STATUS_CLASS[panel.displayStatus],
+                  ].join(" ")}
+                >
+                  {subscriptionStatusBadgeLabel(panel)}
+                </span>
+                <span
+                  className={[
+                    "archa-sub__finik",
+                    panel.platformFinikPayReady
+                      ? "archa-sub__finik--ok"
+                      : panel.platformFinikReady
+                        ? "archa-sub__finik--warn"
+                        : "archa-sub__finik--bad",
+                  ].join(" ")}
+                >
+                  {platformFinikStatusLabel(panel)}
+                </span>
+                {!panel.storeOpenForCustomers ? (
+                  <span className="archa-sub__store-closed">Витрина закрыта</span>
+                ) : (
+                  <span className="archa-sub__store-open">Магазин открыт</span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="archa-sub__status-row">
+              <span
+                className={[
+                  "archa-sub__badge",
+                  SUBSCRIPTION_STATUS_CLASS[panel.displayStatus],
+                ].join(" ")}
+              >
+                {subscriptionStatusBadgeLabel(panel)}
               </span>
-            ) : (
-              <span className="archa-sub__store-open">Магазин открыт</span>
-            )}
-          </div>
+              <span
+                className={[
+                  "archa-sub__finik",
+                  panel.platformFinikPayReady
+                    ? "archa-sub__finik--ok"
+                    : panel.platformFinikReady
+                      ? "archa-sub__finik--warn"
+                      : "archa-sub__finik--bad",
+                ].join(" ")}
+              >
+                {platformFinikStatusLabel(panel)}
+              </span>
+              {!panel.storeOpenForCustomers ? (
+                <span className="archa-sub__store-closed">Витрина закрыта</span>
+              ) : (
+                <span className="archa-sub__store-open">Магазин открыт</span>
+              )}
+            </div>
+          )}
 
           {panel.displayStatus === "PENDING_PAYMENT" && panel.pendingPayment != null ? (
             <div className="archa-sub__pending-card" role="status">
@@ -468,7 +523,7 @@ export function ArchPremiumSubscription({
               ].join(" ")}
             >
               <div className="archa-sub__free-progress-head">
-                <p className="archa-sub__free-progress-title">Прогресс бесплатных заказов</p>
+                <p className="archa-sub__free-progress-title">Бесплатный этап</p>
                 <p className="archa-sub__free-progress-ratio">
                   {freeProgress.used}/{freeProgress.limit}
                 </p>
@@ -480,6 +535,7 @@ export function ArchPremiumSubscription({
                 />
               </div>
               <div className="archa-sub__free-progress-meta">
+                <span>Использовано: {freeProgress.used}/{freeProgress.limit}</span>
                 <span>Осталось: {freeProgress.remaining}</span>
                 <span>
                   Следующий этап:{" "}
@@ -489,41 +545,13 @@ export function ArchPremiumSubscription({
             </div>
           ) : null}
 
-          {panel.displayStatus === "TRIAL" &&
-          countdownParts != null &&
-          countdownParts.totalMs > 0 ? (
-            <div className="archa-sub__trial-banner">
-              <div className="archa-sub__trial-banner-copy">
-                <p className="archa-sub__trial-banner-title">
-                  🟢 Пробный период активен
-                </p>
-                <p className="archa-sub__trial-banner-countdown">
-                  <span className="archa-sub__trial-banner-label">Осталось:</span>
-                  <span className="archa-sub__trial-banner-value">
-                    {formatCountdownShort(countdownParts)}
-                  </span>
-                </p>
-              </div>
-              {panel.isOwner && showPricing ? (
-                <button
-                  type="button"
-                  className="mp-btn mp-btn--primary archa-sub__growth-banner-cta"
-                  disabled={payBusy !== null}
-                  onClick={handlePayNow}
-                >
-                  {paymentAllowed ? "Оплатить сейчас" : "Смотреть тарифы"}
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-
           {panel.inGracePeriod ? (
             <p className="archa-sub__hint archa-sub__hint--grace" role="status">
               {ru.platform.gracePeriodHint}
             </p>
           ) : null}
 
-          {panel.displayStatus !== "TRIAL" &&
+          {!freeLikeStage &&
           endIso != null &&
           countdownParts != null &&
           countdownParts.totalMs > 0 ? (
@@ -578,7 +606,7 @@ export function ArchPremiumSubscription({
             </section>
           ) : null}
 
-          {panel.isOwner && panel.displayStatus !== "TRIAL" ? (
+          {panel.isOwner && !freeLikeStage ? (
             <label className="archa-sub__auto-renew">
               <input
                 type="checkbox"

@@ -9,8 +9,8 @@ export const SUBSCRIPTION_STATUS_CLASS: Record<
   MerchantSubscriptionUiStatus,
   string
 > = {
-  TRIAL: "archa-sub__badge--trial",
-  FREE: "archa-sub__badge--trial",
+  TRIAL: "archa-sub__badge--free",
+  FREE: "archa-sub__badge--free",
   QUOTA_EXHAUSTED: "archa-sub__badge--expired",
   ACTIVE: "archa-sub__badge--active",
   EXPIRING: "archa-sub__badge--expiring",
@@ -37,6 +37,30 @@ export type MerchantGrowthBanner = {
   body: string;
   tone: MerchantGrowthBannerTone;
 };
+
+export type MerchantJourneyStepState = "done" | "current" | "pending";
+
+export type MerchantJourneyStep = {
+  id: "store" | "bot" | "free" | "first_month" | "standard" | "yearly";
+  icon: string;
+  label: string;
+  state: MerchantJourneyStepState;
+};
+
+export type MerchantOrdersEmptyState = {
+  title: string;
+  body: string;
+};
+
+const PAID_STATUSES = new Set<MerchantSubscriptionUiStatus>([
+  "ACTIVE",
+  "EXPIRING",
+  "GRACE",
+]);
+
+export function isFreeStartStatus(status: MerchantSubscriptionUiStatus): boolean {
+  return status === "FREE" || status === "TRIAL" || status === "QUOTA_EXHAUSTED";
+}
 
 function safeProgressNumbers(
   usedRaw: number | null | undefined,
@@ -66,6 +90,18 @@ export function resolveFreeOrdersProgressModel(
   return { ...base, tier };
 }
 
+export function subscriptionStatusBadgeLabel(
+  panel: Pick<MerchantSubscriptionPanelPayload, "displayStatus" | "displayStatusLabel">,
+): string {
+  if (panel.displayStatus === "TRIAL") return "🚀 Бесплатный старт";
+  if (panel.displayStatus === "FREE") return "🎁 Бесплатные заказы";
+  if (panel.displayStatus === "QUOTA_EXHAUSTED") return "⛔ Лимит исчерпан";
+  if (panel.displayStatus === "GRACE") return "⏳ Льготный период";
+  if (panel.displayStatus === "PENDING_PAYMENT") return "⏳ Ожидает оплаты";
+  if (panel.displayStatus === "EXPIRING") return "⚠️ Подписка скоро закончится";
+  return panel.displayStatusLabel;
+}
+
 export function resolveFirstMonthPlan(
   panel: Pick<MerchantSubscriptionPanelPayload, "plans">,
 ): MerchantSubscriptionPlanDTO | null {
@@ -85,10 +121,10 @@ export function resolveMerchantGrowthBanner(
   >,
 ): MerchantGrowthBanner | null {
   const progress = safeProgressNumbers(panel.freeOrdersUsed, panel.freeOrdersLimit);
-  if (panel.displayStatus === "FREE") {
+  if (panel.displayStatus === "TRIAL" || panel.displayStatus === "FREE") {
     if (progress.used <= 2) {
       return {
-        title: "🎁 Бесплатный период продаж активен",
+        title: "🚀 Бесплатный старт",
         body: `Использовано ${progress.used}/${progress.limit}. Осталось ${progress.remaining} бесплатных заказа.`,
         tone: "success",
       };
@@ -133,6 +169,11 @@ export function resolveMerchantGrowthBanner(
 export function subscriptionTariffLabel(
   panel: MerchantSubscriptionPanelPayload,
 ): string {
+  if (panel.displayStatus === "TRIAL") {
+    const used = panel.freeOrdersUsed ?? 0;
+    const limit = panel.freeOrdersLimit ?? 5;
+    return `🚀 Бесплатный старт ${used}/${limit}`;
+  }
   if (panel.displayStatus === "FREE") {
     const used = panel.freeOrdersUsed ?? 0;
     const limit = panel.freeOrdersLimit ?? 5;
@@ -141,9 +182,6 @@ export function subscriptionTariffLabel(
   if (panel.displayStatus === "QUOTA_EXHAUSTED") {
     return "⛔ Лимит бесплатных заказов";
   }
-  if (panel.displayStatus === "TRIAL") {
-    return "🟢 Пробный период";
-  }
   const raw = panel.subscriptionPlanLabel?.trim() ?? "";
   if (raw === "" || raw === "—") {
     if (panel.displayStatus === "GRACE") return ru.platform.gracePeriod;
@@ -151,6 +189,135 @@ export function subscriptionTariffLabel(
     return panel.displayStatusLabel;
   }
   return raw;
+}
+
+export function resolveMerchantOrdersEmptyState(
+  panel: Pick<
+    MerchantSubscriptionPanelPayload,
+    "displayStatus" | "freeOrdersUsed" | "freeOrdersLimit"
+  > | null,
+): MerchantOrdersEmptyState {
+  if (panel == null) {
+    return {
+      title: "Последние заказы",
+      body: "Управляйте заказами, статусами и оплатой в реальном времени.",
+    };
+  }
+  const progress = safeProgressNumbers(panel.freeOrdersUsed, panel.freeOrdersLimit);
+  if (panel.displayStatus === "QUOTA_EXHAUSTED") {
+    return {
+      title: "Бесплатный этап завершён",
+      body: `Вы получили ${progress.limit} из ${progress.limit} бесплатных заказов. Подключите первый месяц и продолжайте рост.`,
+    };
+  }
+  if (progress.used === 0) {
+    return {
+      title: "Получите первые бесплатные заказы",
+      body: `Сейчас 0/${progress.limit}. Поделитесь витриной и примите первые продажи.`,
+    };
+  }
+  if (progress.used === progress.limit - 1) {
+    return {
+      title: "Остался последний бесплатный заказ",
+      body: `Уже ${progress.used}/${progress.limit}. Подготовьте переход на первый месяц заранее.`,
+    };
+  }
+  return {
+    title: "Последние заказы",
+    body: `У вас уже ${progress.used} бесплатных заказов. Продолжайте обрабатывать заявки в одном месте.`,
+  };
+}
+
+export function resolveMerchantJourneySteps(input: {
+  hasBusiness: boolean;
+  webhookStatus?: "OK" | "ERROR" | null;
+  botReadyFromReadiness?: boolean;
+  panel: Pick<
+    MerchantSubscriptionPanelPayload,
+    "displayStatus" | "subscriptionPlanCode" | "freeOrdersUsed" | "freeOrdersLimit"
+  > | null;
+}): MerchantJourneyStep[] {
+  const panel = input.panel;
+  const progress = safeProgressNumbers(panel?.freeOrdersUsed, panel?.freeOrdersLimit);
+  const status = panel?.displayStatus;
+  const paidNow = status != null && PAID_STATUSES.has(status);
+  const normalizedPlanCode = (panel?.subscriptionPlanCode ?? "").trim().toUpperCase();
+  const hasYearly = normalizedPlanCode === "YEARLY";
+  const hasFirstMonth = normalizedPlanCode === "FIRST_MONTH" && paidNow;
+  const hasStandardPaid =
+    paidNow &&
+    normalizedPlanCode !== "" &&
+    normalizedPlanCode !== "FIRST_MONTH" &&
+    normalizedPlanCode !== "YEARLY";
+  const botConnected =
+    input.botReadyFromReadiness === true || input.webhookStatus === "OK";
+  const freeStepDone =
+    progress.used > 0 || paidNow || status === "QUOTA_EXHAUSTED";
+  const freeStepCurrent =
+    status != null && isFreeStartStatus(status) && !paidNow;
+
+  const currentId: MerchantJourneyStep["id"] =
+    !input.hasBusiness
+      ? "store"
+      : !botConnected
+        ? "bot"
+        : freeStepCurrent
+          ? "free"
+          : hasFirstMonth
+            ? "first_month"
+            : hasYearly
+              ? "yearly"
+              : hasStandardPaid
+                ? "standard"
+                : "free";
+
+  const asState = (
+    id: MerchantJourneyStep["id"],
+    done: boolean,
+  ): MerchantJourneyStepState => {
+    if (done) return "done";
+    if (id === currentId) return "current";
+    return "pending";
+  };
+
+  return [
+    {
+      id: "store",
+      icon: "🏪",
+      label: "Магазин создан",
+      state: asState("store", input.hasBusiness),
+    },
+    {
+      id: "bot",
+      icon: "🤖",
+      label: "Бот подключён",
+      state: asState("bot", botConnected),
+    },
+    {
+      id: "free",
+      icon: "🛍",
+      label: `Бесплатные заказы ${progress.used}/${progress.limit}`,
+      state: asState("free", freeStepDone),
+    },
+    {
+      id: "first_month",
+      icon: "⭐",
+      label: "Первый месяц",
+      state: asState("first_month", hasFirstMonth || hasStandardPaid || hasYearly),
+    },
+    {
+      id: "standard",
+      icon: "💎",
+      label: "Стандартный магазин",
+      state: asState("standard", hasStandardPaid || hasYearly),
+    },
+    {
+      id: "yearly",
+      icon: "👑",
+      label: "Годовой магазин",
+      state: asState("yearly", hasYearly),
+    },
+  ];
 }
 
 export function finikAvailabilityMessage(

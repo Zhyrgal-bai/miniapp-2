@@ -120,7 +120,7 @@ export function PlatformStoreCard({
         <div className="mp-v2-sub-hint">
           {trialEndLabel != null ? (
             <p>
-              Пробный период до {trialEndLabel}
+              Бесплатный этап до {trialEndLabel}
               {trialRem != null ? ` · ${trialRem}` : ""}
             </p>
           ) : null}
@@ -139,7 +139,7 @@ export function PlatformStoreCard({
           <p>Статус подписки: {subBadge.label}</p>
           {subEndLabel != null ? <p>Оплачено до {subEndLabel}</p> : null}
           {subEndLabel == null && trialEndLabel != null ? (
-            <p>Период до {trialEndLabel}</p>
+            <p>Бесплатный этап до {trialEndLabel}</p>
           ) : null}
         </div>
       )}

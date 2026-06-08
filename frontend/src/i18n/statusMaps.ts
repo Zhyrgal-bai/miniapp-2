@@ -63,9 +63,9 @@ export const STAFF_ROLE_RU: Record<string, string> = {
 };
 
 export const SUBSCRIPTION_STATUS_RU: Record<string, string> = {
-  TRIAL: "Пробный период",
-  FREE: "Бесплатные заказы",
-  QUOTA_EXHAUSTED: "Лимит исчерпан",
+  TRIAL: "Бесплатный старт",
+  FREE: "Бесплатный старт",
+  QUOTA_EXHAUSTED: "Бесплатный этап завершён",
   ACTIVE: "Активна",
   INACTIVE: "Неактивна",
   EXPIRED: "Истекла",

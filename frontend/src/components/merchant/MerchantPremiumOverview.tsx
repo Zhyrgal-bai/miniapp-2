@@ -9,7 +9,12 @@ import {
   botRunBadge,
 } from "../../pages/platform/platformUi";
 import { formatSaasPriceSom } from "@repo-shared/saasSubscriptionPricing";
-import { resolveFirstMonthPlan } from "../../utils/subscriptionUx";
+import {
+  resolveFirstMonthPlan,
+  resolveFreeOrdersProgressModel,
+  resolveMerchantJourneySteps,
+  resolveMerchantOrdersEmptyState,
+} from "../../utils/subscriptionUx";
 import "./MerchantPremiumOverview.css";
 
 type Props = {
@@ -55,13 +60,23 @@ export function MerchantPremiumOverview({
   const subRem =
     formatDaysRemaining(b.subscriptionEndsAt) ??
     formatDaysRemaining(b.trialEndsAt);
-  const used = Math.max(0, subscriptionPanel?.freeOrdersUsed ?? 0);
-  const limit = Math.max(1, subscriptionPanel?.freeOrdersLimit ?? 5);
-  const remaining = Math.max(0, subscriptionPanel?.freeOrdersRemaining ?? limit - used);
+  const progress =
+    subscriptionPanel != null ? resolveFreeOrdersProgressModel(subscriptionPanel) : null;
+  const used = progress?.used ?? 0;
+  const limit = progress?.limit ?? 5;
+  const remaining = progress?.remaining ?? 5;
   const firstMonthPlan =
     subscriptionPanel != null ? resolveFirstMonthPlan(subscriptionPanel) : null;
   const nextStepPrice =
     firstMonthPlan != null ? formatSaasPriceSom(firstMonthPlan.amountSom) : "1500 сом";
+  const journeySteps = resolveMerchantJourneySteps({
+    hasBusiness: true,
+    webhookStatus: b.webhookStatus,
+    botReadyFromReadiness:
+      readiness?.launchWizard?.steps.find((step) => step.id === "telegram_bot")?.done,
+    panel: subscriptionPanel,
+  });
+  const ordersEmptyState = resolveMerchantOrdersEmptyState(subscriptionPanel);
 
   return (
     <motion.section
@@ -120,16 +135,37 @@ export function MerchantPremiumOverview({
 
         <div className="archa-hub__panel archa-glass archa-glass--glow">
           <div className="archa-hub__panel-head">
-            <h3>Последние заказы</h3>
+            <h3>{ordersEmptyState.title}</h3>
           </div>
           <p className="archa-hub__panel-text">
-            {readiness?.recommendations?.[0] ??
-              "Управляйте заказами, статусами и оплатой в реальном времени."}
+            {ordersEmptyState.body}
           </p>
           <button type="button" className="archa-hub__link-btn archa-hub__link-btn--accent" onClick={onOpenOrders}>
             Перейти к заказам →
           </button>
         </div>
+      </motion.div>
+
+      <motion.div className="archa-hub__journey archa-glass archa-glass--glow" variants={item}>
+        <div className="archa-hub__panel-head">
+          <h3>Путь роста магазина</h3>
+        </div>
+        <ul className="archa-hub__journey-list" aria-label="Этапы роста">
+          {journeySteps.map((step) => (
+            <li
+              key={step.id}
+              className={[
+                "archa-hub__journey-item",
+                `archa-hub__journey-item--${step.state}`,
+              ].join(" ")}
+            >
+              <span className="archa-hub__journey-icon" aria-hidden>
+                {step.icon}
+              </span>
+              <span className="archa-hub__journey-label">{step.label}</span>
+            </li>
+          ))}
+        </ul>
       </motion.div>
 
       {subscriptionPanel != null ? (
@@ -139,7 +175,7 @@ export function MerchantPremiumOverview({
           </div>
           <dl className="archa-hub__analytics-grid">
             <div>
-              <dt>Получено заказов</dt>
+              <dt>Получено бесплатных заказов</dt>
               <dd>{used}</dd>
             </div>
             <div>
@@ -154,9 +190,19 @@ export function MerchantPremiumOverview({
             </div>
             <div>
               <dt>Следующий этап</dt>
+              <dd>Первый месяц</dd>
+            </div>
+            <div>
+              <dt>Стоимость следующего этапа</dt>
               <dd>{nextStepPrice}</dd>
             </div>
           </dl>
+          <div className="archa-hub__analytics-progress" aria-hidden>
+            <span
+              className={`archa-hub__analytics-progress-fill archa-hub__analytics-progress-fill--${progress?.tier ?? "green"}`}
+              style={{ width: `${progress?.percent ?? 0}%` }}
+            />
+          </div>
         </motion.div>
       ) : null}
     </motion.section>

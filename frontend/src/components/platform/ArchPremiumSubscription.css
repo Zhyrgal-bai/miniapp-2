@@ -157,6 +157,10 @@
   margin-bottom: 1rem;
 }
 
+.archa-sub__status-row--minor {
+  margin: 0;
+}
+
 .archa-sub__badge {
   display: inline-flex;
   align-items: center;
@@ -181,10 +185,122 @@
   }
 }
 
-.archa-sub__badge--trial {
+.archa-sub__badge--trial,
+.archa-sub__badge--free {
   background: rgba(34, 197, 94, 0.22);
   color: #86efac;
   box-shadow: 0 0 20px rgba(34, 197, 94, 0.2);
+}
+
+.archa-sub__journey-header {
+  margin: 0 0 1rem;
+  padding: 0.95rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  background: linear-gradient(
+    135deg,
+    rgba(22, 163, 74, 0.16) 0%,
+    rgba(10, 18, 10, 0.55) 100%
+  );
+}
+
+.archa-sub__journey-header--yellow {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: linear-gradient(
+    135deg,
+    rgba(245, 158, 11, 0.18) 0%,
+    rgba(36, 20, 6, 0.54) 100%
+  );
+}
+
+.archa-sub__journey-header--red {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: linear-gradient(
+    135deg,
+    rgba(239, 68, 68, 0.16) 0%,
+    rgba(39, 12, 12, 0.58) 100%
+  );
+}
+
+.archa-sub__journey-kicker {
+  margin: 0;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(238, 248, 234, 0.68);
+}
+
+.archa-sub__journey-title-row {
+  margin-top: 0.3rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.archa-sub__journey-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.archa-sub__journey-ratio {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--archa-green-neon, #9dff57);
+}
+
+.archa-sub__journey-track {
+  margin-top: 0.55rem;
+  width: 100%;
+  height: 0.46rem;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.2);
+  overflow: hidden;
+}
+
+.archa-sub__journey-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22c55e 0%, #bef264 100%);
+}
+
+.archa-sub__journey-header--yellow .archa-sub__journey-fill {
+  background: linear-gradient(90deg, #f59e0b 0%, #fcd34d 100%);
+}
+
+.archa-sub__journey-header--red .archa-sub__journey-fill {
+  background: linear-gradient(90deg, #ef4444 0%, #fb7185 100%);
+}
+
+.archa-sub__journey-meta {
+  margin-top: 0.55rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+  font-size: 0.75rem;
+  color: rgba(238, 248, 234, 0.76);
+}
+
+.archa-sub__journey-next {
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 0.8rem;
+  color: rgba(238, 248, 234, 0.82);
+}
+
+.archa-sub__journey-next strong {
+  color: #f8fafc;
+  font-size: 0.92rem;
 }
 
 .archa-sub__badge--active {

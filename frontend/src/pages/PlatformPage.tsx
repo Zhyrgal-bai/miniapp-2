@@ -1861,7 +1861,7 @@ export default function PlatformPage() {
                 </p>
                 <p className="mb-2 text-sm text-slate-300">
                   Как создать магазин, подключить оплату Finik, настроить
-                  доставку и пробный период.
+                  доставку и бесплатный старт.
                 </p>
                 <button
                   type="button"
