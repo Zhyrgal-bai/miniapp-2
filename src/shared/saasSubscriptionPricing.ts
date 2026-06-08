@@ -93,17 +93,21 @@ export function buildTrialSubscriptionJourney(): SubscriptionJourneyStep[] {
       id: "three_month",
       icon: "🥈",
       title: "3 месяца",
-      subtitle: three?.subtitle,
-      priceLabel: three != null ? formatArchaPriceSom(three.amountSom) : undefined,
       phase: "current",
+      ...(three?.subtitle != null ? { subtitle: three.subtitle } : {}),
+      ...(three != null
+        ? { priceLabel: formatArchaPriceSom(three.amountSom) }
+        : {}),
     },
     {
       id: "yearly",
       icon: "💎",
       title: "Годовой",
-      subtitle: yearly?.subtitle,
-      priceLabel: yearly != null ? formatArchaPriceSom(yearly.amountSom) : undefined,
       phase: "current",
+      ...(yearly?.subtitle != null ? { subtitle: yearly.subtitle } : {}),
+      ...(yearly != null
+        ? { priceLabel: formatArchaPriceSom(yearly.amountSom) }
+        : {}),
     },
   ];
 }
