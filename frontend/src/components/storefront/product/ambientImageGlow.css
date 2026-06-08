@@ -1,0 +1,29 @@
+.sf-ambient-glow {
+  position: absolute;
+  inset: -30%;
+  z-index: 0;
+  pointer-events: none;
+  background: var(--sf-ambient-color, transparent);
+  filter: blur(88px);
+  opacity: 0.32;
+  transform: scale(1.08);
+  will-change: opacity, background;
+}
+
+.sf-ambient-glow--hero {
+  inset: -80% -40%;
+  opacity: 0.26;
+  filter: blur(72px);
+}
+
+.sf-ambient-glow--quick-view {
+  inset: -40% -20% -20%;
+  opacity: 0.38;
+  filter: blur(100px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-ambient-glow {
+    filter: blur(48px);
+  }
+}

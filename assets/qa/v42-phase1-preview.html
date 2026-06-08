@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>ARCHA V4.2 Phase 1 — Image Layer QA</title>
+  <style>
+    :root {
+      --sf-color-primary: #ff2d7a;
+      --sf-color-background: #1a1a1a;
+      --sf-color-surface: #242424;
+      --sf-color-text: #fff;
+      --sf-color-border: #444;
+      --sf-on-primary: #fff;
+      --sf-ux-radius-card: 12px;
+      --sf-ux-space-1: 8px;
+      --sf-ux-body: 0.875rem;
+      --sf-ux-h2: 1rem;
+    }
+    * { box-sizing: border-box; margin: 0; }
+    body { background: #0f0f0f; color: #fff; font-family: system-ui, sans-serif; padding: 24px; }
+    h1 { font-size: 1.25rem; margin-bottom: 8px; }
+    p.meta { color: #888; font-size: 0.8125rem; margin-bottom: 24px; }
+    .panels { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; }
+    .panel { background: #181818; border-radius: 16px; padding: 16px; }
+    .panel h2 { font-size: 0.9375rem; margin-bottom: 12px; color: #ccc; }
+    .phone { width: 390px; background: var(--sf-color-background); border-radius: 24px; overflow: hidden; border: 1px solid #333; }
+    .desktop { width: 960px; background: var(--sf-color-background); border-radius: 12px; overflow: hidden; border: 1px solid #333; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; }
+    .card { overflow: hidden; }
+    .card__img { position: relative; background: #2a2a2a; }
+    .card__img--portrait { aspect-ratio: 4/5; }
+    .card__img--square { aspect-ratio: 1/1; }
+    .card__img img { width: 100%; height: 100%; display: block; }
+    .card__img.cover img { object-fit: cover; }
+    .card__img.contain img { object-fit: contain; padding: 6px; }
+    .card__img { border-radius: 12px 12px 0 0; }
+    .badge { position: absolute; right: 8px; bottom: 8px; padding: 4px 8px; border-radius: 999px; font-size: 0.6875rem; font-weight: 700; background: rgba(0,0,0,.55); border: 1px solid #555; }
+    .card__info { padding: 8px; background: var(--sf-color-surface); border: 1px solid #444; border-top: 0; border-radius: 0 0 12px 12px; }
+    .card__title { font-size: var(--sf-ux-body); font-weight: 600; margin-bottom: 4px; line-height: 1.25; }
+    .card__price { font-size: var(--sf-ux-h2); font-weight: 800; color: #ff2d7a; margin-bottom: 8px; }
+    .card__btn { width: 100%; min-height: 40px; border: 0; border-radius: 12px; background: var(--sf-color-primary); color: #fff; font-weight: 700; font-size: 0.8125rem; }
+    .px { padding: 0; }
+    .px-gallery { display: flex; flex-direction: column; background: #242424; }
+    .px-gallery__main { min-height: 360px; max-height: 420px; overflow: hidden; }
+    .px-gallery__main img { width: 100%; height: 100%; object-fit: cover; min-height: 360px; }
+    .px-gallery__thumbs { display: flex; gap: 8px; padding: 10px 16px; overflow-x: auto; border-top: 1px solid #333; }
+    .px-gallery__thumb { flex: 0 0 52px; width: 52px; height: 52px; border-radius: 8px; overflow: hidden; border: 2px solid transparent; opacity: .78; }
+    .px-gallery__thumb.active { border-color: #ff2d7a; opacity: 1; }
+    .px-gallery__thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .px-main { padding: 16px; }
+    .px-split { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; padding: 24px; }
+  </style>
+</head>
+<body>
+  <h1>ARCHA V4.2 Phase 1 — Image Layer</h1>
+  <p class="meta">A2 +N фото · A1 mobile thumbs · A4 presets · A5 edge-to-edge · Static QA (390px / 960px)</p>
+  <div class="panels">
+    <div class="panel">
+      <h2>Telegram iPhone / Android (390px)</h2>
+      <div class="phone">
+        <div class="grid">
+          <div class="card">
+            <div class="card__img card__img--portrait cover"><img src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400&q=80" alt="" /><span class="badge">+2 фото</span></div>
+            <div class="card__info"><div class="card__title">Платье лён</div><div class="card__price">4 990 сом</div><button class="card__btn">В корзину</button></div>
+          </div>
+          <div class="card">
+            <div class="card__img card__img--square cover"><img src="https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=400&q=80" alt="" /></div>
+            <div class="card__info"><div class="card__title">Капучино</div><div class="card__price">180 сом</div><button class="card__btn">В корзину</button></div>
+          </div>
+        </div>
+        <div class="px">
+          <div class="px-gallery">
+            <div class="px-gallery__main"><img src="https://images.unsplash.com/photo-1561181286-d3cb7c251a85?w=800&q=80" alt="" /></div>
+            <div class="px-gallery__thumbs">
+              <div class="px-gallery__thumb active"><img src="https://images.unsplash.com/photo-1561181286-d3cb7c251a85?w=120&q=80" alt="" /></div>
+              <div class="px-gallery__thumb"><img src="https://images.unsplash.com/photo-1490759840868-5c63d7302cfe?w=120&q=80" alt="" /></div>
+              <div class="px-gallery__thumb"><img src="https://images.unsplash.com/photo-1526047932262-e4162a85623e?w=120&q=80" alt="" /></div>
+            </div>
+          </div>
+          <div class="px-main"><strong>Букет «Нежность»</strong><br /><span style="color:#ff2d7a;font-weight:800">2 490 сом</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Desktop web (960px)</h2>
+      <div class="desktop">
+        <div class="grid" style="grid-template-columns: repeat(4, 1fr); padding: 16px;">
+          <div class="card">
+            <div class="card__img card__img--square contain"><img src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&q=80" alt="" /><span class="badge">+1 фото</span></div>
+            <div class="card__info"><div class="card__title">Smart Watch</div><div class="card__price">12 900 сом</div><button class="card__btn">В корзину</button></div>
+          </div>
+          <div class="card">
+            <div class="card__img card__img--portrait cover"><img src="https://images.unsplash.com/photo-1481349518771-20055b2a7b24?w=400&q=80" alt="" /></div>
+            <div class="card__info"><div class="card__title">Букет роз</div><div class="card__price">3 200 сом</div><button class="card__btn">Выбрать</button></div>
+          </div>
+        </div>
+        <div class="px-split">
+          <div class="px-gallery" style="border-radius:16px;overflow:hidden;">
+            <div class="px-gallery__main" style="min-height:420px;"><img src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&q=80" alt="" style="object-fit:contain;background:#242424;min-height:420px;" /></div>
+            <div class="px-gallery__thumbs">
+              <div class="px-gallery__thumb active"><img src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=120&q=80" alt="" /></div>
+              <div class="px-gallery__thumb"><img src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=120&q=80" alt="" /></div>
+            </div>
+          </div>
+          <div><h3 style="margin-bottom:8px;">Universal / electronics</h3><p style="color:#aaa;font-size:.875rem;">contain preset · thumbs visible</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

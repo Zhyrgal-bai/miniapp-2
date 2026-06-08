@@ -1,0 +1,470 @@
+/**
+ * Retail Product Card System V1
+ * 70% photo · 20% info · 10% action — stable heights, 44px touch targets.
+ * Storefront catalog only (.product-card--retail-v1).
+ */
+
+.product-card--retail-v1 {
+  --retail-radius: 12px;
+  --retail-media-ratio: var(--sf-card-image-ratio, 4 / 5);
+  --retail-meta-min: 52px;
+  --retail-action-min: 44px;
+  contain: layout style;
+  container-type: inline-size;
+  container-name: retail-card;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-radius: 0;
+  overflow: visible;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
+}
+
+.product-card--retail-v1:hover,
+.product-card--retail-v1:active {
+  transform: none;
+  box-shadow: none !important;
+}
+
+.product-card--retail-v1.out {
+  opacity: 1;
+}
+
+/* ── Shell: flex column approximating 70 / 20 / 10 ── */
+.retail-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  gap: 0;
+}
+
+/* Tappable preview zone (photo + title + price) */
+.retail-card__tap {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.retail-card__tap:focus-visible {
+  outline: 2px solid var(--sf-color-primary, #ff2d7a);
+  outline-offset: 2px;
+  border-radius: var(--retail-radius);
+}
+
+/* ~70% — photo dominates */
+.retail-card__media {
+  position: relative;
+  flex: 7 1 0;
+  width: 100%;
+  min-height: 0;
+  aspect-ratio: var(--retail-media-ratio);
+  border-radius: var(--retail-radius);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--sf-color-surface, #242424) 90%, transparent);
+}
+
+.product-card--retail-v1.product-card--ratio-square {
+  --retail-media-ratio: 1 / 1;
+}
+.product-card--retail-v1.product-card--ratio-portrait {
+  --retail-media-ratio: 4 / 5;
+}
+.product-card--retail-v1.product-card--ratio-landscape {
+  --retail-media-ratio: 16 / 10;
+}
+
+.retail-card__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transition: transform 0.28s ease;
+}
+
+.product-card--fit-contain.retail-card--fit-contain .retail-card__img,
+.product-card--retail-v1.product-card--fit-contain .retail-card__img {
+  object-fit: contain;
+  padding: 6px;
+  background: color-mix(in srgb, var(--sf-color-surface) 92%, transparent);
+}
+
+.product-card--retail-v1:not(.out) .retail-card__tap:active .retail-card__img {
+  transform: scale(1.02);
+}
+
+.product-card--retail-v1.out .retail-card__img {
+  opacity: 0.55;
+  filter: grayscale(0.15);
+}
+
+/* Sale pill — single useful badge on photo */
+.retail-card__discount {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  padding: 3px 7px;
+  border-radius: 6px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: color-mix(in srgb, var(--sf-color-danger, #ef4444) 88%, #000);
+  pointer-events: none;
+}
+
+.retail-card__oos {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--sf-color-text) 88%, transparent);
+  background: color-mix(in srgb, var(--sf-color-background) 52%, transparent);
+  pointer-events: none;
+}
+
+/* ~20% — name + price, fixed height band */
+.retail-card__meta {
+  flex: 2 1 auto;
+  min-height: var(--retail-meta-min);
+  max-height: calc(var(--retail-meta-min) + 12px);
+  padding: 8px 2px 4px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.retail-card__title {
+  margin: 0;
+  flex: 0 0 auto;
+  font-size: clamp(0.75rem, 3.4cqi, 0.8125rem);
+  font-weight: 500;
+  line-height: 1.25;
+  height: 2.5em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+  color: color-mix(in srgb, var(--sf-color-text) 94%, transparent);
+}
+
+.retail-card__price {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: nowrap;
+  gap: 6px;
+  min-height: 1.125rem;
+  overflow: hidden;
+}
+
+.retail-card__price-current {
+  font-size: clamp(0.8125rem, 3.6cqi, 0.9375rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  color: var(--sf-color-text);
+}
+
+.retail-card__price-current--sale {
+  color: var(--sf-color-danger, var(--sf-color-primary));
+}
+
+.retail-card__price-was {
+  font-size: clamp(0.6875rem, 2.8cqi, 0.75rem);
+  font-weight: 500;
+  white-space: nowrap;
+  text-decoration: line-through;
+  color: color-mix(in srgb, var(--sf-color-text) 48%, transparent);
+}
+
+/* ~10% — primary action, always visible */
+.retail-card__action {
+  flex: 0 0 var(--retail-action-min);
+  min-height: var(--retail-action-min);
+  display: flex;
+  align-items: stretch;
+  padding-top: 2px;
+}
+
+.retail-card__cta {
+  width: 100%;
+  min-height: var(--retail-action-min);
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--sf-color-text) 16%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sf-color-text) 6%, transparent);
+  color: var(--sf-color-text);
+  font-size: clamp(0.6875rem, 3cqi, 0.8125rem);
+  font-weight: 600;
+  line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.retail-card__cta:active:not(:disabled) {
+  transform: scale(0.98);
+  background: color-mix(in srgb, var(--sf-color-text) 10%, transparent);
+}
+
+.retail-card__cta:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.retail-card__cta--primary {
+  border-color: transparent;
+  background: var(--sf-color-primary);
+  color: var(--sf-on-primary, #fff);
+}
+
+.retail-card__cta--primary:active:not(:disabled) {
+  filter: brightness(0.96);
+  background: var(--sf-color-primary);
+}
+
+.retail-card__cta-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* In-card qty stepper (when item already in cart) */
+.retail-card__qty {
+  width: 100%;
+  min-height: var(--retail-action-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--sf-color-text) 14%, transparent);
+  background: color-mix(in srgb, var(--sf-color-surface) 88%, transparent);
+}
+
+.retail-card__qty-btn {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--sf-color-primary) 14%, transparent);
+  color: var(--sf-color-primary);
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+}
+
+.retail-card__qty-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.retail-card__qty-value {
+  min-width: 1.5rem;
+  text-align: center;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+/* ── Viewport stability (320 → desktop) ── */
+@container retail-card (max-width: 148px) {
+  .retail-card__title {
+    font-size: 0.6875rem;
+    height: 2.5em;
+  }
+
+  .retail-card__price-current {
+    font-size: 0.75rem;
+  }
+
+  .retail-card__cta {
+    font-size: 0.625rem;
+    padding-inline: 8px;
+  }
+}
+
+@media (max-width: 320px) {
+  .product-card--retail-v1 {
+    --retail-meta-min: 48px;
+  }
+
+  .retail-card__meta {
+    padding-top: 6px;
+  }
+}
+
+@media (min-width: 768px) {
+  .product-card--retail-v1 {
+    --retail-radius: 14px;
+  }
+
+  .retail-card__title {
+    font-size: 0.875rem;
+  }
+
+  .retail-card__price-current {
+    font-size: 0.9375rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .product-card--retail-v1:hover:not(.out) .retail-card__img {
+    transform: scale(1.03);
+  }
+
+  .retail-card__cta:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--sf-color-text) 10%, transparent);
+  }
+
+  .retail-card__cta--primary:hover:not(:disabled) {
+    filter: brightness(1.05);
+  }
+}
+
+/* Grid: equal-height cards */
+.product-grid .product-card--retail-v1 {
+  align-self: stretch;
+}
+
+/* Legacy storefront overrides — retail V1 wins */
+.sf-root .product-card.product-card--retail-v1 .product-badge,
+.sf-root .product-card.product-card--retail-v1 .product-photo-count-badge {
+  display: none !important;
+}
+
+.sf-root .product-card.product-card--retail-v1 .retail-card__price-current {
+  letter-spacing: -0.02em;
+}
+
+/* Vertical tweaks hook into retail classes */
+.sf-root[data-sf-vertical="clothing"] .product-card--retail-v1 {
+  --retail-media-ratio: 3 / 4;
+  --retail-radius: 4px;
+}
+
+.sf-root[data-sf-vertical="clothing"] .product-card--retail-v1 .retail-card__title {
+  -webkit-line-clamp: 1;
+  height: 1.25em;
+}
+
+.sf-root[data-sf-vertical="clothing"] .product-card--retail-v1 .retail-card__price-current {
+  font-weight: 500;
+  color: color-mix(in srgb, var(--sf-color-text) 72%, transparent);
+}
+
+.sf-root[data-sf-vertical="clothing"] .product-card--retail-v1 .retail-card__cta {
+  border: 0;
+  background: transparent;
+  min-height: 36px;
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--sf-color-text) 68%, transparent);
+}
+
+.sf-root[data-sf-vertical="flowers"] .product-card--retail-v1 .retail-card__meta {
+  align-items: center;
+  text-align: center;
+}
+
+.sf-root[data-sf-vertical="flowers"] .product-card--retail-v1 .retail-card__title {
+  text-align: center;
+}
+
+.sf-root[data-sf-vertical="flowers"] .product-card--retail-v1 .retail-card__price {
+  justify-content: center;
+}
+
+.sf-root[data-sf-vertical="flowers"] .product-card--retail-v1 .retail-card__price-current {
+  color: color-mix(in srgb, var(--sf-color-primary) 82%, var(--sf-color-text));
+}
+
+.sf-root[data-sf-vertical="flowers"] .product-card--retail-v1 .retail-card__cta--primary {
+  border-color: color-mix(in srgb, var(--sf-color-primary) 35%, transparent);
+  background: color-mix(in srgb, var(--sf-color-primary) 10%, transparent);
+  color: var(--sf-color-primary);
+}
+
+.sf-root[data-sf-vertical="coffee"] .product-card--retail-v1 {
+  --retail-media-ratio: 1 / 1;
+  --retail-radius: 10px;
+  --retail-meta-min: 44px;
+}
+
+.sf-root[data-sf-vertical="coffee"] .product-card--retail-v1 .retail-card__title {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  height: 2.5em;
+}
+
+.sf-root[data-sf-vertical="coffee"] .product-card--retail-v1 .retail-card__price-current {
+  font-size: 0.75rem;
+}
+
+.sf-root[data-sf-vertical="coffee"] .product-card--retail-v1 .retail-card__cta--primary {
+  min-height: 36px;
+  font-size: 0.625rem;
+  border-radius: 8px;
+}
+
+.sf-root[data-sf-vertical="fastfood"] .product-card--retail-v1 {
+  --retail-media-ratio: 1 / 1;
+  --retail-radius: 14px;
+}
+
+.sf-root[data-sf-vertical="fastfood"] .product-card--retail-v1 .retail-card__title {
+  font-weight: 700;
+}
+
+.sf-root[data-sf-vertical="fastfood"] .product-card--retail-v1 .retail-card__price-current {
+  font-weight: 800;
+  color: var(--sf-color-primary);
+}
+
+.sf-root[data-sf-vertical="fastfood"] .product-card--retail-v1 .retail-card__cta--primary {
+  border-radius: 12px;
+  font-weight: 700;
+}

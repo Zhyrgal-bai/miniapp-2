@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Product } from "../../../types";
 import { useStorefrontPayload } from "../runtime/StorefrontPayloadContext";
-import { VerticalOrderOptionsFields } from "../../../commerce/VerticalOrderOptionsFields";
+import { VerticalOrderOptionsExperience } from "../vertical/VerticalOrderOptionsExperience";
+import {
+  storefrontVerticalExperience,
+  verticalPdpAddLabel,
+} from "../../../storefront/verticalExperience";
 import type { SchemaObject } from "../../admin/DynamicFieldRenderer";
 import { formatSizeLabel } from "../../../commerce/useVerticalProductSelection";
 import { isStorefrontCommerceEnabled } from "../../../hooks/useStorefrontCommerceMode";
@@ -9,7 +13,7 @@ import { openOpenInTelegramModal } from "../../../storefront/openInTelegramModal
 import { getPrimaryImage, getEffectivePrice } from "../../../utils/product";
 import { ru } from "../../../i18n/ru";
 import { getRelatedProducts, useProductExperience } from "./useProductExperience";
-import { scrollRootToTop } from "../../../utils/scrollRoot";
+import { AmbientImageGlow } from "./AmbientImageGlow";
 import "./ProductExperienceScreen.css";
 
 export type ProductExperienceScreenProps = {
@@ -19,6 +23,8 @@ export type ProductExperienceScreenProps = {
   catalogProducts: Product[];
   onClose: () => void;
   onSelectProduct: (p: Product) => void;
+  /** Quick View shell — compact layout inside centered modal. */
+  quickView?: boolean;
 };
 
 function formatSom(v: number): string {
@@ -32,20 +38,26 @@ export function ProductExperienceScreen({
   catalogProducts,
   onClose,
   onSelectProduct,
+  quickView = false,
 }: ProductExperienceScreenProps): React.ReactElement {
   const { payload } = useStorefrontPayload();
   const commerceEnabled = isStorefrontCommerceEnabled();
   const isWeb = !commerceEnabled;
 
   const orderOptionsSchema = (payload?.orderOptionsSchema ?? {}) as SchemaObject;
+
+  const resolvedBusinessType =
+    businessType ?? product.businessType ?? payload?.businessType ?? null;
+
+  const verticalExperience = storefrontVerticalExperience(resolvedBusinessType);
+  const sizeBeforeColor = verticalExperience === "clothing";
+
   const addLabel =
     typeof payload?.storefrontTextConfig?.addToCartLabel === "string" &&
     String(payload.storefrontTextConfig.addToCartLabel).trim() !== ""
       ? String(payload.storefrontTextConfig.addToCartLabel)
-      : "Добавить в корзину";
+      : verticalPdpAddLabel(resolvedBusinessType);
 
-  const resolvedBusinessType =
-    businessType ?? product.businessType ?? payload?.businessType ?? null;
   const merchantConfig =
     payload?.merchantConfig != null &&
     typeof payload.merchantConfig === "object" &&
@@ -67,7 +79,6 @@ export function ProductExperienceScreen({
   useEffect(() => {
     setGalleryIndex(0);
     setAddSuccess(false);
-    scrollRootToTop("auto");
   }, [product.id]);
 
   useEffect(() => {
@@ -116,12 +127,69 @@ export function ProductExperienceScreen({
 
   const clearHint = () => px.clearSelectionHint();
 
+  const sizeBlock =
+    px.sizes.length > 0 ? (
+      <section className="px-block px-block--size">
+        <h2 className="px-block__label">{px.primaryLabel}</h2>
+        <div className="px-chips">
+          {px.sizes.map((s) => (
+            <button
+              key={s.size}
+              type="button"
+              disabled={s.stock === 0}
+              className={`px-chip${px.selectedSize === s.size ? " is-active" : ""}`}
+              aria-pressed={px.selectedSize === s.size}
+              onClick={() => {
+                px.setSelectedSize(s.size);
+                clearHint();
+              }}
+            >
+              {formatSizeLabel(resolvedBusinessType, s.size)}
+            </button>
+          ))}
+        </div>
+      </section>
+    ) : null;
+
+  const colorBlock =
+    px.showColorPicker && px.hasCustomColors ? (
+      <section className="px-block px-block--color">
+        <h2 className="px-block__label">Цвет</h2>
+        <div className="px-chips px-chips--colors">
+          {px.colors.map((c) => (
+            <button
+              key={c.name}
+              type="button"
+              className={`px-chip px-chip--color${px.selectedColor === c.name ? " is-active" : ""}`}
+              aria-label={c.name}
+              aria-pressed={px.selectedColor === c.name}
+              style={{ ["--px-chip-color" as string]: c.hex }}
+              onClick={() => {
+                px.setSelectedColor(c.name);
+                clearHint();
+              }}
+            >
+              <span className="px-chip__swatch" aria-hidden />
+              <span className="px-chip__text">{c.name}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+    ) : null;
+
   return (
     <div
-      className={`px-screen${isWeb ? " px-screen--web" : " px-screen--telegram"}`}
+      className={[
+        "px-screen",
+        isWeb ? "px-screen--web" : "px-screen--telegram",
+        quickView ? "px-screen--quick-view" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       data-px-commerce={commerceEnabled ? "telegram" : "web"}
+      data-sf-vertical={verticalExperience !== "default" ? verticalExperience : undefined}
     >
-      {isWeb ? (
+      {isWeb && !quickView ? (
         <header className="px-topbar">
           <button type="button" className="px-topbar__back" onClick={onClose}>
             ← Назад
@@ -136,6 +204,10 @@ export function ProductExperienceScreen({
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
+          <AmbientImageGlow
+            src={px.images[galleryIndex] ?? px.images[0]}
+            className="sf-ambient-glow--px-gallery"
+          />
           {px.images.length > 0 ? (
             <div
               className="px-gallery__track"
@@ -206,55 +278,19 @@ export function ProductExperienceScreen({
 
           {!px.outOfStock ? (
             <>
-              {px.showColorPicker && px.hasCustomColors ? (
-                <section className="px-block">
-                  <h2 className="px-block__label">Цвет</h2>
-                  <div className="px-chips px-chips--colors">
-                    {px.colors.map((c) => (
-                      <button
-                        key={c.name}
-                        type="button"
-                        className={`px-chip px-chip--color${px.selectedColor === c.name ? " is-active" : ""}`}
-                        aria-label={c.name}
-                        aria-pressed={px.selectedColor === c.name}
-                        style={{ ["--px-chip-color" as string]: c.hex }}
-                        onClick={() => {
-                          px.setSelectedColor(c.name);
-                          clearHint();
-                        }}
-                      >
-                        <span className="px-chip__swatch" aria-hidden />
-                        <span className="px-chip__text">{c.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
+              {sizeBeforeColor ? (
+                <>
+                  {sizeBlock}
+                  {colorBlock}
+                </>
+              ) : (
+                <>
+                  {colorBlock}
+                  {sizeBlock}
+                </>
+              )}
 
-              {px.sizes.length > 0 ? (
-                <section className="px-block">
-                  <h2 className="px-block__label">{px.primaryLabel}</h2>
-                  <div className="px-chips">
-                    {px.sizes.map((s) => (
-                      <button
-                        key={s.size}
-                        type="button"
-                        disabled={s.stock === 0}
-                        className={`px-chip${px.selectedSize === s.size ? " is-active" : ""}`}
-                        aria-pressed={px.selectedSize === s.size}
-                        onClick={() => {
-                          px.setSelectedSize(s.size);
-                          clearHint();
-                        }}
-                      >
-                        {formatSizeLabel(resolvedBusinessType, s.size)}
-                      </button>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              <VerticalOrderOptionsFields
+              <VerticalOrderOptionsExperience
                 businessType={resolvedBusinessType}
                 merchantConfig={merchantConfig}
                 schema={orderOptionsSchema}

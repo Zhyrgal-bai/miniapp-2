@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=390, initial-scale=1" />
+  <title>PX V2 Telegram QA</title>
+  <style>
+    :root { --sf-color-primary: #ff2d7a; --sf-color-background: #1a1a1a; --sf-color-surface: #242424; --sf-color-text: #fff; --sf-color-border: #444; --sf-on-primary: #fff; }
+    * { box-sizing: border-box; margin: 0; }
+    body { background: #111; font-family: system-ui, sans-serif; }
+    .px-screen { --px-accent: var(--sf-color-primary); --px-pad: 16px; --px-radius: 12px; min-height: 844px; width: 390px; margin: 0 auto; display: flex; flex-direction: column; background: var(--sf-color-background); color: var(--sf-color-text); overflow-x: clip; }
+    .px-layout { flex: 1; display: flex; flex-direction: column; }
+    .px-gallery { min-height: 420px; max-height: 420px; background: #2a2a2a; position: relative; overflow: hidden; }
+    .px-gallery img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .px-main { padding: 16px; }
+    .px-head__title { font-size: 1.25rem; font-weight: 700; margin-bottom: 8px; }
+    .px-head__price { font-size: 1.375rem; font-weight: 800; color: #ff2d7a; }
+    .px-head__status { color: #00c853; font-size: 0.8125rem; font-weight: 600; margin: 6px 0 12px; }
+    .px-block { padding: 16px 0; border-top: 1px solid #333; }
+    .px-block__label { font-size: 0.8125rem; color: #aaa; margin-bottom: 10px; font-weight: 600; }
+    .px-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .px-chip { min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid #555; background: #242424; color: #fff; font-weight: 600; font-size: 0.875rem; }
+    .px-chip.is-active { border-color: #ff2d7a; background: rgba(255,45,122,.14); color: #ff2d7a; }
+    .px-qty { display: inline-flex; border: 1px solid #555; border-radius: 999px; overflow: hidden; }
+    .px-qty__btn { width: 44px; height: 44px; border: 0; background: transparent; color: #fff; font-size: 1.25rem; }
+    .px-qty__value { min-width: 36px; text-align: center; font-weight: 700; line-height: 44px; }
+    .px-sticky-spacer { height: 100px; }
+    .px-sticky { position: fixed; left: 0; right: 0; bottom: 0; max-width: 390px; margin: 0 auto; padding: 12px 16px 24px; background: rgba(26,26,26,.94); border-top: 1px solid #333; display: flex; align-items: center; gap: 12px; }
+    .px-sticky__sum { font-size: 1.125rem; font-weight: 800; }
+    .px-sticky__btn { flex: 1; min-height: 52px; border: 0; border-radius: 24px; background: #ff2d7a; color: #fff; font-weight: 800; font-size: 0.9375rem; }
+  </style>
+</head>
+<body>
+  <div class="px-screen px-screen--telegram">
+    <div class="px-layout">
+      <section class="px-gallery">
+        <img src="https://images.unsplash.com/photo-1561181286-d3cb7c251a85?w=800&q=80" alt="" />
+      </section>
+      <div class="px-main">
+        <h1 class="px-head__title">Букет «Нежность»</h1>
+        <div class="px-head__price">2 490 сом</div>
+        <p class="px-head__status">В наличии</p>
+        <section class="px-block">
+          <h2 class="px-block__label">Размер</h2>
+          <div class="px-chips">
+            <button class="px-chip is-active" type="button">S</button>
+            <button class="px-chip" type="button">M</button>
+            <button class="px-chip" type="button">L</button>
+          </div>
+        </section>
+        <section class="px-block">
+          <h2 class="px-block__label">Количество</h2>
+          <div class="px-qty"><button class="px-qty__btn">−</button><span class="px-qty__value">1</span><button class="px-qty__btn">+</button></div>
+        </section>
+        <div class="px-sticky-spacer"></div>
+      </div>
+    </div>
+    <footer class="px-sticky">
+      <div><span class="px-sticky__sum">2 490 сом</span></div>
+      <button class="px-sticky__btn" type="button">Добавить в корзину</button>
+    </footer>
+  </div>
+</body>
+</html>

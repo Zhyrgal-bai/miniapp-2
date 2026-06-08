@@ -18,6 +18,7 @@ import "../../storefront/commerceCards.css";
 import "../../storefront/motionTokens.css";
 import "../../storefront/mobileChrome.css";
 import { ProductExperienceScreen } from "./product/ProductExperienceScreen";
+import { ProductQuickViewShell } from "./product/ProductQuickViewShell";
 import "./storefrontKits.css";
 import {
   buildStorefrontLayoutCssVars,
@@ -30,7 +31,9 @@ import {
   mergeStorefrontCardConfigWithResponsive,
   type StorefrontCardViewportTier,
 } from "../../storefront/catalogCardPresets";
+import { getPrimaryImage } from "../../utils/product";
 import { applyImagePresentationForBusinessType } from "../../storefront/imagePresentationPresets";
+import { storefrontVerticalExperience } from "../../storefront/verticalExperience";
 import { StorefrontFeed } from "./StorefrontFeed";
 import { CatalogSearchBar } from "./CatalogSearchBar";
 import { StorefrontCompactStrip } from "./StorefrontCompactStrip";
@@ -181,6 +184,11 @@ export function StorefrontRenderer(props: {
     [props.payload.storefrontCardConfig, cardViewportTier, props.payload.businessType],
   );
 
+  const verticalExperience = useMemo(
+    () => storefrontVerticalExperience(props.payload.businessType),
+    [props.payload.businessType],
+  );
+
   const commerceMode = getStorefrontCommerceMode();
   const isWebBrowse = commerceMode === "web";
   const showTableBooking =
@@ -226,6 +234,27 @@ export function StorefrontRenderer(props: {
     () => filterByCategory(catalog ?? []),
     [catalog, filterByCategory],
   );
+
+  /** Footer rail: full catalog when loaded, else featured from payload (same as admin preview). */
+  const footerSliderProducts = useMemo(() => {
+    const merged = new Map<number, Product>();
+    const featured = enrichProductsFromCatalog(
+      props.payload.featuredProducts ?? [],
+      catalog,
+    );
+    for (const p of featured) {
+      const id = Number(p.id ?? 0);
+      if (id > 0) merged.set(id, p);
+    }
+    if (catalog != null) {
+      for (const p of catalog) {
+        const id = Number(p.id ?? 0);
+        if (id > 0) merged.set(id, p);
+      }
+    }
+    return Array.from(merged.values());
+  }, [catalog, props.payload.featuredProducts]);
+
   const primaryDisplayProducts = useMemo(() => {
     if (featuredFiltered.length > 0) return featuredFiltered;
     return catalogFiltered;
@@ -374,8 +403,8 @@ export function StorefrontRenderer(props: {
     const st = styleCfg?.catalogFooter;
     if (!st || typeof st !== "object") return false;
     const enabled = Boolean((st as { enabled?: boolean }).enabled);
-    return catalogFooterCanShow(enabled, catalog ?? []);
-  }, [styleCfg, catalog]);
+    return catalogFooterCanShow(enabled, footerSliderProducts);
+  }, [styleCfg, footerSliderProducts]);
 
   const identityTextCfg = props.payload.storefrontTextConfig ?? undefined;
   const searchPlaceholder =
@@ -385,29 +414,7 @@ export function StorefrontRenderer(props: {
       : "Поиск товаров…";
   const catalogLoading = catalog === null;
 
-  if (activeProduct) {
-    return (
-      <ThemeVarsProvider theme={theme}>
-        <div
-          data-sf-kit={kit}
-          data-sf-layout={layoutPreset}
-          data-sf-motion={motionLevel}
-          data-sf-brand-tone={brandTone || "default"}
-          className="sf-root sf-root--product-experience"
-          style={cssVars as unknown as React.CSSProperties}
-        >
-          <ProductExperienceScreen
-            product={activeProduct}
-            businessId={props.payload.businessId}
-            businessType={props.payload.businessType ?? undefined}
-            catalogProducts={catalog ?? []}
-            onClose={closeProduct}
-            onSelectProduct={openProduct}
-          />
-        </div>
-      </ThemeVarsProvider>
-    );
-  }
+  const quickViewAmbientSrc = activeProduct ? getPrimaryImage(activeProduct) : null;
 
   return (
     <ThemeVarsProvider theme={theme}>
@@ -416,7 +423,8 @@ export function StorefrontRenderer(props: {
         data-sf-layout={layoutPreset}
         data-sf-motion={motionLevel}
         data-sf-brand-tone={brandTone || "default"}
-        className={`sf-root${catalogBold ? " sf-root--catalog-bold" : ""}`}
+        data-sf-vertical={verticalExperience !== "default" ? verticalExperience : undefined}
+        className={`sf-root${catalogBold ? " sf-root--catalog-bold" : ""}${activeProduct ? " sf-root--quick-view-open" : ""}`}
         style={cssVars as unknown as React.CSSProperties}
       >
         <StorefrontFeed>
@@ -636,12 +644,30 @@ export function StorefrontRenderer(props: {
             <div className="sf-feed__chunk sf-feed__chunk--catalog-footer sf-feed__chunk--stack">
               <CatalogFooterSlider
                 storefrontStyleConfig={styleCfg}
-                catalogProducts={catalog ?? []}
+                catalogProducts={footerSliderProducts}
                 onOpenProduct={openProduct}
               />
             </div>
           ) : null}
         </StorefrontFeed>
+
+        {activeProduct ? (
+          <ProductQuickViewShell
+            open
+            onClose={closeProduct}
+            ambientImageSrc={quickViewAmbientSrc}
+          >
+            <ProductExperienceScreen
+              product={activeProduct}
+              businessId={props.payload.businessId}
+              businessType={props.payload.businessType ?? undefined}
+              catalogProducts={catalog ?? []}
+              onClose={closeProduct}
+              onSelectProduct={openProduct}
+              quickView
+            />
+          </ProductQuickViewShell>
+        ) : null}
       </div>
     </ThemeVarsProvider>
   );

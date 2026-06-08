@@ -21,6 +21,10 @@ import "./components/storefront/commerce/openInTelegramCta.css";
 import "./components/storefront/commerce/customerLocationPrompt.css";
 /** UX redesign tokens — last in cascade for storefront hierarchy. */
 import "./components/storefront/storefrontUxRedesign.css";
+/** Vertical storefront experiences — clothing, flowers, coffee, fastfood. */
+import "./components/storefront/vertical/verticalStorefrontExperiences.css";
+/** Retail product card system — storefront catalog. */
+import "./components/storefront/product/retailProductCard.css";
 /** Device / viewport / touch compatibility — must load last. */
 import "./design/responsiveCompat.css";
 import { bootstrapTelegramWebApp } from "./utils/telegramWebAppBootstrap";

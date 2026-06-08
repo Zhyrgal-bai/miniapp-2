@@ -110,14 +110,32 @@
 }
 
 .sf-skeleton-product {
-  display: grid;
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  height: 100%;
 }
 
 .sf-skeleton-product__img {
-  aspect-ratio: 1;
+  aspect-ratio: 4 / 5;
   width: 100%;
-  border-radius: var(--sf-card-radius, 16px);
+  flex: 7 1 0;
+  border-radius: 12px;
+}
+
+.sf-skeleton-product__meta {
+  min-height: 52px;
+  padding: 8px 2px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: flex-start;
+}
+
+.sf-skeleton-product__action {
+  min-height: 44px;
+  margin-top: 2px;
+  border-radius: 999px;
 }
 
 .sf-skeleton-checkout {

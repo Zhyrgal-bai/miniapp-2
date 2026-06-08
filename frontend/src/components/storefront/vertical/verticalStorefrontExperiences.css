@@ -1,0 +1,456 @@
+/**
+ * ARCHA Phase 3 — vertical storefront experiences.
+ * Scoped by [data-sf-vertical] on .sf-root and .px-screen.
+ */
+
+/* ═══════════════════════════════════════════════════════════════
+   CLOTHING — fashion / lookbook
+   ═══════════════════════════════════════════════════════════════ */
+
+.sf-root[data-sf-vertical="clothing"] .product-grid:not(.product-grid--list):not(.product-grid--rail) {
+  --sf-catalog-cols: 2;
+  --pg-gap-x: 10px;
+  --pg-gap-y: 18px;
+  padding-inline: 12px;
+}
+
+.sf-root[data-sf-vertical="clothing"] .product-card.product-card--storefront .product-image-wrapper {
+  --sf-card-image-ratio: 3 / 4;
+  border-radius: 4px;
+}
+
+.sf-root[data-sf-vertical="clothing"] .product-card.product-card--storefront .product-info {
+  padding: 12px 0 0;
+  gap: 4px;
+}
+
+.sf-root[data-sf-vertical="clothing"] .product-card.product-card--storefront .product-title {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  -webkit-line-clamp: 1;
+}
+
+.sf-root[data-sf-vertical="clothing"] .product-card.product-card--storefront .product-price {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--sf-color-text) 72%, transparent);
+}
+
+.sf-root[data-sf-vertical="clothing"] .product-card.product-card--storefront .product-add-btn--storefront-retail {
+  border: 0;
+  background: transparent;
+  min-height: 32px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--sf-color-text) 68%, transparent);
+}
+
+.sf-root[data-sf-vertical="clothing"] .product-card.product-card--storefront .product-photo-count-badge {
+  display: none;
+}
+
+.sf-root[data-sf-vertical="clothing"] .sf-feed__chunk--search {
+  opacity: 0.92;
+}
+
+.px-screen[data-sf-vertical="clothing"] .px-gallery {
+  min-height: min(52dvh, 420px);
+  background: color-mix(in srgb, var(--sf-color-background) 96%, #000);
+}
+
+.px-screen[data-sf-vertical="clothing"] .px-gallery__track {
+  min-height: min(48dvh, 380px);
+  max-height: 56dvh;
+}
+
+.px-screen[data-sf-vertical="clothing"] .px-gallery__badge {
+  display: none;
+}
+
+.px-screen[data-sf-vertical="clothing"] .px-head__title {
+  font-size: 1.125rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.px-screen[data-sf-vertical="clothing"] .px-head__price {
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.px-screen[data-sf-vertical="clothing"] .px-head__status {
+  display: none;
+}
+
+.px-screen[data-sf-vertical="clothing"] .px-block__label {
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.px-screen[data-sf-vertical="clothing"] .px-chips:not(.px-chips--colors) .px-chip {
+  min-width: 48px;
+  min-height: 48px;
+  font-size: 0.9375rem;
+  border-radius: 4px;
+  border-width: 1px;
+}
+
+.px-screen[data-sf-vertical="clothing"] .px-chips--colors .px-chip--color {
+  min-height: 44px;
+  border-radius: 999px;
+}
+
+.px-screen[data-sf-vertical="clothing"] .px-block--related {
+  display: none;
+}
+
+.px-screen[data-sf-vertical="clothing"] .px-sticky__btn--primary {
+  border-radius: 4px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.8125rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   FLOWERS — gift / emotion
+   ═══════════════════════════════════════════════════════════════ */
+
+.sf-root[data-sf-vertical="flowers"] .product-grid:not(.product-grid--list):not(.product-grid--rail) {
+  --pg-gap-y: 20px;
+}
+
+.sf-root[data-sf-vertical="flowers"] .product-card.product-card--storefront .product-image-wrapper {
+  --sf-card-image-ratio: 4 / 5;
+  border-radius: 16px;
+}
+
+.sf-root[data-sf-vertical="flowers"] .product-card.product-card--storefront .product-title {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-align: center;
+}
+
+.sf-root[data-sf-vertical="flowers"] .product-card.product-card--storefront .product-info {
+  align-items: center;
+  text-align: center;
+  padding-top: 10px;
+}
+
+.sf-root[data-sf-vertical="flowers"] .product-card.product-card--storefront .product-price {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--sf-color-primary) 80%, var(--sf-color-text));
+}
+
+.sf-root[data-sf-vertical="flowers"] .product-card.product-card--storefront .product-add-btn--storefront-retail {
+  border-radius: 999px;
+  border-color: color-mix(in srgb, var(--sf-color-primary) 35%, transparent);
+  background: color-mix(in srgb, var(--sf-color-primary) 8%, transparent);
+  color: var(--sf-color-primary);
+}
+
+.sf-root[data-sf-vertical="flowers"] .sf-cine-hero__title,
+.sf-root[data-sf-vertical="flowers"] .sf-section__title {
+  font-weight: 500 !important;
+}
+
+.px-screen[data-sf-vertical="flowers"] .px-gallery {
+  min-height: min(50dvh, 400px);
+  border-radius: 0 0 20px 20px;
+}
+
+.px-screen[data-sf-vertical="flowers"] .px-head {
+  text-align: center;
+}
+
+.px-screen[data-sf-vertical="flowers"] .px-head__title {
+  font-size: 1.25rem;
+  font-weight: 500;
+}
+
+.px-screen[data-sf-vertical="flowers"] .px-head__price-row {
+  justify-content: center;
+}
+
+.px-screen[data-sf-vertical="flowers"] .px-head__status {
+  text-align: center;
+  color: color-mix(in srgb, var(--sf-color-primary) 70%, var(--sf-color-text));
+}
+
+.px-screen[data-sf-vertical="flowers"] .px-block__label {
+  text-align: center;
+  color: color-mix(in srgb, var(--sf-color-primary) 65%, var(--sf-color-text));
+}
+
+.px-screen[data-sf-vertical="flowers"] .px-chips {
+  justify-content: center;
+}
+
+.px-screen[data-sf-vertical="flowers"] .px-chips .px-chip {
+  min-height: 48px;
+  border-radius: 999px;
+  padding-inline: 18px;
+}
+
+.px-screen[data-sf-vertical="flowers"] .px-block--qty {
+  display: none;
+}
+
+.px-screen[data-sf-vertical="flowers"] .px-sticky__btn--primary {
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.px-screen[data-sf-vertical="flowers"] .px-block--related {
+  display: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   COFFEE — QR menu / high density
+   ═══════════════════════════════════════════════════════════════ */
+
+.sf-root[data-sf-vertical="coffee"] .product-grid:not(.product-grid--list):not(.product-grid--rail) {
+  --sf-catalog-cols: 3;
+  --pg-gap-x: 8px;
+  --pg-gap-y: 10px;
+  padding: 8px 10px 16px;
+}
+
+.sf-root[data-sf-vertical="coffee"] .product-card.product-card--storefront .product-image-wrapper {
+  --sf-card-image-ratio: 1 / 1;
+  border-radius: 10px;
+}
+
+.sf-root[data-sf-vertical="coffee"] .product-card.product-card--storefront .product-info {
+  padding: 6px 0 0;
+  gap: 2px;
+}
+
+.sf-root[data-sf-vertical="coffee"] .product-card.product-card--storefront .product-title {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.25;
+  -webkit-line-clamp: 2;
+}
+
+.sf-root[data-sf-vertical="coffee"] .product-card.product-card--storefront .product-price {
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.sf-root[data-sf-vertical="coffee"] .product-card.product-card--storefront .product-add-btn--storefront-retail {
+  min-height: 30px;
+  font-size: 0.625rem;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: var(--sf-color-primary);
+  border-color: transparent;
+  color: var(--sf-on-primary, #fff);
+}
+
+.sf-root[data-sf-vertical="coffee"] .product-card.product-card--storefront .product-photo-count-badge {
+  font-size: 0.5625rem;
+  padding: 1px 4px;
+}
+
+.sf-root[data-sf-vertical="coffee"] .sf-feed__chunk--section[data-sf-section-type="hero"] {
+  display: none;
+}
+
+.px-screen[data-sf-vertical="coffee"] .px-gallery {
+  min-height: min(36dvh, 280px);
+}
+
+.px-screen[data-sf-vertical="coffee"] .px-gallery__track {
+  min-height: min(32dvh, 240px);
+  max-height: 38dvh;
+}
+
+.px-screen[data-sf-vertical="coffee"] .px-gallery__thumbs {
+  display: none;
+}
+
+.px-screen[data-sf-vertical="coffee"] .px-head__desc {
+  display: none;
+}
+
+.px-screen[data-sf-vertical="coffee"] .px-head__title {
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.px-screen[data-sf-vertical="coffee"] .px-head__status {
+  font-size: 0.75rem;
+}
+
+.px-screen[data-sf-vertical="coffee"] .px-block__label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.px-screen[data-sf-vertical="coffee"] .px-chips .px-chip {
+  min-height: 40px;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.px-screen[data-sf-vertical="coffee"] .px-block--qty {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.px-screen[data-sf-vertical="coffee"] .px-block--qty .px-block__label {
+  margin: 0;
+}
+
+.px-screen[data-sf-vertical="coffee"] .px-qty {
+  margin-left: auto;
+}
+
+.px-screen[data-sf-vertical="coffee"] .px-block--related {
+  display: none;
+}
+
+.px-screen[data-sf-vertical="coffee"] .px-sticky__buy {
+  gap: 12px;
+}
+
+.px-screen[data-sf-vertical="coffee"] .px-sticky__price-col {
+  display: none;
+}
+
+.px-screen[data-sf-vertical="coffee"] .px-sticky__btn--primary {
+  min-height: 52px;
+  font-size: 1rem;
+  font-weight: 700;
+  border-radius: 14px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   FASTFOOD — menu / order assembly
+   ═══════════════════════════════════════════════════════════════ */
+
+.sf-root[data-sf-vertical="fastfood"] .product-grid:not(.product-grid--list):not(.product-grid--rail) {
+  --sf-catalog-cols: 2;
+  --pg-gap-x: 10px;
+  --pg-gap-y: 12px;
+}
+
+.sf-root[data-sf-vertical="fastfood"] .product-card.product-card--storefront .product-image-wrapper {
+  --sf-card-image-ratio: 1 / 1;
+  border-radius: 14px;
+}
+
+.sf-root[data-sf-vertical="fastfood"] .product-card.product-card--storefront .product-catalog-image {
+  transform-origin: center;
+}
+
+.sf-root[data-sf-vertical="fastfood"] .product-card.product-card--storefront:active .product-catalog-image {
+  transform: scale(1.03);
+}
+
+.sf-root[data-sf-vertical="fastfood"] .product-card.product-card--storefront .product-title {
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.sf-root[data-sf-vertical="fastfood"] .product-card.product-card--storefront .product-price {
+  font-size: 0.9375rem;
+  font-weight: 800;
+  color: var(--sf-color-primary);
+}
+
+.sf-root[data-sf-vertical="fastfood"] .product-card.product-card--storefront .product-add-btn--storefront-retail {
+  min-height: 38px;
+  font-weight: 700;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sf-color-primary) 92%, #000);
+  border-color: transparent;
+  color: var(--sf-on-primary, #fff);
+}
+
+.px-screen[data-sf-vertical="fastfood"] .px-gallery {
+  min-height: min(40dvh, 320px);
+}
+
+.px-screen[data-sf-vertical="fastfood"] .px-gallery__track {
+  min-height: min(36dvh, 280px);
+  max-height: 42dvh;
+}
+
+.px-screen[data-sf-vertical="fastfood"] .px-head__title {
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.px-screen[data-sf-vertical="fastfood"] .px-head__price {
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: var(--sf-color-primary);
+}
+
+.px-screen[data-sf-vertical="fastfood"] .px-chips .px-chip {
+  min-height: 44px;
+  border-radius: 12px;
+  font-weight: 700;
+}
+
+.px-screen[data-sf-vertical="fastfood"] .px-chips .px-chip.is-active {
+  background: var(--sf-color-primary);
+  border-color: var(--sf-color-primary);
+  color: var(--sf-on-primary, #fff);
+}
+
+.px-screen[data-sf-vertical="fastfood"] .px-block--qty {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.px-screen[data-sf-vertical="fastfood"] .px-block--qty .px-block__label {
+  margin: 0;
+}
+
+.px-screen[data-sf-vertical="fastfood"] .px-block--related {
+  display: none;
+}
+
+.px-screen[data-sf-vertical="fastfood"] .px-sticky__btn--primary {
+  min-height: 54px;
+  font-size: 1.0625rem;
+  font-weight: 800;
+  border-radius: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+@media (min-width: 520px) {
+  .sf-root[data-sf-vertical="coffee"] .product-grid:not(.product-grid--list):not(.product-grid--rail) {
+    --sf-catalog-cols: 4;
+  }
+}
+
+@media (min-width: 768px) {
+  .sf-root[data-sf-vertical="clothing"] .product-grid:not(.product-grid--list):not(.product-grid--rail) {
+    --sf-catalog-cols: 3;
+  }
+
+  .sf-root[data-sf-vertical="flowers"] .product-grid:not(.product-grid--list):not(.product-grid--rail) {
+    --sf-catalog-cols: 2;
+    max-width: 720px;
+    margin-inline: auto;
+  }
+}

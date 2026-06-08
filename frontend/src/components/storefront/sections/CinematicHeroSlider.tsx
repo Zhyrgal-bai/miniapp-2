@@ -9,6 +9,7 @@ import {
   type TouchEvent,
 } from "react";
 import { buildCloudinaryResponsiveUrl } from "../../../utils/cloudinaryTransforms";
+import { AmbientImageGlow } from "../product/AmbientImageGlow";
 import "./cinematicHeroSlider.css";
 
 const PROGRESS_SEGMENTS_MAX = 8;
@@ -275,7 +276,7 @@ export function CinematicHeroSlider(props: {
                         .filter(Boolean)
                         .join(" ")}
                     />
-                    <div className="sf-cine-hero__ambient" />
+                    <AmbientImageGlow src={imgSrc} className="sf-ambient-glow--hero" />
                     <div className="sf-cine-hero__edge" />
                   </div>
                 </div>

@@ -17,6 +17,7 @@ const SCROLLABLE_OVERLAY_SELECTOR = [
   ".archa-overlay__scroll",
   ".sf-profile-sheet__scroll",
   ".sf-tg-modal",
+  ".sf-product-quick-view__scroll",
   ".px-related-rail",
   ".table-booking-sheet__body",
 ].join(", ");
@@ -25,6 +26,7 @@ const SCROLLABLE_OVERLAY_SELECTOR = [
 const OPEN_OVERLAY_BACKDROP_SELECTOR = [
   ".archa-overlay__backdrop",
   ".sf-tg-modal-backdrop",
+  ".sf-product-quick-view__backdrop",
   ".admin-modal-overlay",
   ".table-booking-modal-backdrop",
 ].join(", ");

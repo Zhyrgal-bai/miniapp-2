@@ -32,6 +32,8 @@ import {
   productRequiresVariantPicker,
   resolveInstantAddLine,
 } from "../../commerce/productVariantPolicy";
+import { verticalCatalogCtaLabel, storefrontVerticalExperience } from "../../storefront/verticalExperience";
+import { formatRetailCardPrice } from "../../storefront/retailProductCard";
 import { IconCart } from "../storefront/icons/StorefrontCommerceIcons";
 
 type Props = {
@@ -216,11 +218,12 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   const primaryCatalogImage = images[0] ?? product.image;
 
   const storefrontCtaLabel = useMemo(() => {
-    if (outOfStock) return "Нет в наличии";
-    if (needsVariantPicker) return "Выбрать";
     if (customAddLabel !== "") return customAddLabel;
-    return "В корзину";
-  }, [outOfStock, needsVariantPicker, customAddLabel]);
+    return verticalCatalogCtaLabel(resolvedBusinessType, {
+      outOfStock,
+      needsVariantPicker,
+    });
+  }, [customAddLabel, resolvedBusinessType, outOfStock, needsVariantPicker]);
 
   const lineColor = useMemo(() => {
     if (hasCustomColors) {
@@ -560,7 +563,6 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
           disabled={outOfStock}
           aria-label={storefrontCtaLabel}
         >
-          <IconCart size={15} />
           <span className="product-add-btn__label">{storefrontCtaLabel}</span>
         </button>
       ) : (
@@ -572,6 +574,121 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
         </div>
       )
     ) : null;
+
+  const verticalExp = storefrontVerticalExperience(resolvedBusinessType);
+  const retailCtaPrimary =
+    verticalExp === "coffee" || verticalExp === "fastfood" || verticalExp === "flowers";
+
+  if (isStorefrontCatalog) {
+    const retailCardClasses = [
+      "product-card",
+      "product-card--storefront",
+      "product-card--retail-v1",
+      outOfStock ? "out" : "",
+      `product-card--ratio-${cfg.imageRatio}`,
+      `product-card--fit-${cfg.imageFit}`,
+      cfg.rounded ? "product-card--rounded" : "product-card--square",
+      `product-card--density-${cfg.density}`,
+      `product-card--price-${cfg.priceStyle}`,
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    const retailAction =
+      !commerceEnabled ? (
+        <button
+          type="button"
+          className={`retail-card__cta${retailCtaPrimary ? " retail-card__cta--primary" : ""}`}
+          onClick={() => openOpenInTelegramModal(payload?.telegramOpenUrl ?? null)}
+        >
+          <span className="retail-card__cta-label">{addLabel}</span>
+        </button>
+      ) : quantity <= 0 ? (
+        <button
+          type="button"
+          className={`retail-card__cta${retailCtaPrimary ? " retail-card__cta--primary" : ""}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleAddToCart();
+          }}
+          disabled={outOfStock}
+          aria-label={storefrontCtaLabel}
+        >
+          <span className="retail-card__cta-label">{storefrontCtaLabel}</span>
+        </button>
+      ) : (
+        <div className="retail-card__qty" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            className="retail-card__qty-btn"
+            onClick={handleDecrement}
+            disabled={outOfStock || !selectedSize || lineColor === null}
+            aria-label="Уменьшить"
+          >
+            −
+          </button>
+          <span className="retail-card__qty-value" aria-label="Количество">
+            {quantity}
+          </span>
+          <button
+            type="button"
+            className="retail-card__qty-btn"
+            onClick={handleIncrement}
+            disabled={outOfStock || !selectedSize || lineColor === null || atMaxQty}
+            aria-label="Увеличить"
+          >
+            +
+          </button>
+        </div>
+      );
+
+    return (
+      <article className={retailCardClasses}>
+        <div className="retail-card">
+          <button
+            type="button"
+            className="retail-card__tap"
+            onClick={openDetail}
+            aria-label={`${product.name}, ${formatRetailCardPrice(displayPrice)}`}
+          >
+            <div className="retail-card__media">
+              <img
+                className="retail-card__img"
+                src={primaryCatalogImage}
+                alt=""
+                sizes="(min-width: 1200px) 220px, (min-width: 900px) 20vw, (min-width: 600px) 28vw, 48vw"
+                loading="lazy"
+                decoding="async"
+              />
+              {outOfStock ? (
+                <span className="retail-card__oos">Нет в наличии</span>
+              ) : discountPct > 0 ? (
+                <span className="retail-card__discount">−{discountPct}%</span>
+              ) : null}
+            </div>
+            <div className="retail-card__meta">
+              <h3 className="retail-card__title">{product.name}</h3>
+              <div className="retail-card__price">
+                {discountPct > 0 ? (
+                  <>
+                    <span className="retail-card__price-current retail-card__price-current--sale">
+                      {formatRetailCardPrice(displayPrice)}
+                    </span>
+                    <span className="retail-card__price-was">{formatRetailCardPrice(product.price)}</span>
+                  </>
+                ) : (
+                  <span className="retail-card__price-current">
+                    {formatRetailCardPrice(product.price)}
+                  </span>
+                )}
+              </div>
+            </div>
+          </button>
+          <div className="retail-card__action">{retailAction}</div>
+        </div>
+      </article>
+    );
+  }
 
   return (
     <div

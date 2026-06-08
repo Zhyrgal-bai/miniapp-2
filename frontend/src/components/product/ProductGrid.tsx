@@ -3,6 +3,7 @@ import ProductCard from "./ProductCard";
 import { EmptyState } from "../ui/EmptyState";
 import "../ui/emptyState.css";
 import "../ui/ProductGrid.css";
+import { storefrontVerticalExperience } from "../../storefront/verticalExperience";
 
 type ProductGridProps = {
   products: Product[];
@@ -41,6 +42,8 @@ export default function ProductGrid({
   const catalogLayout =
     catalogLayoutRaw === "list" ? "list" : catalogLayoutRaw === "rail" ? "rail" : "grid";
 
+  const verticalExperience = storefrontVerticalExperience(businessType);
+
   if (catalogProductCount === 0) {
     return (
       <EmptyState
@@ -64,6 +67,7 @@ export default function ProductGrid({
 
   return (
     <div
+      data-sf-vertical={verticalExperience !== "default" ? verticalExperience : undefined}
       className={[
         "product-grid",
         `product-grid--density-${density}`,

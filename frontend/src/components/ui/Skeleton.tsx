@@ -48,8 +48,11 @@ export function ProductCardSkeleton(): React.ReactElement {
   return (
     <div className="sf-skeleton-product" aria-hidden>
       <SkeletonBlock className="sf-skeleton-product__img" rounded />
-      <SkeletonBlock className="sf-skeleton-line sf-skeleton-line--md" />
-      <SkeletonBlock className="sf-skeleton-line sf-skeleton-line--xs" />
+      <div className="sf-skeleton-product__meta">
+        <SkeletonBlock className="sf-skeleton-line sf-skeleton-line--md" />
+        <SkeletonBlock className="sf-skeleton-line sf-skeleton-line--xs" />
+      </div>
+      <SkeletonBlock className="sf-skeleton-product__action" rounded />
     </div>
   );
 }

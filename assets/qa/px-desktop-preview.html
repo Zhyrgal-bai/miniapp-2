@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1280" />
+  <title>PX V2 Desktop QA</title>
+  <style>
+    :root { --sf-color-primary: #ff2d7a; --sf-color-background: #1a1a1a; --sf-color-text: #fff; }
+    * { box-sizing: border-box; margin: 0; }
+    body { background: #111; font-family: system-ui, sans-serif; padding: 24px; }
+    .px-screen { width: 1200px; margin: 0 auto; background: #1a1a1a; color: #fff; min-height: 720px; border-radius: 12px; overflow: hidden; }
+    .px-topbar { padding: 8px 16px; }
+    .px-topbar__back { background: none; border: 0; color: #fff; font-size: 0.9375rem; font-weight: 600; cursor: pointer; }
+    .px-layout { display: flex; gap: 40px; padding: 0 24px 24px; align-items: flex-start; }
+    .px-gallery { flex: 1 1 52%; min-height: 520px; border-radius: 16px; overflow: hidden; background: #2a2a2a; position: sticky; top: 16px; }
+    .px-gallery img { width: 100%; height: 520px; object-fit: cover; display: block; }
+    .px-main { flex: 1 1 48%; max-width: 480px; padding-top: 8px; }
+    .px-head__title { font-size: 1.5rem; font-weight: 700; margin-bottom: 12px; }
+    .px-head__price { font-size: 1.5rem; font-weight: 800; color: #ff2d7a; margin-bottom: 8px; }
+    .px-head__status { color: #00c853; font-size: 0.875rem; margin-bottom: 16px; }
+    .px-head__desc { color: #bbb; line-height: 1.5; margin-bottom: 20px; font-size: 0.875rem; }
+    .px-block { padding: 16px 0; border-top: 1px solid #333; }
+    .px-block__label { font-size: 0.8125rem; color: #aaa; margin-bottom: 10px; }
+    .px-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .px-chip { min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid #555; background: #242424; color: #fff; font-weight: 600; }
+    .px-chip.is-active { border-color: #ff2d7a; color: #ff2d7a; background: rgba(255,45,122,.12); }
+    .px-sticky { margin-top: 24px; padding: 16px; border-radius: 16px; border: 1px solid #333; display: flex; align-items: center; gap: 16px; }
+    .px-sticky__sum { font-size: 1.25rem; font-weight: 800; min-width: 120px; }
+    .px-sticky__btn { flex: 1; min-height: 52px; border: 0; border-radius: 24px; background: #ff2d7a; color: #fff; font-weight: 800; font-size: 1rem; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="px-screen px-screen--web">
+    <header class="px-topbar"><button class="px-topbar__back" type="button">← Назад</button></header>
+    <div class="px-layout">
+      <section class="px-gallery">
+        <img src="https://images.unsplash.com/photo-1561181286-d3cb7c251a85?w=900&q=80" alt="" />
+      </section>
+      <div class="px-main">
+        <h1 class="px-head__title">Букет «Нежность»</h1>
+        <div class="px-head__price">2 490 сом</div>
+        <p class="px-head__status">В наличии</p>
+        <p class="px-head__desc">Свежие розы и эустома в авторской упаковке. Идеален для подарка.</p>
+        <section class="px-block">
+          <h2 class="px-block__label">Размер букета</h2>
+          <div class="px-chips">
+            <button class="px-chip is-active" type="button">25 см</button>
+            <button class="px-chip" type="button">35 см</button>
+            <button class="px-chip" type="button">45 см</button>
+          </div>
+        </section>
+        <section class="px-block">
+          <h2 class="px-block__label">Количество</h2>
+          <div class="px-chips"><button class="px-chip is-active">1</button></div>
+        </section>
+        <footer class="px-sticky">
+          <span class="px-sticky__sum">2 490 сом</span>
+          <button class="px-sticky__btn" type="button">Добавить в корзину</button>
+        </footer>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

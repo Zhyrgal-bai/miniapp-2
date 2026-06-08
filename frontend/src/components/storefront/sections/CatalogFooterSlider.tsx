@@ -14,6 +14,7 @@ import {
 } from "../../../storefront/catalogFooterRailSettings";
 import { storefrontMotionLevelFromStyleConfig } from "../../../storefront/buildStorefrontLayoutCssVars";
 import { buildCloudinaryResponsiveUrl } from "../../../utils/cloudinaryTransforms";
+import { getPrimaryImage } from "../../../utils/product";
 import "./CatalogFooterSlider.css";
 
 const RESUME_AUTO_MS = 2600;
@@ -36,10 +37,8 @@ export type ResolvedSlide = {
 };
 
 function productPrimaryImage(p: Product): string {
-  const a = typeof p.image === "string" ? p.image.trim() : "";
-  if (a !== "") return a;
-  const first = p.images?.[0];
-  return typeof first === "string" ? first.trim() : "";
+  const url = getPrimaryImage(p);
+  return typeof url === "string" ? url.trim() : "";
 }
 
 function readCatalogFooter(styleConfig: Record<string, unknown> | null | undefined): {

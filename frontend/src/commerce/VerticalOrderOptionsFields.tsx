@@ -7,6 +7,8 @@ import {
   DynamicFieldRenderer,
   type SchemaObject,
 } from "../components/admin/DynamicFieldRenderer";
+import { VerticalOrderOptionsExperience } from "../components/storefront/vertical/VerticalOrderOptionsExperience";
+import { hasVerticalStorefrontExperience } from "../storefront/verticalExperience";
 
 type Props = {
   businessType: string | null | undefined;
@@ -33,6 +35,18 @@ export function VerticalOrderOptionsFields({
   ) as SchemaObject;
 
   if (Object.keys(filtered).length === 0) return null;
+
+  if (hasVerticalStorefrontExperience(businessType)) {
+    return (
+      <VerticalOrderOptionsExperience
+        businessType={businessType}
+        merchantConfig={merchantConfig}
+        schema={schema}
+        value={value}
+        onChange={onChange}
+      />
+    );
+  }
 
   return (
     <div className="sf-order-options">
