@@ -204,10 +204,12 @@ export function ProductExperienceScreen({
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
-          <AmbientImageGlow
-            src={px.images[galleryIndex] ?? px.images[0]}
-            className="sf-ambient-glow--px-gallery"
-          />
+          {!quickView ? (
+            <AmbientImageGlow
+              src={px.images[galleryIndex] ?? px.images[0]}
+              className="sf-ambient-glow--px-gallery"
+            />
+          ) : null}
           {px.images.length > 0 ? (
             <div
               className="px-gallery__track"
@@ -238,16 +240,17 @@ export function ProductExperienceScreen({
             </div>
           )}
           {px.images.length > 1 ? (
-            <div className="px-gallery__thumbs" role="tablist" aria-label="Миниатюры">
-              {px.images.map((src, i) => (
+            <div className="px-gallery__dots" role="tablist" aria-label="Фото товара">
+              {px.images.map((_, i) => (
                 <button
                   key={i}
                   type="button"
-                  className={`px-gallery__thumb${i === galleryIndex ? " is-active" : ""}`}
+                  role="tab"
+                  aria-selected={i === galleryIndex}
+                  aria-label={`Фото ${i + 1} из ${px.images.length}`}
+                  className={`px-gallery__dot${i === galleryIndex ? " is-active" : ""}`}
                   onClick={() => setGalleryIndex(i)}
-                >
-                  <img src={src} alt="" loading="lazy" decoding="async" />
-                </button>
+                />
               ))}
             </div>
           ) : null}
@@ -331,7 +334,7 @@ export function ProductExperienceScreen({
             </p>
           ) : null}
 
-          {related.length > 0 ? (
+          {!quickView && related.length > 0 ? (
             <section className="px-block px-block--related">
               <h2 className="px-block__label">
                 {ru.discovery.titleRelated}

@@ -18,7 +18,66 @@
 
 .px-screen--quick-view {
   min-height: 0;
-  background: transparent;
+  background: var(--sf-color-background, #141414);
+}
+
+.px-screen--quick-view .px-gallery {
+  min-height: min(36dvh, 300px);
+  max-height: 40dvh;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--sf-color-surface, #242424) 55%, transparent);
+}
+
+.px-screen--quick-view .px-gallery__track {
+  min-height: min(34dvh, 280px);
+  max-height: 38dvh;
+}
+
+
+.px-screen--quick-view .px-main {
+  padding: 12px var(--px-pad) 0;
+}
+
+.px-screen--quick-view .px-head__title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  padding-right: 40px;
+}
+
+.px-screen--quick-view .px-head__price {
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.px-screen--quick-view .px-head__price-old {
+  color: color-mix(in srgb, #fff 50%, transparent);
+}
+
+.px-screen--quick-view .px-block {
+  padding: 12px 0;
+}
+
+.px-screen--quick-view .px-block__label {
+  font-size: 0.75rem;
+  margin-bottom: 8px;
+}
+
+.px-screen--quick-view .px-sticky {
+  background: var(--sf-color-background, #141414);
+  border-top: 1px solid color-mix(in srgb, var(--sf-color-border) 45%, transparent);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  padding-top: 10px;
+}
+
+.px-screen--quick-view .px-sticky-spacer {
+  height: calc(76px + env(safe-area-inset-bottom, 0px));
+}
+
+.px-screen--quick-view .px-chip.is-active {
+  border-color: color-mix(in srgb, var(--sf-color-primary) 55%, transparent);
+  background: color-mix(in srgb, var(--sf-color-primary) 10%, var(--sf-color-surface));
 }
 
 .px-topbar {
@@ -124,46 +183,38 @@
   font-weight: 600;
 }
 
-.px-gallery__thumbs {
-  position: relative;
-  z-index: 2;
+/* Instagram-style dots — bottom center on photo */
+.px-gallery__dots {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  z-index: 4;
+  transform: translateX(-50%);
   display: flex;
-  flex-shrink: 0;
-  gap: 8px;
-  padding: 10px var(--px-pad);
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x mandatory;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
-  background: color-mix(in srgb, var(--sf-color-background) 96%, transparent);
-  border-top: 1px solid color-mix(in srgb, var(--sf-color-border) 40%, transparent);
-}
-
-.px-gallery__thumb {
-  flex: 0 0 52px;
-  width: 52px;
-  height: 52px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 0;
-  border: 2px solid transparent;
-  border-radius: 8px;
-  overflow: hidden;
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+
+.px-gallery__dot {
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, #fff 40%, transparent);
+  box-shadow: 0 0 4px color-mix(in srgb, #000 40%, transparent);
   cursor: pointer;
-  opacity: 0.78;
-  scroll-snap-align: start;
-  background: color-mix(in srgb, var(--sf-color-surface) 90%, transparent);
+  transition: transform 0.2s ease, background 0.2s ease;
 }
 
-.px-gallery__thumb.is-active {
-  border-color: color-mix(in srgb, var(--sf-color-text) 55%, transparent);
-  opacity: 1;
-}
-
-.px-gallery__thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
+.px-gallery__dot.is-active {
+  background: #fff;
+  transform: scale(1.2);
 }
 
 .px-main {
@@ -190,9 +241,9 @@
 
 .px-head__price {
   font-size: 1.125rem;
-  font-weight: 600;
+  font-weight: 800;
   color: var(--sf-color-text, #fff);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 
 .px-head__price-old {
@@ -444,8 +495,8 @@
 }
 
 .px-sticky__btn--primary {
-  background: var(--sf-color-text, #fff);
-  color: var(--sf-color-background, #111);
+  background: var(--sf-color-primary, #ff2d7a);
+  color: var(--sf-on-primary, #fff);
 }
 
 .px-sticky__btn--ghost {
@@ -507,37 +558,8 @@
     top: 16px;
   }
 
-  .px-screen--web .px-gallery__thumbs {
-    display: flex;
-    gap: 8px;
-    padding: 12px;
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(transparent, color-mix(in srgb, #000 55%, transparent));
-  }
-
-  .px-screen--web .px-gallery__thumb {
-    width: 56px;
-    height: 56px;
-    padding: 0;
-    border: 2px solid transparent;
-    border-radius: 8px;
-    overflow: hidden;
-    cursor: pointer;
-    opacity: 0.75;
-  }
-
-  .px-screen--web .px-gallery__thumb.is-active {
-    border-color: var(--px-accent);
-    opacity: 1;
-  }
-
-  .px-screen--web .px-gallery__thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+  .px-screen--web .px-gallery__dots {
+    bottom: 18px;
   }
 
   .px-screen--web .px-main {

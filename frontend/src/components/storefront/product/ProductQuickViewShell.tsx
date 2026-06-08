@@ -2,12 +2,12 @@ import { useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useBodyScrollLock } from "../../../utils/bodyScrollLock";
-import { AmbientImageGlow } from "./AmbientImageGlow";
 import "./ProductQuickViewShell.css";
 
 export type ProductQuickViewShellProps = {
   open: boolean;
   onClose: () => void;
+  /** @deprecated Ambient glow removed — kept for call-site compat */
   ambientImageSrc?: string | null;
   children: ReactNode;
 };
@@ -22,7 +22,6 @@ const MODAL_EASE = [0.22, 1, 0.36, 1] as const;
 export function ProductQuickViewShell({
   open,
   onClose,
-  ambientImageSrc,
   children,
 }: ProductQuickViewShellProps): React.ReactElement | null {
   useBodyScrollLock(open);
@@ -60,16 +59,12 @@ export function ProductQuickViewShell({
             aria-modal="true"
             aria-label="Товар"
             className="sf-product-quick-view"
-            style={{ x: "-50%", y: "-50%" }}
-            initial={{ opacity: 0, scale: 0.92, x: "-50%", y: "-50%" }}
-            animate={{ opacity: 1, scale: 1, x: "-50%", y: "-50%" }}
-            exit={{ opacity: 0, scale: 0.96, x: "-50%", y: "-50%" }}
-            transition={{ duration: 0.28, ease: MODAL_EASE }}
+            initial={{ opacity: 0, y: "100%" }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: "100%" }}
+            transition={{ duration: 0.32, ease: MODAL_EASE }}
           >
-            <AmbientImageGlow
-              src={ambientImageSrc}
-              className="sf-ambient-glow--quick-view"
-            />
+            <div className="sf-product-quick-view__handle" aria-hidden />
             <button
               type="button"
               className="sf-product-quick-view__close"

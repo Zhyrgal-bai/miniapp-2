@@ -207,15 +207,16 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
     [businessType],
   );
 
-  const images = useMemo(
-    () =>
+  const images = useMemo(() => {
+    const raw =
       product.images && product.images.length > 0
         ? product.images
-        : [product.image],
-    [product]
-  );
+        : [product.image];
+    return raw.filter((u) => typeof u === "string" && u.trim() !== "");
+  }, [product]);
 
   const primaryCatalogImage = images[0] ?? product.image;
+  const catalogHasMultiplePhotos = images.length > 1;
 
   const storefrontCtaLabel = useMemo(() => {
     if (customAddLabel !== "") return customAddLabel;
@@ -651,15 +652,55 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
             onClick={openDetail}
             aria-label={`${product.name}, ${formatRetailCardPrice(displayPrice)}`}
           >
-            <div className="retail-card__media">
-              <img
-                className="retail-card__img"
-                src={getPrimaryImage(product)}
-                alt=""
-                sizes="(min-width: 1200px) 220px, (min-width: 900px) 20vw, (min-width: 600px) 28vw, 48vw"
-                loading="lazy"
-                decoding="async"
-              />
+            <div
+              className="retail-card__media"
+              onTouchStart={catalogHasMultiplePhotos ? handleTouchStart : undefined}
+              onTouchEnd={catalogHasMultiplePhotos ? handleTouchEnd : undefined}
+            >
+              {catalogHasMultiplePhotos ? (
+                <div
+                  className="retail-card__slider"
+                  style={
+                    {
+                      ["--slide-count" as string]: images.length,
+                      width: "calc(var(--slide-count) * 100%)",
+                      transform: `translateX(calc(-${currentIndex} * 100% / var(--slide-count)))`,
+                    } as React.CSSProperties
+                  }
+                >
+                  {images.map((img, index) => (
+                    <div key={index} className="retail-card__slide">
+                      <img
+                        className="retail-card__img"
+                        src={img}
+                        alt=""
+                        sizes="(min-width: 1200px) 220px, (min-width: 900px) 20vw, (min-width: 600px) 28vw, 48vw"
+                        loading={index === 0 ? "eager" : "lazy"}
+                        decoding="async"
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <img
+                  className="retail-card__img"
+                  src={primaryCatalogImage}
+                  alt=""
+                  sizes="(min-width: 1200px) 220px, (min-width: 900px) 20vw, (min-width: 600px) 28vw, 48vw"
+                  loading="lazy"
+                  decoding="async"
+                />
+              )}
+              {catalogHasMultiplePhotos ? (
+                <div className="retail-card__dots" aria-hidden>
+                  {images.map((_, i) => (
+                    <span
+                      key={i}
+                      className={`retail-card__dot${i === currentIndex ? " is-active" : ""}`}
+                    />
+                  ))}
+                </div>
+              ) : null}
               {outOfStock ? (
                 <span className="retail-card__oos">Нет в наличии</span>
               ) : discountPct > 0 ? (

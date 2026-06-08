@@ -122,7 +122,9 @@
    ═══════════════════════════════════════════════════════════════ */
 
 .sf-root[data-sf-vertical="flowers"] .product-grid:not(.product-grid--list):not(.product-grid--rail) {
+  --pg-gap-x: 12px;
   --pg-gap-y: 20px;
+  padding-inline: 14px;
 }
 
 .sf-root[data-sf-vertical="flowers"] .product-card.product-card--storefront .product-image-wrapper {
