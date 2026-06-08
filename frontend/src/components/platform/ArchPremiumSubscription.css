@@ -493,6 +493,25 @@
   cursor: not-allowed;
 }
 
+.archa-sub__pricing-cta--disabled:not(:disabled) {
+  opacity: 1;
+}
+
+.archa-sub__pricing-cta--disabled {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--archa-text-dim, rgba(238, 248, 234, 0.42));
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.archa-sub__pricing-card--selected .archa-sub__pricing-cta--disabled {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--archa-text-dim, rgba(238, 248, 234, 0.42));
+  box-shadow: none;
+}
+
 @media (min-width: 768px) {
   .archa-sub__pricing-track {
     display: grid;

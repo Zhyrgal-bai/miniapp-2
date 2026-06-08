@@ -11,6 +11,7 @@ import {
 type Props = {
   plan: MerchantSubscriptionPlanDTO;
   selected: boolean;
+  canPay: boolean;
   disabled: boolean;
   busy: boolean;
   onSelect: () => void;
@@ -20,6 +21,7 @@ type Props = {
 export function SubscriptionPricingCard({
   plan,
   selected,
+  canPay,
   disabled,
   busy,
   onSelect,
@@ -27,6 +29,7 @@ export function SubscriptionPricingCard({
 }: Props) {
   const pres = planPresentation(plan);
   const isMonthly = plan.code === "MONTHLY";
+  const payDisabled = disabled || !canPay;
 
   return (
     <article
@@ -93,14 +96,16 @@ export function SubscriptionPricingCard({
         className={[
           "archa-sub__pricing-cta",
           selected ? "archa-sub__pricing-cta--selected" : "",
+          payDisabled && !busy ? "archa-sub__pricing-cta--disabled" : "",
         ]
           .filter(Boolean)
           .join(" ")}
-        disabled={disabled}
+        disabled={payDisabled}
         aria-busy={busy}
+        aria-disabled={payDisabled}
         onClick={onPay}
       >
-        {busy ? "Открываем…" : "Выбрать"}
+        {busy ? "Открываем…" : !canPay ? "Недоступно" : "Выбрать"}
       </button>
     </article>
   );

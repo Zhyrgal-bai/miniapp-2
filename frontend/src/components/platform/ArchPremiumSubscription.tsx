@@ -244,9 +244,10 @@ export function ArchPremiumSubscription({
   const showPricing =
     panel != null &&
     panel.isOwner &&
-    panel.canPay &&
     panel.displayStatus !== "PENDING_PAYMENT" &&
     sortedPlans.length > 0;
+
+  const paymentAllowed = panel?.canPay === true;
 
   const content = (
     <>
@@ -339,14 +340,14 @@ export function ArchPremiumSubscription({
                   </span>
                 </p>
               </div>
-              {panel.isOwner && panel.canPay ? (
+              {panel.isOwner && showPricing ? (
                 <button
                   type="button"
                   className="mp-btn mp-btn--primary archa-sub__trial-banner-cta"
                   disabled={payBusy !== null}
                   onClick={handlePayNow}
                 >
-                  Оплатить сейчас
+                  {paymentAllowed ? "Оплатить сейчас" : "Смотреть тарифы"}
                 </button>
               ) : null}
             </div>
@@ -397,10 +398,14 @@ export function ArchPremiumSubscription({
                       <SubscriptionPricingCard
                         plan={plan}
                         selected={selectedPlanCode === plan.code}
+                        canPay={paymentAllowed}
                         disabled={anyBusy}
                         busy={busy}
                         onSelect={() => setSelectedPlanCode(plan.code)}
-                        onPay={() => void handlePay(plan)}
+                        onPay={() => {
+                          if (!paymentAllowed) return;
+                          void handlePay(plan);
+                        }}
                       />
                     </div>
                   );
@@ -434,7 +439,7 @@ export function ArchPremiumSubscription({
             <p className="archa-sub__hint">
               Оплатить подписку может только владелец магазина.
             </p>
-          ) : finikMsg != null ? (
+          ) : finikMsg != null && !paymentAllowed ? (
             <p
               className={[
                 "archa-sub__hint",
@@ -445,9 +450,11 @@ export function ArchPremiumSubscription({
             >
               {finikMsg.text}
             </p>
-          ) : !showPricing && panel.displayStatus !== "PENDING_PAYMENT" ? (
+          ) : !showPricing &&
+            panel.isOwner &&
+            panel.displayStatus !== "PENDING_PAYMENT" ? (
             <p className="archa-sub__hint">
-              Оплата временно недоступна. Проверьте подключение Finik или обратитесь в поддержку.
+              Тарифы временно недоступны. Обновите страницу или обратитесь в поддержку.
             </p>
           ) : null}
 
