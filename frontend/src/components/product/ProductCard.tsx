@@ -654,7 +654,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
             <div className="retail-card__media">
               <img
                 className="retail-card__img"
-                src={primaryCatalogImage}
+                src={getPrimaryImage(product)}
                 alt=""
                 sizes="(min-width: 1200px) 220px, (min-width: 900px) 20vw, (min-width: 600px) 28vw, 48vw"
                 loading="lazy"

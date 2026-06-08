@@ -70,12 +70,12 @@
   border-radius: var(--retail-radius);
 }
 
-/* ~70% — photo dominates */
+/* ~70% — photo dominates (aspect-ratio sets height; must not flex-shrink to 0) */
 .retail-card__media {
   position: relative;
-  flex: 7 1 0;
+  flex: 0 0 auto;
+  flex-shrink: 0;
   width: 100%;
-  min-height: 0;
   aspect-ratio: var(--retail-media-ratio);
   border-radius: var(--retail-radius);
   overflow: hidden;
