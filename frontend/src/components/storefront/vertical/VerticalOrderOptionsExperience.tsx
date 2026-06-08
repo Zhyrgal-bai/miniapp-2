@@ -17,8 +17,8 @@ type Props = {
 
 const FIELD_ORDER: Record<string, string[]> = {
   flowers: ["deliveryDate", "packaging", "occasion", "postcardText"],
-  coffee: ["hotOrCold", "sugar", "syrups"],
-  fastfood: ["combo", "spicy", "addons"],
+  coffee: ["hotOrCold", "milk", "sugar", "syrups"],
+  fastfood: ["combo", "spicy", "addons", "orderNote"],
   electronics: ["serialNumber"],
   autoparts: ["vin", "compatibility"],
   cosmetics: ["skinType"],
@@ -27,7 +27,15 @@ const FIELD_ORDER: Record<string, string[]> = {
 
 const VALUE_LABELS: Record<string, Record<string, string>> = {
   hotOrCold: { hot: "Горячий", ice: "Холодный" },
-  sugar: { no: "Без сахара", less: "Меньше", normal: "Обычно" },
+  milk: { regular: "Обычное", coconut: "Кокосовое", soy: "Соевое" },
+  sugar: {
+    "0": "0%",
+    "50": "50%",
+    "100": "100%",
+    no: "Без сахара",
+    less: "Меньше",
+    normal: "Обычно",
+  },
   syrups: { vanilla: "Ваниль", caramel: "Карамель", hazelnut: "Лесной орех" },
   spicy: { no: "Не острое", mild: "Средне", hot: "Остро" },
   packaging: { paper: "Бумага", box: "Коробка" },
@@ -59,6 +67,7 @@ function sectionTitle(
   }
   if (vertical === "coffee") {
     if (key === "hotOrCold") return "Температура";
+    if (key === "milk") return "Тип молока";
     if (key === "sugar") return "Сахар";
     if (key === "syrups") return "Сиропы";
   }
@@ -66,6 +75,7 @@ function sectionTitle(
     if (key === "combo") return "Комбо";
     if (key === "spicy") return "Острота";
     if (key === "addons") return "Добавки";
+    if (key === "orderNote") return "Заметка к заказу";
   }
   if (vertical === "electronics") {
     if (key === "serialNumber") return "Серийный номер";
@@ -229,20 +239,21 @@ function renderText(
 ): React.ReactElement {
   const label = sectionTitle(vertical, key, field.label ?? key);
   const isPostcard = key === "postcardText";
+  const isOrderNote = key === "orderNote";
 
   return (
     <section
       key={key}
-      className={`vx-order-field vx-order-field--text${isPostcard ? " vx-order-field--postcard" : ""}`}
+      className={`vx-order-field vx-order-field--text${isPostcard ? " vx-order-field--postcard" : ""}${isOrderNote ? " vx-order-field--order-note" : ""}`}
     >
       <h3 className="vx-order-field__label">{label}</h3>
-      {isPostcard ? (
+      {isPostcard || isOrderNote ? (
         <div className="vx-postcard">
           <textarea
             className="vx-postcard__input"
-            rows={3}
+            rows={isOrderNote ? 2 : 3}
             maxLength={field.maxLen ?? 280}
-            placeholder="Напишите пожелание…"
+            placeholder={isOrderNote ? "Комментарий к заказу…" : "Напишите пожелание…"}
             value={typeof v === "string" ? v : ""}
             onChange={(e) => onChange({ ...value, [key]: e.target.value })}
             aria-label={label}

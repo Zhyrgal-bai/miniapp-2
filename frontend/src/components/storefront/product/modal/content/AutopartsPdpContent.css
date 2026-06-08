@@ -1,0 +1,70 @@
+.autoparts-pdp__fitment {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.autoparts-pdp__fitment-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--sf-color-border) 35%, transparent);
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+.autoparts-pdp__fitment-row:last-child {
+  border-bottom: none;
+}
+
+.autoparts-pdp__fitment-label {
+  flex: 0 0 42%;
+  color: color-mix(in srgb, var(--sf-color-text) 62%, transparent);
+  font-weight: 500;
+}
+
+.autoparts-pdp__fitment-value {
+  flex: 1;
+  text-align: right;
+  color: var(--sf-color-text);
+  font-weight: 600;
+}
+
+.autoparts-pdp__fitment-value--mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 0.02em;
+}
+
+.autoparts-pdp__notice {
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, #f97316 35%, transparent);
+  background: color-mix(in srgb, #f97316 10%, transparent);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--sf-color-text) 88%, transparent);
+}
+
+.autoparts-pdp__delivery-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.autoparts-pdp__delivery-row {
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.autoparts-pdp__delivery-title {
+  font-weight: 700;
+  color: var(--sf-color-text);
+}
+
+.autoparts-pdp__delivery-value {
+  color: color-mix(in srgb, var(--sf-color-text) 78%, transparent);
+}

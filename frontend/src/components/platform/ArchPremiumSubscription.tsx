@@ -18,6 +18,9 @@ import { useLiveCountdown } from "../../hooks/useLiveCountdown";
 import {
   finikAvailabilityMessage,
   platformFinikStatusLabel,
+  resolveFirstMonthPlan,
+  resolveFreeOrdersProgressModel,
+  resolveMerchantGrowthBanner,
   SUBSCRIPTION_STATUS_CLASS,
 } from "../../utils/subscriptionUx";
 import { ru } from "../../i18n/ru";
@@ -66,6 +69,8 @@ function historySourceLabel(source: string): string | null {
 }
 
 function statusBadgeLabel(panel: MerchantSubscriptionPanelPayload): string {
+  if (panel.displayStatus === "FREE") return "🎁 Бесплатные заказы";
+  if (panel.displayStatus === "QUOTA_EXHAUSTED") return "⛔ Лимит исчерпан";
   if (panel.displayStatus === "TRIAL") return "🟢 Пробный период";
   if (panel.displayStatus === "PENDING_PAYMENT") return "⏳ Ожидает оплаты";
   return panel.displayStatusLabel;
@@ -187,6 +192,19 @@ export function ArchPremiumSubscription({
   const endIso = panel != null ? primaryEndIso(panel) : null;
   const { parts: countdownParts } = useLiveCountdown(endIso);
   const finikMsg = panel != null ? finikAvailabilityMessage(panel) : null;
+  const growthBanner = panel != null ? resolveMerchantGrowthBanner(panel) : null;
+  const freeProgress =
+    panel != null &&
+    (panel.displayStatus === "FREE" || panel.displayStatus === "QUOTA_EXHAUSTED")
+      ? resolveFreeOrdersProgressModel(panel)
+      : null;
+  const firstMonthPlan = panel != null ? resolveFirstMonthPlan(panel) : null;
+  const firstMonthPriceLabel =
+    firstMonthPlan != null ? formatSaasPriceSom(firstMonthPlan.amountSom) : null;
+  const quotaPayLabel =
+    firstMonthPriceLabel != null
+      ? `Оплатить ${firstMonthPriceLabel}`
+      : "Оплатить 1500 сом";
 
   const sortedPlans = useMemo(
     () => (panel != null ? sortSubscriptionPlans(panel.plans) : []),
@@ -414,6 +432,63 @@ export function ArchPremiumSubscription({
             </p>
           ) : null}
 
+          {growthBanner != null ? (
+            <div
+              className={[
+                "archa-sub__growth-banner",
+                `archa-sub__growth-banner--${growthBanner.tone}`,
+                panel.displayStatus === "QUOTA_EXHAUSTED"
+                  ? "archa-sub__growth-banner--celebrate"
+                  : "",
+              ].join(" ")}
+              role="status"
+            >
+              <div className="archa-sub__growth-banner-copy">
+                <p className="archa-sub__growth-banner-title">{growthBanner.title}</p>
+                <p className="archa-sub__growth-banner-text">{growthBanner.body}</p>
+              </div>
+              {panel.isOwner && showPricing && panel.displayStatus === "QUOTA_EXHAUSTED" ? (
+                <button
+                  type="button"
+                  className="mp-btn mp-btn--primary archa-sub__growth-banner-cta"
+                  disabled={payBusy !== null}
+                  onClick={handlePayNow}
+                >
+                  {paymentAllowed ? quotaPayLabel : "Смотреть тарифы"}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {freeProgress != null ? (
+            <div
+              className={[
+                "archa-sub__free-progress",
+                `archa-sub__free-progress--${freeProgress.tier}`,
+              ].join(" ")}
+            >
+              <div className="archa-sub__free-progress-head">
+                <p className="archa-sub__free-progress-title">Прогресс бесплатных заказов</p>
+                <p className="archa-sub__free-progress-ratio">
+                  {freeProgress.used}/{freeProgress.limit}
+                </p>
+              </div>
+              <div className="archa-sub__free-progress-track" aria-hidden>
+                <span
+                  className="archa-sub__free-progress-fill"
+                  style={{ width: `${freeProgress.percent}%` }}
+                />
+              </div>
+              <div className="archa-sub__free-progress-meta">
+                <span>Осталось: {freeProgress.remaining}</span>
+                <span>
+                  Следующий этап:{" "}
+                  {firstMonthPriceLabel != null ? firstMonthPriceLabel : "1500 сом"}
+                </span>
+              </div>
+            </div>
+          ) : null}
+
           {panel.displayStatus === "TRIAL" &&
           countdownParts != null &&
           countdownParts.totalMs > 0 ? (
@@ -432,7 +507,7 @@ export function ArchPremiumSubscription({
               {panel.isOwner && showPricing ? (
                 <button
                   type="button"
-                  className="mp-btn mp-btn--primary archa-sub__trial-banner-cta"
+                  className="mp-btn mp-btn--primary archa-sub__growth-banner-cta"
                   disabled={payBusy !== null}
                   onClick={handlePayNow}
                 >

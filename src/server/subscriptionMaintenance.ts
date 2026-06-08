@@ -6,6 +6,9 @@ import {
   isInSubscriptionGracePeriod,
 } from "./subscriptionAccess.js";
 import {
+  transitionTrialToFreeTier,
+} from "./freeOrderQuotaService.js";
+import {
   ARCHA_AUTO_RENEW_INVOICE_DAYS_BEFORE,
   ARCHA_SUBSCRIPTION_GRACE_DAYS,
 } from "../shared/archaSubscriptionPlans.js";
@@ -214,6 +217,8 @@ export async function runSubscriptionMaintenanceOnce(
       trialEndsAt: true,
       subscriptionEndsAt: true,
       gracePeriodEndsAt: true,
+      freeOrdersUsed: true,
+      freeOrdersLimit: true,
       subscriptionPlanCode: true,
       autoRenewEnabled: true,
       lastReminder7DaysAt: true,
@@ -228,6 +233,14 @@ export async function runSubscriptionMaintenanceOnce(
     if (b.isBlocked) continue;
 
     try {
+      if (
+        b.subscriptionStatus === SubscriptionStatus.TRIALING &&
+        b.trialEndsAt != null &&
+        b.trialEndsAt.getTime() <= now.getTime()
+      ) {
+        await transitionTrialToFreeTier(b.id);
+      }
+
       const plainTok = plainBotTokenFromStored(b.botToken);
       const subEnd = b.subscriptionEndsAt;
       const ownerTg = await findBusinessOwnerTelegramId(b.id);
@@ -359,29 +372,35 @@ export async function runSubscriptionMaintenanceOnce(
         continue;
       }
 
-      const shouldDeactivate =
+      const shouldMoveToQuotaExhausted =
         b.isActive &&
         !hasValidPaidOrTrialWindow(
           {
             subscriptionStatus: b.subscriptionStatus,
             trialEndsAt: b.trialEndsAt,
             subscriptionEndsAt: b.subscriptionEndsAt,
+            isBlocked: b.isBlocked,
+            isActive: b.isActive,
+            freeOrdersUsed: b.freeOrdersUsed,
+            freeOrdersLimit: b.freeOrdersLimit,
           },
           now,
         ) &&
-        !isInSubscriptionGracePeriod(b, now);
+        !isInSubscriptionGracePeriod(b, now) &&
+        b.subscriptionStatus !== SubscriptionStatus.QUOTA_EXHAUSTED;
 
-      if (shouldDeactivate) {
+      if (shouldMoveToQuotaExhausted) {
         await prisma.business.update({
           where: { id: b.id },
           data: {
-            isActive: false,
-            subscriptionStatus: SubscriptionStatus.EXPIRED,
+            subscriptionStatus: SubscriptionStatus.QUOTA_EXHAUSTED,
+            quotaExhaustedAt: now,
             gracePeriodEndsAt: null,
             lastReminder3DaysAt: null,
             lastReminder1DayAt: null,
             lastReminder7DaysAt: null,
             lastReminderAfterExpiryAt: null,
+            isActive: true,
           },
         });
         const tgId = ownerTg ?? (await findBusinessOwnerTelegramId(b.id));
@@ -389,10 +408,10 @@ export async function runSubscriptionMaintenanceOnce(
           await sendTelegramToUser(
             plainTok,
             tgId,
-            "⛔ Grace period закончился. Магазин временно отключён. Продлите подписку ARCHA в панели.",
+            "⛔ Подписка ARCHA закончилась. Лимит бесплатных заказов исчерпан — оплатите подписку в Mini App.",
           );
         }
-        console.log("subscriptionMaintenance: deactivated business", b.id);
+        console.log("subscriptionMaintenance: quota exhausted business", b.id);
       }
     } catch (e) {
       console.error("subscriptionMaintenance: business", b.id, e);

@@ -15,10 +15,11 @@ import {
 describe("resolveMerchantSubscriptionUiStatus", () => {
   const now = new Date("2026-05-28T12:00:00.000Z");
 
-  it("returns TRIAL when trialing and trial end in future", () => {
+  it("returns TRIAL when grandfather trialing and trial end in future", () => {
     const s = resolveMerchantSubscriptionUiStatus(
       {
         isBlocked: false,
+        isActive: true,
         subscriptionStatus: SubscriptionStatus.TRIALING,
         trialEndsAt: new Date("2026-06-01T00:00:00.000Z"),
         subscriptionEndsAt: null,
@@ -28,10 +29,43 @@ describe("resolveMerchantSubscriptionUiStatus", () => {
     expect(s).toBe("TRIAL");
   });
 
+  it("returns FREE when free tier with remaining quota", () => {
+    const s = resolveMerchantSubscriptionUiStatus(
+      {
+        isBlocked: false,
+        isActive: true,
+        subscriptionStatus: SubscriptionStatus.FREE,
+        trialEndsAt: null,
+        subscriptionEndsAt: null,
+        freeOrdersUsed: 2,
+        freeOrdersLimit: 5,
+      },
+      now,
+    );
+    expect(s).toBe("FREE");
+  });
+
+  it("returns QUOTA_EXHAUSTED when limit reached", () => {
+    const s = resolveMerchantSubscriptionUiStatus(
+      {
+        isBlocked: false,
+        isActive: true,
+        subscriptionStatus: SubscriptionStatus.QUOTA_EXHAUSTED,
+        trialEndsAt: null,
+        subscriptionEndsAt: null,
+        freeOrdersUsed: 5,
+        freeOrdersLimit: 5,
+      },
+      now,
+    );
+    expect(s).toBe("QUOTA_EXHAUSTED");
+  });
+
   it("returns EXPIRING when paid subscription ends within 7 days", () => {
     const s = resolveMerchantSubscriptionUiStatus(
       {
         isBlocked: false,
+        isActive: true,
         subscriptionStatus: SubscriptionStatus.ACTIVE,
         trialEndsAt: null,
         subscriptionEndsAt: new Date("2026-06-04T00:00:00.000Z"),
@@ -42,10 +76,11 @@ describe("resolveMerchantSubscriptionUiStatus", () => {
     expect(s).toBe("EXPIRING");
   });
 
-  it("returns EXPIRED when trial ended", () => {
+  it("returns EXPIRED when trial ended without free access", () => {
     const s = resolveMerchantSubscriptionUiStatus(
       {
         isBlocked: false,
+        isActive: true,
         subscriptionStatus: SubscriptionStatus.EXPIRED,
         trialEndsAt: new Date("2026-05-01T00:00:00.000Z"),
         subscriptionEndsAt: null,
@@ -59,6 +94,7 @@ describe("resolveMerchantSubscriptionUiStatus", () => {
     const s = resolveMerchantSubscriptionUiStatus(
       {
         isBlocked: false,
+        isActive: true,
         subscriptionStatus: SubscriptionStatus.ACTIVE,
         trialEndsAt: null,
         subscriptionEndsAt: new Date("2026-12-01T00:00:00.000Z"),
@@ -74,6 +110,7 @@ describe("resolveMerchantSubscriptionUiStatus", () => {
     const s = resolveMerchantSubscriptionUiStatus(
       {
         isBlocked: true,
+        isActive: true,
         subscriptionStatus: SubscriptionStatus.ACTIVE,
         trialEndsAt: null,
         subscriptionEndsAt: new Date("2026-12-01T00:00:00.000Z"),

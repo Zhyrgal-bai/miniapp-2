@@ -7,7 +7,10 @@ export function platformStatusLabel(status: string): string {
     inactive: "Не активен",
     subscription_expired: "Подписка истекла",
     trialing: "Пробный период",
+    free: "Бесплатный режим",
+    quota_exhausted: "Лимит бесплатных заказов исчерпан",
     active: "Активен",
+    grace: "Льготный период",
     past_due: "Просрочен платёж",
     canceled: "Отменён",
     expired: "Истёк",
@@ -119,8 +122,17 @@ export function subscriptionBadge(status: string): { label: string; className: s
   if (s === "trialing") {
     return { label: ru.platform.trial, className: "mp-v2-badge mp-v2-badge--trial" };
   }
+  if (s === "free") {
+    return { label: "Бесплатные заказы", className: "mp-v2-badge mp-v2-badge--trial" };
+  }
+  if (s === "quota_exhausted") {
+    return { label: "Лимит исчерпан", className: "mp-v2-badge mp-v2-badge--warn" };
+  }
   if (s === "active") {
     return { label: ru.platform.active, className: "mp-v2-badge mp-v2-badge--active" };
+  }
+  if (s === "grace") {
+    return { label: "Льготный период", className: "mp-v2-badge mp-v2-badge--warn" };
   }
   if (s === "inactive") {
     return { label: ru.platform.inactive, className: "mp-v2-badge mp-v2-badge--warn" };
@@ -135,6 +147,38 @@ export function subscriptionBadge(status: string): { label: string; className: s
     return { label: ru.platform.canceled, className: "mp-v2-badge" };
   }
   return { label: platformStatusLabel(status), className: "mp-v2-badge" };
+}
+
+export function adminSubscriptionBadge(status: string): {
+  label: string;
+  className: string;
+} {
+  const s = status.toLowerCase();
+  if (s === "free") {
+    return { label: "FREE", className: "mp-v2-badge mp-v2-badge--trial" };
+  }
+  if (s === "quota_exhausted") {
+    return { label: "QUOTA_EXHAUSTED", className: "mp-v2-badge mp-v2-badge--warn" };
+  }
+  if (s === "active") {
+    return { label: "ACTIVE", className: "mp-v2-badge mp-v2-badge--active" };
+  }
+  if (s === "grace") {
+    return { label: "GRACE", className: "mp-v2-badge mp-v2-badge--warn" };
+  }
+  if (s === "trialing") {
+    return { label: "TRIALING", className: "mp-v2-badge mp-v2-badge--trial" };
+  }
+  if (s === "subscription_expired" || s === "expired") {
+    return { label: "EXPIRED", className: "mp-v2-badge mp-v2-badge--warn" };
+  }
+  if (s === "past_due") {
+    return { label: "PAST_DUE", className: "mp-v2-badge mp-v2-badge--warn" };
+  }
+  if (s === "canceled") {
+    return { label: "CANCELED", className: "mp-v2-badge" };
+  }
+  return { label: status.toUpperCase(), className: "mp-v2-badge" };
 }
 
 export function webhookBadge(ws: "OK" | "ERROR"): { label: string; className: string } {

@@ -100,10 +100,12 @@ export type TemplateVariantEditor =
   | "bouquet_tiers"
   | "none";
 
+export type TemplatePrimaryAxisKey = "size" | "memory";
+
 export type TemplateVariantPolicy = {
   mode: "sku_matrix" | "single_axis" | "metadata_only";
-  /** Storage adapter currently maps to OrderItem.size/ProductStock.size. */
-  primaryAxisKey: "size";
+  /** Business axis id; storage adapter maps `memory` → OrderItem.size/ProductStock.size. */
+  primaryAxisKey: TemplatePrimaryAxisKey;
   primaryAxisLabel: string;
   /** Storage adapter currently maps to OrderItem.color; null disables selector. */
   secondaryAxisKey: "color" | null;

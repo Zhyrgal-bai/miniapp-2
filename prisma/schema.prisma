@@ -13,6 +13,8 @@ datasource db {
 /// Tenant (store / SaaS subscriber). One Telegram bot token per tenant.
 enum SubscriptionStatus {
   TRIALING
+  FREE
+  QUOTA_EXHAUSTED
   ACTIVE
   PAST_DUE
   CANCELED
@@ -94,6 +96,15 @@ model Business {
   /// When the configured trial expires (set on onboarding); null if not using trials.
   trialEndsAt DateTime?
 
+  /// Phase 13: paid CONFIRMED orders counted toward free tier quota.
+  freeOrdersUsed Int @default(0)
+
+  /// Phase 13: max free orders before QUOTA_EXHAUSTED (default 5).
+  freeOrdersLimit Int @default(5)
+
+  /// Phase 13: when free quota was exhausted (audit).
+  quotaExhaustedAt DateTime?
+
   subscriptionEndsAt DateTime?
 
   /// Last day we sent an expiry reminder (rate-limit: at most one reminder batch per calendar day).
@@ -168,6 +179,7 @@ model Business {
   orderItems  OrderItem[]
   paymentRequests PaymentRequest[]
   dailyOrderCounters BusinessDailyOrderCounter[]
+  freeOrderQuotaEvents FreeOrderQuotaEvent[]
 
   /// Платежи Finik только за SaaS-подписку (не заказы витрины).
   subscriptionFinikPayments SubscriptionFinikPayment[]
@@ -668,6 +680,17 @@ model BusinessDailyOrderCounter {
   lastSeq Int    @default(0)
 
   @@id([businessId, dayKey])
+  @@index([businessId])
+}
+
+/// Phase 13: idempotent free-order quota increment (one row per paid order).
+model FreeOrderQuotaEvent {
+  id         Int      @id @default(autoincrement())
+  orderId    Int      @unique
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
   @@index([businessId])
 }
 

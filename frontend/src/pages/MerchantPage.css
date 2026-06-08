@@ -47,6 +47,21 @@
   background: rgba(69, 26, 3, 0.45);
 }
 
+.mp-subscription-cta--success {
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(6, 78, 59, 0.38);
+}
+
+.mp-subscription-cta--warning {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(69, 26, 3, 0.45);
+}
+
+.mp-subscription-cta--danger {
+  border-color: rgba(239, 68, 68, 0.36);
+  background: rgba(69, 10, 10, 0.42);
+}
+
 .mp-subscription-cta__title {
   margin: 0;
   font-size: 0.9375rem;
@@ -59,6 +74,22 @@
   font-size: 0.8125rem;
   line-height: 1.45;
   color: #fcd34d;
+}
+
+.mp-subscription-cta--success .mp-subscription-cta__title {
+  color: #86efac;
+}
+
+.mp-subscription-cta--success .mp-subscription-cta__text {
+  color: #bbf7d0;
+}
+
+.mp-subscription-cta--danger .mp-subscription-cta__title {
+  color: #fecaca;
+}
+
+.mp-subscription-cta--danger .mp-subscription-cta__text {
+  color: #fca5a5;
 }
 
 .mp-subscription-cta__btn {

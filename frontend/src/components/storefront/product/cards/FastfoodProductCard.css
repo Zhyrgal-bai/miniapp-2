@@ -1,0 +1,63 @@
+.fastfood-card__badges {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.fastfood-card__badge {
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: color-mix(in srgb, var(--sf-color-surface) 88%, black);
+  color: var(--sf-color-text);
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 45%, transparent);
+}
+
+.fastfood-card__badge--hot {
+  background: color-mix(in srgb, var(--sf-color-warning) 28%, transparent);
+  border-color: color-mix(in srgb, var(--sf-color-warning) 50%, transparent);
+}
+
+.fastfood-card__badge--new {
+  background: color-mix(in srgb, var(--sf-color-primary) 22%, transparent);
+  border-color: color-mix(in srgb, var(--sf-color-primary) 40%, transparent);
+  color: var(--sf-color-primary);
+}
+
+.fastfood-card__badge--sale {
+  background: color-mix(in srgb, var(--sf-color-danger, #e11) 20%, transparent);
+  border-color: color-mix(in srgb, var(--sf-color-danger, #e11) 45%, transparent);
+}
+
+.fastfood-card__badge--spicy {
+  background: color-mix(in srgb, #ef4444 24%, transparent);
+  border-color: color-mix(in srgb, #ef4444 45%, transparent);
+  color: #fecaca;
+}
+
+.fastfood-card__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.fastfood-card__fact {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--sf-color-text) 72%, transparent);
+}
+
+.sf-root .product-card.fastfood-card {
+  --retail-media-ratio: 1 / 1;
+}

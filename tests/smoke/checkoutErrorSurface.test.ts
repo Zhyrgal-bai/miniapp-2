@@ -68,7 +68,7 @@ describe("coffee checkout options validation (lenient)", () => {
     const v = validateOrderOptionsForCheckout("coffee" as any, {});
     expect(v.ok).toBe(true);
     if (v.ok) {
-      expect(v.value.sugar).toBe("normal");
+      expect(v.value.sugar).toBe("50");
     }
   });
 

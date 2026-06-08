@@ -33,6 +33,14 @@ export const LEGACY_STALE_PRODUCT_ATTR_KEYS = [
   "spicy",
   "combo",
   "addons",
+  "preparationTimeMinutes",
+  "calories",
+  "milk",
+  "orderNote",
+  "memory",
+  "specifications",
+  "shade",
+  "usageGuide",
 ] as const;
 
 export type StripProductAttributesResult = {

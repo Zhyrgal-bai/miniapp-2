@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import type { PlatformMyBusinessDTO } from "../../services/platformApi";
+import type { MerchantSubscriptionPanelPayload } from "../../services/platformApi";
 import type { StoreReadinessPayload } from "../../services/platformApi";
 import {
   formatDaysRemaining,
@@ -7,10 +8,13 @@ import {
   webhookBadge,
   botRunBadge,
 } from "../../pages/platform/platformUi";
+import { formatSaasPriceSom } from "@repo-shared/saasSubscriptionPricing";
+import { resolveFirstMonthPlan } from "../../utils/subscriptionUx";
 import "./MerchantPremiumOverview.css";
 
 type Props = {
   business: PlatformMyBusinessDTO;
+  subscriptionPanel: MerchantSubscriptionPanelPayload | null;
   readiness: StoreReadinessPayload | null;
   readinessPct: number;
   onOpenOrders: () => void;
@@ -37,6 +41,7 @@ const item = {
 
 export function MerchantPremiumOverview({
   business: b,
+  subscriptionPanel,
   readiness,
   readinessPct,
   onOpenOrders,
@@ -50,6 +55,13 @@ export function MerchantPremiumOverview({
   const subRem =
     formatDaysRemaining(b.subscriptionEndsAt) ??
     formatDaysRemaining(b.trialEndsAt);
+  const used = Math.max(0, subscriptionPanel?.freeOrdersUsed ?? 0);
+  const limit = Math.max(1, subscriptionPanel?.freeOrdersLimit ?? 5);
+  const remaining = Math.max(0, subscriptionPanel?.freeOrdersRemaining ?? limit - used);
+  const firstMonthPlan =
+    subscriptionPanel != null ? resolveFirstMonthPlan(subscriptionPanel) : null;
+  const nextStepPrice =
+    firstMonthPlan != null ? formatSaasPriceSom(firstMonthPlan.amountSom) : "1500 сом";
 
   return (
     <motion.section
@@ -119,6 +131,34 @@ export function MerchantPremiumOverview({
           </button>
         </div>
       </motion.div>
+
+      {subscriptionPanel != null ? (
+        <motion.div className="archa-hub__analytics archa-glass archa-glass--glow" variants={item}>
+          <div className="archa-hub__panel-head">
+            <h3>Аналитика роста</h3>
+          </div>
+          <dl className="archa-hub__analytics-grid">
+            <div>
+              <dt>Получено заказов</dt>
+              <dd>{used}</dd>
+            </div>
+            <div>
+              <dt>Использовано</dt>
+              <dd>
+                {used}/{limit}
+              </dd>
+            </div>
+            <div>
+              <dt>Осталось</dt>
+              <dd>{remaining}</dd>
+            </div>
+            <div>
+              <dt>Следующий этап</dt>
+              <dd>{nextStepPrice}</dd>
+            </div>
+          </dl>
+        </motion.div>
+      ) : null}
     </motion.section>
   );
 }

@@ -1,6 +1,6 @@
 import {
   SAAS_SUBSCRIPTION_PRICE_30_D,
-  SAAS_SUBSCRIPTION_PRICE_90_D,
+  SAAS_SUBSCRIPTION_PRICE_FIRST_MONTH,
   formatSaasPriceSom,
 } from "@repo-shared/saasSubscriptionPricing";
 import { ARCHA_BRAND } from "../config/brandAssets";
@@ -32,7 +32,6 @@ export const ARCHA_FAQ_CATEGORIES: ArchaFaqCategory[] = [
 ];
 
 const price30 = formatSaasPriceSom(SAAS_SUBSCRIPTION_PRICE_30_D);
-const price90 = formatSaasPriceSom(SAAS_SUBSCRIPTION_PRICE_90_D);
 
 export const ARCHA_FAQ_ITEMS: ArchaFaqItem[] = [
   {
@@ -89,12 +88,12 @@ export const ARCHA_FAQ_ITEMS: ArchaFaqItem[] = [
     categoryId: "subscription",
     question: "Можно ли использовать ARCHA бесплатно?",
     paragraphs: [
-      "Для новых владельцев доступен пробный период — 10 дней с полным доступом.",
-      "Пробный период предоставляется один раз на аккаунт Telegram.",
-      `После пробного периода нужна подписка: ${price30} за 30 дней или ${price90} за 90 дней. Оплата — через Finik.`,
-      "Без активной подписки или trial витрина для покупателей будет недоступна.",
+      "Каждый новый магазин получает 5 бесплатных оплаченных заказов с полным доступом: бот, витрина, корзина и checkout.",
+      "Счётчик увеличивается после успешной оплаты заказа покупателем.",
+      `После лимита нужна подписка: первый месяц ${formatSaasPriceSom(SAAS_SUBSCRIPTION_PRICE_FIRST_MONTH)}, далее ${price30} за 30 дней. Оплата — через Finik.`,
+      "Без активной подписки или оставшихся бесплатных заказов витрина для покупателей будет недоступна.",
     ],
-    keywords: ["бесплатно", "пробный", "подписка", "тариф", "trial"],
+    keywords: ["бесплатно", "заказы", "подписка", "тариф", "лимит"],
   },
   {
     id: "who-created-archa",

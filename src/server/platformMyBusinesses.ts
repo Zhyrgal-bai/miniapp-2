@@ -57,6 +57,10 @@ export function computePlatformBusinessStatus(b: {
       return "active";
     case SubscriptionStatus.TRIALING:
       return "trialing";
+    case SubscriptionStatus.FREE:
+      return "free";
+    case SubscriptionStatus.QUOTA_EXHAUSTED:
+      return "quota_exhausted";
     case SubscriptionStatus.PAST_DUE:
       return "past_due";
     case SubscriptionStatus.CANCELED:

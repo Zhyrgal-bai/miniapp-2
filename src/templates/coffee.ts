@@ -38,7 +38,20 @@ export const coffeeTemplate: BusinessTemplateConfig = {
   },
   orderOptionsSchema: {
     hotOrCold: { type: "select", label: "Горячее/Холодное", required: true, values: ["hot", "ice"] },
-    sugar: { type: "select", label: "Сахар", required: false, values: ["no", "less", "normal"], default: "normal" },
+    milk: {
+      type: "select",
+      label: "Молоко",
+      required: false,
+      values: ["regular", "coconut", "soy"],
+      default: "regular",
+    },
+    sugar: {
+      type: "select",
+      label: "Сахар",
+      required: false,
+      values: ["0", "50", "100", "no", "less", "normal"],
+      default: "50",
+    },
     syrups: { type: "multiselect", label: "Сиропы", required: false, values: ["vanilla", "caramel", "hazelnut"] },
   },
   merchantConfig: {

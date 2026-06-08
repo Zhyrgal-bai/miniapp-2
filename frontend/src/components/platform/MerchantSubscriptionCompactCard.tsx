@@ -3,16 +3,27 @@ import {
   fetchMerchantSubscriptionPanel,
   type MerchantSubscriptionPanelPayload,
 } from "../../services/platformApi";
+import {
+  resolveFreeOrdersProgressModel,
+  resolveMerchantGrowthBanner,
+} from "../../utils/subscriptionUx";
 import "./MerchantSubscriptionCompactCard.css";
 
 type Props = {
   businessId: number;
   onOpen: () => void;
+  panel?: MerchantSubscriptionPanelPayload | null;
 };
 
 function statusLine(panel: MerchantSubscriptionPanelPayload): string {
   if (panel.displayStatus === "PENDING_PAYMENT") {
     return "Ожидает оплаты";
+  }
+  if (panel.displayStatus === "FREE") {
+    return "Бесплатные заказы";
+  }
+  if (panel.displayStatus === "QUOTA_EXHAUSTED") {
+    return "Лимит исчерпан";
   }
   if (panel.displayStatus === "TRIAL") {
     return "Пробный период";
@@ -23,6 +34,14 @@ function statusLine(panel: MerchantSubscriptionPanelPayload): string {
 function daysLine(panel: MerchantSubscriptionPanelPayload): string | null {
   if (panel.displayStatus === "PENDING_PAYMENT") {
     return "Подтверждение оплаты Finik";
+  }
+  if (
+    panel.displayStatus === "FREE" ||
+    panel.displayStatus === "QUOTA_EXHAUSTED"
+  ) {
+    const used = panel.freeOrdersUsed ?? 0;
+    const limit = panel.freeOrdersLimit ?? 5;
+    return `Бесплатные заказы: ${used}/${limit}`;
   }
   if (panel.daysLeft != null && panel.daysLeft >= 0) {
     const n = panel.daysLeft;
@@ -38,28 +57,42 @@ function daysLine(panel: MerchantSubscriptionPanelPayload): string | null {
   return null;
 }
 
-export function MerchantSubscriptionCompactCard({ businessId, onOpen }: Props) {
-  const [panel, setPanel] = useState<MerchantSubscriptionPanelPayload | null>(
+export function MerchantSubscriptionCompactCard({ businessId, onOpen, panel }: Props) {
+  const [loadedPanel, setLoadedPanel] = useState<MerchantSubscriptionPanelPayload | null>(
     null,
   );
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(panel == null);
 
   const load = useCallback(async () => {
     if (businessId <= 0) return;
     setLoading(true);
     try {
       const p = await fetchMerchantSubscriptionPanel(businessId);
-      setPanel(p);
+      setLoadedPanel(p);
     } catch {
-      setPanel(null);
+      setLoadedPanel(null);
     } finally {
       setLoading(false);
     }
   }, [businessId]);
 
   useEffect(() => {
+    if (panel != null) {
+      setLoading(false);
+      return;
+    }
     void load();
-  }, [load]);
+  }, [load, panel]);
+
+  const effectivePanel = panel ?? loadedPanel;
+  const progress =
+    effectivePanel != null &&
+    (effectivePanel.displayStatus === "FREE" ||
+      effectivePanel.displayStatus === "QUOTA_EXHAUSTED")
+      ? resolveFreeOrdersProgressModel(effectivePanel)
+      : null;
+  const growthBanner =
+    effectivePanel != null ? resolveMerchantGrowthBanner(effectivePanel) : null;
 
   return (
     <section
@@ -70,11 +103,25 @@ export function MerchantSubscriptionCompactCard({ businessId, onOpen }: Props) {
         <h2 className="archa-sub-compact__title">Подписка ARCHA</h2>
         {loading ? (
           <p className="archa-sub-compact__meta">Загрузка…</p>
-        ) : panel != null ? (
+        ) : effectivePanel != null ? (
           <>
-            <p className="archa-sub-compact__status">{statusLine(panel)}</p>
-            {daysLine(panel) != null ? (
-              <p className="archa-sub-compact__meta">{daysLine(panel)}</p>
+            <p className="archa-sub-compact__status">{statusLine(effectivePanel)}</p>
+            {daysLine(effectivePanel) != null ? (
+              <p className="archa-sub-compact__meta">{daysLine(effectivePanel)}</p>
+            ) : null}
+            {growthBanner != null ? (
+              <p className="archa-sub-compact__banner">{growthBanner.title}</p>
+            ) : null}
+            {progress != null ? (
+              <div
+                className={`archa-sub-compact__progress archa-sub-compact__progress--${progress.tier}`}
+                aria-hidden
+              >
+                <span
+                  className="archa-sub-compact__progress-fill"
+                  style={{ width: `${progress.percent}%` }}
+                />
+              </div>
             ) : null}
           </>
         ) : (

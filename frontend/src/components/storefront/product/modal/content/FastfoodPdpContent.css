@@ -1,0 +1,19 @@
+.fastfood-pdp__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.fastfood-pdp__fact {
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--sf-color-surface) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 45%, transparent);
+}
+
+.fastfood-pdp__options {
+  margin-top: 4px;
+}

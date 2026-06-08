@@ -8,6 +8,7 @@ import { createOwnerStaffRow } from "./businessStaffAccess.js";
 import { parseFinikRegistrationFields } from "../shared/finikRegistration.js";
 import { allocateUniqueBusinessSlug } from "../shared/storeSlug.js";
 import { normalizeProvisionBusinessType } from "../shared/businessTypes.js";
+import { resolveFreeOrdersLimit } from "../shared/freeUsageModel.js";
 
 function normalizeStoreName(raw: string): string {
   return raw.replace(/\s+/g, " ").trim();
@@ -48,13 +49,10 @@ export async function provisionMerchantStoreInTx(
       telegramId: params.telegramId,
       name: normalizeStoreName(params.name),
     },
-    select: { id: true, hasUsedTrial: true },
+    select: { id: true },
   });
 
-  const giveTrial = !ownerUser.hasUsedTrial;
-  const trialEnd = giveTrial
-    ? new Date(Date.now() + 10 * 24 * 60 * 60 * 1000)
-    : null;
+  const freeLimit = resolveFreeOrdersLimit(null);
 
   const business = await tx.business.create({
     data: {
@@ -65,14 +63,15 @@ export async function provisionMerchantStoreInTx(
       finikApiKey: useFinikPayment ? finik.finikApiKey : null,
       finikAccountId: useFinikPayment ? finik.finikAccountId : null,
       businessType: normalizeProvisionBusinessType(params.businessType) as any,
-      isActive: giveTrial,
+      isActive: true,
       isBlocked: false,
-      subscriptionStatus: giveTrial
-        ? SubscriptionStatus.TRIALING
-        : SubscriptionStatus.EXPIRED,
+      subscriptionStatus: SubscriptionStatus.FREE,
       billingPlan: BillingPlan.FREE,
-      trialEndsAt: trialEnd,
+      trialEndsAt: null,
       subscriptionEndsAt: null,
+      freeOrdersUsed: 0,
+      freeOrdersLimit: freeLimit,
+      quotaExhaustedAt: null,
       addressLine: params.addressLine?.trim() || null,
       city: params.city?.trim() || null,
       latitude:
@@ -85,13 +84,6 @@ export async function provisionMerchantStoreInTx(
           : null,
     } as any,
   });
-
-  if (giveTrial) {
-    await tx.user.update({
-      where: { id: ownerUser.id },
-      data: { hasUsedTrial: true },
-    });
-  }
 
   await tx.settings.create({
     data: {

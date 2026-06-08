@@ -1,0 +1,35 @@
+.clothing-pdp__size-table-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 50%, transparent);
+  background: color-mix(in srgb, var(--sf-color-surface) 75%, transparent);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--sf-color-text);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.clothing-pdp__size-table-panel {
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 45%, transparent);
+  background: color-mix(in srgb, var(--sf-color-surface) 82%, transparent);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--sf-color-text) 82%, transparent);
+}
+
+.clothing-pdp__size-table-panel p {
+  margin: 0 0 8px;
+}
+
+.clothing-pdp__size-table-panel p:last-child {
+  margin-bottom: 0;
+}

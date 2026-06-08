@@ -165,7 +165,7 @@ export function totalPlanMonths(plan: ArchaSubscriptionPlanDefinition): number {
   return plan.paidMonths + plan.bonusMonths;
 }
 
-/** База продления: активная подписка → trialEndsAt на trial → now. */
+/** База продления: активная подписка → now (free/trial не продлевают оплату). */
 export function resolveSubscriptionExtensionBaseStart(input: {
   now: Date;
   subscriptionEndsAt: Date | null;
@@ -178,13 +178,6 @@ export function resolveSubscriptionExtensionBaseStart(input: {
     input.subscriptionEndsAt.getTime() > t
   ) {
     return input.subscriptionEndsAt;
-  }
-  if (
-    input.subscriptionStatus.trim().toUpperCase() === "TRIALING" &&
-    input.trialEndsAt != null &&
-    input.trialEndsAt.getTime() > t
-  ) {
-    return input.trialEndsAt;
   }
   return input.now;
 }

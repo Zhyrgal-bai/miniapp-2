@@ -1,0 +1,18 @@
+.coffee-pdp__notice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  background: color-mix(in srgb, #b45309 10%, transparent);
+  border: 1px solid color-mix(in srgb, #b45309 22%, transparent);
+  color: color-mix(in srgb, var(--sf-color-text) 88%, transparent);
+}
+
+.coffee-pdp__options {
+  margin-top: 4px;
+}
+
+.coffee-pdp__options .vx-order-options--coffee .vx-order-field__label {
+  font-weight: 700;
+}

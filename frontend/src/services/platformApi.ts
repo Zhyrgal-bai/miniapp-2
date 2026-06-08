@@ -233,6 +233,8 @@ export async function postPlatformSubscriptionPaymentCancel(params: {
 export type MerchantSubscriptionUiStatus =
   | "ACTIVE"
   | "TRIAL"
+  | "FREE"
+  | "QUOTA_EXHAUSTED"
   | "GRACE"
   | "EXPIRED"
   | "EXPIRING"
@@ -277,12 +279,16 @@ export type MerchantSubscriptionPanelPayload = {
   businessId: number;
   displayStatus: MerchantSubscriptionUiStatus;
   displayStatusLabel: string;
+  accessMode?: string;
   subscriptionStatus: string;
   subscriptionPlanCode: string | null;
   subscriptionPlanLabel: string;
   trialEndsAt: string | null;
   subscriptionEndsAt: string | null;
   gracePeriodEndsAt: string | null;
+  freeOrdersUsed?: number;
+  freeOrdersLimit?: number;
+  freeOrdersRemaining?: number;
   daysLeft: number | null;
   countdownMs: number | null;
   inGracePeriod: boolean;
@@ -319,6 +325,8 @@ export async function fetchMerchantSubscriptionPanel(
     typeof j.businessId !== "number" ||
     (j.displayStatus !== "ACTIVE" &&
       j.displayStatus !== "TRIAL" &&
+      j.displayStatus !== "FREE" &&
+      j.displayStatus !== "QUOTA_EXHAUSTED" &&
       j.displayStatus !== "EXPIRED" &&
       j.displayStatus !== "GRACE" &&
       j.displayStatus !== "EXPIRING" &&

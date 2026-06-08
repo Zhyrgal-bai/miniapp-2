@@ -26,8 +26,8 @@ export const cosmeticsTemplate: BusinessTemplateConfig = {
   ],
   productSchema: {
     brand: { type: "text", label: "Бренд", required: false, maxLen: 80 },
+    shade: { type: "text", label: "Оттенок", required: false, maxLen: 80 },
     volume: { type: "text", label: "Объём", required: false, maxLen: 64 },
-    ingredients: { type: "text", label: "Состав", required: false, maxLen: 4096 },
     skinType: {
       type: "select",
       label: "Тип кожи",
@@ -35,6 +35,8 @@ export const cosmeticsTemplate: BusinessTemplateConfig = {
       values: ["all", "dry", "normal", "oily", "combo", "sensitive"],
       default: "all",
     },
+    ingredients: { type: "text", label: "Состав", required: false, maxLen: 4096 },
+    usageGuide: { type: "text", label: "Способ применения", required: false, maxLen: 2048 },
   },
   merchantSettingsSchema: {
     consultationEnabled: { type: "boolean", label: "Консультация", required: false, default: true },
@@ -56,8 +58,11 @@ export const cosmeticsTemplate: BusinessTemplateConfig = {
       price: 1890,
       image: "https://picsum.photos/seed/cosmetics-serum/600/600",
       attributes: {
+        brand: "Archa Beauty",
         volume: "30 мл",
         skinType: "all",
+        ingredients: "Aqua, Glycerin, Hyaluronic Acid, Niacinamide",
+        usageGuide: "Нанесите 2–3 капли на очищенную кожу утром и вечером.",
       },
     },
     {
@@ -66,14 +71,19 @@ export const cosmeticsTemplate: BusinessTemplateConfig = {
       price: 990,
       image: "https://picsum.photos/seed/cosmetics-lip/600/600",
       attributes: {
+        brand: "Archa Beauty",
+        shade: "Rose Velvet",
         volume: "8 мл",
+        skinType: "all",
+        ingredients: "Dimethicone, Isododecane, CI 45410",
+        usageGuide: "Нанесите тонким слоем на губы. Дайте подсохнуть 30 секунд.",
       },
     },
   ],
   variantPolicy: {
     mode: "metadata_only",
     primaryAxisKey: "size",
-    primaryAxisLabel: "Вариант",
+    primaryAxisLabel: "Объём",
     secondaryAxisKey: null,
     secondaryAxisLabel: null,
     showFashionVariantMatrix: false,

@@ -68,6 +68,9 @@ export async function relayDynamicStoreWebhook(
       subscriptionStatus: true,
       trialEndsAt: true,
       subscriptionEndsAt: true,
+      gracePeriodEndsAt: true,
+      freeOrdersUsed: true,
+      freeOrdersLimit: true,
     },
   });
 

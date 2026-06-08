@@ -34,6 +34,36 @@
   color: #94a3b8;
 }
 
+.archa-sub-compact__banner {
+  margin: 0.35rem 0 0;
+  font-size: 0.76rem;
+  color: #cbd5e1;
+}
+
+.archa-sub-compact__progress {
+  margin-top: 0.4rem;
+  height: 0.32rem;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.2);
+  overflow: hidden;
+}
+
+.archa-sub-compact__progress-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22c55e, #86efac);
+}
+
+.archa-sub-compact__progress--yellow .archa-sub-compact__progress-fill {
+  background: linear-gradient(90deg, #f59e0b, #fcd34d);
+}
+
+.archa-sub-compact__progress--red .archa-sub-compact__progress-fill {
+  background: linear-gradient(90deg, #ef4444, #fb7185);
+}
+
 .archa-sub-compact__btn {
   flex-shrink: 0;
   min-width: 6.5rem;

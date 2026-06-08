@@ -42,6 +42,7 @@ import {
 } from "../services/platformAdminApi";
 import {
   fetchPlatformMyBusinesses,
+  fetchMerchantSubscriptionPanel,
   fetchOperatorCapabilities,
   fetchPlatformStoreSettings,
   fetchRegistrationStatus,
@@ -54,6 +55,7 @@ import {
   savePlatformStoreSettings,
   fetchStoreReadiness,
   postPlatformFeedback,
+  type MerchantSubscriptionPanelPayload,
   type PlatformMyBusinessDTO,
   type PlatformStoreSettingsDTO,
   type StoreReadinessPayload,
@@ -73,6 +75,11 @@ import type { MerchantDeliverySettings } from "@repo-shared/merchantDeliverySett
 import { defaultStoreAvailabilitySettings } from "@repo-shared/storeAvailabilitySettings";
 import type { StoreAvailabilitySettings } from "@repo-shared/storeAvailabilitySettings";
 import type { BusinessStoreAddressDTO } from "../services/platformApi";
+import { formatSaasPriceSom } from "@repo-shared/saasSubscriptionPricing";
+import {
+  resolveFirstMonthPlan,
+  resolveMerchantGrowthBanner,
+} from "../utils/subscriptionUx";
 import {
   draftFromStoreAddressPublic,
   emptyMerchantStoreAddressDraft,
@@ -178,6 +185,8 @@ export default function PlatformPage() {
   const [feedbackText, setFeedbackText] = useState("");
   const [feedbackBusy, setFeedbackBusy] = useState(false);
   const [feedbackOk, setFeedbackOk] = useState<string | null>(null);
+  const [subscriptionPanel, setSubscriptionPanel] =
+    useState<MerchantSubscriptionPanelPayload | null>(null);
 
   const [registrationStatus, setRegistrationStatus] =
     useState<RegistrationStatusPayload | null>(null);
@@ -1244,6 +1253,47 @@ export default function PlatformPage() {
 
   const primaryBusiness = businesses[0] ?? null;
 
+  useEffect(() => {
+    if (isPlatformAdmin || primaryBusiness == null || primaryBusiness.id <= 0) {
+      setSubscriptionPanel(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchMerchantSubscriptionPanel(primaryBusiness.id)
+      .then((panel) => {
+        if (!cancelled) setSubscriptionPanel(panel);
+      })
+      .catch(() => {
+        if (!cancelled) setSubscriptionPanel(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isPlatformAdmin, primaryBusiness?.id]);
+
+  const growthBanner =
+    subscriptionPanel != null ? resolveMerchantGrowthBanner(subscriptionPanel) : null;
+  const firstMonthPlan =
+    subscriptionPanel != null ? resolveFirstMonthPlan(subscriptionPanel) : null;
+  const firstMonthPriceLabel =
+    firstMonthPlan != null ? formatSaasPriceSom(firstMonthPlan.amountSom) : null;
+  const subscriptionCtaTone =
+    subscriptionPanel?.displayStatus === "QUOTA_EXHAUSTED"
+      ? "success"
+      : subscriptionPanel?.displayStatus === "GRACE"
+        ? "warning"
+        : "danger";
+  const subscriptionCtaText =
+    subscriptionPanel?.displayStatus === "QUOTA_EXHAUSTED"
+      ? `Откройте следующий этап за ${firstMonthPriceLabel ?? "1500 сом"} и продолжайте принимать заказы.`
+      : subscriptionPanel?.displayStatus === "GRACE"
+        ? "Льготный период активен. Оплатите подписку, чтобы магазин не остановил приём заказов."
+        : "Лимит бесплатных заказов исчерпан или подписка не активна. Оплатите подписку, чтобы снова принимать заказы.";
+  const subscriptionCtaButton =
+    subscriptionPanel?.displayStatus === "QUOTA_EXHAUSTED"
+      ? `Оплатить ${firstMonthPriceLabel ?? "1500 сом"}`
+      : "Оформить подписку";
+
   const handleBotRecoveryStatusChange = useCallback(() => {
     void loadBusinesses({ background: true });
     const bid = businessesRef.current[0]?.id;
@@ -1401,26 +1451,27 @@ export default function PlatformPage() {
     const b = primaryBusiness;
     if (b == null) return [];
     const locked = !b.subscriptionActive;
+    const catalogLocked = locked;
     return [
       {
         id: "orders",
         label: "Заказы",
         icon: "📦",
-        disabled: locked,
+        disabled: false,
         onClick: () => navigate(merchantAdminNavigateTarget(b, "orders")),
       },
       {
         id: "products",
         label: "Товары",
         icon: "👕",
-        disabled: locked,
+        disabled: catalogLocked,
         onClick: () => navigate(merchantAdminNavigateTarget(b, "products")),
       },
       {
         id: "categories",
         label: "Категории",
         icon: "📁",
-        disabled: locked,
+        disabled: catalogLocked,
         onClick: () => navigate(merchantAdminNavigateTarget(b, "categories")),
       },
       {
@@ -1505,6 +1556,7 @@ export default function PlatformPage() {
             {!loading && businesses.length > 0 && !isPlatformAdmin && primaryBusiness != null ? (
               <MerchantPremiumOverview
                 business={primaryBusiness}
+                subscriptionPanel={subscriptionPanel}
                 readiness={readiness}
                 readinessPct={readinessPct}
                 onOpenOrders={() =>
@@ -1523,19 +1575,22 @@ export default function PlatformPage() {
             !primaryBusiness.subscriptionActive &&
             !isPlatformAdmin &&
             !loading ? (
-              <div className="mp-subscription-cta" role="alert">
+              <div
+                className={`mp-subscription-cta mp-subscription-cta--${subscriptionCtaTone}`}
+                role="alert"
+              >
                 <p className="mp-subscription-cta__title">
-                  Подписка истекла — магазин закрыт для покупателей
+                  {growthBanner?.title ?? "Магазин закрыт для покупателей"}
                 </p>
                 <p className="mp-subscription-cta__text">
-                  Новые заказы и витрина недоступны, пока вы не продлите подписку.
+                  {growthBanner?.body ?? subscriptionCtaText}
                 </p>
                 <button
                   type="button"
                   className="mp-subscription-cta__btn"
                   onClick={openSubscription}
                 >
-                  Продлить подписку →
+                  {subscriptionCtaButton} →
                 </button>
               </div>
             ) : null}
@@ -1710,6 +1765,7 @@ export default function PlatformPage() {
               <MerchantSubscriptionCompactCard
                 businessId={primaryBusiness.id}
                 onOpen={openSubscription}
+                panel={subscriptionPanel}
               />
             ) : null}
 

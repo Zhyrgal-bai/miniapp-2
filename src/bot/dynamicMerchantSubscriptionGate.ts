@@ -3,6 +3,7 @@ import type { Telegraf } from "telegraf";
 import { prisma } from "../server/db.js";
 import { syncBusinessSubscriptionActivationState } from "../server/saasBillingService.js";
 import { businessSubscriptionBlocked } from "../middleware/business.middleware.js";
+import { SubscriptionStatus } from "@prisma/client";
 import {
   isTelegramCancelCommandText,
   isTelegramStartCommandText,
@@ -41,6 +42,9 @@ export function attachDynamicMerchantSubscriptionGate(
         subscriptionStatus: true,
         trialEndsAt: true,
         subscriptionEndsAt: true,
+        gracePeriodEndsAt: true,
+        freeOrdersUsed: true,
+        freeOrdersLimit: true,
       },
     });
 
@@ -70,7 +74,9 @@ export function attachDynamicMerchantSubscriptionGate(
 
     const reply = b.isBlocked
       ? "❌ Магазин отключён администратором"
-      : "❌ Подписка не активна. Оплатите подписку в Mini App.";
+      : b.subscriptionStatus === SubscriptionStatus.QUOTA_EXHAUSTED
+        ? "❌ Лимит бесплатных заказов исчерпан. Оплатите подписку в Mini App."
+        : "❌ Подписка не активна. Оплатите подписку в Mini App.";
 
     await ctx.reply(reply);
   };

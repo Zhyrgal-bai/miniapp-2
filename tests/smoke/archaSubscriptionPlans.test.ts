@@ -120,7 +120,7 @@ describe("archaSubscriptionPlans", () => {
     expect(isFirstMonthPlanEligible(true)).toBe(false);
   });
 
-  it("resolveSubscriptionExtensionBaseStart stacks from trialEndsAt on trial", () => {
+  it("resolveSubscriptionExtensionBaseStart uses now on trial (no trial stacking)", () => {
     const now = new Date("2026-06-01T12:00:00.000Z");
     const trialEndsAt = new Date("2026-06-11T12:00:00.000Z");
     const base = resolveSubscriptionExtensionBaseStart({
@@ -129,7 +129,7 @@ describe("archaSubscriptionPlans", () => {
       subscriptionStatus: "TRIALING",
       trialEndsAt,
     });
-    expect(base.getTime()).toBe(trialEndsAt.getTime());
+    expect(base.getTime()).toBe(now.getTime());
   });
 
   it("resolveSubscriptionExtensionBaseStart stacks from subscriptionEndsAt when active", () => {
@@ -155,7 +155,7 @@ describe("archaSubscriptionPlans", () => {
     expect(base.getTime()).toBe(now.getTime());
   });
 
-  it("trial payment extends from trialEndsAt (FIRST_MONTH example)", () => {
+  it("FIRST_MONTH payment extends from now when on trial", () => {
     const now = new Date("2026-06-01T12:00:00.000Z");
     const trialEndsAt = new Date("2026-06-11T12:00:00.000Z");
     const base = resolveSubscriptionExtensionBaseStart({
@@ -165,7 +165,7 @@ describe("archaSubscriptionPlans", () => {
       trialEndsAt,
     });
     const end = subscriptionEndAfterPlan(base, "FIRST_MONTH");
-    const expected = addCalendarMonths(trialEndsAt, 1);
+    const expected = addCalendarMonths(now, 1);
     expect(end.getTime()).toBe(expected.getTime());
   });
 });

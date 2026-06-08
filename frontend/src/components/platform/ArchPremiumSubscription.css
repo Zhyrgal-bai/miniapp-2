@@ -245,6 +245,157 @@
   color: #fcd34d;
 }
 
+/* Growth banner */
+.archa-sub__growth-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin: 0 0 1rem;
+  padding: 1rem 1.05rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.archa-sub__growth-banner--success {
+  border-color: rgba(34, 197, 94, 0.3);
+  background: linear-gradient(
+    135deg,
+    rgba(34, 197, 94, 0.14) 0%,
+    rgba(10, 18, 10, 0.55) 100%
+  );
+}
+
+.archa-sub__growth-banner--warning {
+  border-color: rgba(245, 158, 11, 0.34);
+  background: linear-gradient(
+    135deg,
+    rgba(245, 158, 11, 0.16) 0%,
+    rgba(36, 20, 6, 0.54) 100%
+  );
+}
+
+.archa-sub__growth-banner--danger {
+  border-color: rgba(239, 68, 68, 0.34);
+  background: linear-gradient(
+    135deg,
+    rgba(239, 68, 68, 0.14) 0%,
+    rgba(39, 12, 12, 0.58) 100%
+  );
+}
+
+.archa-sub__growth-banner--info {
+  border-color: rgba(59, 130, 246, 0.35);
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.14) 0%,
+    rgba(10, 17, 33, 0.56) 100%
+  );
+}
+
+.archa-sub__growth-banner--celebrate {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 28px rgba(245, 158, 11, 0.18);
+}
+
+.archa-sub__growth-banner-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.archa-sub__growth-banner-text {
+  margin: 0.4rem 0 0;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: rgba(238, 248, 234, 0.82);
+}
+
+.archa-sub__growth-banner-cta {
+  align-self: flex-start;
+  min-width: 10rem;
+}
+
+/* Free progress */
+.archa-sub__free-progress {
+  margin: 0 0 1.1rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 0.95rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.archa-sub__free-progress--green {
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.archa-sub__free-progress--yellow {
+  border-color: rgba(245, 158, 11, 0.34);
+}
+
+.archa-sub__free-progress--red {
+  border-color: rgba(239, 68, 68, 0.34);
+}
+
+.archa-sub__free-progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.archa-sub__free-progress-title {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(238, 248, 234, 0.84);
+}
+
+.archa-sub__free-progress-ratio {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--archa-green-neon, #9dff57);
+  font-variant-numeric: tabular-nums;
+}
+
+.archa-sub__free-progress-track {
+  margin-top: 0.55rem;
+  width: 100%;
+  height: 0.42rem;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+  overflow: hidden;
+}
+
+.archa-sub__free-progress-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22c55e 0%, #bef264 100%);
+  transition: width 0.3s ease;
+}
+
+.archa-sub__free-progress--yellow .archa-sub__free-progress-fill {
+  background: linear-gradient(90deg, #f59e0b 0%, #fcd34d 100%);
+}
+
+.archa-sub__free-progress--red .archa-sub__free-progress-fill {
+  background: linear-gradient(90deg, #ef4444 0%, #fb7185 100%);
+}
+
+.archa-sub__free-progress-meta {
+  margin-top: 0.55rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+  font-size: 0.75rem;
+  color: rgba(238, 248, 234, 0.72);
+}
+
 /* Trial banner */
 .archa-sub__trial-banner {
   display: flex;
@@ -292,20 +443,21 @@
   color: var(--archa-green-neon, #9dff57);
 }
 
-.archa-sub__trial-banner-cta {
-  align-self: flex-start;
-  min-width: 10rem;
-}
-
 @media (min-width: 480px) {
-  .archa-sub__trial-banner {
+  .archa-sub__growth-banner {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
   }
 
-  .archa-sub__trial-banner-cta {
+  .archa-sub__growth-banner-cta {
     flex-shrink: 0;
+  }
+
+  .archa-sub__trial-banner {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
   }
 }
 

@@ -1,0 +1,89 @@
+.clothing-card__variants {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.clothing-card__sizes,
+.clothing-card__colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.clothing-card__size {
+  min-width: 28px;
+  min-height: 24px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 55%, transparent);
+  background: color-mix(in srgb, var(--sf-color-surface) 70%, transparent);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--sf-color-text) 78%, transparent);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.clothing-card__size.is-active {
+  border-color: var(--sf-color-text);
+  color: var(--sf-color-text);
+  background: color-mix(in srgb, var(--sf-color-text) 8%, transparent);
+}
+
+.clothing-card__size:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+.clothing-card__size-more {
+  font-size: 0.625rem;
+  color: color-mix(in srgb, var(--sf-color-text) 55%, transparent);
+  padding: 0 2px;
+}
+
+.clothing-card__color {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--sf-color-border) 60%, transparent);
+  background: var(--clothing-card-swatch, var(--sf-color-muted));
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.clothing-card__color.is-active {
+  border-color: var(--sf-color-text);
+  box-shadow: 0 0 0 1px var(--sf-color-text);
+}
+
+.clothing-card__stock {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: color-mix(in srgb, var(--sf-color-surface) 82%, black);
+  color: var(--sf-color-text);
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 50%, transparent);
+}
+
+.clothing-card__stock--low {
+  background: color-mix(in srgb, var(--sf-color-warning) 22%, transparent);
+  border-color: color-mix(in srgb, var(--sf-color-warning) 45%, transparent);
+}
+
+.clothing-card__stock--out {
+  background: color-mix(in srgb, var(--sf-color-danger, #e11) 18%, transparent);
+}

@@ -1,5 +1,6 @@
 import { prisma } from "./db.js";
-import { isSubscriptionFullyExpired } from "./subscriptionMaintenance.js";
+import { SubscriptionStatus } from "@prisma/client";
+import { canAcceptCustomerOrders } from "./subscriptionAccess.js";
 
 export type PlatformOpsSummary = {
   generatedAt: string;
@@ -7,6 +8,7 @@ export type PlatformOpsSummary = {
     active: number;
     blocked: number;
     subscriptionExpired: number;
+    quotaExhausted: number;
     finikNotConfigured: number;
   };
   orders: {
@@ -36,6 +38,7 @@ export async function buildPlatformOpsSummary(): Promise<PlatformOpsSummary> {
   const [
     activeStores,
     blockedStores,
+    quotaExhaustedStores,
     businesses,
     ordersLast24h,
     unpaidPending,
@@ -51,11 +54,20 @@ export async function buildPlatformOpsSummary(): Promise<PlatformOpsSummary> {
       where: { isActive: true, isBlocked: false },
     }),
     prisma.business.count({ where: { isBlocked: true } }),
+    prisma.business.count({
+      where: { subscriptionStatus: SubscriptionStatus.QUOTA_EXHAUSTED },
+    }),
     prisma.business.findMany({
       where: { isActive: true, isBlocked: false },
       select: {
+        isActive: true,
+        isBlocked: true,
+        subscriptionStatus: true,
         trialEndsAt: true,
         subscriptionEndsAt: true,
+        gracePeriodEndsAt: true,
+        freeOrdersUsed: true,
+        freeOrdersLimit: true,
         finikApiKey: true,
         finikAccountId: true,
       },
@@ -93,7 +105,7 @@ export async function buildPlatformOpsSummary(): Promise<PlatformOpsSummary> {
   let subscriptionExpired = 0;
   let finikNotConfigured = 0;
   for (const b of businesses) {
-    if (isSubscriptionFullyExpired(b, now)) subscriptionExpired += 1;
+    if (!canAcceptCustomerOrders(b, now)) subscriptionExpired += 1;
     const finikOk =
       Boolean(b.finikApiKey?.trim()) && Boolean(b.finikAccountId?.trim());
     if (!finikOk) finikNotConfigured += 1;
@@ -109,6 +121,9 @@ export async function buildPlatformOpsSummary(): Promise<PlatformOpsSummary> {
   if (subscriptionExpired > 0) {
     alerts.push(`stores_subscription_expired:${subscriptionExpired}`);
   }
+  if (quotaExhaustedStores > 0) {
+    alerts.push(`stores_quota_exhausted:${quotaExhaustedStores}`);
+  }
 
   return {
     generatedAt: now.toISOString(),
@@ -116,6 +131,7 @@ export async function buildPlatformOpsSummary(): Promise<PlatformOpsSummary> {
       active: activeStores,
       blocked: blockedStores,
       subscriptionExpired,
+      quotaExhausted: quotaExhaustedStores,
       finikNotConfigured,
     },
     orders: {

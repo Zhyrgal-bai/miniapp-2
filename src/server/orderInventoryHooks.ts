@@ -58,6 +58,10 @@ export async function onOrderPaidConfirmed(orderId: number): Promise<void> {
     await commitPaidOrderStock(tx, order.businessId, orderId, lines);
   });
   await syncDeliveryStageForOrderStatus(orderId, "CONFIRMED");
+  const { incrementFreeOrderQuotaOnPaid } = await import(
+    "./freeOrderQuotaService.js"
+  );
+  await incrementFreeOrderQuotaOnPaid(orderId);
 }
 
 export async function onOrderCancelled(orderId: number, fromStatus: string): Promise<void> {

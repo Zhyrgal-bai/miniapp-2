@@ -649,6 +649,12 @@
 }
 
 .px-screen--layout-cosmetics .px-head__facts .px-head__fact,
-.px-screen--layout-clothing .px-head__facts .px-head__fact {
+.px-screen--layout-clothing .px-head__facts .px-head__fact,
+.px-screen--layout-flowers .px-head__facts .px-head__fact,
+.px-screen--layout-coffee .px-head__facts .px-head__fact {
   border-radius: 12px;
+}
+
+.px-screen--layout-flowers .px-gallery__slide img {
+  object-fit: cover;
 }

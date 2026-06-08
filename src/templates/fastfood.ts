@@ -28,6 +28,14 @@ export const fastfoodTemplate: BusinessTemplateConfig = {
     spicy: { type: "select", label: "Острота", required: false, values: ["no", "mild", "hot"], default: "no" },
     combo: { type: "boolean", label: "Комбо", required: false, default: false },
     addons: { type: "multiselect", label: "Добавки", required: false, values: ["cheese", "bacon", "sauce"] },
+    preparationTimeMinutes: {
+      type: "number",
+      label: "Время приготовления (мин)",
+      required: false,
+      min: 1,
+      max: 180,
+    },
+    calories: { type: "number", label: "Калории", required: false, min: 0, max: 5000 },
   },
   merchantSettingsSchema: {
     deliveryZones: { type: "text", label: "Зоны доставки (описание)", required: false, maxLen: 2048 },
@@ -40,6 +48,7 @@ export const fastfoodTemplate: BusinessTemplateConfig = {
     spicy: { type: "select", label: "Острота", required: false, values: ["no", "mild", "hot"], default: "no" },
     combo: { type: "boolean", label: "Комбо", required: false, default: false },
     addons: { type: "multiselect", label: "Добавки", required: false, values: ["cheese", "bacon", "sauce"] },
+    orderNote: { type: "text", label: "Заметка к заказу", required: false, maxLen: 280 },
   },
   merchantConfig: {
     sections: [
@@ -55,7 +64,12 @@ export const fastfoodTemplate: BusinessTemplateConfig = {
       name: "Бургер классик",
       price: 250,
       image: "https://picsum.photos/seed/fastfood-burger/600/600",
-      attributes: { spicy: ["no", "mild", "hot"], addons: ["сыр", "бекон"] },
+      attributes: {
+        spicy: ["no", "mild", "hot"],
+        addons: ["cheese", "bacon"],
+        preparationTimeMinutes: 18,
+        calories: 520,
+      },
     },
     {
       categoryKey: "combo",

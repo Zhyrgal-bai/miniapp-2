@@ -136,7 +136,7 @@ export async function extendBusinessSubscription(
 }
 
 /**
- * Если срок триала и оплаты вышел (включая grace) — ставим isActive=false.
+ * Sync subscription-driven activation. Quota exhaustion does not deactivate isActive.
  */
 export async function syncBusinessSubscriptionActivationState(
   businessId: number,
@@ -152,24 +152,44 @@ export async function syncBusinessSubscriptionActivationState(
       trialEndsAt: true,
       subscriptionEndsAt: true,
       gracePeriodEndsAt: true,
+      freeOrdersUsed: true,
+      freeOrdersLimit: true,
     },
   });
-  if (b == null || b.isBlocked || !b.isActive) return;
+  if (b == null || b.isBlocked) return;
 
   if (hasValidPaidOrTrialWindow(b, now)) return;
   if (isInSubscriptionGracePeriod(b, now)) return;
 
-  await prisma.business.update({
-    where: { id: businessId },
-    data: {
-      isActive: false,
-      subscriptionStatus: SubscriptionStatus.EXPIRED,
-      gracePeriodEndsAt: null,
-      lastReminder3DaysAt: null,
-      lastReminder1DayAt: null,
-      lastReminder7DaysAt: null,
-    },
-  });
+  if (b.subscriptionStatus === SubscriptionStatus.TRIALING) {
+    const { transitionTrialToFreeTier } = await import(
+      "./freeOrderQuotaService.js"
+    );
+    await transitionTrialToFreeTier(businessId);
+    return;
+  }
+
+  const paidEnded =
+    b.subscriptionEndsAt != null && b.subscriptionEndsAt.getTime() <= now.getTime();
+
+  if (
+    paidEnded &&
+    b.subscriptionStatus !== SubscriptionStatus.QUOTA_EXHAUSTED &&
+    b.subscriptionStatus !== SubscriptionStatus.FREE
+  ) {
+    await prisma.business.update({
+      where: { id: businessId },
+      data: {
+        subscriptionStatus: SubscriptionStatus.QUOTA_EXHAUSTED,
+        quotaExhaustedAt: now,
+        gracePeriodEndsAt: null,
+        lastReminder3DaysAt: null,
+        lastReminder1DayAt: null,
+        lastReminder7DaysAt: null,
+        isActive: true,
+      },
+    });
+  }
 }
 
 export async function adminBlockBusiness(businessId: number): Promise<void> {

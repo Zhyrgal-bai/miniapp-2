@@ -11,9 +11,11 @@ import {
   type ExtendBusinessSubscriptionSource,
 } from "./saasBillingService.js";
 import {
+  freeOrdersQuotaSummary,
   hasCustomerAccessWindow,
   hasValidPaidOrTrialWindow,
   isInSubscriptionGracePeriod,
+  resolveMerchantAccessMode,
   type SubscriptionGateFields,
 } from "./subscriptionAccess.js";
 import { platformMerchantIsStoreOwner } from "./platformMerchantAccess.js";
@@ -41,6 +43,8 @@ import { canClaimSubscriptionFinikPaymentStatus } from "../shared/subscriptionFi
 export type MerchantSubscriptionUiStatus =
   | "ACTIVE"
   | "TRIAL"
+  | "FREE"
+  | "QUOTA_EXHAUSTED"
   | "GRACE"
   | "EXPIRED"
   | "EXPIRING"
@@ -50,12 +54,16 @@ export type MerchantSubscriptionPanelPayload = {
   businessId: number;
   displayStatus: MerchantSubscriptionUiStatus;
   displayStatusLabel: string;
+  accessMode: string;
   subscriptionStatus: string;
   subscriptionPlanCode: string | null;
   subscriptionPlanLabel: string;
   trialEndsAt: string | null;
   subscriptionEndsAt: string | null;
   gracePeriodEndsAt: string | null;
+  freeOrdersUsed: number;
+  freeOrdersLimit: number;
+  freeOrdersRemaining: number;
   daysLeft: number | null;
   countdownMs: number | null;
   inGracePeriod: boolean;
@@ -117,15 +125,17 @@ export function resolveMerchantSubscriptionUiStatus(
   if (isInSubscriptionGracePeriod(b, now)) {
     return "GRACE";
   }
-  const t = now.getTime();
-  const trialOk =
-    b.subscriptionStatus === SubscriptionStatus.TRIALING &&
-    b.trialEndsAt != null &&
-    b.trialEndsAt.getTime() >= t &&
-    (b.subscriptionEndsAt == null || b.subscriptionEndsAt.getTime() >= t);
-  if (trialOk) {
+  const accessMode = resolveMerchantAccessMode(b, now);
+  if (accessMode === "grandfather_trial") {
     return "TRIAL";
   }
+  if (accessMode === "free") {
+    return "FREE";
+  }
+  if (accessMode === "quota_exhausted") {
+    return "QUOTA_EXHAUSTED";
+  }
+  const t = now.getTime();
   const paidOk =
     b.subscriptionStatus === SubscriptionStatus.ACTIVE &&
     b.subscriptionEndsAt != null &&
@@ -146,6 +156,8 @@ export function resolveMerchantSubscriptionUiStatus(
 const STATUS_LABEL: Record<MerchantSubscriptionUiStatus, string> = {
   ACTIVE: "Активна",
   TRIAL: "Пробный период",
+  FREE: "Бесплатные заказы",
+  QUOTA_EXHAUSTED: "Лимит исчерпан",
   GRACE: "Grace period",
   EXPIRING: "Скоро истекает",
   EXPIRED: "Просрочена",
@@ -204,6 +216,8 @@ export async function buildMerchantSubscriptionPanel(input: {
       trialEndsAt: true,
       subscriptionEndsAt: true,
       gracePeriodEndsAt: true,
+      freeOrdersUsed: true,
+      freeOrdersLimit: true,
       autoRenewEnabled: true,
     },
   });
@@ -240,18 +254,25 @@ export async function buildMerchantSubscriptionPanel(input: {
   const entitled = hasCustomerAccessWindow(b, now);
   const storeOpenForCustomers = !b.isBlocked && b.isActive && entitled;
 
+  const quota = freeOrdersQuotaSummary(b);
+  const accessMode = resolveMerchantAccessMode(b, now);
+
   return {
     ok: true,
     panel: {
       businessId: b.id,
       displayStatus,
       displayStatusLabel: STATUS_LABEL[displayStatus],
+      accessMode,
       subscriptionStatus: String(b.subscriptionStatus),
       subscriptionPlanCode: b.subscriptionPlanCode,
       subscriptionPlanLabel: planCodeLabel(b.subscriptionPlanCode),
       trialEndsAt: b.trialEndsAt?.toISOString() ?? null,
       subscriptionEndsAt: b.subscriptionEndsAt?.toISOString() ?? null,
       gracePeriodEndsAt: b.gracePeriodEndsAt?.toISOString() ?? null,
+      freeOrdersUsed: quota.used,
+      freeOrdersLimit: quota.limit,
+      freeOrdersRemaining: quota.remaining,
       daysLeft,
       countdownMs,
       inGracePeriod: inGrace,

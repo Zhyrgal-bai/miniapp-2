@@ -5,6 +5,8 @@ export const API_ERR_NOT_FOUND = "Не найдено";
 export const API_ERR_STORE_UNAVAILABLE = "Магазин недоступен";
 export const API_ERR_STORE_SUBSCRIPTION_EXPIRED =
   "Магазин временно недоступен. Владелец продлевает подписку.";
+export const API_ERR_STORE_QUOTA_EXHAUSTED =
+  "Магазин временно не принимает заказы. Лимит бесплатных заказов исчерпан.";
 export const API_ERR_BUSINESS_NOT_FOUND = "Магазин не найден";
 export const API_ERR_INVALID_BUSINESS_ID = "Некорректный id магазина";
 export const API_ERR_INVALID_SLUG = "Некорректный адрес магазина";

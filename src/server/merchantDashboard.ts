@@ -1,6 +1,10 @@
 import { BusinessStaffRole, SubscriptionStatus } from "@prisma/client";
 import { prisma } from "./db.js";
-import { hasValidPaidOrTrialWindow } from "./subscriptionAccess.js";
+import {
+  freeOrdersQuotaSummary,
+  hasValidPaidOrTrialWindow,
+  resolveMerchantAccessMode,
+} from "./subscriptionAccess.js";
 
 /** Публичный JSON для Mini App «мои магазины». */
 export type MerchantBusinessCard = {
@@ -14,7 +18,10 @@ export type MerchantBusinessCard = {
   trialEndsAt: string | null;
   subscriptionEndsAt: string | null;
   daysLeft: number | null;
-  accessState: "active" | "blocked" | "pay_required" | "paused";
+  freeOrdersUsed: number;
+  freeOrdersLimit: number;
+  freeOrdersRemaining: number;
+  accessState: "active" | "blocked" | "pay_required" | "paused" | "quota_exhausted";
 };
 
 function calendarWholeDaysAhead(end: Date, now: Date): number | null {
@@ -35,20 +42,58 @@ function summarizeAccess(
     subscriptionStatus: SubscriptionStatus;
     trialEndsAt: Date | null;
     subscriptionEndsAt: Date | null;
+    freeOrdersUsed?: number | null;
+    freeOrdersLimit?: number | null;
   },
   now: Date
-): Pick<MerchantBusinessCard, "daysLeft" | "accessState"> {
+): Pick<
+  MerchantBusinessCard,
+  "daysLeft" | "accessState" | "freeOrdersUsed" | "freeOrdersLimit" | "freeOrdersRemaining"
+> {
+  const quota = freeOrdersQuotaSummary(b);
   if (b.isBlocked) {
-    return { daysLeft: null, accessState: "blocked" };
+    return {
+      daysLeft: null,
+      accessState: "blocked",
+      freeOrdersUsed: quota.used,
+      freeOrdersLimit: quota.limit,
+      freeOrdersRemaining: quota.remaining,
+    };
+  }
+
+  const mode = resolveMerchantAccessMode(
+    { ...b, gracePeriodEndsAt: null },
+    now,
+  );
+  if (mode === "quota_exhausted") {
+    return {
+      daysLeft: null,
+      accessState: "quota_exhausted",
+      freeOrdersUsed: quota.used,
+      freeOrdersLimit: quota.limit,
+      freeOrdersRemaining: 0,
+    };
   }
 
   const entitled = hasValidPaidOrTrialWindow(b, now);
-  if (!entitled) {
-    return { daysLeft: null, accessState: "pay_required" };
+  if (!entitled && mode !== "grace") {
+    return {
+      daysLeft: null,
+      accessState: "pay_required",
+      freeOrdersUsed: quota.used,
+      freeOrdersLimit: quota.limit,
+      freeOrdersRemaining: quota.remaining,
+    };
   }
 
   if (!b.isActive) {
-    return { daysLeft: null, accessState: "paused" };
+    return {
+      daysLeft: null,
+      accessState: "paused",
+      freeOrdersUsed: quota.used,
+      freeOrdersLimit: quota.limit,
+      freeOrdersRemaining: quota.remaining,
+    };
   }
 
   const nowTs = now.getTime();
@@ -64,7 +109,13 @@ function summarizeAccess(
     daysLeft = calendarWholeDaysAhead(b.trialEndsAt, now);
   }
 
-  return { daysLeft, accessState: "active" };
+  return {
+    daysLeft,
+    accessState: "active",
+    freeOrdersUsed: quota.used,
+    freeOrdersLimit: quota.limit,
+    freeOrdersRemaining: quota.remaining,
+  };
 }
 
 /** Магазины, где пользователь — staff (не покупатель). */
@@ -75,7 +126,7 @@ export async function listMerchantOwnedBusinesses(
     where: { telegramId },
     select: { id: true },
   });
-  if (!identity) {
+  if (identity == null) {
     return [];
   }
 
@@ -98,7 +149,7 @@ export async function listMerchantOwnedBusinesses(
       isBlocked: b.isBlocked,
       role: m.role,
       subscriptionStatus: b.subscriptionStatus,
-      billingPlan: b.billingPlan ?? null,
+      billingPlan: b.billingPlan,
       trialEndsAt: b.trialEndsAt?.toISOString() ?? null,
       subscriptionEndsAt: b.subscriptionEndsAt?.toISOString() ?? null,
       ...summary,

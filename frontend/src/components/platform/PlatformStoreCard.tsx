@@ -2,6 +2,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import type { PlatformMyBusinessDTO } from "../../services/platformApi";
 import {
+  adminSubscriptionBadge,
   botRunBadge,
   formatDaysRemaining,
   formatRuDateShort,
@@ -66,7 +67,9 @@ export function PlatformStoreCard({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [extendToDateDraft, setExtendToDateDraft] = useState("");
   const runBadge = botRunBadge(b);
-  const subBadge = subscriptionBadge(b.status);
+  const subBadge = isPlatformAdmin
+    ? adminSubscriptionBadge(b.status)
+    : subscriptionBadge(b.status);
   const whBadge = webhookBadge(b.webhookStatus);
   const subLocked = !b.subscriptionActive;
   const trialEndLabel = formatRuDateShort(b.trialEndsAt);
@@ -133,8 +136,11 @@ export function PlatformStoreCard({
         </div>
       ) : (
         <div className="mp-v2-sub-hint">
-          {trialEndLabel != null ? <p>Пробный до {trialEndLabel}</p> : null}
-          {subEndLabel != null ? <p>Оплата до {subEndLabel}</p> : null}
+          <p>Статус подписки: {subBadge.label}</p>
+          {subEndLabel != null ? <p>Оплачено до {subEndLabel}</p> : null}
+          {subEndLabel == null && trialEndLabel != null ? (
+            <p>Период до {trialEndLabel}</p>
+          ) : null}
         </div>
       )}
 

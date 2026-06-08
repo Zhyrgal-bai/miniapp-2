@@ -1,0 +1,72 @@
+.electronics-pdp__specs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.electronics-pdp__spec-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--sf-color-border) 35%, transparent);
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+.electronics-pdp__spec-row:last-child {
+  border-bottom: none;
+}
+
+.electronics-pdp__spec-label {
+  flex: 0 0 42%;
+  color: color-mix(in srgb, var(--sf-color-text) 62%, transparent);
+  font-weight: 500;
+}
+
+.electronics-pdp__spec-value {
+  flex: 1;
+  text-align: right;
+  color: var(--sf-color-text);
+  font-weight: 600;
+}
+
+.electronics-pdp__info-panel {
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 45%, transparent);
+  background: color-mix(in srgb, var(--sf-color-surface) 82%, transparent);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--sf-color-text) 88%, transparent);
+}
+
+.electronics-pdp__info-panel p {
+  margin: 0;
+}
+
+.electronics-pdp__delivery-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.electronics-pdp__delivery-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.electronics-pdp__delivery-title {
+  font-weight: 700;
+  color: var(--sf-color-text);
+}
+
+.electronics-pdp__delivery-value {
+  color: color-mix(in srgb, var(--sf-color-text) 78%, transparent);
+}

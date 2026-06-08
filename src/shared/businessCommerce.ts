@@ -13,8 +13,8 @@ export type VerticalInventoryMode =
 export type VerticalCommerceProfile = {
   businessType: BusinessTypeId;
   inventoryMode: VerticalInventoryMode;
-  /** Maps to OrderItem.size / ProductStock.size (storage adapter) */
-  primaryAxisKey: "size";
+  /** Business axis id; `memory` maps to OrderItem.size / ProductStock.size (storage adapter). */
+  primaryAxisKey: "size" | "memory";
   primaryAxisLabel: string;
   /** Maps to OrderItem.color; null = hide secondary picker */
   secondaryAxisKey: "color" | null;
@@ -119,9 +119,27 @@ export const HOT_OR_COLD_RU: Record<string, string> = {
 };
 
 export const SUGAR_RU: Record<string, string> = {
+  "0": "0%",
+  "50": "50%",
+  "100": "100%",
   no: "Без сахара",
   less: "Меньше сахара",
   normal: "Обычный",
+};
+
+export const MILK_RU: Record<string, string> = {
+  regular: "Обычное",
+  coconut: "Кокосовое",
+  soy: "Соевое",
+};
+
+export const SKIN_TYPE_RU: Record<string, string> = {
+  all: "Для всех типов",
+  dry: "Сухая кожа",
+  normal: "Нормальная",
+  oily: "Жирная",
+  combo: "Комбинированная",
+  sensitive: "Чувствительная",
 };
 
 export const SPICY_RU: Record<string, string> = {
@@ -236,6 +254,8 @@ export function formatOrderOptionsSummary(
       case "coffee": {
         const temp = pickAttrString(options, "hotOrCold");
         if (temp) parts.push(HOT_OR_COLD_RU[temp] ?? temp);
+        const milk = pickAttrString(options, "milk");
+        if (milk) parts.push(MILK_RU[milk] ?? milk);
         const sugar = pickAttrString(options, "sugar");
         if (sugar) parts.push(SUGAR_RU[sugar] ?? sugar);
         const syrups = options.syrups;
@@ -273,6 +293,8 @@ export function formatOrderOptionsSummary(
           }
         }
         if (options.combo === true) parts.push("Комбо");
+        const orderNote = pickAttrString(options, "orderNote");
+        if (orderNote) parts.push(`Заметка: ${orderNote}`);
         break;
       }
       case "electronics": {
@@ -283,13 +305,11 @@ export function formatOrderOptionsSummary(
       case "autoparts": {
         const vin = pickAttrString(options, "vin");
         if (vin) parts.push(`VIN: ${vin}`);
-        const comp = pickAttrString(options, "compatibility");
-        if (comp) parts.push(`Совместимость: ${comp}`);
         break;
       }
       case "cosmetics": {
         const skinType = pickAttrString(options, "skinType");
-        if (skinType) parts.push(`Тип кожи: ${skinType}`);
+        if (skinType) parts.push(`Тип кожи: ${SKIN_TYPE_RU[skinType] ?? skinType}`);
         break;
       }
       case "furniture": {

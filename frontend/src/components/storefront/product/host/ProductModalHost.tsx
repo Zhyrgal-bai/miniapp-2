@@ -4,15 +4,15 @@ import {
   resolveModalRendererId,
 } from "../../../../storefront/templates/templateRegistry";
 import { ProductModalFrameV2 } from "../modal/ProductModalFrameV2";
+import { ClothingPdpContent } from "../modal/content/ClothingPdpContent";
+import { FlowersPdpContent } from "../modal/content/FlowersPdpContent";
+import { FastfoodPdpContent } from "../modal/content/FastfoodPdpContent";
+import { CoffeePdpContent } from "../modal/content/CoffeePdpContent";
+import { ElectronicsPdpContent } from "../modal/content/ElectronicsPdpContent";
+import { AutopartsPdpContent } from "../modal/content/AutopartsPdpContent";
+import { CosmeticsPdpContent } from "../modal/content/CosmeticsPdpContent";
+import { FurniturePdpContent } from "../modal/content/FurniturePdpContent";
 import {
-  AutopartsProductModalContent,
-  ClothingProductModalContent,
-  CoffeeProductModalContent,
-  CosmeticsProductModalContent,
-  ElectronicsProductModalContent,
-  FastfoodProductModalContent,
-  FlowersProductModalContent,
-  FurnitureProductModalContent,
   GenericProductModalContent,
 } from "../modal/content/VerticalModalContents";
 
@@ -62,14 +62,14 @@ export function ProductModalHost({
     ).trim().toLowerCase();
     const content = (() => {
       if (rendererId === "generic-v2") return <GenericProductModalContent {...commonProps} />;
-      if (vertical === "clothing") return <ClothingProductModalContent {...commonProps} />;
-      if (vertical === "flowers") return <FlowersProductModalContent {...commonProps} />;
-      if (vertical === "coffee") return <CoffeeProductModalContent {...commonProps} />;
-      if (vertical === "fastfood") return <FastfoodProductModalContent {...commonProps} />;
-      if (vertical === "electronics") return <ElectronicsProductModalContent {...commonProps} />;
-      if (vertical === "autoparts") return <AutopartsProductModalContent {...commonProps} />;
-      if (vertical === "cosmetics") return <CosmeticsProductModalContent {...commonProps} />;
-      if (vertical === "furniture") return <FurnitureProductModalContent {...commonProps} />;
+      if (vertical === "clothing") return <ClothingPdpContent {...commonProps} />;
+      if (vertical === "flowers") return <FlowersPdpContent {...commonProps} />;
+      if (vertical === "coffee") return <CoffeePdpContent {...commonProps} />;
+      if (vertical === "fastfood") return <FastfoodPdpContent {...commonProps} />;
+      if (vertical === "electronics") return <ElectronicsPdpContent {...commonProps} />;
+      if (vertical === "autoparts") return <AutopartsPdpContent {...commonProps} />;
+      if (vertical === "cosmetics") return <CosmeticsPdpContent {...commonProps} />;
+      if (vertical === "furniture") return <FurniturePdpContent {...commonProps} />;
       return <GenericProductModalContent {...commonProps} />;
     })();
     return (

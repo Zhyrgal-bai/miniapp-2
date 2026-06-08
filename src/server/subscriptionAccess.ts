@@ -1,8 +1,17 @@
 import {
   API_ERR_BUSINESS_NOT_FOUND,
+  API_ERR_STORE_QUOTA_EXHAUSTED,
   API_ERR_STORE_SUBSCRIPTION_EXPIRED,
   API_ERR_STORE_UNAVAILABLE,
 } from "../shared/apiClientMessages.js";
+import {
+  hasFreeOrdersRemaining,
+  isFreeTierStatus,
+  isFreeUsageModelEnabled,
+  isQuotaExhaustedStatus,
+  type MerchantAccessMode,
+  resolveFreeOrdersLimit,
+} from "../shared/freeUsageModel.js";
 import { SubscriptionStatus } from "@prisma/client";
 
 /** Поля подписки для проверки доступа (без финансовых атрибутов витрины). */
@@ -13,6 +22,8 @@ export type SubscriptionGateFields = {
   trialEndsAt: Date | null;
   subscriptionEndsAt: Date | null;
   gracePeriodEndsAt?: Date | null;
+  freeOrdersUsed?: number | null;
+  freeOrdersLimit?: number | null;
 };
 
 /** Prisma select для проверок витрины / каталога / checkout. */
@@ -24,6 +35,8 @@ export const businessSubscriptionGateSelect = {
   trialEndsAt: true,
   subscriptionEndsAt: true,
   gracePeriodEndsAt: true,
+  freeOrdersUsed: true,
+  freeOrdersLimit: true,
 } as const;
 
 export function isInSubscriptionGracePeriod(
@@ -40,32 +53,16 @@ export function isInSubscriptionGracePeriod(
   return b.subscriptionEndsAt.getTime() <= t;
 }
 
-/**
- * Есть действующее оплатное окно или действующий trial (без grace).
- */
-export function hasValidPaidOrTrialWindow(
+function hasValidPaidWindow(
   b: Pick<
     SubscriptionGateFields,
-    "subscriptionStatus" | "trialEndsAt" | "subscriptionEndsAt"
+    "subscriptionStatus" | "subscriptionEndsAt"
   >,
   now = new Date(),
 ): boolean {
   const t = now.getTime();
-
   switch (b.subscriptionStatus) {
     case SubscriptionStatus.ACTIVE:
-      return (
-        b.subscriptionEndsAt != null && b.subscriptionEndsAt.getTime() >= t
-      );
-    case SubscriptionStatus.TRIALING: {
-      if (
-        b.subscriptionEndsAt != null &&
-        b.subscriptionEndsAt.getTime() < t
-      ) {
-        return false;
-      }
-      return b.trialEndsAt != null && b.trialEndsAt.getTime() >= t;
-    }
     case SubscriptionStatus.PAST_DUE:
       return (
         b.subscriptionEndsAt != null && b.subscriptionEndsAt.getTime() >= t
@@ -75,7 +72,95 @@ export function hasValidPaidOrTrialWindow(
   }
 }
 
-/** Магазин в оплаченном окне или grace period (витрина, заказы, история). */
+/** Grandfather: active 10-day trial until trialEndsAt. */
+export function hasGrandfatherTrialWindow(
+  b: Pick<
+    SubscriptionGateFields,
+    "subscriptionStatus" | "trialEndsAt" | "subscriptionEndsAt"
+  >,
+  now = new Date(),
+): boolean {
+  if (!isFreeUsageModelEnabled()) {
+    return hasLegacyTrialWindow(b, now);
+  }
+  if (b.subscriptionStatus !== SubscriptionStatus.TRIALING) return false;
+  const t = now.getTime();
+  if (
+    b.subscriptionEndsAt != null &&
+    b.subscriptionEndsAt.getTime() < t
+  ) {
+    return false;
+  }
+  return b.trialEndsAt != null && b.trialEndsAt.getTime() >= t;
+}
+
+function hasLegacyTrialWindow(
+  b: Pick<
+    SubscriptionGateFields,
+    "subscriptionStatus" | "trialEndsAt" | "subscriptionEndsAt"
+  >,
+  now = new Date(),
+): boolean {
+  const t = now.getTime();
+  if (b.subscriptionStatus !== SubscriptionStatus.TRIALING) return false;
+  if (
+    b.subscriptionEndsAt != null &&
+    b.subscriptionEndsAt.getTime() < t
+  ) {
+    return false;
+  }
+  return b.trialEndsAt != null && b.trialEndsAt.getTime() >= t;
+}
+
+export function hasValidFreeQuotaWindow(
+  b: SubscriptionGateFields,
+): boolean {
+  if (!isFreeUsageModelEnabled()) return false;
+  if (isQuotaExhaustedStatus(b.subscriptionStatus)) return false;
+  if (isFreeTierStatus(b.subscriptionStatus)) {
+    return hasFreeOrdersRemaining(b);
+  }
+  return false;
+}
+
+/**
+ * Есть действующее оплатное окно, free quota или grandfather trial (без grace).
+ */
+export function hasValidPaidOrTrialWindow(
+  b: SubscriptionGateFields,
+  now = new Date(),
+): boolean {
+  if (hasValidPaidWindow(b, now)) return true;
+  if (hasGrandfatherTrialWindow(b, now)) return true;
+  return hasValidFreeQuotaWindow(b);
+}
+
+/** @deprecated Alias — prefer hasValidPaidOrTrialWindow (includes free quota). */
+export const hasValidPaidOrFreeWindow = hasValidPaidOrTrialWindow;
+
+export function resolveMerchantAccessMode(
+  b: SubscriptionGateFields,
+  now = new Date(),
+): MerchantAccessMode {
+  if (hasValidPaidWindow(b, now)) return "paid";
+  if (isInSubscriptionGracePeriod(b, now)) return "grace";
+  if (hasGrandfatherTrialWindow(b, now)) return "grandfather_trial";
+  if (isFreeUsageModelEnabled()) {
+    if (isQuotaExhaustedStatus(b.subscriptionStatus)) return "quota_exhausted";
+    if (isFreeTierStatus(b.subscriptionStatus) && hasFreeOrdersRemaining(b)) {
+      return "free";
+    }
+    if (
+      isFreeTierStatus(b.subscriptionStatus) &&
+      !hasFreeOrdersRemaining(b)
+    ) {
+      return "quota_exhausted";
+    }
+  }
+  return "expired";
+}
+
+/** Магазин в оплаченном окне, free quota, grandfather trial или grace. */
 export function hasCustomerAccessWindow(
   b: SubscriptionGateFields,
   now = new Date(),
@@ -101,13 +186,18 @@ export function customerOrdersRejectionReason(
 ): string | null {
   if (b == null) return API_ERR_BUSINESS_NOT_FOUND;
   if (b.isBlocked || !b.isActive) return API_ERR_STORE_UNAVAILABLE;
+
+  const mode = resolveMerchantAccessMode(b, now);
+  if (mode === "quota_exhausted") {
+    return API_ERR_STORE_QUOTA_EXHAUSTED;
+  }
   if (!hasCustomerAccessWindow(b, now)) {
     return API_ERR_STORE_SUBSCRIPTION_EXPIRED;
   }
   return null;
 }
 
-/** Магазин может работать для клиентов: не заблокирован, витрина включена, есть оплата/trial/grace. */
+/** Магазин может работать для клиентов: не заблокирован, витрина включена, есть доступ. */
 export function isSubscriptionActive(
   b: SubscriptionGateFields,
   now = new Date(),
@@ -118,7 +208,7 @@ export function isSubscriptionActive(
 }
 
 /**
- * Premium-функции платформы (настройки, Finik, bot token) — только paid/trial, не grace.
+ * Premium-функции платформы (настройки, Finik, bot token) — paid/trial/free, не grace.
  */
 export function merchantStoreEntitled(
   b: SubscriptionGateFields,
@@ -135,6 +225,20 @@ export function merchantStorefrontEntitled(
 ): boolean {
   if (b.isBlocked) return false;
   return hasCustomerAccessWindow(b, now);
+}
+
+export function freeOrdersQuotaSummary(b: SubscriptionGateFields): {
+  used: number;
+  limit: number;
+  remaining: number;
+} {
+  const limit = resolveFreeOrdersLimit(b.freeOrdersLimit);
+  const used = Math.min(Math.max(0, b.freeOrdersUsed ?? 0), limit);
+  return {
+    used,
+    limit,
+    remaining: Math.max(0, limit - used),
+  };
 }
 
 /**
