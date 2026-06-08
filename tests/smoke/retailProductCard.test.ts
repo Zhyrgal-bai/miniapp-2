@@ -17,6 +17,7 @@ describe("retailProductCard", () => {
   });
 
   it("formats price with som suffix", () => {
-    expect(formatRetailCardPrice(1990)).toBe("1990 сом");
+    expect(formatRetailCardPrice(1990)).toBe("1\u00a0990 сом");
+    expect(formatRetailCardPrice(500)).toBe("500 сом");
   });
 });

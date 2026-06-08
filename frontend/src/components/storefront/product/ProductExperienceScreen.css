@@ -47,11 +47,11 @@
 .px-screen--quick-view .px-head__price {
   font-size: 1.125rem;
   font-weight: 800;
-  color: #fff;
+  color: var(--sf-color-text);
 }
 
 .px-screen--quick-view .px-head__price-old {
-  color: color-mix(in srgb, #fff 50%, transparent);
+  color: color-mix(in srgb, var(--sf-color-text) 50%, transparent);
 }
 
 .px-screen--quick-view .px-block {

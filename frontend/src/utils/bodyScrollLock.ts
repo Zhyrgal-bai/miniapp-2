@@ -16,6 +16,7 @@ const SCROLLABLE_OVERLAY_SELECTOR = [
   ".merchant-register__scroll",
   ".archa-overlay__scroll",
   ".mp-settings-dialog-shell",
+  ".mp-settings-shell__body",
   ".mp-settings-scroll",
   ".sf-profile-sheet__scroll",
   ".sf-tg-modal",

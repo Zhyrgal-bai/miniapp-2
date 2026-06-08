@@ -285,16 +285,61 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   const storageColor = storageColorForCart(resolvedBusinessType, lineColor);
 
   const cartItem = useMemo(() => {
-    if (!selectedSize) return null;
-    const key = cartLineIdentityKey({
-      productId: product.id!,
-      size: selectedSize,
-      color: storageColor,
-    });
-    return items.find((i) => cartLineIdentityKey(i) === key) ?? null;
-  }, [items, product.id, selectedSize, storageColor]);
+    if (product.id == null) return null;
+
+    if (selectedSize) {
+      const key = cartLineIdentityKey({
+        productId: product.id,
+        size: selectedSize,
+        color: storageColor,
+      });
+      const exact = items.find((i) => cartLineIdentityKey(i) === key);
+      if (exact) return exact;
+    }
+
+    if (!needsVariantPicker) {
+      const instant = resolveInstantAddLine(product, resolvedBusinessType, merchantConfig);
+      if (instant) {
+        const key = cartLineIdentityKey({
+          productId: product.id,
+          size: instant.size,
+          color: storageColorForCart(resolvedBusinessType, instant.color),
+        });
+        const line = items.find((i) => cartLineIdentityKey(i) === key);
+        if (line) return line;
+      }
+    }
+
+    return items.find((i) => i.productId === product.id) ?? null;
+  }, [
+    items,
+    product,
+    selectedSize,
+    storageColor,
+    needsVariantPicker,
+    resolvedBusinessType,
+    merchantConfig,
+  ]);
 
   const quantity = cartItem?.quantity ?? 0;
+
+  const activeLineStock = useMemo(() => {
+    if (cartItem) {
+      return getMaxOrderQty(product, cartItem.size, cartItem.color ?? null);
+    }
+    if (!needsVariantPicker) {
+      const instant = resolveInstantAddLine(product, resolvedBusinessType, merchantConfig);
+      if (instant) return getMaxOrderQty(product, instant.size, instant.color);
+    }
+    return selectedStock;
+  }, [
+    cartItem,
+    needsVariantPicker,
+    product,
+    resolvedBusinessType,
+    merchantConfig,
+    selectedStock,
+  ]);
 
   const discountPct = getDiscountPercent(product);
   const displayPrice = getEffectivePrice(product);
@@ -390,7 +435,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   };
 
   const handleIncrement = () => {
-    if (quantity >= selectedStock) return;
+    if (quantity >= activeLineStock) return;
     upsertQuantity(quantity + 1);
   };
 
@@ -398,7 +443,8 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
     upsertQuantity(quantity - 1);
   };
 
-  const atMaxQty = quantity >= selectedStock && selectedStock > 0;
+  const atMaxQty = quantity >= activeLineStock && activeLineStock > 0;
+  const canAdjustQty = quantity > 0 && !outOfStock;
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
@@ -623,7 +669,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
             type="button"
             className="retail-card__qty-btn"
             onClick={handleDecrement}
-            disabled={outOfStock || !selectedSize || lineColor === null}
+            disabled={!canAdjustQty}
             aria-label="Уменьшить"
           >
             −
@@ -635,7 +681,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
             type="button"
             className="retail-card__qty-btn"
             onClick={handleIncrement}
-            disabled={outOfStock || !selectedSize || lineColor === null || atMaxQty}
+            disabled={!canAdjustQty || atMaxQty}
             aria-label="Увеличить"
           >
             +

@@ -3,7 +3,7 @@
 .sf-product-rail-section {
   margin-top: 4px;
   padding: 0 0 14px;
-  touch-action: pan-x pan-y;
+  touch-action: pan-x;
 }
 
 .sf-product-rail__head {
@@ -79,8 +79,20 @@
 .sf-product-rail__viewport--scroll {
   overflow-x: auto;
   overflow-y: hidden;
-  mask-image: none;
-  -webkit-mask-image: none;
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    #000 4%,
+    #000 96%,
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    #000 4%,
+    #000 96%,
+    transparent 100%
+  );
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
@@ -97,6 +109,11 @@
   width: max-content;
   padding: 2px 2px 4px;
   will-change: transform;
+}
+
+.sf-product-rail__track:not(.sf-product-rail__track--scroll) {
+  justify-content: center;
+  width: 100%;
 }
 
 .sf-product-rail__track--animate {
@@ -162,7 +179,7 @@
   height: 100%;
   object-fit: cover;
   display: block;
-  transform: scale(1.05);
+  transform: scale(1.02);
 }
 
 .sf-product-rail__card--static .sf-product-rail__img {
@@ -247,6 +264,8 @@
   }
 }
 
+.sf-root[data-sf-motion="none"] .sf-product-rail__track--animate,
+.sf-root[data-sf-motion="low"] .sf-product-rail__track--animate,
 [data-sf-motion="reduced"] .sf-product-rail__track--animate {
   animation: none !important;
 }

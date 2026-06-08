@@ -14,7 +14,7 @@ import {
 } from "../../../storefront/catalogFooterRailSettings";
 import { storefrontMotionLevelFromStyleConfig } from "../../../storefront/buildStorefrontLayoutCssVars";
 import { buildCloudinaryResponsiveUrl } from "../../../utils/cloudinaryTransforms";
-import { getPrimaryImage } from "../../../utils/product";
+import { getDiscountPercent, getEffectivePrice, getPrimaryImage } from "../../../utils/product";
 import "./CatalogFooterSlider.css";
 
 const RESUME_AUTO_MS = 2600;
@@ -51,7 +51,7 @@ function readCatalogFooter(styleConfig: Record<string, unknown> | null | undefin
   const o = raw as Record<string, unknown>;
   return {
     enabled: Boolean(o.enabled),
-    title: typeof o.title === "string" ? o.title : "Букеты",
+    title: typeof o.title === "string" ? o.title : "",
   };
 }
 
@@ -65,29 +65,22 @@ function formatProductKicker(p: Product | undefined): string {
 
 function formatProductSubtitle(p: Product | undefined): string {
   if (!p || !Number.isFinite(p.price)) return "";
-  const price = Math.round(p.price);
-  const discount = p.discountPercent;
-  if (typeof discount === "number" && discount > 0 && discount < 100) {
-    const sale = Math.round(price * (1 - discount / 100));
-    return `${sale.toLocaleString("ru-RU")} сом`;
-  }
-  return `${price.toLocaleString("ru-RU")} сом`;
+  return `${getEffectivePrice(p).toLocaleString("ru-RU")} сом`;
 }
 
 function formatProductPriceLine(p: Product | undefined): ReactElement | string {
-  const line = formatProductSubtitle(p);
-  if (!p || line === "") return "";
-  const discount = p.discountPercent;
-  if (typeof discount === "number" && discount > 0 && discount < 100) {
+  if (!p || !Number.isFinite(p.price)) return "";
+  const sale = formatProductSubtitle(p);
+  const discount = getDiscountPercent(p);
+  if (discount > 0) {
     const old = Math.round(p.price).toLocaleString("ru-RU");
     return (
       <>
-        <s>{old} сом</s>
-        {line}
+        <s>{old} сом</s> {sale}
       </>
     );
   }
-  return line;
+  return sale;
 }
 
 export function buildFooterSliderSlidesFromProducts(products: Product[]): ResolvedSlide[] {
@@ -326,7 +319,7 @@ export function CatalogFooterSlider(props: {
 
   if (!cfg?.enabled || resolved.length === 0) return null;
 
-  const sectionTitle = cfg.title.trim() !== "" ? cfg.title : "Букеты";
+  const sectionTitle = cfg.title.trim() !== "" ? cfg.title : "Подборка";
   const viewportScrollable = count > 1;
 
   const trackClass = [
@@ -356,6 +349,15 @@ export function CatalogFooterSlider(props: {
             className={viewportClass}
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}
+            onMouseEnter={() => {
+              if (canAnimate) setPaused(true);
+            }}
+            onMouseLeave={() => {
+              if (canAnimate) {
+                setPaused(false);
+                setManualScroll(false);
+              }
+            }}
           >
             <div className={trackClass}>
               {loopSlides.map((slide, i) => (

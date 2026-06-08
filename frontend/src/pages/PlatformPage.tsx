@@ -59,12 +59,8 @@ import {
 } from "../services/platformApi";
 import { trackPlatformFunnel } from "../services/platformFunnel";
 import { formatAdminApiError } from "../utils/adminApiError";
-import {
-  MerchantSettingsRenderer,
-  type SchemaObject as MerchantSchemaObject,
-} from "../components/merchant/MerchantSettingsRenderer";
 import { MerchantPremiumOverview } from "../components/merchant/MerchantPremiumOverview";
-import { MerchantStoreSettingsSection } from "../components/merchant/MerchantStoreSettingsSection";
+import { MerchantSettingsModal } from "../components/platform/merchantSettings/MerchantSettingsModal";
 import "../design/archaPremium.css";
 import { MERCHANT_REGISTER_SENT_KEY } from "./MerchantRegisterPage";
 import "./MerchantPage.css";
@@ -75,9 +71,6 @@ import { defaultMerchantDeliverySettings } from "@repo-shared/merchantDeliverySe
 import type { MerchantDeliverySettings } from "@repo-shared/merchantDeliverySettings";
 import { defaultStoreAvailabilitySettings } from "@repo-shared/storeAvailabilitySettings";
 import type { StoreAvailabilitySettings } from "@repo-shared/storeAvailabilitySettings";
-import { MerchantStoreAvailabilityPanel } from "../components/platform/MerchantStoreAvailabilityPanel";
-import { MerchantDeliverySettingsPanel } from "../components/platform/MerchantDeliverySettingsPanel";
-import { MerchantStoreAddressEditor } from "../components/platform/MerchantStoreAddressEditor";
 import type { BusinessStoreAddressDTO } from "../services/platformApi";
 import {
   draftFromStoreAddressPublic,
@@ -977,19 +970,19 @@ export default function PlatformPage() {
     setSettingsBusinessId(null);
   };
 
-  const handleSaveBotToken = async () => {
+  const handleSaveBotToken = async (): Promise<boolean> => {
     if (
       !Number.isFinite(merchantTelegramId) ||
       settingsBusinessId == null ||
       settingsSnap == null
     ) {
       setSettingsErr("Сначала дождитесь загрузки настроек.");
-      return;
+      return false;
     }
     const newTok = settingsNewToken.replace(/\s/g, "").trim();
     if (newTok === "") {
       setSettingsErr("Вставьте новый токен из @BotFather.");
-      return;
+      return false;
     }
     setBotTokenSaving(true);
     setSettingsErr(null);
@@ -1013,8 +1006,10 @@ export default function PlatformPage() {
       setBotRecoveryRefresh((n) => n + 1);
       void loadBusinesses({ background: true });
       void reloadReadiness(settingsBusinessId);
+      return true;
     } catch (e) {
       setSettingsErr(formatAdminApiError(e));
+      return false;
     } finally {
       setBotTokenSaving(false);
     }
@@ -2158,453 +2153,59 @@ export default function PlatformPage() {
         ) : null}
       </AnimatePresence>
 
-      <ArchaOverlay
+      <MerchantSettingsModal
         open={settingsBusinessId != null}
         onClose={closeSettingsModal}
-        variant="platform-modal"
-        ariaLabel="Настройки магазина"
-        panelClassName="mp-settings-dialog-shell"
-      >
-            <div className="mp-settings-header">
-              <div>
-                <h2
-                  id="platform-settings-title"
-                  className="mp-settings-header__title"
-                >
-                  Настройки магазина
-                </h2>
-                {settingsSnap != null ? (
-                  <p className="mp-settings-header__sub">{settingsSnap.name}</p>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                className={archa.btnIcon}
-                onClick={closeSettingsModal}
-                aria-label="Закрыть"
-              >
-                ✕
-              </button>
-            </div>
-
-            {settingsLoading ? (
-              <div className="mp-settings-scroll">
-                <p className="mp-muted text-sm">Загрузка…</p>
-              </div>
-            ) : settingsErr != null && settingsSnap == null ? (
-              <div className="mp-settings-scroll">
-                <p
-                  className="mp-settings-alert mp-settings-alert--error"
-                  role="alert"
-                >
-                  {settingsErr}
-                </p>
-              </div>
-            ) : (
-              <form
-                className="mp-settings-form"
-                onSubmit={(e) => void handleSaveSettings(e)}
-              >
-                <div className="mp-settings-scroll">
-                {settingsSnap?.pendingBotTokenChange && isPlatformAdmin ? (
-                  <p className="mp-settings-alert mp-settings-alert--amber" role="status">
-                    Ожидается подтверждение администратором смены токена бота.
-                  </p>
-                ) : null}
-
-                {settingsBusinessId != null &&
-                Number.isFinite(merchantTelegramId) ? (
-                  <MerchantStoreSettingsSection
-                    icon="💎"
-                    title="Подписка"
-                  >
-                    <MerchantSubscriptionPanel
-                      variant="settings"
-                      businessId={settingsBusinessId}
-                      telegramId={merchantTelegramId}
-                      onPaid={() => {
-                        void loadBusinesses({ background: true });
-                        void fetchPlatformStoreSettings({
-                          telegramId: merchantTelegramId,
-                          businessId: settingsBusinessId,
-                        })
-                          .then(setSettingsSnap)
-                          .catch(() => undefined);
-                      }}
-                    />
-                  </MerchantStoreSettingsSection>
-                ) : null}
-
-                <MerchantStoreSettingsSection
-                  icon="🏪"
-                  title="Магазин"
-                  description="Название видят покупатели в витрине, заказах и уведомлениях."
-                >
-                  <div className="mp-settings-field">
-                    <label
-                      htmlFor="platform-settings-name"
-                      className="mp-settings-field__label"
-                    >
-                      Название магазина
-                    </label>
-                    <input
-                      id="platform-settings-name"
-                      type="text"
-                      required
-                      minLength={2}
-                      maxLength={160}
-                      autoComplete="organization"
-                      disabled={settingsSnap == null}
-                      value={settingsName}
-                      onChange={(e) => setSettingsName(e.target.value)}
-                      className={archa.input}
-                    />
-                  </div>
-
-                  {settingsSnap != null &&
-                  isPlatformAdmin &&
-                  Object.keys(settingsSnap.merchantSettingsSchema ?? {}).length >
-                    0 ? (
-                    <div className="mp-settings-field">
-                      <label className="mp-settings-field__label">
-                        Настройки ({settingsSnap.businessType})
-                      </label>
-                      <MerchantSettingsRenderer
-                        schema={
-                          settingsSnap.merchantSettingsSchema as unknown as MerchantSchemaObject
-                        }
-                        value={merchantConfigDraft}
-                        onChange={setMerchantConfigDraft}
-                      />
-                    </div>
-                  ) : null}
-                </MerchantStoreSettingsSection>
-
-                <MerchantStoreSettingsSection
-                  icon="📍"
-                  title="Адрес"
-                  description="Для карты, доставки по расстоянию и блока «О магазине»."
-                >
-                  <MerchantStoreAddressEditor
-                    inputId="platform-settings-address"
-                    inputClassName={archa.input}
-                    disabled={settingsSnap == null}
-                    value={storeAddressDraft}
-                    onChange={setStoreAddressDraft}
-                  />
-                </MerchantStoreSettingsSection>
-
-                <MerchantStoreSettingsSection
-                  icon="🚚"
-                  title="Доставка"
-                  description="Правила доставки для checkout и расчёта суммы заказа."
-                >
-                  <MerchantDeliverySettingsPanel
-                    value={deliverySettingsDraft}
-                    onChange={setDeliverySettingsDraft}
-                    disabled={settingsSnap == null}
-                  />
-                </MerchantStoreSettingsSection>
-
-                <MerchantStoreSettingsSection
-                  icon="🕐"
-                  title="График и ETA"
-                  description="Часы работы, время доставки и самовывоза для витрины и checkout."
-                >
-                  <MerchantStoreAvailabilityPanel
-                    value={storeAvailabilityDraft}
-                    businessType={settingsSnap?.businessType ?? ""}
-                    onChange={setStoreAvailabilityDraft}
-                  />
-                </MerchantStoreSettingsSection>
-
-                <MerchantStoreSettingsSection
-                  icon="🤖"
-                  title="Telegram Bot"
-                  description={
-                    isPlatformAdmin
-                      ? "Смена токена создаёт заявку для оператора. Текущий токен не показывается."
-                      : "Вставьте новый токен из @BotFather — проверим Telegram, сохраним и переподключим webhook."
-                  }
-                >
-                  <div className="mp-settings-field">
-                    <label
-                      htmlFor="platform-settings-token"
-                      className="mp-settings-field__label"
-                    >
-                      Новый токен бота
-                    </label>
-                    <input
-                      id="platform-settings-token"
-                      type="password"
-                      autoComplete="off"
-                      disabled={settingsSnap == null || botTokenSaving}
-                      value={settingsNewToken}
-                      onChange={(e) => setSettingsNewToken(e.target.value)}
-                      placeholder="123456789:AA…"
-                      className={`${archa.input} font-mono`}
-                    />
-                  </div>
-                  {!isPlatformAdmin ? (
-                    <button
-                      type="button"
-                      className="mp-settings-btn-secondary"
-                      disabled={
-                        settingsSnap == null ||
-                        botTokenSaving ||
-                        settingsSaving ||
-                        settingsNewToken.trim() === ""
-                      }
-                      onClick={() => void handleSaveBotToken()}
-                    >
-                      {botTokenSaving ? "Сохранение…" : "Сохранить токен и подключить"}
-                    </button>
-                  ) : null}
-                </MerchantStoreSettingsSection>
-
-                {isPlatformAdmin ? (
-                <MerchantStoreSettingsSection
-                  icon="💳"
-                  title="Оплата (оператор)"
-                  description="Finik: API Key, Account ID и webhook — только для оператора платформы."
-                  badge={
-                    settingsSnap?.finikReady ? (
-                      <span className="mp-settings-status-pill mp-settings-status-pill--ok">
-                        Готов к оплате
-                      </span>
-                    ) : (
-                      <span className="mp-settings-status-pill mp-settings-status-pill--warn">
-                        Не настроен
-                      </span>
-                    )
-                  }
-                >
-                  <div className="mp-finik-status-row">
-                    <span className="mp-settings-key-chip">
-                      API Key:{" "}
-                      {settingsSnap?.finikHasApiKey ? "сохранён" : "не задан"}
-                    </span>
-                    <span className="mp-settings-key-chip">
-                      Account ID:{" "}
-                      {settingsSnap?.finikHasAccountId ? "сохранён" : "не задан"}
-                    </span>
-                    <span className="mp-settings-key-chip">
-                      Legacy HTTP:{" "}
-                      {settingsSnap?.finikLegacyHttpReady ? "готов" : "нет Secret"}
-                    </span>
-                  </div>
-                  <ol className="mp-finik-steps">
-                    <li>
-                      Скопируйте API Key и Account ID в{" "}
-                      <a
-                        href="https://finik.kg"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mp-finik-steps__link"
-                      >
-                        кабинете Finik
-                      </a>{" "}
-                      магазина.
-                    </li>
-                    <li>Вставьте их ниже и нажмите «Сохранить Finik».</li>
-                    <li>
-                      Укажите Webhook URL в Finik (кнопка «Скопировать»).
-                    </li>
-                  </ol>
-                  <div className="mp-settings-field">
-                    <label
-                      htmlFor="platform-settings-finik-key"
-                      className="mp-settings-field__label"
-                    >
-                      API Key Finik
-                    </label>
-                    <input
-                      id="platform-settings-finik-key"
-                      type="password"
-                      autoComplete="off"
-                      disabled={settingsSnap == null || finikSaving}
-                      value={finikKeyDraft}
-                      onChange={(e) => {
-                        setFinikKeyDraft(e.target.value);
-                        setFinikErr(null);
-                        setFinikMsg(null);
-                      }}
-                      placeholder={
-                        settingsSnap?.finikHasApiKey
-                          ? "Новый ключ (оставьте пустым, чтобы не менять)"
-                          : "Вставьте API Key"
-                      }
-                      className={`${archa.input} font-mono`}
-                    />
-                  </div>
-                  <div className="mp-settings-field">
-                    <label
-                      htmlFor="platform-settings-finik-account"
-                      className="mp-settings-field__label"
-                    >
-                      Account ID Finik
-                    </label>
-                    <input
-                      id="platform-settings-finik-account"
-                      type="text"
-                      autoComplete="off"
-                      disabled={settingsSnap == null || finikSaving}
-                      value={finikAccountIdDraft}
-                      onChange={(e) => {
-                        setFinikAccountIdDraft(e.target.value);
-                        setFinikErr(null);
-                        setFinikMsg(null);
-                      }}
-                      placeholder={
-                        settingsSnap?.finikHasAccountId
-                          ? "Новый Account ID (оставьте пустым, чтобы не менять)"
-                          : "Вставьте Account ID"
-                      }
-                      className={`${archa.input} font-mono`}
-                    />
-                  </div>
-                  <div className="mp-settings-field">
-                    <label
-                      htmlFor="platform-settings-finik-secret"
-                      className="mp-settings-field__label"
-                    >
-                      Secret Finik (legacy, опционально)
-                    </label>
-                    <input
-                      id="platform-settings-finik-secret"
-                      type="password"
-                      autoComplete="off"
-                      disabled={settingsSnap == null || finikSaving}
-                      value={finikSecretDraft}
-                      onChange={(e) => {
-                        setFinikSecretDraft(e.target.value);
-                        setFinikErr(null);
-                        setFinikMsg(null);
-                      }}
-                      placeholder={
-                        settingsSnap?.finikHasSecret
-                          ? "Новый secret (оставьте пустым, чтобы не менять)"
-                          : "Вставьте Secret"
-                      }
-                      className={`${archa.input} font-mono`}
-                    />
-                  </div>
-                  <div className="mp-finik-webhook">
-                    <span className="mp-settings-field__label">Webhook URL</span>
-                    <div className="mp-finik-webhook__row">
-                      <code className="mp-finik-webhook__url">
-                        {settingsSnap?.finikWebhookUrl?.trim() ||
-                          "Задайте API_URL на сервере."}
-                      </code>
-                      <button
-                        type="button"
-                        className="mp-settings-btn-secondary mp-finik-webhook__copy"
-                        disabled={
-                          !settingsSnap?.finikWebhookUrl?.trim() || finikSaving
-                        }
-                        onClick={() => void handleCopyFinikWebhook()}
-                      >
-                        {finikWebhookCopied ? "Скопировано" : "Скопировать"}
-                      </button>
-                    </div>
-                  </div>
-                  {finikErr ? (
-                    <p
-                      className="mp-settings-alert mp-settings-alert--error mt-2"
-                      role="alert"
-                    >
-                      {finikErr}
-                    </p>
-                  ) : null}
-                  {finikMsg ? (
-                    <p className="mt-2 text-sm text-[#86EFAC]" role="status">
-                      {finikMsg}
-                    </p>
-                  ) : null}
-                  <button
-                    type="button"
-                    disabled={
-                      settingsSnap == null || finikSaving || settingsLoading
-                    }
-                    onClick={() => void handleSaveFinik()}
-                    className="mp-settings-btn-secondary"
-                  >
-                    {finikSaving ? "Сохранение…" : "Сохранить Finik"}
-                  </button>
-                </MerchantStoreSettingsSection>
-                ) : (
-                <MerchantStoreSettingsSection
-                  icon="💳"
-                  title="Приём оплат"
-                  description="Статус подключения Finik для заказов покупателей."
-                  badge={
-                    settingsSnap?.finikReady ? (
-                      <span className="mp-settings-status-pill mp-settings-status-pill--ok">
-                        Подключено
-                      </span>
-                    ) : (
-                      <span className="mp-settings-status-pill mp-settings-status-pill--warn">
-                        Не подключено
-                      </span>
-                    )
-                  }
-                >
-                  <p className="mp-settings-field__hint">
-                    {settingsSnap?.finikReady
-                      ? "Покупатели могут оплачивать заказы онлайн. Технические ключи и webhook настраивает поддержка ARCHA."
-                      : "Для подключения онлайн-оплаты напишите в поддержку ARCHA — мы поможем настроить Finik для вашего магазина."}
-                  </p>
-                </MerchantStoreSettingsSection>
-                )}
-
-                {!isPlatformAdmin && settingsSnap != null ? (
-                  <MerchantStoreSettingsSection
-                    icon="💎"
-                    title="Подписка"
-                    description="Оплата и продление — в разделе «Подписка» на главной панели (Finik платформы)."
-                  >
-                    <button
-                      type="button"
-                      className="mp-settings-btn-secondary"
-                      onClick={() => {
-                        setSettingsBusinessId(null);
-                        scrollToSubscription();
-                      }}
-                    >
-                      Перейти к оплате подписки →
-                    </button>
-                  </MerchantStoreSettingsSection>
-                ) : null}
-                </div>
-
-                <div className="mp-settings-save-footer">
-                  {settingsErr ? (
-                    <p
-                      className="mp-settings-alert mp-settings-alert--error"
-                      role="alert"
-                    >
-                      {settingsErr}
-                    </p>
-                  ) : null}
-                  {settingsOkMsg ? (
-                    <p className="text-sm text-[#86EFAC]" role="status">
-                      {settingsOkMsg}
-                    </p>
-                  ) : null}
-
-                  <button
-                    type="submit"
-                    disabled={
-                      settingsSnap == null || settingsSaving || settingsLoading
-                    }
-                    className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg mt-2"
-                  >
-                    {settingsSaving ? "Сохранение…" : "Сохранить настройки"}
-                  </button>
-                </div>
-              </form>
-            )}
-      </ArchaOverlay>
+        loading={settingsLoading}
+        saving={settingsSaving}
+        error={settingsErr}
+        okMsg={settingsOkMsg}
+        snap={settingsSnap}
+        businessId={settingsBusinessId}
+        businessName={settingsSnap?.name ?? ""}
+        isPlatformAdmin={isPlatformAdmin}
+        merchantTelegramId={merchantTelegramId}
+        settingsName={settingsName}
+        onSettingsNameChange={setSettingsName}
+        storeAddressDraft={storeAddressDraft}
+        onStoreAddressDraftChange={setStoreAddressDraft}
+        deliverySettingsDraft={deliverySettingsDraft}
+        onDeliverySettingsDraftChange={setDeliverySettingsDraft}
+        storeAvailabilityDraft={storeAvailabilityDraft}
+        onStoreAvailabilityDraftChange={setStoreAvailabilityDraft}
+        merchantConfigDraft={merchantConfigDraft}
+        onMerchantConfigDraftChange={setMerchantConfigDraft}
+        settingsNewToken={settingsNewToken}
+        onSettingsNewTokenChange={setSettingsNewToken}
+        botTokenSaving={botTokenSaving}
+        onSaveBotToken={() => handleSaveBotToken()}
+        botRecoveryRefresh={botRecoveryRefresh}
+        finikKeyDraft={finikKeyDraft}
+        onFinikKeyDraftChange={(v) => {
+          setFinikKeyDraft(v);
+          setFinikErr(null);
+          setFinikMsg(null);
+        }}
+        finikAccountIdDraft={finikAccountIdDraft}
+        onFinikAccountIdDraftChange={(v) => {
+          setFinikAccountIdDraft(v);
+          setFinikErr(null);
+          setFinikMsg(null);
+        }}
+        finikSecretDraft={finikSecretDraft}
+        onFinikSecretDraftChange={(v) => {
+          setFinikSecretDraft(v);
+          setFinikErr(null);
+          setFinikMsg(null);
+        }}
+        finikSaving={finikSaving}
+        finikErr={finikErr}
+        finikMsg={finikMsg}
+        onSaveFinik={() => void handleSaveFinik()}
+        finikWebhookCopied={finikWebhookCopied}
+        onCopyFinikWebhook={() => void handleCopyFinikWebhook()}
+        onSubmit={(e) => void handleSaveSettings(e)}
+      />
     </>
   );
 }

@@ -38,4 +38,17 @@ describe("catalogFooterSlider", () => {
     ]);
     expect(slides).toHaveLength(0);
   });
+
+  it("uses effective sale price in slide subtitle", () => {
+    const slides = buildFooterSliderSlidesFromProducts([
+      product({
+        id: 4,
+        name: "Sale",
+        price: 1000,
+        discountPercent: 20,
+        images: ["https://picsum.photos/200"],
+      }),
+    ]);
+    expect(slides[0]?.subtitle).toBe("800 сом");
+  });
 });

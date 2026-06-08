@@ -18,7 +18,7 @@ export function retailCardAspectRatio(ratio: RetailCardImageRatio): string {
   }
 }
 
-/** Format price for card scan (no thousand separators — keeps line stable). */
+/** Format price for card — locale grouping for scanability. */
 export function formatRetailCardPrice(amount: number): string {
-  return `${amount} сом`;
+  return `${Math.round(amount).toLocaleString("ru-RU")} сом`;
 }
