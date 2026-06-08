@@ -144,15 +144,21 @@
 
 .sf-root[data-sf-vertical="flowers"] .product-card.product-card--storefront .product-price {
   font-size: 0.875rem;
-  font-weight: 500;
-  color: color-mix(in srgb, var(--sf-color-primary) 80%, var(--sf-color-text));
+  font-weight: 600;
+  color: var(--sf-color-text);
 }
 
 .sf-root[data-sf-vertical="flowers"] .product-card.product-card--storefront .product-add-btn--storefront-retail {
   border-radius: 999px;
-  border-color: color-mix(in srgb, var(--sf-color-primary) 35%, transparent);
-  background: color-mix(in srgb, var(--sf-color-primary) 8%, transparent);
-  color: var(--sf-color-primary);
+  border-color: transparent;
+  background: var(--sf-color-primary);
+  color: var(--sf-on-primary, #fff);
+}
+
+.sf-root[data-sf-vertical="flowers"] .sf-product-rail__card {
+  box-shadow:
+    0 10px 28px color-mix(in srgb, #000 24%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--sf-color-border, #444) 20%, transparent);
 }
 
 .sf-root[data-sf-vertical="flowers"] .sf-cine-hero__title,

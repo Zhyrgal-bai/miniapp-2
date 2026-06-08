@@ -917,10 +917,10 @@ export default function App() {
         <FloatingCart
           visible={
             !productExperienceOpen &&
+            page !== "home" &&
             page !== "support" &&
             page !== "checkout" &&
-            page !== "table-booking" &&
-            !(page === "home" && totalQuantity > 0)
+            page !== "table-booking"
           }
           totalQuantity={totalQuantity}
           onOpen={handleFloatingCartClick}

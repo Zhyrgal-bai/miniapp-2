@@ -4,7 +4,7 @@
  * Storefront catalog only (.product-card--retail-v1).
  */
 
-.product-card--retail-v1 {
+.sf-root .product-card.product-card--retail-v1 {
   --retail-radius: 12px;
   --retail-media-ratio: var(--sf-card-image-ratio, 4 / 5);
   --retail-meta-min: 52px;
@@ -27,10 +27,12 @@
   contain-intrinsic-size: auto 320px;
 }
 
-.product-card--retail-v1:hover,
-.product-card--retail-v1:active {
-  transform: none;
+.sf-root .product-card.product-card--retail-v1:hover,
+.sf-root .product-card.product-card--retail-v1:active,
+.sf-root .product-card.product-card--retail-v1.out:hover {
+  transform: none !important;
   box-shadow: none !important;
+  border-color: transparent !important;
 }
 
 .product-card--retail-v1.out {
@@ -101,7 +103,6 @@
   transition: transform 0.28s ease;
 }
 
-.product-card--fit-contain.retail-card--fit-contain .retail-card__img,
 .product-card--retail-v1.product-card--fit-contain .retail-card__img {
   object-fit: contain;
   padding: 6px;
@@ -405,6 +406,13 @@
   color: color-mix(in srgb, var(--sf-color-text) 68%, transparent);
 }
 
+.sf-root[data-sf-vertical="flowers"] .product-card.product-card--retail-v1 {
+  --retail-radius: 16px;
+  background: color-mix(in srgb, var(--sf-color-surface, #242424) 94%, transparent) !important;
+  border-radius: calc(var(--retail-radius) + 4px);
+  padding: 8px;
+}
+
 .sf-root[data-sf-vertical="flowers"] .product-card--retail-v1 .retail-card__meta {
   align-items: center;
   text-align: center;
@@ -419,13 +427,18 @@
 }
 
 .sf-root[data-sf-vertical="flowers"] .product-card--retail-v1 .retail-card__price-current {
-  color: color-mix(in srgb, var(--sf-color-primary) 82%, var(--sf-color-text));
+  color: var(--sf-color-text);
+  font-weight: 600;
+}
+
+.sf-root[data-sf-vertical="flowers"] .product-card--retail-v1 .retail-card__price-current--sale {
+  color: var(--sf-color-danger, var(--sf-color-primary));
 }
 
 .sf-root[data-sf-vertical="flowers"] .product-card--retail-v1 .retail-card__cta--primary {
-  border-color: color-mix(in srgb, var(--sf-color-primary) 35%, transparent);
-  background: color-mix(in srgb, var(--sf-color-primary) 10%, transparent);
-  color: var(--sf-color-primary);
+  border-color: transparent;
+  background: var(--sf-color-primary);
+  color: var(--sf-on-primary, #fff);
 }
 
 .sf-root[data-sf-vertical="coffee"] .product-card--retail-v1 {

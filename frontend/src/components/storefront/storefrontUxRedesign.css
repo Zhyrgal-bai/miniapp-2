@@ -384,10 +384,12 @@
   min-height: 52px;
   padding: var(--sf-ux-space-1) var(--sf-ux-space-2);
   border-radius: var(--sf-ux-radius-btn);
-  background: var(--sf-ux-accent);
+  background: var(--sf-ux-accent) !important;
   color: var(--sf-on-primary, #fff);
-  border: 0;
-  box-shadow: 0 8px 28px color-mix(in srgb, var(--sf-ux-accent) 50%, transparent);
+  border: 0 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--sf-ux-accent) 50%, transparent) !important;
   cursor: pointer;
   text-align: left;
 }
