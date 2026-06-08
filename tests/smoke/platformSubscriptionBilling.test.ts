@@ -4,8 +4,11 @@ import {
   resolveMerchantSubscriptionUiStatus,
 } from "../../src/server/platformSubscriptionBilling.js";
 import {
-  getPlatformFinikCredentials,
+  getPlatformFinikApiKey,
+  getPlatformFinikAccountId,
   isPlatformFinikLegacyHttpReady,
+  isPlatformFinikOfficialReady,
+  isPlatformFinikPayReady,
   isPlatformFinikReady,
 } from "../../src/shared/platformFinik.js";
 
@@ -82,57 +85,89 @@ describe("resolveMerchantSubscriptionUiStatus", () => {
 });
 
 describe("platform Finik env", () => {
+  const envKeys = [
+    "FINIK_USE_MOCK",
+    "PLATFORM_FINIK_API_KEY",
+    "PLATFORM_FINIK_ACCOUNT_ID",
+    "PLATFORM_FINIK_SECRET",
+    "FINIK_API_KEY",
+    "FINIK_ACCOUNT_ID",
+    "FINIK_PRIVATE_KEY",
+    "FINIK_PUBLIC_KEY",
+    "FINIK_RSA_PRIVATE_KEY",
+  ] as const;
+
+  function saveEnv(): Record<string, string | undefined> {
+    const snap: Record<string, string | undefined> = {};
+    for (const k of envKeys) snap[k] = process.env[k];
+    return snap;
+  }
+
+  function restoreEnv(snap: Record<string, string | undefined>): void {
+    for (const k of envKeys) {
+      if (snap[k] === undefined) delete process.env[k];
+      else process.env[k] = snap[k];
+    }
+  }
+
   it("isPlatformFinikReady is true when mock enabled", () => {
-    const prev = process.env.FINIK_USE_MOCK;
+    const snap = saveEnv();
     process.env.FINIK_USE_MOCK = "1";
     try {
       expect(isPlatformFinikReady()).toBe(true);
     } finally {
-      if (prev === undefined) delete process.env.FINIK_USE_MOCK;
-      else process.env.FINIK_USE_MOCK = prev;
+      restoreEnv(snap);
     }
   });
 
-  it("isPlatformFinikReady requires api key and account id", () => {
-    const prevMock = process.env.FINIK_USE_MOCK;
-    const prevKey = process.env.PLATFORM_FINIK_API_KEY;
-    const prevAcct = process.env.PLATFORM_FINIK_ACCOUNT_ID;
+  it("isPlatformFinikReady accepts FINIK_* without PLATFORM_*", () => {
+    const snap = saveEnv();
     delete process.env.FINIK_USE_MOCK;
     delete process.env.PLATFORM_FINIK_API_KEY;
     delete process.env.PLATFORM_FINIK_ACCOUNT_ID;
+    process.env.FINIK_API_KEY = "k";
+    process.env.FINIK_ACCOUNT_ID = "acct";
     try {
-      expect(isPlatformFinikReady()).toBe(false);
-      process.env.PLATFORM_FINIK_API_KEY = "k";
-      expect(isPlatformFinikReady()).toBe(false);
-      process.env.PLATFORM_FINIK_ACCOUNT_ID = "acct";
       expect(isPlatformFinikReady()).toBe(true);
+      expect(getPlatformFinikApiKey()).toBe("k");
+      expect(getPlatformFinikAccountId()).toBe("acct");
     } finally {
-      if (prevMock === undefined) delete process.env.FINIK_USE_MOCK;
-      else process.env.FINIK_USE_MOCK = prevMock;
-      if (prevKey === undefined) delete process.env.PLATFORM_FINIK_API_KEY;
-      else process.env.PLATFORM_FINIK_API_KEY = prevKey;
-      if (prevAcct === undefined) delete process.env.PLATFORM_FINIK_ACCOUNT_ID;
-      else process.env.PLATFORM_FINIK_ACCOUNT_ID = prevAcct;
+      restoreEnv(snap);
     }
   });
 
-  it("getPlatformFinikCredentials still requires legacy secret", () => {
-    const prevKey = process.env.PLATFORM_FINIK_API_KEY;
-    const prevSec = process.env.PLATFORM_FINIK_SECRET;
-    const prevAcct = process.env.PLATFORM_FINIK_ACCOUNT_ID;
+  it("isPlatformFinikOfficialReady requires RSA keys", () => {
+    const snap = saveEnv();
+    delete process.env.FINIK_USE_MOCK;
+    process.env.FINIK_API_KEY = "k";
+    process.env.FINIK_ACCOUNT_ID = "acct";
+    delete process.env.FINIK_PRIVATE_KEY;
+    delete process.env.FINIK_RSA_PRIVATE_KEY;
+    delete process.env.FINIK_PUBLIC_KEY;
+    try {
+      expect(isPlatformFinikReady()).toBe(true);
+      expect(isPlatformFinikOfficialReady()).toBe(false);
+      expect(isPlatformFinikPayReady()).toBe(false);
+      process.env.FINIK_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\\nX\\n-----END PRIVATE KEY-----";
+      process.env.FINIK_PUBLIC_KEY = "-----BEGIN PUBLIC KEY-----\\nY\\n-----END PUBLIC KEY-----";
+      expect(isPlatformFinikOfficialReady()).toBe(true);
+      expect(isPlatformFinikPayReady()).toBe(true);
+    } finally {
+      restoreEnv(snap);
+    }
+  });
+
+  it("legacy secret readiness is deprecated and not used for pay", () => {
+    const snap = saveEnv();
+    delete process.env.FINIK_USE_MOCK;
     process.env.PLATFORM_FINIK_API_KEY = "k";
     process.env.PLATFORM_FINIK_ACCOUNT_ID = "acct";
     delete process.env.PLATFORM_FINIK_SECRET;
     try {
-      expect(getPlatformFinikCredentials()).toBeNull();
       expect(isPlatformFinikLegacyHttpReady()).toBe(false);
+      expect(isPlatformFinikPayReady()).toBe(false);
     } finally {
-      if (prevKey === undefined) delete process.env.PLATFORM_FINIK_API_KEY;
-      else process.env.PLATFORM_FINIK_API_KEY = prevKey;
-      if (prevSec === undefined) delete process.env.PLATFORM_FINIK_SECRET;
-      else process.env.PLATFORM_FINIK_SECRET = prevSec;
-      if (prevAcct === undefined) delete process.env.PLATFORM_FINIK_ACCOUNT_ID;
-      else process.env.PLATFORM_FINIK_ACCOUNT_ID = prevAcct;
+      restoreEnv(snap);
     }
   });
 });

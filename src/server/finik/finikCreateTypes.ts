@@ -20,7 +20,6 @@ export type FinikBusinessTenant = {
 export type FinikPlatformTenant = {
   kind: "platform";
   apiKey: string;
-  secret: string;
 };
 
 export type FinikCreateTenant = FinikBusinessTenant | FinikPlatformTenant;

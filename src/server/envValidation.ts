@@ -90,11 +90,23 @@ export function validateEnvironment(): EnvValidationResult {
         "API_URL or RENDER_EXTERNAL_URL should be set for webhooks and public links",
       );
     }
-    const platformFinikKey = process.env.PLATFORM_FINIK_API_KEY?.trim();
-    const platformFinikAccountId = process.env.PLATFORM_FINIK_ACCOUNT_ID?.trim();
+    const platformFinikKey =
+      process.env.PLATFORM_FINIK_API_KEY?.trim() ||
+      process.env.FINIK_API_KEY?.trim();
+    const platformFinikAccountId =
+      process.env.PLATFORM_FINIK_ACCOUNT_ID?.trim() ||
+      process.env.FINIK_ACCOUNT_ID?.trim();
     if (!platformFinikKey || !platformFinikAccountId) {
       warnings.push(
-        "PLATFORM_FINIK_API_KEY / PLATFORM_FINIK_ACCOUNT_ID not set — merchant self-service subscription pay disabled",
+        "FINIK_API_KEY / FINIK_ACCOUNT_ID (or PLATFORM_FINIK_*) not set — merchant self-service subscription pay disabled",
+      );
+    }
+    const hasOfficialKeys =
+      !!process.env.FINIK_PRIVATE_KEY?.trim() &&
+      !!process.env.FINIK_PUBLIC_KEY?.trim();
+    if (platformFinikKey && platformFinikAccountId && !hasOfficialKeys) {
+      warnings.push(
+        "FINIK_PRIVATE_KEY / FINIK_PUBLIC_KEY not set — ARCHA subscription Finik RSA pay disabled",
       );
     }
     if (!hasHttpsUrl("FRONT_URL") && !hasHttpsUrl("MINI_APP_URL")) {

@@ -3,8 +3,9 @@ import { plainBotTokenFromStored } from "./businessBotToken.js";
 import { prisma } from "./db.js";
 import {
   createFinikPlatformSubscriptionSession,
-  verifyFinikWebhookSignature,
 } from "./finikMerchant.js";
+import { verifyFinikWebhookAdmission } from "./finik/finikWebhookVerify.js";
+import { extractFinikWebhookPaymentIds } from "./finik/finikWebhookPayload.js";
 import {
   extendBusinessSubscription,
   type ExtendBusinessSubscriptionSource,
@@ -17,11 +18,11 @@ import {
 } from "./subscriptionAccess.js";
 import { platformMerchantIsStoreOwner } from "./platformMerchantAccess.js";
 import {
-  getPlatformFinikCredentials,
-  isPlatformFinikLegacyHttpReady,
+  isPlatformFinikOfficialReady,
+  isPlatformFinikPayReady,
   isPlatformFinikReady,
+  PLATFORM_FINIK_OFFICIAL_UNAVAILABLE_ERROR,
 } from "../shared/platformFinik.js";
-import { FINIK_LEGACY_HTTP_UNAVAILABLE_ERROR } from "../shared/finikReady.js";
 import {
   legacyPlanDaysToCode,
   approximateAccessDays,
@@ -251,12 +252,10 @@ export async function buildMerchantSubscriptionPanel(input: {
       isBlocked: b.isBlocked,
       isActive: b.isActive,
       platformFinikReady: isPlatformFinikReady(),
-      platformFinikPayReady:
-        isPlatformFinikReady() && isPlatformFinikLegacyHttpReady(),
+      platformFinikPayReady: isPlatformFinikPayReady(),
       canPay:
         isOwner &&
-        isPlatformFinikReady() &&
-        isPlatformFinikLegacyHttpReady() &&
+        isPlatformFinikPayReady() &&
         !b.isBlocked &&
         !hasPendingPayment,
       isOwner,
@@ -397,11 +396,11 @@ export async function createPlatformSubscriptionPaymentSession(input: {
     };
   }
 
-  if (!isPlatformFinikLegacyHttpReady()) {
+  if (!isPlatformFinikOfficialReady()) {
     return {
       ok: false,
       statusCode: 503,
-      error: FINIK_LEGACY_HTTP_UNAVAILABLE_ERROR,
+      error: PLATFORM_FINIK_OFFICIAL_UNAVAILABLE_ERROR,
     };
   }
 
@@ -664,9 +663,24 @@ export async function applyPlatformSubscriptionFinikWebhook(
   | { ok: true; duplicate?: boolean; ignored?: boolean }
   | { ok: false; statusCode: number; error: string }
 > {
-  const platformSecret = getPlatformFinikCredentials()?.secret ?? null;
-  if (!verifyFinikWebhookSignature(platformSecret, req, rawBody)) {
-    return { ok: false, statusCode: 403, error: "Invalid signature" };
+  const verify = await verifyFinikWebhookAdmission({
+    finikSecret: null,
+    req,
+    rawBody,
+    body,
+    webhookPath: "/api/platform/subscription-finik-webhook",
+  });
+  if (!verify.ok) {
+    const statusCode =
+      verify.reason === "no_verify_credentials" ? 503 : 403;
+    return {
+      ok: false,
+      statusCode,
+      error:
+        verify.reason === "no_verify_credentials"
+          ? PLATFORM_FINIK_OFFICIAL_UNAVAILABLE_ERROR
+          : "Invalid signature",
+    };
   }
 
   const paymentId = extractPaymentIdFromBody(body);
@@ -816,15 +830,8 @@ export async function applyPlatformSubscriptionFinikWebhook(
 }
 
 function extractPaymentIdFromBody(body: Record<string, unknown>): string {
-  const paymentIdRaw =
-    body.paymentId ??
-    body.payment_id ??
-    body.id ??
-    body.orderId ??
-    body.order_id;
-  return paymentIdRaw != null && String(paymentIdRaw).trim() !== ""
-    ? String(paymentIdRaw).trim()
-    : "";
+  const ids = extractFinikWebhookPaymentIds(body);
+  return ids[0] ?? "";
 }
 
 function parseSaasSubRowId(body: Record<string, unknown>): number | null {
@@ -840,6 +847,13 @@ function parseSaasSubRowId(body: Record<string, unknown>): number | null {
       : null;
   if (meta != null) {
     candidates.push(meta.external_id, meta.externalId);
+  }
+  for (const dataKey of ["Data", "data"] as const) {
+    const dataRaw = body[dataKey];
+    if (typeof dataRaw === "object" && dataRaw !== null) {
+      const data = dataRaw as Record<string, unknown>;
+      candidates.push(data.external_id, data.externalId);
+    }
   }
   const prefix = "saas_sub:";
   for (const c of candidates) {

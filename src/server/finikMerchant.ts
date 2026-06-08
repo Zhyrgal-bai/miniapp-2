@@ -20,9 +20,13 @@ import {
   isFinikLegacyHttpReady,
 } from "../shared/finikReady.js";
 import {
-  getPlatformFinikCredentials,
+  isPlatformFinikOfficialReady,
   platformFinikUseMockForCreate,
+  PLATFORM_FINIK_OFFICIAL_UNAVAILABLE_ERROR,
 } from "../shared/platformFinik.js";
+import { buildPlatformSubscriptionFinikCreateContext } from "./finik/buildPlatformSubscriptionFinikCreateContext.js";
+import { mockCreateAdapter } from "./finik/mockCreateAdapter.js";
+import { officialAcquiringCreateAdapter } from "./finik/officialAcquiringCreateAdapter.js";
 import {
   extractFinikWebhookPaymentIds,
   parseFinikWebhookPayload,
@@ -239,7 +243,7 @@ export async function createFinikSaasSubscriptionSession(
 }
 
 /**
- * Платёж за SaaS-подписку через Finik **платформы** (не магазина).
+ * Платёж за SaaS-подписку через Finik **платформы** (Official Acquiring RSA).
  * Webhook: `POST /api/platform/subscription-finik-webhook`.
  */
 export async function createFinikPlatformSubscriptionSession(input: {
@@ -250,86 +254,34 @@ export async function createFinikPlatformSubscriptionSession(input: {
   | { ok: true; paymentId: string; paymentUrl: string }
   | { ok: false; error: string }
 > {
-  const platform = getPlatformFinikCredentials();
+  const built = buildPlatformSubscriptionFinikCreateContext({
+    subscriptionPaymentRowId: input.subscriptionPaymentRowId,
+    amountSom: input.amountSom,
+    ...(input.currency != null ? { currency: input.currency } : {}),
+  });
+  if (!built.ok) {
+    return { ok: false, error: built.error };
+  }
+
   const useMock = platformFinikUseMockForCreate();
+  const result = useMock
+    ? await mockCreateAdapter.createPaymentSession(built.ctx)
+    : !isPlatformFinikOfficialReady()
+      ? {
+          ok: false as const,
+          error: PLATFORM_FINIK_OFFICIAL_UNAVAILABLE_ERROR,
+        }
+      : await officialAcquiringCreateAdapter.createPaymentSession(built.ctx);
 
-  if (useMock) {
-    const paymentId = `finik_platform_sub_${Date.now()}_${input.subscriptionPaymentRowId}`;
-    const paymentUrl = `https://pay.finik.kg/?amount=${input.amountSom}&orderId=${encodeURIComponent(paymentId)}`;
-    return { ok: true, paymentId, paymentUrl };
+  if (!result.ok) {
+    return { ok: false, error: result.error };
   }
 
-  if (!platform) {
-    return {
-      ok: false,
-      error:
-        "Finik платформы: legacy HTTP не настроен (нужны PLATFORM_FINIK_API_KEY и PLATFORM_FINIK_SECRET до миграции API)",
-    };
-  }
-
-  const origin = publicApiOrigin();
-  if (!origin) {
-    return {
-      ok: false,
-      error: "Сервер: задайте API_URL (публичный URL) для callback Finik",
-    };
-  }
-
-  const callbackUrl = `${origin}/api/platform/subscription-finik-webhook`;
-  const ext = `saas_sub:${input.subscriptionPaymentRowId}`;
-
-  const url = `${finikApiBase()}${finikCreatePaymentsPath()}`;
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${platform.apiKey}`,
-        "X-Api-Secret": platform.secret,
-      },
-      body: JSON.stringify({
-        amount: input.amountSom,
-        currency: input.currency ?? "KGS",
-        order_id: ext,
-        external_id: ext,
-        callback_url: callbackUrl,
-        return_url: callbackUrl,
-      }),
-    });
-
-    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    if (!res.ok) {
-      console.error("Finik platform subscription HTTP", res.status, json);
-      return {
-        ok: false,
-        error: "Finik платформы отклонил запрос (проверьте PLATFORM_FINIK_* на сервере)",
-      };
-    }
-
-    const paymentId =
-      (typeof json.payment_id === "string" && json.payment_id) ||
-      (typeof json.id === "string" && json.id) ||
-      (typeof json.paymentId === "string" && json.paymentId) ||
-      "";
-    const paymentUrl =
-      (typeof json.payment_url === "string" && json.payment_url) ||
-      (typeof json.url === "string" && json.url) ||
-      (typeof json.checkout_url === "string" && json.checkout_url) ||
-      "";
-
-    if (!paymentId || !paymentUrl) {
-      console.error("Finik platform subscription: unexpected body", json);
-      return {
-        ok: false,
-        error: "Finik: неверный ответ API (ожидаются payment id и url)",
-      };
-    }
-
-    return { ok: true, paymentId, paymentUrl };
-  } catch (e) {
-    console.error("Finik platform subscription fetch:", e);
-    return { ok: false, error: "Ошибка сети при обращении к Finik" };
-  }
+  return {
+    ok: true,
+    paymentId: result.paymentId,
+    paymentUrl: result.paymentUrl,
+  };
 }
 
 /** Reservation deposit payment (Phase 6E). */

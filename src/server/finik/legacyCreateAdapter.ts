@@ -24,8 +24,9 @@ function legacyAuthHeaders(ctx: FinikCreateContext): Record<string, string> | nu
     };
   }
   const key = ctx.tenant.apiKey.trim();
-  const secret = ctx.tenant.secret.trim();
-  if (key === "" || secret === "") return null;
+  if (key === "") return null;
+  const secret = process.env.PLATFORM_FINIK_SECRET?.trim() ?? "";
+  if (secret === "") return null;
   return {
     "Content-Type": "application/json",
     Authorization: `Bearer ${key}`,

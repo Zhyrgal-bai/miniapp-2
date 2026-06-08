@@ -51,21 +51,32 @@ function resolveMerchantCategoryCode(): string {
   );
 }
 
+function isPlatformSubscriptionFlow(ctx: FinikCreateContext): boolean {
+  return (
+    ctx.flow === "platform_subscription" || ctx.flow === "saas_subscription"
+  );
+}
+
 function buildOfficialPaymentBody(
   ctx: FinikCreateContext,
   accountId: string,
 ): FinikOfficialRequestBody {
+  const data: Record<string, unknown> = {
+    accountId,
+    merchantCategoryCode: resolveMerchantCategoryCode(),
+    name_en: resolveOfficialDisplayName(ctx),
+    webhookUrl: ctx.callbackUrl,
+  };
+  if (isPlatformSubscriptionFlow(ctx) && ctx.externalId.trim() !== "") {
+    data.externalId = ctx.externalId.trim();
+  }
+
   return {
     Amount: ctx.amount,
     CardType: "FINIK_QR",
     PaymentId: randomUUID(),
     RedirectUrl: ctx.returnUrl,
-    Data: {
-      accountId,
-      merchantCategoryCode: resolveMerchantCategoryCode(),
-      name_en: resolveOfficialDisplayName(ctx),
-      webhookUrl: ctx.callbackUrl,
-    },
+    Data: data,
   };
 }
 
