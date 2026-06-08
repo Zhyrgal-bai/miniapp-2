@@ -49,6 +49,72 @@
   pointer-events: none;
 }
 
+.archa-sub__pending-card {
+  position: relative;
+  margin-bottom: 1rem;
+  padding: 1rem 1.05rem;
+  border-radius: 14px;
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.archa-sub__pending-title {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fde68a;
+}
+
+.archa-sub__pending-details {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0 0 0.85rem;
+}
+
+.archa-sub__pending-details div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.9rem;
+}
+
+.archa-sub__pending-details dt {
+  margin: 0;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.archa-sub__pending-details dd {
+  margin: 0;
+  color: #f8fafc;
+  font-weight: 600;
+  text-align: right;
+}
+
+.archa-sub__pending-cancel {
+  width: 100%;
+}
+
+.archa-sub__finik-return {
+  margin: 0 0 0.85rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.archa-sub__finik-return--processing {
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  background: rgba(59, 130, 246, 0.1);
+  color: #bfdbfe;
+}
+
+.archa-sub__finik-return--success {
+  border: 1px solid rgba(134, 239, 172, 0.35);
+  background: rgba(34, 197, 94, 0.12);
+  color: #bbf7d0;
+}
+
 .archa-sub__head {
   position: relative;
   display: flex;

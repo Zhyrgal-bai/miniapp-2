@@ -5,6 +5,7 @@ import {
   fetchSubscriptionPaymentHistory,
   patchSubscriptionAutoRenew,
   postPlatformSubscriptionPaymentCreate,
+  postPlatformSubscriptionPaymentCancel,
   type MerchantSubscriptionPanelPayload,
   type MerchantSubscriptionPlanDTO,
   type MerchantSubscriptionPlanCode,
@@ -33,6 +34,8 @@ type Props = {
   variant?: ArchPremiumSubscriptionVariant;
   sectionRef?: React.RefObject<HTMLElement | null>;
   onPaid?: () => void;
+  /** Finik browser redirect: `/merchant/subscription?finik=return` */
+  finikReturn?: boolean;
 };
 
 function primaryEndIso(panel: MerchantSubscriptionPanelPayload): string | null {
@@ -51,6 +54,7 @@ function paymentStatusLabel(status: string, entryType?: string): string {
   if (s === "completed" || s === "applied") return "Оплачен";
   if (s === "pending") return "Ожидает";
   if (s === "failed") return "Ошибка";
+  if (s === "cancelled") return "Отменён";
   return status;
 }
 
@@ -120,6 +124,7 @@ export function ArchPremiumSubscription({
   variant = "dashboard",
   sectionRef,
   onPaid,
+  finikReturn = false,
 }: Props) {
   const embedded = variant === "settings";
   const pricingRef = useRef<HTMLDivElement>(null);
@@ -134,6 +139,7 @@ export function ArchPremiumSubscription({
   );
   const [payMsg, setPayMsg] = useState<string | null>(null);
   const [autoRenewBusy, setAutoRenewBusy] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false);
   const [selectedPlanCode, setSelectedPlanCode] =
     useState<MerchantSubscriptionPlanCode | null>(null);
 
@@ -168,10 +174,15 @@ export function ArchPremiumSubscription({
   }, [load]);
 
   useEffect(() => {
-    if (panel?.displayStatus !== "PENDING_PAYMENT") return;
+    const waitingPending = panel?.displayStatus === "PENDING_PAYMENT";
+    const waitingFinikReturn =
+      finikReturn &&
+      panel != null &&
+      (panel.displayStatus === "PENDING_PAYMENT" || panel.hasPendingPayment);
+    if (!waitingPending && !waitingFinikReturn) return;
     const timer = window.setInterval(() => void load(), 5000);
     return () => window.clearInterval(timer);
-  }, [panel?.displayStatus, load]);
+  }, [panel?.displayStatus, panel?.hasPendingPayment, finikReturn, load]);
 
   const endIso = panel != null ? primaryEndIso(panel) : null;
   const { parts: countdownParts } = useLiveCountdown(endIso);
@@ -230,6 +241,20 @@ export function ArchPremiumSubscription({
     }
   };
 
+  const handleCancelPending = async () => {
+    setCancelBusy(true);
+    setError(null);
+    setPayMsg(null);
+    try {
+      await postPlatformSubscriptionPaymentCancel({ businessId });
+      void load();
+    } catch (e) {
+      setError(formatAdminApiError(e));
+    } finally {
+      setCancelBusy(false);
+    }
+  };
+
   const scrollToPricing = () => {
     pricingRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   };
@@ -248,6 +273,18 @@ export function ArchPremiumSubscription({
     sortedPlans.length > 0;
 
   const paymentAllowed = panel?.canPay === true;
+
+  const finikReturnProcessing =
+    finikReturn &&
+    panel != null &&
+    (panel.displayStatus === "PENDING_PAYMENT" || panel.hasPendingPayment);
+
+  const finikReturnSuccess =
+    finikReturn &&
+    panel != null &&
+    !panel.hasPendingPayment &&
+    panel.displayStatus !== "PENDING_PAYMENT" &&
+    (panel.displayStatus === "ACTIVE" || panel.displayStatus === "EXPIRING");
 
   const content = (
     <>
@@ -279,6 +316,24 @@ export function ArchPremiumSubscription({
       {error ? (
         <p className="archa-sub__err" role="alert">
           {error}
+        </p>
+      ) : null}
+
+      {finikReturnProcessing ? (
+        <p
+          className="archa-sub__finik-return archa-sub__finik-return--processing"
+          role="status"
+        >
+          Платёж обрабатывается. Обычно подтверждение занимает несколько секунд.
+        </p>
+      ) : null}
+
+      {finikReturnSuccess ? (
+        <p
+          className="archa-sub__finik-return archa-sub__finik-return--success"
+          role="status"
+        >
+          Подписка успешно активирована.
         </p>
       ) : null}
 
@@ -319,7 +374,41 @@ export function ArchPremiumSubscription({
             )}
           </div>
 
-          {panel.displayStatus === "PENDING_PAYMENT" ? (
+          {panel.displayStatus === "PENDING_PAYMENT" && panel.pendingPayment != null ? (
+            <div className="archa-sub__pending-card" role="status">
+              <p className="archa-sub__pending-title">Ожидает оплаты</p>
+              <dl className="archa-sub__pending-details">
+                <div>
+                  <dt>Тариф</dt>
+                  <dd>{panel.pendingPayment.planLabel}</dd>
+                </div>
+                <div>
+                  <dt>Сумма</dt>
+                  <dd>{formatSaasPriceSom(panel.pendingPayment.amountSom)}</dd>
+                </div>
+                <div>
+                  <dt>Создан</dt>
+                  <dd>
+                    {formatRuDateShort(panel.pendingPayment.createdAt) ??
+                      panel.pendingPayment.createdAt}
+                  </dd>
+                </div>
+              </dl>
+              <p className="archa-sub__hint archa-sub__hint--info">
+                Ожидаем подтверждение оплаты от Finik. Статус обновится автоматически.
+              </p>
+              {panel.isOwner ? (
+                <button
+                  type="button"
+                  className="mp-btn mp-btn--secondary archa-sub__pending-cancel"
+                  disabled={cancelBusy}
+                  onClick={() => void handleCancelPending()}
+                >
+                  {cancelBusy ? "Отмена…" : "Отменить счёт"}
+                </button>
+              ) : null}
+            </div>
+          ) : panel.displayStatus === "PENDING_PAYMENT" ? (
             <p className="archa-sub__hint archa-sub__hint--info" role="status">
               Ожидаем подтверждение оплаты от Finik. Статус обновится автоматически.
             </p>

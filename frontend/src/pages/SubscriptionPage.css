@@ -1,0 +1,45 @@
+.merchant-subscription-page {
+  min-height: 100dvh;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+.merchant-subscription-page__top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 0.65rem 0.85rem 0.5rem;
+  background: rgb(15 23 42 / 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgb(51 65 85);
+}
+
+.merchant-subscription-page__back {
+  border: none;
+  background: transparent;
+  color: #93c5fd;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.35rem 0.15rem;
+  margin-bottom: 0.25rem;
+}
+
+.merchant-subscription-page__title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: -0.02em;
+}
+
+.merchant-subscription-page__main {
+  padding: 0.85rem 0.85rem 2rem;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.merchant-subscription-page .archa-sub {
+  margin: 0;
+}

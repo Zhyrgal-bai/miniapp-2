@@ -36,6 +36,7 @@ import {
   totalPlanMonths,
   type ArchaSubscriptionPlanCode,
 } from "../shared/archaSubscriptionPlans.js";
+import { canClaimSubscriptionFinikPaymentStatus } from "../shared/subscriptionFinikPaymentStatus.js";
 
 export type MerchantSubscriptionUiStatus =
   | "ACTIVE"
@@ -68,6 +69,13 @@ export type MerchantSubscriptionPanelPayload = {
   isOwner: boolean;
   firstMonthEligible: boolean;
   hasPendingPayment: boolean;
+  pendingPayment: {
+    id: number;
+    planCode: string | null;
+    planLabel: string;
+    amountSom: number;
+    createdAt: string;
+  } | null;
   plans: Array<{
     code: ArchaSubscriptionPlanCode;
     title: string;
@@ -261,6 +269,16 @@ export async function buildMerchantSubscriptionPanel(input: {
       isOwner,
       firstMonthEligible,
       hasPendingPayment,
+      pendingPayment:
+        pendingPayment != null
+          ? {
+              id: pendingPayment.id,
+              planCode: pendingPayment.planCode,
+              planLabel: planCodeLabel(pendingPayment.planCode),
+              amountSom: pendingPayment.amountSom,
+              createdAt: pendingPayment.createdAt.toISOString(),
+            }
+          : null,
       plans: merchantVisibleSubscriptionPlans({ firstMonthEligible }).map((p) => ({
         code: p.code,
         title: p.title,
@@ -306,9 +324,18 @@ function resolvePlanCode(input: {
   return null;
 }
 
+export type PendingSubscriptionFinikPayment = {
+  id: number;
+  source: string;
+  finikPaymentId: string | null;
+  planCode: string | null;
+  amountSom: number;
+  createdAt: Date;
+};
+
 export async function findPendingSubscriptionFinikPayment(
   businessId: number,
-): Promise<{ id: number; source: string; finikPaymentId: string | null } | null> {
+): Promise<PendingSubscriptionFinikPayment | null> {
   const staleBefore = new Date(Date.now() - 24 * 60 * 60 * 1000);
   await prisma.subscriptionFinikPayment.updateMany({
     where: {
@@ -321,8 +348,67 @@ export async function findPendingSubscriptionFinikPayment(
   return prisma.subscriptionFinikPayment.findFirst({
     where: { businessId, status: "pending" },
     orderBy: { createdAt: "desc" },
-    select: { id: true, source: true, finikPaymentId: true },
+    select: {
+      id: true,
+      source: true,
+      finikPaymentId: true,
+      planCode: true,
+      amountSom: true,
+      createdAt: true,
+    },
   });
+}
+
+export async function cancelPendingPlatformSubscriptionPayment(input: {
+  telegramId: string;
+  businessId: number;
+}): Promise<
+  | { ok: true; success: true }
+  | { ok: false; statusCode: number; error: string }
+> {
+  if (!Number.isInteger(input.businessId) || input.businessId <= 0) {
+    return { ok: false, statusCode: 400, error: "Некорректный businessId" };
+  }
+
+  const isOwner = await platformMerchantIsStoreOwner(
+    input.telegramId,
+    input.businessId,
+  );
+  if (!isOwner) {
+    return {
+      ok: false,
+      statusCode: 403,
+      error: "Отменить счёт может только владелец магазина",
+    };
+  }
+
+  const pending = await findPendingSubscriptionFinikPayment(input.businessId);
+  if (pending == null) {
+    return {
+      ok: false,
+      statusCode: 404,
+      error: "Нет ожидающего платежа для отмены",
+    };
+  }
+
+  const updated = await prisma.subscriptionFinikPayment.updateMany({
+    where: {
+      id: pending.id,
+      businessId: input.businessId,
+      status: "pending",
+    },
+    data: { status: "cancelled" },
+  });
+
+  if (updated.count !== 1) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "Платёж уже обработан",
+    };
+  }
+
+  return { ok: true, success: true };
 }
 
 export async function createPlatformSubscriptionPaymentSession(input: {
@@ -756,6 +842,10 @@ export async function applyPlatformSubscriptionFinikWebhook(
     return { ok: true, duplicate: true };
   }
 
+  if (!canClaimSubscriptionFinikPaymentStatus(subRow.status)) {
+    return { ok: true, ignored: true };
+  }
+
   const planCode = parseArchaSubscriptionPlanCode(subRow.planCode);
   const source: ExtendBusinessSubscriptionSource =
     subRow.source === "auto_renew" ? "auto_renew" : "finik";
@@ -764,7 +854,7 @@ export async function applyPlatformSubscriptionFinikWebhook(
     const claimed = await tx.subscriptionFinikPayment.updateMany({
       where: {
         id: subRow!.id,
-        status: { in: ["pending", "failed"] },
+        status: "pending",
       },
       data: { status: "completed" },
     });

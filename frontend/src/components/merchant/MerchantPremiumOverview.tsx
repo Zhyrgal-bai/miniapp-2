@@ -15,7 +15,7 @@ type Props = {
   readinessPct: number;
   onOpenOrders: () => void;
   onOpenStore: () => void;
-  onScrollSubscription: () => void;
+  onOpenSubscription: () => void;
 };
 
 const stagger = {
@@ -41,7 +41,7 @@ export function MerchantPremiumOverview({
   readinessPct,
   onOpenOrders,
   onOpenStore,
-  onScrollSubscription,
+  onOpenSubscription,
 }: Props) {
   const sub = subscriptionBadge(b.status);
   const wh = webhookBadge(b.webhookStatus);
@@ -99,7 +99,7 @@ export function MerchantPremiumOverview({
               Открыть витрину
             </button>
             {!b.subscriptionActive ? (
-              <button type="button" className="archa-hub__link-btn archa-hub__link-btn--accent" onClick={onScrollSubscription}>
+              <button type="button" className="archa-hub__link-btn archa-hub__link-btn--accent" onClick={onOpenSubscription}>
                 Продлить подписку
               </button>
             ) : null}

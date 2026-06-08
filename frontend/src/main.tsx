@@ -8,6 +8,7 @@ import { StorefrontPayloadProvider } from "./components/storefront/runtime/Store
 import MerchantDashboardPage from "./pages/MerchantDashboardPage";
 import MerchantRegisterPage from "./pages/MerchantRegisterPage";
 import MerchantFaqPage from "./pages/MerchantFaqPage";
+import SubscriptionPage from "./pages/SubscriptionPage";
 import RootAppOrPlatform from "./pages/RootAppOrPlatform";
 import StoreSlugAliasRedirect from "./pages/StoreSlugAliasRedirect";
 import AppErrorBoundary from "./components/ui/AppErrorBoundary";
@@ -44,6 +45,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 element={<MerchantRegisterPage />}
               />
               <Route path="/merchant/faq" element={<MerchantFaqPage />} />
+              <Route
+                path="/merchant/subscription"
+                element={<SubscriptionPage />}
+              />
               <Route path="/merchant" element={<MerchantDashboardPage />} />
               <Route
                 path="/platform"

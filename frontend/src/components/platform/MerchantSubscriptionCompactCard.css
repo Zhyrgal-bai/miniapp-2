@@ -1,0 +1,40 @@
+.archa-sub-compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  margin-bottom: 1rem;
+  border-radius: 16px;
+}
+
+.archa-sub-compact__copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.archa-sub-compact__title {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: -0.02em;
+}
+
+.archa-sub-compact__status {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.archa-sub-compact__meta {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.archa-sub-compact__btn {
+  flex-shrink: 0;
+  min-width: 6.5rem;
+}

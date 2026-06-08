@@ -4,6 +4,7 @@ import {
 } from "../../shared/platformFinik.js";
 import { publicApiOrigin } from "../finikMerchant.js";
 import type { FinikCreateContext } from "./finikCreateTypes.js";
+import { buildPlatformSubscriptionFinikReturnUrl } from "./finikPlatformSubscriptionUrls.js";
 
 export type BuildPlatformSubscriptionFinikContextInput = {
   subscriptionPaymentRowId: number;
@@ -31,6 +32,7 @@ export function buildPlatformSubscriptionFinikCreateContext(
   );
 
   let callbackUrl: string;
+  let returnUrl: string | null;
   if (!useMock) {
     const origin = publicApiOrigin();
     if (!origin) {
@@ -40,8 +42,15 @@ export function buildPlatformSubscriptionFinikCreateContext(
       };
     }
     callbackUrl = `${origin}/api/platform/subscription-finik-webhook`;
+    returnUrl = buildPlatformSubscriptionFinikReturnUrl();
+    if (returnUrl == null) {
+      returnUrl = `${origin}/merchant/subscription?finik=return`;
+    }
   } else {
     callbackUrl = "https://pay.finik.kg/mock-platform-subscription-webhook";
+    returnUrl =
+      buildPlatformSubscriptionFinikReturnUrl() ??
+      "https://pay.finik.kg/merchant/subscription?finik=return";
   }
 
   const ctx: FinikCreateContext = {
@@ -55,7 +64,7 @@ export function buildPlatformSubscriptionFinikCreateContext(
     orderId: externalId,
     externalId,
     callbackUrl,
-    returnUrl: callbackUrl,
+    returnUrl,
   };
 
   return { ok: true, ctx };

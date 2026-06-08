@@ -25,7 +25,8 @@ import {
   type LaunchWizardAction,
 } from "../components/platform/LaunchWizard";
 import { MerchantBotRecovery } from "../components/platform/MerchantBotRecovery";
-import { MerchantSubscriptionPanel } from "../components/platform/MerchantSubscriptionPanel";
+import { MerchantSubscriptionCompactCard } from "../components/platform/MerchantSubscriptionCompactCard";
+import { MERCHANT_SUBSCRIPTION_PATH } from "../constants/merchantRoutes";
 import {
   fetchPlatformAdminBusinesses,
   fetchPlatformAdminRequests,
@@ -212,7 +213,6 @@ export default function PlatformPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const storesSectionRef = useRef<HTMLElement>(null);
   const helpSectionRef = useRef<HTMLElement>(null);
-  const subscriptionSectionRef = useRef<HTMLElement>(null);
   const businessesRef = useRef(businesses);
   businessesRef.current = businesses;
 
@@ -1260,12 +1260,9 @@ export default function PlatformPage() {
     helpSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
-  const scrollToSubscription = useCallback(() => {
-    subscriptionSectionRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  }, []);
+  const openSubscription = useCallback(() => {
+    navigate(MERCHANT_SUBSCRIPTION_PATH);
+  }, [navigate]);
 
   const closeMiniApp = useCallback(() => {
     try {
@@ -1292,7 +1289,7 @@ export default function PlatformPage() {
             businessId: b.id,
             meta: { launchStep: stepId, section: "subscription" },
           });
-          scrollToSubscription();
+          openSubscription();
           break;
         case "telegram_bot":
         case "finik":
@@ -1328,14 +1325,14 @@ export default function PlatformPage() {
               businessId: b.id,
               meta: { launchStep: stepId, section: "subscription" },
             });
-            scrollToSubscription();
+            openSubscription();
           }
           break;
         default:
           break;
       }
     },
-    [primaryBusiness, openPrimarySettings, navigate, openStorefront, scrollToSubscription],
+    [primaryBusiness, openPrimarySettings, navigate, openStorefront, openSubscription],
   );
 
   const platformMenuItems = useMemo((): PlatformMenuItem[] => {
@@ -1372,7 +1369,7 @@ export default function PlatformPage() {
         label: "Подписка",
         icon: "⭐",
         onClick: () => {
-          if (primaryBusiness != null) scrollToSubscription();
+          if (primaryBusiness != null) openSubscription();
           else scrollToStores();
         },
       },
@@ -1393,7 +1390,7 @@ export default function PlatformPage() {
     goToMerchantRegister,
     primaryBusiness,
     scrollToHelp,
-    scrollToSubscription,
+    openSubscription,
     openPrimarySettings,
     closeMiniApp,
     navigate,
@@ -1514,7 +1511,7 @@ export default function PlatformPage() {
                   navigate(merchantAdminNavigateTarget(primaryBusiness, "orders"))
                 }
                 onOpenStore={() => openStorefront(primaryBusiness)}
-                onScrollSubscription={scrollToSubscription}
+                onOpenSubscription={openSubscription}
               />
             ) : null}
 
@@ -1536,7 +1533,7 @@ export default function PlatformPage() {
                 <button
                   type="button"
                   className="mp-subscription-cta__btn"
-                  onClick={() => scrollToSubscription()}
+                  onClick={openSubscription}
                 >
                   Продлить подписку →
                 </button>
@@ -1709,17 +1706,10 @@ export default function PlatformPage() {
               />
             ) : null}
 
-            {primaryBusiness != null &&
-            !isPlatformAdmin &&
-            Number.isFinite(merchantTelegramId) ? (
-              <MerchantSubscriptionPanel
+            {primaryBusiness != null && !isPlatformAdmin ? (
+              <MerchantSubscriptionCompactCard
                 businessId={primaryBusiness.id}
-                telegramId={merchantTelegramId}
-                sectionRef={subscriptionSectionRef}
-                onPaid={() => {
-                  void loadBusinesses({ background: true });
-                  void reloadReadiness(primaryBusiness.id);
-                }}
+                onOpen={openSubscription}
               />
             ) : null}
 

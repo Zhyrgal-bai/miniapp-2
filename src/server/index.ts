@@ -44,6 +44,7 @@ import {
   platformMerchantBotTokenBodySchema,
   platformRegisterRequestShape,
   platformSubscriptionPaymentBodySchema,
+  platformSubscriptionPaymentCancelBodySchema,
   platformSubscriptionAutoRenewBodySchema,
   platformAdminExtendBodySchema,
   platformToggleBotBodySchema,
@@ -265,6 +266,7 @@ import {
 } from "./subscriptionFinikPayments.js";
 import {
   buildMerchantSubscriptionPanel,
+  cancelPendingPlatformSubscriptionPayment,
   createPlatformSubscriptionPaymentSession,
   listSubscriptionHistoryForMerchant,
   setMerchantAutoRenew,
@@ -981,6 +983,42 @@ app.post(
       });
     } catch (e) {
       console.error("POST /api/platform/subscription-payment/create:", e);
+      res.status(500).json({ error: "Ошибка сервера" });
+    }
+  },
+);
+
+app.post(
+  "/api/platform/subscription-payment/cancel",
+  strictLimiter,
+  requireNonEmptyJsonBody,
+  async (req: Request, res: Response) => {
+    try {
+      const telegramId = platformTelegramIdFromWebApp(req);
+      if (!telegramId) {
+        res.status(500).json({
+          error: "Внутренняя ошибка авторизации Mini App",
+        });
+        return;
+      }
+      const parsed = platformSubscriptionPaymentCancelBodySchema.safeParse(
+        req.body,
+      );
+      if (!parsed.success) {
+        res.status(400).json({ error: formatZodApiError(parsed.error) });
+        return;
+      }
+      const out = await cancelPendingPlatformSubscriptionPayment({
+        telegramId,
+        businessId: parsed.data.businessId,
+      });
+      if (!out.ok) {
+        res.status(out.statusCode).json({ error: out.error });
+        return;
+      }
+      res.json({ success: true });
+    } catch (e) {
+      console.error("POST /api/platform/subscription-payment/cancel:", e);
       res.status(500).json({ error: "Ошибка сервера" });
     }
   },

@@ -214,6 +214,22 @@ export async function postPlatformSubscriptionPaymentCreate(params: {
   throw new Error(j.error ?? "Некорректный ответ сервера");
 }
 
+export async function postPlatformSubscriptionPaymentCancel(params: {
+  businessId: number;
+}): Promise<void> {
+  const j = await adminFetchJson<{ success?: boolean; error?: string }>(
+    apiAbsoluteUrl("/api/platform/subscription-payment/cancel"),
+    {
+      method: "POST",
+      businessId: params.businessId,
+      body: JSON.stringify({ businessId: params.businessId }),
+    },
+  );
+  if (j.success !== true) {
+    throw new Error(j.error ?? "Не удалось отменить счёт");
+  }
+}
+
 export type MerchantSubscriptionUiStatus =
   | "ACTIVE"
   | "TRIAL"
@@ -280,6 +296,13 @@ export type MerchantSubscriptionPanelPayload = {
   isOwner: boolean;
   firstMonthEligible: boolean;
   hasPendingPayment: boolean;
+  pendingPayment: {
+    id: number;
+    planCode: string | null;
+    planLabel: string;
+    amountSom: number;
+    createdAt: string;
+  } | null;
   plans: MerchantSubscriptionPlanDTO[];
 };
 

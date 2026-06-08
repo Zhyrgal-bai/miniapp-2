@@ -148,6 +148,10 @@ export const platformSubscriptionPaymentBodySchema = z
     message: "Укажите planCode или plan",
   });
 
+export const platformSubscriptionPaymentCancelBodySchema = z.object({
+  businessId: z.coerce.number().int().positive(),
+});
+
 export const platformSubscriptionAutoRenewBodySchema = z.object({
   businessId: z.coerce.number().int().positive(),
   enabled: z.boolean(),

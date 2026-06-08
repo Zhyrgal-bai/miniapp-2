@@ -278,7 +278,7 @@ model SubscriptionFinikPayment {
   /// manual | auto_renew | operator
   source    String   @default("manual")
 
-  /// pending | completed | failed
+  /// pending | completed | failed | cancelled
   status    String   @default("pending")
   createdAt DateTime @default(now())
 
