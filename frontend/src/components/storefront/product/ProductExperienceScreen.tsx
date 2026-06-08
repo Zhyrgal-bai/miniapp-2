@@ -166,7 +166,7 @@ export function ProductExperienceScreen({
             </div>
           )}
           {px.images.length > 1 ? (
-            <div className="px-gallery__thumbs" aria-hidden>
+            <div className="px-gallery__thumbs" role="tablist" aria-label="Миниатюры">
               {px.images.map((src, i) => (
                 <button
                   key={i}

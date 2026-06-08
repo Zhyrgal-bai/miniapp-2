@@ -44,16 +44,20 @@
 .px-gallery {
   position: relative;
   flex-shrink: 0;
-  min-height: min(52dvh, 420px);
-  max-height: 56dvh;
+  display: flex;
+  flex-direction: column;
+  min-height: min(48dvh, 400px);
+  max-height: none;
   overflow: hidden;
   background: color-mix(in srgb, var(--sf-color-surface, #242424) 90%, transparent);
 }
 
 .px-gallery__track {
   display: flex;
-  height: 100%;
-  min-height: inherit;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: min(44dvh, 360px);
+  max-height: 52dvh;
   transition: transform 0.28s ease-out;
 }
 
@@ -106,7 +110,43 @@
 }
 
 .px-gallery__thumbs {
-  display: none;
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+  padding: 10px var(--px-pad);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  background: color-mix(in srgb, var(--sf-color-background) 96%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--sf-color-border) 40%, transparent);
+}
+
+.px-gallery__thumb {
+  flex: 0 0 52px;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  opacity: 0.78;
+  scroll-snap-align: start;
+  background: color-mix(in srgb, var(--sf-color-surface) 90%, transparent);
+}
+
+.px-gallery__thumb.is-active {
+  border-color: var(--px-accent);
+  opacity: 1;
+}
+
+.px-gallery__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .px-main {

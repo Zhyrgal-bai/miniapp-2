@@ -32,6 +32,7 @@ import {
   productRequiresVariantPicker,
   resolveInstantAddLine,
 } from "../../commerce/productVariantPolicy";
+import { IconCart } from "../storefront/icons/StorefrontCommerceIcons";
 
 type Props = {
   product: Product;
@@ -135,10 +136,9 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   const commerceEnabled = isStorefrontCommerceEnabled();
   const { payload } = useStorefrontPayload();
   const cfg = useMemo(() => normalizeCardConfig(cardConfig), [cardConfig]);
-  const addLabel =
-    readTextConfigString(textConfig ?? undefined, "addToCartLabel").trim() !== ""
-      ? readTextConfigString(textConfig ?? undefined, "addToCartLabel")
-      : "Добавить";
+  const customAddLabel = readTextConfigString(textConfig ?? undefined, "addToCartLabel").trim();
+  const addLabel = customAddLabel !== "" ? customAddLabel : "Добавить";
+  const isStorefrontCatalog = Boolean(onOpenDetail);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -212,6 +212,15 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
         : [product.image],
     [product]
   );
+
+  const primaryCatalogImage = images[0] ?? product.image;
+
+  const storefrontCtaLabel = useMemo(() => {
+    if (outOfStock) return "Нет в наличии";
+    if (needsVariantPicker) return "Выбрать";
+    if (customAddLabel !== "") return customAddLabel;
+    return "В корзину";
+  }, [outOfStock, needsVariantPicker, customAddLabel]);
 
   const lineColor = useMemo(() => {
     if (hasCustomColors) {
@@ -476,7 +485,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
         type="button"
       >
         <span className="product-add-btn__icon" aria-hidden>
-          🛒
+          <IconCart size={16} />
         </span>
         <span className="product-add-btn__label">{cta.label || addLabel}</span>
         {cta.sublabel ? <span className="product-add-btn__sub">{cta.sublabel}</span> : null}
@@ -518,44 +527,49 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
       }
     >
       <span className="product-add-btn__icon" aria-hidden>
-        🛒
+        <IconCart size={16} />
       </span>
       <span className="product-add-btn__label">{addLabel}</span>
     </button>
   );
 
-  const webIconAddButton = (
+  const webStorefrontButton = (
     <button
       type="button"
-      className="product-add-btn product-add-btn--icon product-add-btn--modern"
-      onClick={() =>
-        openOpenInTelegramModal(payload?.telegramOpenUrl ?? null)
-      }
-      aria-label={addLabel}
-      title={addLabel}
+      className="product-add-btn product-add-btn--storefront-retail"
+      onClick={(e) => {
+        e.stopPropagation();
+        openOpenInTelegramModal(payload?.telegramOpenUrl ?? null);
+      }}
     >
-      🛒
+      <IconCart size={15} />
+      <span className="product-add-btn__label">{addLabel}</span>
     </button>
   );
 
-  const storefrontQuickAdd =
-    onOpenDetail && commerceEnabled && !outOfStock ? (
+  const storefrontRetailControl =
+    isStorefrontCatalog && commerceEnabled && !outOfStock ? (
       quantity <= 0 ? (
         <button
           type="button"
-          className="product-add-btn product-add-btn--storefront-icon"
+          className="product-add-btn product-add-btn--storefront-retail"
           onClick={(e) => {
             e.stopPropagation();
             handleAddToCart();
           }}
-          disabled={cta.disabled}
-          aria-label={cta.label || addLabel}
-          title={cta.label || addLabel}
+          disabled={outOfStock}
+          aria-label={storefrontCtaLabel}
         >
-          +
+          <IconCart size={15} />
+          <span className="product-add-btn__label">{storefrontCtaLabel}</span>
         </button>
       ) : (
-        purchaseControl
+        <div
+          className="product-actions product-actions--storefront-qty"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {purchaseControl}
+        </div>
       )
     ) : null;
 
@@ -584,8 +598,8 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
       {/* Archetype-specific composition */}
       <div
         className={`product-image-wrapper${onOpenDetail ? " product-image-wrapper--detail" : ""}`}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
+        onTouchStart={isStorefrontCatalog ? undefined : handleTouchStart}
+        onTouchEnd={isStorefrontCatalog ? undefined : handleTouchEnd}
         onClick={() => onOpenDetail && openDetail()}
         onKeyDown={(e) => {
           if (!onOpenDetail) return;
@@ -598,40 +612,58 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
         tabIndex={onOpenDetail ? 0 : undefined}
         aria-label={onOpenDetail ? "Подробнее о товаре" : undefined}
       >
-        <div
-          className="image-slider"
-          style={
-            {
-              ["--slide-count" as string]: images.length,
-              width: "calc(var(--slide-count) * 100%)",
-              transform: `translateX(calc(-${currentIndex} * 100% / var(--slide-count)))`,
-            } as React.CSSProperties
-          }
-        >
-          {images.map((img, index) => (
-            <div key={index} className="image-slide">
-              <img
-                src={img}
-                alt=""
-                sizes="(min-width: 1200px) 220px, (min-width: 900px) 20vw, (min-width: 600px) 28vw, 48vw"
-                loading={index === 0 ? "eager" : "lazy"}
-                decoding="async"
-              />
+        {isStorefrontCatalog ? (
+          <img
+            className="product-catalog-image"
+            src={primaryCatalogImage}
+            alt=""
+            sizes="(min-width: 1200px) 220px, (min-width: 900px) 20vw, (min-width: 600px) 28vw, 48vw"
+            loading="eager"
+            decoding="async"
+          />
+        ) : (
+          <>
+            <div
+              className="image-slider"
+              style={
+                {
+                  ["--slide-count" as string]: images.length,
+                  width: "calc(var(--slide-count) * 100%)",
+                  transform: `translateX(calc(-${currentIndex} * 100% / var(--slide-count)))`,
+                } as React.CSSProperties
+              }
+            >
+              {images.map((img, index) => (
+                <div key={index} className="image-slide">
+                  <img
+                    src={img}
+                    alt=""
+                    sizes="(min-width: 1200px) 220px, (min-width: 900px) 20vw, (min-width: 600px) 28vw, 48vw"
+                    loading={index === 0 ? "eager" : "lazy"}
+                    decoding="async"
+                  />
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        <div className="dots">
-          {images.map((_, i) => (
-            <span
-              key={i}
-              className={i === currentIndex ? "active" : ""}
-              onClick={(e) => {
-                e.stopPropagation();
-                setCurrentIndex(i);
-              }}
-            />
-          ))}
-        </div>
+            <div className="dots">
+              {images.map((_, i) => (
+                <span
+                  key={i}
+                  className={i === currentIndex ? "active" : ""}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCurrentIndex(i);
+                  }}
+                />
+              ))}
+            </div>
+          </>
+        )}
+        {isStorefrontCatalog && images.length > 1 ? (
+          <span className="product-photo-count-badge" aria-label={`Ещё ${images.length - 1} фото`}>
+            +{images.length - 1} фото
+          </span>
+        ) : null}
         {cfg.showBadges ? badges.slice(0, 2).map((b) => (
           <div
             key={b.id}
@@ -708,8 +740,8 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
         {onOpenDetail ? (
           <div className="product-bottom product-bottom--storefront">
             {PriceBlock}
-            <div className="product-actions">
-              {!commerceEnabled ? webIconAddButton : storefrontQuickAdd}
+            <div className="product-actions product-actions--storefront-retail">
+              {!commerceEnabled ? webStorefrontButton : storefrontRetailControl}
             </div>
           </div>
         ) : archetype === "fashion" ? (
@@ -720,17 +752,17 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
             </div>
             <div className="product-actions product-actions--icon">
               {!commerceEnabled ? (
-                webIconAddButton
+                webStorefrontButton
               ) : quantity <= 0 ? (
                 <button
-                  className="product-add-btn product-add-btn--icon product-add-btn--modern"
+                  className="product-add-btn product-add-btn--storefront-retail product-add-btn--compact"
                   onClick={handleAddToCart}
                   disabled={outOfStock || !canAddToCart}
                   type="button"
                   aria-label={addLabel}
-                  title={addLabel}
                 >
-                  🛒
+                  <IconCart size={15} />
+                  <span className="product-add-btn__label">{addLabel}</span>
                 </button>
               ) : (
                 <div className="product-actions">{purchaseControl}</div>
@@ -751,7 +783,7 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
                   type="button"
                 >
                   <span className="product-add-btn__icon" aria-hidden>
-                    🛒
+                    <IconCart size={16} />
                   </span>
                   <span className="product-add-btn__label">{addLabel}</span>
                 </button>

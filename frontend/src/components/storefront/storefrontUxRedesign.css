@@ -186,23 +186,52 @@
   padding: var(--sf-ux-space-1) var(--sf-ux-space-2) var(--sf-ux-space-3);
 }
 
-/* ── Storefront product cards ── */
+/* ── Storefront product cards — edge-to-edge image (A5) ── */
 .sf-root .product-card.product-card--storefront {
   border-radius: var(--sf-ux-radius-card);
-  background: var(--sf-color-surface, #242424);
-  border: 1px solid color-mix(in srgb, var(--sf-color-border) 45%, transparent);
+  background: transparent;
+  border: 0;
   box-shadow: none;
   overflow: hidden;
+  gap: 0;
 }
 
 .sf-root .product-card.product-card--storefront .product-image-wrapper {
   position: relative;
-  aspect-ratio: 4 / 5;
-  border-radius: 0;
+  aspect-ratio: var(--sf-card-image-ratio, 4 / 5);
+  border-radius: var(--sf-ux-radius-card) var(--sf-ux-radius-card) 0 0;
+  background: color-mix(in srgb, var(--sf-color-surface, #242424) 88%, transparent);
 }
 
-.sf-root .product-card.product-card--storefront .product-image-wrapper .dots {
-  bottom: 6px;
+.sf-root .product-card.product-card--storefront .product-catalog-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sf-root .product-card.product-card--storefront.product-card--fit-contain .product-catalog-image {
+  object-fit: contain;
+  padding: 6px;
+  background: color-mix(in srgb, var(--sf-color-surface, #242424) 92%, transparent);
+}
+
+.sf-root .product-card.product-card--storefront .product-photo-count-badge {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 3;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--sf-color-text, #fff);
+  background: color-mix(in srgb, var(--sf-color-background, #1a1a1a) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 55%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: none;
 }
 
 .sf-root .product-card.product-card--storefront .product-info {
@@ -211,6 +240,10 @@
   flex-direction: column;
   gap: 4px;
   min-height: 0;
+  background: var(--sf-color-surface, #242424);
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 45%, transparent);
+  border-top: 0;
+  border-radius: 0 0 var(--sf-ux-radius-card) var(--sf-ux-radius-card);
 }
 
 .sf-root .product-card.product-card--storefront .product-title {
@@ -235,10 +268,56 @@
 
 .sf-root .product-card.product-card--storefront .product-bottom {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
   gap: var(--sf-ux-space-1);
   margin-top: 2px;
+}
+
+.sf-root .product-card.product-card--storefront .product-actions--storefront-retail,
+.sf-root .product-card.product-card--storefront .product-actions--storefront-qty {
+  width: 100%;
+  margin-left: 0;
+}
+
+.sf-root .product-card.product-card--storefront .product-add-btn--storefront-retail {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--sf-ux-radius-card, 12px);
+  background: var(--sf-ux-accent);
+  color: var(--sf-on-primary, #fff);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--sf-ux-accent) 35%, transparent);
+}
+
+.sf-root .product-card.product-card--storefront .product-add-btn--storefront-retail:active {
+  transform: scale(0.98);
+}
+
+.sf-root .product-card.product-card--storefront .product-add-btn--storefront-retail:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.sf-root .product-card.product-card--storefront .product-add-btn--storefront-retail .product-add-btn__label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sf-root .product-card.product-card--storefront .product-actions--storefront-qty {
+  display: flex;
+  justify-content: center;
 }
 
 .sf-root .product-card.product-card--storefront .product-price,
@@ -254,37 +333,6 @@
 
 .sf-root .product-card.product-card--storefront .product-actions {
   flex-shrink: 0;
-  margin-left: auto;
-}
-
-.sf-root .product-card.product-card--storefront .product-add-btn--storefront-icon {
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
-  min-height: 44px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: var(--sf-ux-accent);
-  color: var(--sf-on-primary, #fff);
-  font-size: 1.5rem;
-  font-weight: 700;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 4px 14px color-mix(in srgb, var(--sf-ux-accent) 45%, transparent);
-}
-
-.sf-root .product-card.product-card--storefront .product-add-btn--storefront-icon:active {
-  transform: scale(0.94);
-}
-
-.sf-root .product-card.product-card--storefront .product-add-btn--storefront-icon:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  box-shadow: none;
 }
 
 .sf-root .product-card.product-card--storefront .out-of-stock {
@@ -339,11 +387,18 @@
 }
 
 .sf-sticky-cart__unified-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: var(--sf-ux-body);
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.sf-sticky-cart__icon {
+  flex-shrink: 0;
 }
 
 .sf-sticky-cart__unified-sum {
@@ -430,7 +485,10 @@
 /* ── Bottom product rail (catalog footer slider) ── */
 .sf-root .sf-feed__chunk--catalog-footer {
   padding-top: var(--sf-ux-space-2);
-  padding-bottom: calc(var(--sf-ux-space-2) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(
+    var(--sf-ux-space-2) + env(safe-area-inset-bottom, 0px) + var(--sf-chrome-sticky-height, 0px)
+  );
+  scroll-margin-bottom: calc(var(--sf-chrome-sticky-height, 0px) + 12px);
 }
 
 @media (max-width: 320px) {
@@ -450,7 +508,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sf-sticky-cart.sf-sticky-cart--unified:active,
-  .sf-root .product-card.product-card--storefront .product-add-btn--storefront-icon:active {
+  .sf-root .product-card.product-card--storefront .product-add-btn--storefront-retail:active {
     transform: none;
   }
 }

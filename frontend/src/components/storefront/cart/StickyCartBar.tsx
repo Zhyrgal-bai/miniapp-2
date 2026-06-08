@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useCartStore } from "../../../store/useCartStore";
 import { useStorefrontPayload } from "../runtime/StorefrontPayloadContext";
 import { storefrontShellModeFromStyleConfig } from "../../../storefront/buildStorefrontLayoutCssVars";
+import { IconCart } from "../icons/StorefrontCommerceIcons";
 
 function formatSom(v: number): string {
   const n = Number(v) || 0;
@@ -64,7 +65,8 @@ export function StickyCartBar(props: {
       >
         <span className="sf-sticky-cart__unified-main">
           <span className="sf-sticky-cart__unified-line">
-            🛒 {qty} {itemsLabel(qty)}
+            <IconCart size={16} className="sf-sticky-cart__icon" />
+            {qty} {itemsLabel(qty)}
           </span>
           <span className="sf-sticky-cart__unified-sum">{formatSom(total)} сом</span>
         </span>

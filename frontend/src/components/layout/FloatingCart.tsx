@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { IconCart } from "../storefront/icons/StorefrontCommerceIcons";
 
 const STORAGE_KEY = "miniapp-floating-cart-pos";
 const BTN = 56;
@@ -260,7 +261,7 @@ export default function FloatingCart({
       aria-label="Открыть корзину"
     >
       <div className="cart-icon">
-        🛒
+        <IconCart size={22} />
         {totalQuantity > 0 && (
           <span className="cart-badge">{totalQuantity}</span>
         )}

@@ -30,6 +30,7 @@ import {
   mergeStorefrontCardConfigWithResponsive,
   type StorefrontCardViewportTier,
 } from "../../storefront/catalogCardPresets";
+import { applyImagePresentationForBusinessType } from "../../storefront/imagePresentationPresets";
 import { StorefrontFeed } from "./StorefrontFeed";
 import { CatalogSearchBar } from "./CatalogSearchBar";
 import { StorefrontCompactStrip } from "./StorefrontCompactStrip";
@@ -174,7 +175,8 @@ export function StorefrontRenderer(props: {
       if (typeof rawCfg.catalogCardPreset !== "string" || rawCfg.catalogCardPreset.trim() === "") {
         rawCfg.catalogCardPreset = defaultCatalogCardPresetForBusinessType(props.payload.businessType);
       }
-      return mergeStorefrontCardConfigWithResponsive(rawCfg, cardViewportTier);
+      const merged = mergeStorefrontCardConfigWithResponsive(rawCfg, cardViewportTier);
+      return applyImagePresentationForBusinessType(merged, props.payload.businessType, rawCfg);
     },
     [props.payload.storefrontCardConfig, cardViewportTier, props.payload.businessType],
   );

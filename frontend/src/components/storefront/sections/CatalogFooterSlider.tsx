@@ -4,20 +4,27 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type ReactElement,
   type TouchEvent,
 } from "react";
 import type { Product } from "../../../types";
 import {
-  CATALOG_FOOTER_RAIL_SPEED_SECONDS,
   parseCatalogFooterRailSettings,
+  type CatalogFooterRailSpeed,
 } from "../../../storefront/catalogFooterRailSettings";
+import { storefrontMotionLevelFromStyleConfig } from "../../../storefront/buildStorefrontLayoutCssVars";
 import { buildCloudinaryResponsiveUrl } from "../../../utils/cloudinaryTransforms";
 import "./CatalogFooterSlider.css";
 
 const RESUME_AUTO_MS = 2600;
 const SWIPE_THRESHOLD_PX = 36;
+
+/** JS marquee speed — reliable in Telegram WebView (CSS transform animation often stalls). */
+const RAIL_SCROLL_PX_PER_SEC: Record<CatalogFooterRailSpeed, number> = {
+  slow: 28,
+  medium: 44,
+  fast: 68,
+};
 
 export type ResolvedSlide = {
   imageUrl: string;
@@ -189,22 +196,25 @@ export function CatalogFooterSlider(props: {
     typeof window !== "undefined" &&
     window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
 
-  const canAnimate = count > 1 && rail.autoMove && !reducedMotion && !manualScroll;
-
-  const durationSec = CATALOG_FOOTER_RAIL_SPEED_SECONDS[rail.speed];
-  const trackStyle = useMemo(
-    () =>
-      ({
-        ["--sf-rail-dur" as string]: `${durationSec}s`,
-      }) as CSSProperties,
-    [durationSec],
+  const motionLevel = storefrontMotionLevelFromStyleConfig(
+    props.storefrontStyleConfig ?? undefined,
   );
+  const motionDisabled = motionLevel === "none";
+
+  const canAnimate =
+    count > 1 &&
+    rail.autoMove &&
+    !reducedMotion &&
+    !motionDisabled &&
+    !manualScroll;
 
   const loopSlides = useMemo(() => {
     if (count <= 1) return resolved;
-    if (rail.autoMove && !reducedMotion) return [...resolved, ...resolved];
+    if (rail.autoMove && !reducedMotion && rail.infiniteLoop) {
+      return [...resolved, ...resolved];
+    }
     return resolved;
-  }, [resolved, count, rail.autoMove, reducedMotion]);
+  }, [resolved, count, rail.autoMove, rail.infiniteLoop, reducedMotion]);
 
   const clearResumeTimer = useCallback(() => {
     if (resumeTimer.current != null) {
@@ -224,6 +234,53 @@ export function CatalogFooterSlider(props: {
   }, [rail.autoMove, clearResumeTimer]);
 
   useEffect(() => () => clearResumeTimer(), [clearResumeTimer]);
+
+  useEffect(() => {
+    if (!canAnimate || rail.direction !== "right") return;
+    const vp = viewportRef.current;
+    if (!vp) return;
+    const loopW = vp.scrollWidth / 2;
+    if (loopW > vp.clientWidth) {
+      vp.scrollLeft = loopW;
+    }
+  }, [canAnimate, rail.direction, loopSlides.length]);
+
+  /** Scroll-based marquee — works in TMA where CSS keyframe transform may not run. */
+  useEffect(() => {
+    if (!canAnimate) return;
+    const vp = viewportRef.current;
+    if (!vp) return;
+
+    let rafId = 0;
+    let lastTs = 0;
+    const dir = rail.direction === "right" ? -1 : 1;
+    const speed = RAIL_SCROLL_PX_PER_SEC[rail.speed];
+
+    const step = (ts: number) => {
+      const el = viewportRef.current;
+      if (!el) return;
+
+      if (!paused) {
+        const dt = lastTs > 0 ? Math.min((ts - lastTs) / 1000, 0.05) : 0;
+        if (dt > 0) {
+          el.scrollLeft += dir * speed * dt;
+          const loopW = el.scrollWidth / 2;
+          if (loopW > el.clientWidth) {
+            if (dir > 0 && el.scrollLeft >= loopW) {
+              el.scrollLeft -= loopW;
+            } else if (dir < 0 && el.scrollLeft <= 0) {
+              el.scrollLeft += loopW;
+            }
+          }
+        }
+      }
+      lastTs = ts;
+      rafId = window.requestAnimationFrame(step);
+    };
+
+    rafId = window.requestAnimationFrame(step);
+    return () => window.cancelAnimationFrame(rafId);
+  }, [canAnimate, paused, rail.direction, rail.speed]);
 
   const pauseForInteraction = useCallback(() => {
     if (!rail.pauseOnTouch) return;
@@ -271,22 +328,18 @@ export function CatalogFooterSlider(props: {
   if (!cfg?.enabled || resolved.length === 0) return null;
 
   const sectionTitle = cfg.title.trim() !== "" ? cfg.title : "Букеты";
-  const scrollable = count > 1 && (!canAnimate || manualScroll);
-  const animationPaused = paused || !canAnimate;
+  const viewportScrollable = count > 1;
 
   const trackClass = [
     "sf-product-rail__track",
-    canAnimate ? "sf-product-rail__track--animate" : "",
-    rail.direction === "right" ? "sf-product-rail__track--reverse" : "",
-    rail.infiniteLoop ? "" : "sf-product-rail__track--once",
-    animationPaused ? "sf-product-rail__track--paused" : "",
+    viewportScrollable ? "sf-product-rail__track--scroll" : "",
   ]
     .filter(Boolean)
     .join(" ");
 
   const viewportClass = [
     "sf-product-rail__viewport",
-    scrollable ? "sf-product-rail__viewport--scroll" : "",
+    viewportScrollable ? "sf-product-rail__viewport--scroll" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -304,13 +357,8 @@ export function CatalogFooterSlider(props: {
             className={viewportClass}
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}
-            onPointerEnter={() => rail.pauseOnTouch && setPaused(true)}
-            onPointerLeave={() => {
-              if (!paused) return;
-              scheduleResume();
-            }}
           >
-            <div className={trackClass} style={trackStyle}>
+            <div className={trackClass}>
               {loopSlides.map((slide, i) => (
                 <ProductRailCard
                   key={
