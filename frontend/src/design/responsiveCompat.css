@@ -37,6 +37,22 @@
   scroll-margin-bottom: var(--archa-keyboard-scroll-margin);
 }
 
+/**
+ * iOS Safari + Telegram Mini App: inputs below 16px trigger focus auto-zoom;
+ * scale can stick after blur. Force ≥16px on touch/narrow viewports only.
+ */
+@media (pointer: coarse), (max-width: 768px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+      [type="file"]
+    ):not([type="hidden"]):not([type="button"]):not([type="submit"]):not(
+      [type="reset"]
+    ):not([type="image"]):not([type="color"]),
+  textarea,
+  select {
+    font-size: max(16px, 1em) !important;
+  }
+}
+
 /* ── Sticky cart: single source of truth (wins over conflicting rules) ── */
 .sf-chrome-align-commerce.sf-sticky-cart-slot {
   position: fixed !important;

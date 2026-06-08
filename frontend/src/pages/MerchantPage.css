@@ -882,6 +882,12 @@
   margin-bottom: 0;
   padding-bottom: 0.85rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: color-mix(in srgb, var(--archa-bg-elevated, #111827) 96%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .mp-settings-header__title {
@@ -899,24 +905,24 @@
 }
 
 .mp-settings-form {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-height: 0;
+  display: block;
   gap: 0;
 }
 
 .mp-settings-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  overflow: visible;
   padding: 0.85rem 0 0.5rem;
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+}
+
+.mp-settings-form .mp-settings-scroll {
+  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+.mp-settings-dialog-shell > .mp-settings-scroll {
+  padding-bottom: max(0.85rem, env(safe-area-inset-bottom, 0px));
 }
 
 .mp-settings-scroll > .mp-muted,
@@ -1216,8 +1222,11 @@
 
 .mp-settings-save-footer {
   flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
   margin-top: 0;
-  padding: 0.9rem 0 0;
+  padding: 0.9rem 0 max(0.65rem, env(safe-area-inset-bottom, 0px));
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   background: linear-gradient(
     180deg,
@@ -1685,8 +1694,12 @@
   align-items: flex-end;
   justify-content: center;
   box-sizing: border-box;
-  padding: max(0.65rem, env(safe-area-inset-top, 0px)) 0.75rem
-    max(0.75rem, env(safe-area-inset-bottom, 0px));
+  overflow: hidden;
+  overscroll-behavior: contain;
+  padding: max(0.5rem, env(safe-area-inset-top, 0px))
+    max(0.4rem, env(safe-area-inset-right, 0px))
+    max(0.5rem, env(safe-area-inset-bottom, 0px))
+    max(0.4rem, env(safe-area-inset-left, 0px));
   background: rgba(3, 4, 3, 0.78);
   backdrop-filter: blur(12px);
 }
@@ -1694,31 +1707,40 @@
 @media (min-width: 640px) {
   .mp-settings-backdrop {
     align-items: center;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
   }
 }
 
 .mp-settings-dialog-shell {
   display: flex;
   flex-direction: column;
+  min-height: 0;
   max-height: min(
-    90dvh,
-    calc(100dvh - env(safe-area-inset-top, 0px) - 1.25rem)
+    92dvh,
+    calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 1rem)
   );
   width: 100%;
-  max-width: 26rem;
-  overflow: hidden;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   border-radius: var(--archa-radius-xl, 1.15rem);
   border: 1px solid var(--archa-glass-border-strong) !important;
   background: color-mix(in srgb, var(--archa-bg-elevated) 94%, transparent) !important;
   backdrop-filter: blur(24px);
   color: var(--archa-text);
-  padding: 1.15rem 1.35rem max(1.15rem, env(safe-area-inset-bottom, 0px)) !important;
+  padding: 1.1rem 1rem 0 !important;
   box-shadow: var(--archa-shadow-glow), var(--archa-shadow-card);
 }
 
 @media (min-width: 640px) {
   .mp-settings-dialog-shell {
+    max-width: 26rem;
     max-height: min(88dvh, 40rem);
-    padding: 1.25rem 1.5rem 1.5rem !important;
+    padding: 1.25rem 1.5rem 0 !important;
+    border-radius: var(--archa-radius-xl, 1.15rem);
   }
 }

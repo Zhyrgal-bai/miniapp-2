@@ -166,10 +166,16 @@
   background-repeat: no-repeat;
   background-position: right 12px center;
   color: #fff;
-  font-size: 15px;
+  font-size: 16px;
   font-family: inherit;
   appearance: none;
   cursor: pointer;
+}
+
+.admin-form input,
+.admin-input,
+.admin-textarea {
+  font-size: 16px;
 }
 
 .admin-select option {

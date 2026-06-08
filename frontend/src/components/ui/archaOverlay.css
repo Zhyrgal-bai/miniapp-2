@@ -94,6 +94,9 @@
 .archa-overlay__backdrop--platform,
 .archa-overlay__backdrop--layer-platform {
   z-index: 2147483000;
+  overflow: hidden;
+  overscroll-behavior: contain;
+  touch-action: none;
 }
 
 /* Storefront-themed header account sheet */

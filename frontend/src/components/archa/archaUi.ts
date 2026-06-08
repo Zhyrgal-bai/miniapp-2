@@ -28,9 +28,9 @@ export const archa = {
   btnIconSuccess:
     "inline-flex h-11 min-w-[2.75rem] items-center justify-center rounded-xl border border-[#22C55E]/35 bg-[#22C55E]/10 text-base text-[#86efac] transition duration-200 hover:bg-[#22C55E]/18 disabled:pointer-events-none disabled:opacity-40",
   input:
-    "w-full rounded-xl border border-white/[0.08] bg-[#0B0F14]/90 px-3 py-3 text-sm text-[#E5E7EB] outline-none ring-[#22C55E]/15 transition placeholder:text-[#9CA3AF]/60 focus:border-[#22C55E]/45 focus:ring-2 disabled:opacity-50",
+    "w-full rounded-xl border border-white/[0.08] bg-[#0B0F14]/90 px-3 py-3 text-base text-[#E5E7EB] outline-none ring-[#22C55E]/15 transition placeholder:text-[#9CA3AF]/60 focus:border-[#22C55E]/45 focus:ring-2 disabled:opacity-50",
   inputSearch:
-    "w-full rounded-2xl border border-white/[0.08] bg-[#111827]/70 py-3 pl-11 pr-4 text-sm text-[#E5E7EB] outline-none ring-[#22C55E]/10 transition placeholder:text-[#9CA3AF]/55 focus:border-[#22C55E]/40 focus:ring-2 focus:ring-[#22C55E]/20",
+    "w-full rounded-2xl border border-white/[0.08] bg-[#111827]/70 py-3 pl-11 pr-4 text-base text-[#E5E7EB] outline-none ring-[#22C55E]/10 transition placeholder:text-[#9CA3AF]/55 focus:border-[#22C55E]/40 focus:ring-2 focus:ring-[#22C55E]/20",
   bottomDock:
     "fixed bottom-0 left-0 right-0 border-t border-white/[0.06] bg-[#0B0F14]/92 backdrop-blur-xl",
   modalBackdrop:
