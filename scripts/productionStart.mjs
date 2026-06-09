@@ -124,6 +124,20 @@ if (process.env.BACKFILL_ENABLE_STOREFRONT === "1") {
   }
 }
 
+if (process.env.BACKFILL_LEGACY_SLUGS === "1") {
+  if (!process.env.RENDER) {
+    console.error(
+      "[start] BACKFILL_LEGACY_SLUGS ignored: use only on Render (with RENDER set).",
+    );
+  } else {
+    console.warn(
+      "[start] BACKFILL_LEGACY_SLUGS=1: legacy slug backfill (dry-run then apply). Remove this env after one successful deploy.",
+    );
+    run("npx tsx scripts/backfillSlugs.mjs");
+    run("npx tsx scripts/backfillSlugs.mjs --apply");
+  }
+}
+
 const serve = spawnSync(process.execPath, ["dist/server/index.js"], {
   stdio: "inherit",
   env: process.env,

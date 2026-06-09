@@ -69,4 +69,24 @@ describe("web experience contracts", () => {
     expect(landing.includes('id="how"')).toBe(true);
     expect(landing.includes('id="pricing"')).toBe(true);
   });
+
+  it("landing renders founder section + branding line (Phase 17.1)", () => {
+    const landing = read("frontend/src/pages/MerchantLandingPage.tsx");
+    expect(landing.includes("<FounderSection />")).toBe(true);
+    expect(landing.includes("ARCHA Generation One")).toBe(true);
+    const founder = read("frontend/src/components/landing/FounderSection.tsx");
+    expect(founder.includes("enabledFounderSocials")).toBe(true);
+    expect(founder.includes("onError")).toBe(true);
+  });
+
+  it("merchant showcase footer says Powered by ARCHA with no founder data", () => {
+    const footer = read("frontend/src/components/storefront/web/WebShowcaseFooter.tsx");
+    expect(footer.includes("Powered by ARCHA")).toBe(true);
+    // No founder data leaks into merchant stores (name + founder config import).
+    expect(footer.includes("Жыргал")).toBe(false);
+    expect(footer.includes("ARCHA_FOUNDER")).toBe(false);
+    expect(footer.includes("config/founder")).toBe(false);
+    const renderer = read("frontend/src/components/storefront/StorefrontRenderer.tsx");
+    expect(renderer.includes("WebShowcaseFooter")).toBe(true);
+  });
 });

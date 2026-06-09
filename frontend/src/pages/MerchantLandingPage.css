@@ -234,7 +234,7 @@
 }
 
 .archa-landing__section {
-  padding: 3rem 0;
+  padding: clamp(2.5rem, 6vw, 4rem) 0;
   border-top: 1px solid rgba(157, 255, 87, 0.08);
 }
 
@@ -349,8 +349,8 @@
 }
 
 .archa-landing__cta-band {
-  margin-top: 1rem;
-  padding: 2.5rem 1.5rem;
+  margin-top: clamp(2.5rem, 6vw, 4rem);
+  padding: clamp(2.25rem, 5vw, 3rem) 1.5rem;
   border-radius: var(--archa-radius-xl);
   text-align: center;
 }
@@ -368,12 +368,22 @@
 .archa-landing__footer {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
   padding: 24px 20px max(24px, env(safe-area-inset-bottom));
   border-top: 1px solid rgba(157, 255, 87, 0.08);
   font-size: 0.8125rem;
   color: var(--archa-text-dim);
+}
+
+.archa-landing__footer-brand {
+  width: 100%;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--archa-text-dim, #6f8a6a) 80%, transparent);
+  opacity: 0.8;
 }
 
 /* Phase 17: business types, steps, pricing */

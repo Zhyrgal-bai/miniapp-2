@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { ARCHA_BRAND } from "../config/brandAssets";
 import { ru } from "../i18n/ru";
+import { FounderSection } from "../components/landing/FounderSection";
 import "../design/archaPremium.css";
 import "./MerchantLandingPage.css";
 
@@ -290,6 +291,8 @@ export default function MerchantLandingPage() {
           </div>
         </section>
 
+        <FounderSection />
+
         <motion.section
           className="archa-landing__cta-band archa-glass archa-glass--glow"
           initial={reduceMotion ? false : { opacity: 0, scale: 0.98 }}
@@ -310,6 +313,9 @@ export default function MerchantLandingPage() {
       <footer className="archa-landing__footer">
         <span>{ARCHA_BRAND.name}</span>
         <span>{ARCHA_BRAND.tagline}</span>
+        <span className="archa-landing__footer-brand">
+          Built in Kyrgyzstan 🇰🇬 · ARCHA Generation One · 2026
+        </span>
       </footer>
     </div>
   );

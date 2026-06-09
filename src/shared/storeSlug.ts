@@ -122,6 +122,76 @@ async function isBusinessSlugTaken(
   return row != null;
 }
 
+/** Base36 timestamp suffix from `Date.now().toString(36)` collision fallback. */
+function isBase36TimestampSuffix(suffix: string): boolean {
+  if (!/^[a-z0-9]+$/.test(suffix)) return false;
+  if (suffix.length < 6) return false;
+  return /[a-z]/.test(suffix) && /[0-9]/.test(suffix);
+}
+
+/**
+ * True when slug is null/empty or an auto-generated technical fallback
+ * (`shop-<base36ts>`, `shop-<id>-<base36ts>`, or `*-<base36ts>`).
+ */
+export function isLegacyTechnicalSlug(slug: string | null | undefined): boolean {
+  const s = (slug ?? "").trim().toLowerCase();
+  if (s === "") return true;
+  if (s.startsWith("shop-")) return true;
+
+  const lastDash = s.lastIndexOf("-");
+  if (lastDash <= 0) return false;
+  const suffix = s.slice(lastDash + 1);
+  if (/^\d+$/.test(suffix)) return false;
+  return isBase36TimestampSuffix(suffix);
+}
+
+async function isSlugReservedByOther(
+  tx: Prisma.TransactionClient,
+  slug: string,
+  excludeBusinessId: number,
+): Promise<boolean> {
+  const normalized = slug.trim().toLowerCase();
+  const row = await tx.business.findFirst({
+    where: { slug: { equals: normalized, mode: "insensitive" } } as any,
+    select: { id: true },
+  });
+  if (row != null && row.id !== excludeBusinessId) return true;
+
+  const alias = await (tx as any).storefrontSlugAlias.findUnique({
+    where: { oldSlug: normalized },
+    select: { businessId: true },
+  });
+  return alias != null && alias.businessId !== excludeBusinessId;
+}
+
+/**
+ * Like `allocateUniqueBusinessSlug`, but excludes `excludeBusinessId` from
+ * collision checks and also treats `StorefrontSlugAlias` as reserved.
+ * Returns null when the name cannot yield a slug or uniqueness is exhausted.
+ */
+export async function allocateUniqueBusinessSlugExcluding(
+  tx: Prisma.TransactionClient,
+  storeName: string,
+  excludeBusinessId: number,
+): Promise<string | null> {
+  const base = slugifyStoreName(storeName);
+  if (base === "") return null;
+
+  const tryCandidate = async (candidate: string): Promise<boolean> => {
+    if (RESERVED_STORE_SLUGS.has(candidate)) return false;
+    return !(await isSlugReservedByOther(tx, candidate, excludeBusinessId));
+  };
+
+  if (await tryCandidate(base)) return base;
+
+  for (let n = 2; n <= 100; n += 1) {
+    const candidate = `${base}-${n}`;
+    if (await tryCandidate(candidate)) return candidate;
+  }
+
+  return null;
+}
+
 function technicalFallbackSlug(): string {
   return `shop-${Date.now().toString(36)}`;
 }

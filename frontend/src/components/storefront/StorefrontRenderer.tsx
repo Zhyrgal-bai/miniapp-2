@@ -44,6 +44,7 @@ import { WebStorefrontInfoBar } from "./commerce/WebStorefrontInfoBar";
 import { WebShowcaseHeader } from "./web/WebShowcaseHeader";
 import { WebShowcaseAbout } from "./web/WebShowcaseAbout";
 import { WebShowcaseContacts } from "./web/WebShowcaseContacts";
+import { WebShowcaseFooter } from "./web/WebShowcaseFooter";
 import { trackStoreView } from "../../services/storefrontAnalytics";
 import { enrichProductsFromCatalog } from "../../utils/enrichProductsFromCatalog";
 import { businessTypeSupportsTableReservations } from "@repo-shared/tableReservation";
@@ -752,6 +753,12 @@ export function StorefrontRenderer(props: {
                 catalogProducts={footerSliderProducts}
                 onOpenProduct={openProduct}
               />
+            </div>
+          ) : null}
+
+          {isWebBrowse ? (
+            <div className="sf-feed__chunk sf-feed__chunk--web-footer sf-feed__chunk--stack">
+              <WebShowcaseFooter telegramOpenUrl={props.payload.telegramOpenUrl ?? null} />
             </div>
           ) : null}
         </StorefrontFeed>
