@@ -56,6 +56,7 @@ export function AutopartsPdpContent({
     businessId,
     businessType: resolvedBusinessType,
     merchantConfig,
+    orderOptionsSchema: (payload?.orderOptionsSchema ?? {}) as Record<string, unknown>,
   });
 
   const attrs = productAttrs(px.display);
@@ -121,7 +122,7 @@ export function AutopartsPdpContent({
       data-sf-vertical="autoparts"
     >
       <div className="px-layout">
-        <PdpGallery images={px.images} discountPct={px.discountPct} />
+        <PdpGallery images={px.images} discountPct={px.discountPct} resetKey={product.id} />
 
         <div className="px-main">
           <header className="px-head">

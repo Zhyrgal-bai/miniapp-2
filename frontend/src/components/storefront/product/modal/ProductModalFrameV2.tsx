@@ -18,7 +18,7 @@ export function ProductModalFrameV2({
 }: Props): React.ReactElement | null {
   if (!open) return null;
   return (
-    <ProductQuickViewShell open={open} onClose={onClose}>
+    <ProductQuickViewShell open={open} onClose={onClose} maxWidth={maxWidth}>
       <div className={`sf-product-modal-v2__body sf-product-modal-v2__body--${maxWidth}`}>{children}</div>
     </ProductQuickViewShell>
   );

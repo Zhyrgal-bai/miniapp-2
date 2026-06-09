@@ -32,6 +32,13 @@ import {
   markCustomerLocationGranted,
   readCustomerLocationAddress,
 } from "../storefront/customerLocationStorage";
+import {
+  readCheckoutAutofillHints,
+  rememberCheckoutAutofill,
+  resolveCheckoutAutofill,
+  resolveAutofillField,
+  type AutofillRecipient,
+} from "../storefront/customerAutofillStorage";
 import { reverseGeocodeKg } from "../utils/nominatimGeocode";
 import { checkoutLocationLabel } from "../utils/checkoutLocationLabel";
 
@@ -133,6 +140,12 @@ export default function CheckoutPage({ onBack }: Props) {
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [phoneFromSavedOrder, setPhoneFromSavedOrder] = useState(false);
+  const [recentAddresses, setRecentAddresses] = useState<string[]>([]);
+  const [recentRecipients, setRecentRecipients] = useState<AutofillRecipient[]>([]);
+  const nameTouchedRef = useRef(false);
+  const phoneTouchedRef = useRef(false);
+  const addressTouchedRef = useRef(false);
+  const autofillHydratedRef = useRef(false);
   const [promoPreview, setPromoPreview] = useState<{
     newTotal: number;
     discount: number;
@@ -329,32 +342,84 @@ export default function CheckoutPage({ onBack }: Props) {
   }, []);
 
   useEffect(() => {
-    const uid = getTelegramWebAppUserId();
-    if (!Number.isFinite(uid) || uid <= 0) return;
+    if (autofillHydratedRef.current) return;
+    if (businessId == null || businessId <= 0) return;
+    autofillHydratedRef.current = true;
+    const telegramUser = getTelegramUser();
+    const telegramName = [telegramUser?.first_name, telegramUser?.last_name]
+      .map((part) => (typeof part === "string" ? part.trim() : ""))
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    const telegramPhoneRaw =
+      telegramUser != null &&
+      typeof (telegramUser as unknown as { phone_number?: unknown }).phone_number === "string"
+        ? (telegramUser as unknown as { phone_number?: string }).phone_number ?? null
+        : null;
+    const telegramPhone = resolveAutofillField(
+      null,
+      telegramPhoneRaw,
+    );
+    const hints = readCheckoutAutofillHints(businessId);
+    setRecentAddresses(
+      [hints.addresses.home, hints.addresses.work, hints.addresses.last, ...hints.recentAddresses]
+        .filter((x): x is string => typeof x === "string" && x.trim() !== "")
+        .slice(0, 8),
+    );
+    setRecentRecipients(hints.recentRecipients.slice(0, 8));
+
     let cancelled = false;
-    (async () => {
-      try {
-        const rows = await fetchMyOrders(uid, buildCatalogRequestParams().shop);
-        const prev = rows.find((o) => {
-          const raw = o.phone ?? o.customerPhone;
-          return raw != null && String(raw).trim() !== "";
-        });
-        const saved =
-          prev != null
-            ? String(prev.phone ?? prev.customerPhone ?? "").trim()
-            : "";
-        if (!cancelled && saved !== "") {
-          setPhone(saved);
-          setPhoneFromSavedOrder(true);
+    void (async () => {
+      const uid = getTelegramWebAppUserId();
+      let recentOrder: { name?: string | null; phone?: string | null; address?: string | null } | null =
+        null;
+      if (Number.isFinite(uid) && uid > 0) {
+        try {
+          const rows = await fetchMyOrders(uid, buildCatalogRequestParams().shop);
+          if (cancelled) return;
+          const best = rows.find(
+            (o) =>
+              resolveAutofillField(null, o.phone, o.customerPhone) !== "" ||
+              resolveAutofillField(null, o.address) !== "",
+          );
+          if (best) {
+            recentOrder = {
+              name: resolveAutofillField(
+                null,
+                (best as { customerName?: unknown }).customerName as string | null | undefined,
+                (best as { name?: unknown }).name as string | null | undefined,
+              ),
+              phone: resolveAutofillField(null, best.phone, best.customerPhone),
+              address: resolveAutofillField(null, best.address),
+            };
+          }
+        } catch {
+          /* do not block checkout */
         }
-      } catch {
-        /* не блокируем оформление */
+      }
+      if (cancelled) return;
+      const merged = resolveCheckoutAutofill({
+        explicit: { name, phone, address },
+        saved: hints.profile,
+        recentOrder: recentOrder ?? undefined,
+        telegram: { name: telegramName, phone: telegramPhone || null, address: null },
+      });
+      if (!nameTouchedRef.current && name.trim() === "" && merged.name !== "") {
+        setName(merged.name);
+      }
+      if (!phoneTouchedRef.current && phone.trim() === "" && merged.phone !== "") {
+        setPhone(merged.phone);
+        setPhoneFromSavedOrder(true);
+      }
+      if (!addressTouchedRef.current && address.trim() === "" && merged.address !== "") {
+        setAddress(merged.address);
       }
     })();
+
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [businessId, name, phone, address]);
 
   const applyPromoCode = async (): Promise<number | null> => {
     const code = cleanInput(promo);
@@ -467,6 +532,7 @@ export default function CheckoutPage({ onBack }: Props) {
   );
 
   const selectAddress = useCallback((item: NominatimSearchItem) => {
+    addressTouchedRef.current = true;
     if (addressSearchTimerRef.current) {
       clearTimeout(addressSearchTimerRef.current);
       addressSearchTimerRef.current = null;
@@ -478,6 +544,32 @@ export default function CheckoutPage({ onBack }: Props) {
     setLng(Number(item.lon));
     setAddressSuggestions([]);
   }, []);
+
+  const applyRecentAddress = useCallback((value: string) => {
+    addressTouchedRef.current = true;
+    if (addressSearchTimerRef.current) {
+      clearTimeout(addressSearchTimerRef.current);
+      addressSearchTimerRef.current = null;
+    }
+    addressSearchSeqRef.current += 1;
+    setAddressSearchLoading(false);
+    setAddressSuggestions([]);
+    setAddress(value);
+    if (fieldErrors.address) {
+      setFieldErrors((prev) => ({ ...prev, address: undefined }));
+    }
+  }, [fieldErrors.address]);
+
+  const applyRecentRecipient = useCallback((recipient: AutofillRecipient) => {
+    nameTouchedRef.current = true;
+    phoneTouchedRef.current = true;
+    setName(recipient.name);
+    setPhone(recipient.phone);
+    setPhoneFromSavedOrder(true);
+    if (fieldErrors.name || fieldErrors.phone) {
+      setFieldErrors((prev) => ({ ...prev, name: undefined, phone: undefined }));
+    }
+  }, [fieldErrors.name, fieldErrors.phone]);
 
   const getLocation = useCallback(() => {
     if (!navigator.geolocation) {
@@ -504,6 +596,7 @@ export default function CheckoutPage({ onBack }: Props) {
           try {
             const geo = await reverseGeocodeKg(nextLat, nextLng);
             if (geo.ok) {
+              addressTouchedRef.current = true;
               setAddress(geo.value.displayAddress.slice(0, 2000));
               markCustomerLocationGranted(businessId, {
                 latitude: nextLat,
@@ -668,6 +761,13 @@ export default function CheckoutPage({ onBack }: Props) {
           ? data.paymentUrl.trim()
           : null;
 
+      rememberCheckoutAutofill(businessId ?? 0, {
+        name: displayName,
+        phone: phoneTrimmed,
+        address: deliveryType === "pickup" ? null : addressClean,
+        deliveryType: deliveryType === "pickup" ? "pickup" : "delivery",
+      });
+
       if (payUrl) {
         redirecting = true;
         const resolvedBusinessId =
@@ -725,6 +825,10 @@ export default function CheckoutPage({ onBack }: Props) {
       setFinikRedirectMessage(null);
       setSubmitting(false);
       submitLockRef.current = false;
+      nameTouchedRef.current = false;
+      phoneTouchedRef.current = false;
+      addressTouchedRef.current = false;
+      autofillHydratedRef.current = false;
     };
     window.addEventListener("sf:finikPaymentPaid", onPaid as EventListener);
     return () =>
@@ -878,6 +982,7 @@ export default function CheckoutPage({ onBack }: Props) {
               placeholder={t("checkout.name")}
               value={name}
               onChange={(e) => {
+                nameTouchedRef.current = true;
                 setName(e.target.value);
                 if (fieldErrors.name) {
                   setFieldErrors((prev) => ({ ...prev, name: undefined }));
@@ -888,6 +993,20 @@ export default function CheckoutPage({ onBack }: Props) {
             {fieldErrors.name && (
               <p className="checkout-field__error">{fieldErrors.name}</p>
             )}
+            {recentRecipients.length > 0 ? (
+              <div className="checkout-autofill-row" aria-label="Недавние получатели">
+                {recentRecipients.map((recipient) => (
+                  <button
+                    key={`${recipient.phone}-${recipient.name}`}
+                    type="button"
+                    className="checkout-autofill-chip"
+                    onClick={() => applyRecentRecipient(recipient)}
+                  >
+                    {recipient.name} · {recipient.phone}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
 
           <div className="checkout-field">
@@ -900,6 +1019,7 @@ export default function CheckoutPage({ onBack }: Props) {
               placeholder="+996 XXX XXX XXX"
               value={phone}
               onChange={(e) => {
+                phoneTouchedRef.current = true;
                 setPhone(e.target.value);
                 if (phoneFromSavedOrder) setPhoneFromSavedOrder(false);
                 if (fieldErrors.phone) {
@@ -926,7 +1046,10 @@ export default function CheckoutPage({ onBack }: Props) {
                   className={fieldErrors.address ? "checkout-field--error" : ""}
                   placeholder={t("checkout.address")}
                   value={address}
-                  onChange={(e) => handleAddressChange(e.target.value)}
+                  onChange={(e) => {
+                    addressTouchedRef.current = true;
+                    handleAddressChange(e.target.value);
+                  }}
                   autoComplete="street-address"
                   aria-autocomplete="list"
                   aria-expanded={
@@ -965,6 +1088,20 @@ export default function CheckoutPage({ onBack }: Props) {
                   </div>
                 )}
               </div>
+              {recentAddresses.length > 0 ? (
+                <div className="checkout-autofill-row" aria-label="Недавние адреса">
+                  {recentAddresses.map((recentAddress) => (
+                    <button
+                      key={recentAddress}
+                      type="button"
+                      className="checkout-autofill-chip checkout-autofill-chip--address"
+                      onClick={() => applyRecentAddress(recentAddress)}
+                    >
+                      {recentAddress}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <div className="checkout-loc-actions">
                 <button
                   type="button"
@@ -994,6 +1131,7 @@ export default function CheckoutPage({ onBack }: Props) {
                     setLat={(v) => setLat(v)}
                     setLng={(v) => setLng(v)}
                     setAddress={(v) => {
+                      addressTouchedRef.current = true;
                       setAddress(v);
                       if (addressSearchTimerRef.current) {
                         clearTimeout(addressSearchTimerRef.current);

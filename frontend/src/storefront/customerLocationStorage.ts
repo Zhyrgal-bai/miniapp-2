@@ -187,7 +187,7 @@ export function loadCustomerLocation(businessId: number): CustomerLocationRecord
   if (!Number.isFinite(bid) || bid <= 0) return emptyRecord(0);
 
   try {
-    let raw = localStorage.getItem(storageKey(bid));
+    const raw = localStorage.getItem(storageKey(bid));
     if (raw == null || raw.trim() === "") return emptyRecord(bid);
     const j = JSON.parse(raw) as unknown;
     if (!isObj(j) || j.version !== 1) return emptyRecord(bid);

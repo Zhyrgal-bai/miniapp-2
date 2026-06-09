@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useBodyScrollLock } from "../../../utils/bodyScrollLock";
@@ -9,6 +9,7 @@ export type ProductQuickViewShellProps = {
   onClose: () => void;
   /** @deprecated Ambient glow removed — kept for call-site compat */
   ambientImageSrc?: string | null;
+  maxWidth?: "sm" | "md" | "lg";
   children: ReactNode;
 };
 
@@ -18,10 +19,16 @@ function portalRoot(): HTMLElement | null {
 }
 
 const MODAL_EASE = [0.22, 1, 0.36, 1] as const;
+const MODAL_MAX_WIDTH: Record<NonNullable<ProductQuickViewShellProps["maxWidth"]>, string> = {
+  sm: "640px",
+  md: "780px",
+  lg: "960px",
+};
 
 export function ProductQuickViewShell({
   open,
   onClose,
+  maxWidth = "md",
   children,
 }: ProductQuickViewShellProps): React.ReactElement | null {
   useBodyScrollLock(open);
@@ -54,25 +61,34 @@ export function ProductQuickViewShell({
             onClick={onClose}
           />
           <motion.div
-            key="px-qv-panel"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Товар"
-            className="sf-product-quick-view"
-            initial={{ opacity: 0, y: 24, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 16, scale: 0.98 }}
-            transition={{ duration: 0.32, ease: MODAL_EASE }}
+            key="px-qv-positioner"
+            className="sf-product-quick-view__positioner"
+            style={
+              {
+                ["--sf-modal-max-width" as string]: MODAL_MAX_WIDTH[maxWidth],
+              } as CSSProperties
+            }
           >
-            <button
-              type="button"
-              className="sf-product-quick-view__close"
-              aria-label="Закрыть"
-              onClick={onClose}
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Товар"
+              className="sf-product-quick-view"
+              initial={{ opacity: 0, y: 20, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 14, scale: 0.97 }}
+              transition={{ duration: 0.28, ease: MODAL_EASE }}
             >
-              ×
-            </button>
-            <div className="sf-product-quick-view__scroll">{children}</div>
+              <button
+                type="button"
+                className="sf-product-quick-view__close"
+                aria-label="Закрыть"
+                onClick={onClose}
+              >
+                ×
+              </button>
+              <div className="sf-product-quick-view__scroll">{children}</div>
+            </motion.div>
           </motion.div>
         </>
       ) : null}

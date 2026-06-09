@@ -181,6 +181,7 @@ import {
 } from "./productFeedbackService.js";
 import { maybeEmitRetentionNudges } from "./merchantRetentionService.js";
 import { buildMerchantGrowthDashboard } from "./merchantGrowthDashboardService.js";
+import { registerLifetimeOrderCreated } from "./merchantLifetimeAnalyticsService.js";
 import {
   createMerchantNotification,
   ingestStorefrontEvents,
@@ -4467,14 +4468,14 @@ app.delete("/orders/clear", async (req: Request, res: Response) => {
     const type = String(rawType ?? "all").toLowerCase();
 
     // Исторические алиасы из UI:
-    // - completed -> SHIPPED | DELIVERED (финальные успешные статусы)
+    // - completed -> CONFIRMED | SHIPPED | DELIVERED (финальные успешные статусы)
     // - rejected  -> CANCELLED (отклонён/отменён)
     const baseWhere: Prisma.OrderWhereInput = {
       businessId: merchant.businessId,
     };
     let statusFilter: Prisma.EnumOrderStatusFilter | undefined;
     if (type === "completed") {
-      statusFilter = { in: ["SHIPPED", "DELIVERED"] };
+      statusFilter = { in: ["CONFIRMED", "SHIPPED", "DELIVERED"] };
     } else if (type === "rejected") {
       statusFilter = { equals: "CANCELLED" };
     } else if (type !== "all") {
@@ -5437,6 +5438,19 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
             },
           }),
         checkoutCtx,
+      );
+
+      await runCheckoutStep(
+        "order_created",
+        businessId,
+        () =>
+          registerLifetimeOrderCreated({
+            tx,
+            businessId,
+            orderId: order.id,
+            initialStatus: order.status,
+          }),
+        { ...checkoutCtx, orderId: order.id },
       );
 
       const stockLines = order.items.map((it) => ({

@@ -31,6 +31,28 @@ describe("vertical ux contracts", () => {
     );
     expect(src.includes("resolveModalBehavior")).toBe(true);
     expect(src.includes("maxWidth={modalBehavior.maxWidth}")).toBe(true);
+    expect(src.includes("VerticalProductModalContent")).toBe(true);
+    expect(src.includes("forceGeneric={!modalV3Enabled}")).toBe(true);
+  });
+
+  it("uses centered modal shell positioner with width token", () => {
+    const tsx = read(
+      "frontend/src/components/storefront/product/ProductQuickViewShell.tsx",
+    );
+    const css = read(
+      "frontend/src/components/storefront/product/ProductQuickViewShell.css",
+    );
+    expect(tsx.includes("sf-product-quick-view__positioner")).toBe(true);
+    expect(tsx.includes("--sf-modal-max-width")).toBe(true);
+    expect(css.includes("--sf-modal-gutter")).toBe(true);
+    expect(css.includes("place-items: center")).toBe(true);
+  });
+
+  it("hydrates and persists vertical order options through autofill storage", () => {
+    const src = read("frontend/src/components/storefront/product/useProductExperience.ts");
+    expect(src.includes("resolveVerticalPresetBySchema")).toBe(true);
+    expect(src.includes("rememberVerticalPreset")).toBe(true);
+    expect(src.includes("orderOptionsSchema")).toBe(true);
   });
 
   it("uses cardHint in ProductCard rendering", () => {
@@ -60,18 +82,19 @@ describe("vertical ux contracts", () => {
     expect(src.includes("<ProductCard")).toBe(false);
   });
 
-  it("wires dedicated clothing, flowers, fastfood, coffee and electronics PDP content in ProductModalHost", () => {
-    const host = read(
-      "frontend/src/components/storefront/product/host/ProductModalHost.tsx",
+  it("wires dedicated clothing, flowers, fastfood, coffee and electronics PDP content in dispatcher", () => {
+    const contents = read(
+      "frontend/src/components/storefront/product/modal/content/VerticalModalContents.tsx",
     );
-    expect(host.includes("ClothingPdpContent")).toBe(true);
-    expect(host.includes("FlowersPdpContent")).toBe(true);
-    expect(host.includes("FastfoodPdpContent")).toBe(true);
-    expect(host.includes("CoffeePdpContent")).toBe(true);
-    expect(host.includes("ElectronicsPdpContent")).toBe(true);
-    expect(host.includes("AutopartsPdpContent")).toBe(true);
-    expect(host.includes("CosmeticsPdpContent")).toBe(true);
-    expect(host.includes("FurniturePdpContent")).toBe(true);
+    expect(contents.includes("ClothingPdpContent")).toBe(true);
+    expect(contents.includes("FlowersPdpContent")).toBe(true);
+    expect(contents.includes("FastfoodPdpContent")).toBe(true);
+    expect(contents.includes("CoffeePdpContent")).toBe(true);
+    expect(contents.includes("ElectronicsPdpContent")).toBe(true);
+    expect(contents.includes("AutopartsPdpContent")).toBe(true);
+    expect(contents.includes("CosmeticsPdpContent")).toBe(true);
+    expect(contents.includes("FurniturePdpContent")).toBe(true);
+    expect(contents.includes("VerticalProductModalContent")).toBe(true);
     expect(
       read("frontend/src/components/storefront/product/modal/content/FastfoodPdpContent.tsx").includes(
         "VerticalOrderOptionsExperience",

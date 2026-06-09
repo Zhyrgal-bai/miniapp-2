@@ -4,6 +4,7 @@ import { buildMerchantGrowth } from "./merchantGrowthService.js";
 import { assessMerchantRetention } from "./merchantRetentionService.js";
 import { referralStats } from "./merchantReferralService.js";
 import { prisma } from "./db.js";
+import { ORDER_ANALYTICS_SUCCESS_STATUSES_DB } from "../shared/orderAnalytics.js";
 
 export type GrowthMilestone = {
   id: string;
@@ -28,8 +29,6 @@ export type MerchantGrowthDashboardPayload = {
   };
 };
 
-const PAID = ["CONFIRMED", "SHIPPED", "DELIVERED"] as const;
-
 export async function buildMerchantGrowthDashboard(input: {
   businessId: number;
   rangeDays: 7 | 30 | 90;
@@ -45,7 +44,7 @@ export async function buildMerchantGrowthDashboard(input: {
       referralStats(bid),
       buildMerchantAnalytics({ businessId: bid, rangeDays }),
       prisma.order.count({
-        where: { businessId: bid, status: { in: [...PAID] } },
+        where: { businessId: bid, status: { in: [...ORDER_ANALYTICS_SUCCESS_STATUSES_DB] } },
       }),
       prisma.business.findUnique({
         where: { id: bid },

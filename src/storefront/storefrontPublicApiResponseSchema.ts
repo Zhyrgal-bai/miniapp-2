@@ -45,6 +45,8 @@ const ResolvedFeatureFlagsWireSchema = z.object({
   enableStories: z.boolean(),
   enableReviews: z.boolean(),
   enableVideo: z.boolean(),
+  enableProductModalV3: z.boolean(),
+  enableLifetimeAnalyticsV2: z.boolean(),
 });
 
 export type CategoryTreeNode = {

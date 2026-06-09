@@ -1,7 +1,24 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db.js";
+import { isOrderAnalyticsSuccessStatus } from "../shared/orderAnalytics.js";
+import { getMerchantLifetimeAnalytics } from "./merchantLifetimeAnalyticsService.js";
 
-const PAID_STATUSES = new Set<string>(["CONFIRMED", "SHIPPED", "DELIVERED"]);
+type PeriodFunnel = {
+  created: number;
+  paid: number;
+  completed: number;
+  cancelled: number;
+  paidRate: number;
+  completedRate: number;
+  cancelledRate: number;
+};
+
+type PeriodKpi = {
+  orders: number;
+  revenue: number;
+  averageOrderValue: number;
+  funnel: PeriodFunnel;
+};
 
 export type MerchantAnalyticsPayload = {
   totalOrders: number;
@@ -26,6 +43,21 @@ export type MerchantAnalyticsPayload = {
   wau: number;
   dailySeries: Array<{ day: string; revenue: number; orders: number; visitors: number }>;
   topSku: Array<{ productId: number | null; name: string; quantity: number; revenue: number }>;
+  topCategories: Array<{
+    categoryId: number | null;
+    name: string;
+    quantity: number;
+    revenue: number;
+  }>;
+  periods: {
+    today: PeriodKpi;
+    week: PeriodKpi;
+    month: PeriodKpi;
+    lifetime: PeriodKpi;
+  };
+  freeOrdersUsed: number;
+  freeOrdersRemaining: number;
+  subscriptionConversionRate: number | null;
   support: {
     openTickets: number;
     pendingMerchant: number;
@@ -45,6 +77,41 @@ function dayKey(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+function toPeriodFunnel(orders: Array<{ status: string }>): PeriodFunnel {
+  const created = orders.length;
+  const paid = orders.filter((o) => isOrderAnalyticsSuccessStatus(o.status)).length;
+  const completed = orders.filter((o) => o.status === "DELIVERED").length;
+  const cancelled = orders.filter((o) => o.status === "CANCELLED").length;
+  const denom = Math.max(created, 1);
+  const toPct = (value: number) => Math.round((value / denom) * 1000) / 10;
+  return {
+    created,
+    paid,
+    completed,
+    cancelled,
+    paidRate: toPct(paid),
+    completedRate: toPct(completed),
+    cancelledRate: toPct(cancelled),
+  };
+}
+
+function toPeriodKpi(
+  orders: Array<{ status: string; total: number }>,
+  revenueOverride?: number,
+): PeriodKpi {
+  const paidOrders = orders.filter((o) => isOrderAnalyticsSuccessStatus(o.status));
+  const revenue =
+    revenueOverride ?? paidOrders.reduce((sum, order) => sum + order.total, 0);
+  const averageOrderValue =
+    paidOrders.length > 0 ? Math.round(revenue / paidOrders.length) : 0;
+  return {
+    orders: paidOrders.length,
+    revenue,
+    averageOrderValue,
+    funnel: toPeriodFunnel(orders),
+  };
+}
+
 export async function buildMerchantAnalytics(input: {
   businessId: number;
   rangeDays: 7 | 30 | 90;
@@ -52,11 +119,17 @@ export async function buildMerchantAnalytics(input: {
   const since = new Date(Date.now() - input.rangeDays * 86400000);
   const bid = input.businessId;
 
-  const [orders, ordersInRange, eventsInRange, orderItemsInRange, supportCounts, opsCounts] =
+  const [orders, ordersInRange, eventsInRange, orderItemsInRange, supportCounts, opsCounts, business, lifetime] =
     await Promise.all([
       prisma.order.findMany({
         where: { businessId: bid },
-        select: { id: true, status: true, total: true, buyerUserId: true },
+        select: {
+          id: true,
+          status: true,
+          total: true,
+          buyerUserId: true,
+          createdAt: true,
+        },
       }),
       prisma.order.findMany({
         where: { businessId: bid, createdAt: { gte: since } },
@@ -76,9 +149,23 @@ export async function buildMerchantAnalytics(input: {
         where: {
           businessId: bid,
           productId: { not: null },
-          order: { createdAt: { gte: since } },
+          order: {
+            createdAt: { gte: since },
+            status: { in: ["CONFIRMED", "SHIPPED", "DELIVERED"] },
+          },
         },
-        select: { productId: true, name: true, quantity: true, price: true },
+        select: {
+          productId: true,
+          name: true,
+          quantity: true,
+          price: true,
+          product: {
+            select: {
+              categoryId: true,
+              category: { select: { name: true } },
+            },
+          },
+        },
       }),
       Promise.all([
         prisma.supportTicket.count({
@@ -125,10 +212,21 @@ export async function buildMerchantAnalytics(input: {
           where: { businessId: bid, available: { lte: 3, gt: 0 } },
         }),
       ]),
+      prisma.business.findUnique({
+        where: { id: bid },
+        select: {
+          freeOrdersUsed: true,
+          freeOrdersLimit: true,
+          subscriptionStatus: true,
+        },
+      }),
+      getMerchantLifetimeAnalytics(bid),
     ]);
 
-  const paidOrders = orders.filter((o) => PAID_STATUSES.has(o.status));
-  const totalRevenue = paidOrders.reduce((s, o) => s + o.total, 0);
+  const paidOrders = orders.filter((o) => isOrderAnalyticsSuccessStatus(o.status));
+  const computedLifetimeRevenue = paidOrders.reduce((s, o) => s + o.total, 0);
+  const lifetimeSuccessfulOrders = Math.max(lifetime.successfulOrders, paidOrders.length);
+  const totalRevenue = Math.max(lifetime.successfulRevenue, computedLifetimeRevenue);
   const accepted = orders.filter((o) => o.status === "ACCEPTED").length;
   const pending = orders.filter((o) => o.status === "PAID_PENDING").length;
   const shipped = orders.filter((o) => o.status === "SHIPPED").length;
@@ -139,7 +237,7 @@ export async function buildMerchantAnalytics(input: {
     byStatus[o.status] = (byStatus[o.status] ?? 0) + 1;
   }
 
-  const paidInRange = ordersInRange.filter((o) => PAID_STATUSES.has(o.status));
+  const paidInRange = ordersInRange.filter((o) => isOrderAnalyticsSuccessStatus(o.status));
   const revenueInRange = paidInRange.reduce((s, o) => s + o.total, 0);
   const paidOrdersInRange = paidInRange.length;
   const averageOrderValue =
@@ -155,6 +253,20 @@ export async function buildMerchantAnalytics(input: {
       ? Math.round((ordersInRange.length / uniqueVisitors.size) * 1000) / 10
       : null;
 
+  const now = new Date();
+  const todaySince = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const weekSince = new Date(now.getTime() - 7 * 86400000);
+  const monthSince = new Date(now.getTime() - 30 * 86400000);
+  const todayOrders = orders.filter((o) => o.createdAt >= todaySince);
+  const weekOrders = orders.filter((o) => o.createdAt >= weekSince);
+  const monthOrders = orders.filter((o) => o.createdAt >= monthSince);
+  const periods = {
+    today: toPeriodKpi(todayOrders),
+    week: toPeriodKpi(weekOrders),
+    month: toPeriodKpi(monthOrders),
+    lifetime: toPeriodKpi(orders, totalRevenue),
+  };
+
   const buyerCounts = new Map<number, number>();
   for (const o of paidOrders) {
     if (o.buyerUserId == null) continue;
@@ -162,7 +274,6 @@ export async function buildMerchantAnalytics(input: {
   }
   const repeatCustomers = [...buyerCounts.values()].filter((c) => c > 1).length;
 
-  const now = new Date();
   const dauSince = new Date(now.getTime() - 86400000);
   const wauSince = new Date(now.getTime() - 7 * 86400000);
   const dauKeys = new Set<string>();
@@ -185,7 +296,7 @@ export async function buildMerchantAnalytics(input: {
       visitors: new Set<string>(),
     };
     row.orders += 1;
-    if (PAID_STATUSES.has(o.status)) row.revenue += o.total;
+    if (isOrderAnalyticsSuccessStatus(o.status)) row.revenue += o.total;
     dayMap.set(key, row);
   }
   for (const e of storeViews) {
@@ -233,6 +344,33 @@ export async function buildMerchantAnalytics(input: {
       revenue: v.revenue,
     }));
 
+  const categoryMap = new Map<
+    number,
+    { name: string; quantity: number; revenue: number }
+  >();
+  for (const item of orderItemsInRange) {
+    const categoryId = item.product?.categoryId;
+    if (categoryId == null) continue;
+    const categoryName = item.product?.category?.name ?? "Без категории";
+    const current = categoryMap.get(categoryId) ?? {
+      name: categoryName,
+      quantity: 0,
+      revenue: 0,
+    };
+    current.quantity += item.quantity;
+    current.revenue += item.quantity * item.price;
+    categoryMap.set(categoryId, current);
+  }
+  const topCategories = [...categoryMap.entries()]
+    .sort((a, b) => b[1].quantity - a[1].quantity)
+    .slice(0, 10)
+    .map(([categoryId, row]) => ({
+      categoryId,
+      name: row.name,
+      quantity: row.quantity,
+      revenue: row.revenue,
+    }));
+
   const [openTickets, pendingMerchant, resolvedInRange, openReturns] =
     supportCounts;
   const [
@@ -242,9 +380,20 @@ export async function buildMerchantAnalytics(input: {
     returnRequestsInRange,
     lowStockSkus,
   ] = opsCounts;
+  const freeOrdersUsed = Number(business?.freeOrdersUsed ?? 0);
+  const freeOrdersLimit = Number(business?.freeOrdersLimit ?? 5);
+  const freeOrdersRemaining = Math.max(0, freeOrdersLimit - freeOrdersUsed);
+  const subscriptionConversionRate =
+    freeOrdersUsed > 0
+      ? ["ACTIVE", "EXPIRING", "PAST_DUE", "GRACE"].includes(
+          String(business?.subscriptionStatus ?? ""),
+        )
+        ? 100
+        : 0
+      : null;
 
   return {
-    totalOrders: orders.length,
+    totalOrders: lifetimeSuccessfulOrders,
     totalRevenue,
     accepted,
     pending,
@@ -266,6 +415,11 @@ export async function buildMerchantAnalytics(input: {
     wau: wauKeys.size,
     dailySeries,
     topSku,
+    topCategories,
+    periods,
+    freeOrdersUsed,
+    freeOrdersRemaining,
+    subscriptionConversionRate,
     support: {
       openTickets,
       pendingMerchant,

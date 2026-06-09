@@ -124,6 +124,12 @@ export function TableMapCanvas({
     [mode, readNorm],
   );
 
+  const endDragHandlerRef = useRef<() => void>(() => {});
+
+  const stableEndDrag = useCallback(() => {
+    endDragHandlerRef.current();
+  }, []);
+
   const endDrag = useCallback(() => {
     if (dragRef.current) {
       commitDrag();
@@ -131,9 +137,11 @@ export function TableMapCanvas({
     dragRef.current = null;
     setDraggingId(null);
     window.removeEventListener("pointermove", onPointerMove);
-    window.removeEventListener("pointerup", endDrag);
-    window.removeEventListener("pointercancel", endDrag);
-  }, [commitDrag, onPointerMove]);
+    window.removeEventListener("pointerup", stableEndDrag);
+    window.removeEventListener("pointercancel", stableEndDrag);
+  }, [commitDrag, onPointerMove, stableEndDrag]);
+
+  endDragHandlerRef.current = endDrag;
 
   useEffect(() => () => endDrag(), [endDrag]);
 
@@ -169,8 +177,8 @@ export function TableMapCanvas({
     }
 
     window.addEventListener("pointermove", onPointerMove, { passive: false });
-    window.addEventListener("pointerup", endDrag);
-    window.addEventListener("pointercancel", endDrag);
+    window.addEventListener("pointerup", stableEndDrag);
+    window.addEventListener("pointercancel", stableEndDrag);
   };
 
   const orderedTables = useMemo(() => {

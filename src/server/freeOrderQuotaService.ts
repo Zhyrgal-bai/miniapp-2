@@ -5,8 +5,9 @@ import {
   resolveFreeOrdersLimit,
 } from "../shared/freeUsageModel.js";
 import { plainBotTokenFromStored } from "./businessBotToken.js";
+import { ORDER_ANALYTICS_SUCCESS_STATUSES_DB } from "../shared/orderAnalytics.js";
 
-const PAID_ORDER_STATUSES = ["CONFIRMED", "SHIPPED", "DELIVERED"] as const;
+const PAID_ORDER_STATUSES = [...ORDER_ANALYTICS_SUCCESS_STATUSES_DB] as const;
 
 function freeQuotaMilestoneMessage(used: number, limit: number): string {
   const safeLimit = Math.max(1, limit);

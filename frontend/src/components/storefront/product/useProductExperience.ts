@@ -20,6 +20,10 @@ import {
   productRequiresVariantPicker,
   resolveInstantAddLine,
 } from "../../../commerce/productVariantPolicy";
+import {
+  rememberVerticalPreset,
+  resolveVerticalPresetBySchema,
+} from "../../../storefront/customerAutofillStorage";
 
 export type ProductExperienceState = {
   display: Product;
@@ -57,8 +61,15 @@ export function useProductExperience(opts: {
   businessId: number;
   businessType?: string | null;
   merchantConfig?: Record<string, unknown> | null;
+  orderOptionsSchema?: Record<string, unknown> | null;
 }): ProductExperienceState {
-  const { product, businessId, businessType, merchantConfig } = opts;
+  const {
+    product,
+    businessId,
+    businessType,
+    merchantConfig,
+    orderOptionsSchema = null,
+  } = opts;
   const [resolved, setResolved] = useState<Product | null>(null);
   const [pickQty, setPickQtyState] = useState(1);
   const [selectionHint, setSelectionHint] = useState<string | null>(null);
@@ -69,10 +80,15 @@ export function useProductExperience(opts: {
   const loadingDetail = resolved == null && product.id != null;
 
   useEffect(() => {
+    const nextOrderOptions = resolveVerticalPresetBySchema(
+      businessId,
+      businessType ?? product.businessType ?? null,
+      orderOptionsSchema,
+    );
     setResolved(null);
     setPickQtyState(1);
     setSelectionHint(null);
-    setOrderOptions({});
+    setOrderOptions(nextOrderOptions);
     const id = product.id;
     if (!Number.isFinite(id) || !id) return;
     let cancelled = false;
@@ -87,7 +103,7 @@ export function useProductExperience(opts: {
     return () => {
       cancelled = true;
     };
-  }, [product.id]);
+  }, [product.id, businessId, businessType, product.businessType, orderOptionsSchema]);
 
   const resolvedBusinessType =
     businessType ?? display.businessType ?? null;
@@ -289,6 +305,15 @@ export function useProductExperience(opts: {
   }, []);
 
   const clearSelectionHint = useCallback(() => setSelectionHint(null), []);
+
+  useEffect(() => {
+    if (Object.keys(orderOptions).length === 0) return;
+    rememberVerticalPreset(
+      businessId,
+      resolvedBusinessType ?? display.businessType ?? null,
+      orderOptions,
+    );
+  }, [businessId, resolvedBusinessType, display.businessType, orderOptions]);
 
   return {
     display,

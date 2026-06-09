@@ -3,15 +3,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
 type Props = {
   images: string[];
   discountPct: number;
+  resetKey?: string | number | null;
 };
 
-export function PdpGallery({ images, discountPct }: Props): React.ReactElement {
+export function PdpGallery({
+  images,
+  discountPct,
+  resetKey = null,
+}: Props): React.ReactElement {
   const [galleryIndex, setGalleryIndex] = useState(0);
   const touchStartX = useRef<number | null>(null);
 
   useEffect(() => {
     setGalleryIndex(0);
-  }, [images]);
+  }, [images, resetKey]);
 
   useEffect(() => {
     setGalleryIndex((i) => (images.length === 0 ? 0 : Math.min(i, images.length - 1)));
@@ -35,12 +40,33 @@ export function PdpGallery({ images, discountPct }: Props): React.ReactElement {
     [images.length],
   );
 
+  const handleTouchCancel = useCallback(() => {
+    touchStartX.current = null;
+  }, []);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLElement>) => {
+      if (images.length <= 1) return;
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        setGalleryIndex((i) => Math.min(i + 1, images.length - 1));
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setGalleryIndex((i) => Math.max(i - 1, 0));
+      }
+    },
+    [images.length],
+  );
+
   return (
     <section
       className="px-gallery"
       aria-label="Фото товара"
+      tabIndex={images.length > 1 ? 0 : -1}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
+      onKeyDown={handleKeyDown}
     >
       {images.length > 0 ? (
         <div

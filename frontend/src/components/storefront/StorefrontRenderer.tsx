@@ -123,6 +123,13 @@ export type ResolvedStorefrontPayload = {
   deliveryZones?: PublicStoreAvailability["deliveryZones"];
   businessType: string;
   templateId: string | null;
+  featureFlags?: {
+    enableStories?: boolean;
+    enableReviews?: boolean;
+    enableVideo?: boolean;
+    enableProductModalV3?: boolean;
+    enableLifetimeAnalyticsV2?: boolean;
+  };
   storefrontConfigVersion: number;
   sections: ResolvedStorefrontSection[];
   storefrontHeaderConfig?: Record<string, unknown>;
@@ -721,6 +728,7 @@ export function StorefrontRenderer(props: {
           businessId={props.payload.businessId}
           businessType={props.payload.businessType ?? undefined}
           templateDescriptor={props.payload.templateDescriptor ?? null}
+          modalV3Enabled={props.payload.featureFlags?.enableProductModalV3 !== false}
           catalogProducts={catalog ?? []}
           onClose={closeProduct}
           onSelectProduct={openProduct}

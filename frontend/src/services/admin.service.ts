@@ -177,6 +177,73 @@ export type AdminAnalytics = {
     quantity: number;
     revenue?: number;
   }>;
+  topCategories?: Array<{
+    categoryId: number | null;
+    name: string;
+    quantity: number;
+    revenue?: number;
+  }>;
+  periods?: {
+    today: {
+      orders: number;
+      revenue: number;
+      averageOrderValue: number;
+      funnel: {
+        created: number;
+        paid: number;
+        completed: number;
+        cancelled: number;
+        paidRate: number;
+        completedRate: number;
+        cancelledRate: number;
+      };
+    };
+    week: {
+      orders: number;
+      revenue: number;
+      averageOrderValue: number;
+      funnel: {
+        created: number;
+        paid: number;
+        completed: number;
+        cancelled: number;
+        paidRate: number;
+        completedRate: number;
+        cancelledRate: number;
+      };
+    };
+    month: {
+      orders: number;
+      revenue: number;
+      averageOrderValue: number;
+      funnel: {
+        created: number;
+        paid: number;
+        completed: number;
+        cancelled: number;
+        paidRate: number;
+        completedRate: number;
+        cancelledRate: number;
+      };
+    };
+    lifetime: {
+      orders: number;
+      revenue: number;
+      averageOrderValue: number;
+      funnel: {
+        created: number;
+        paid: number;
+        completed: number;
+        cancelled: number;
+        paidRate: number;
+        completedRate: number;
+        cancelledRate: number;
+      };
+    };
+  };
+  freeOrdersUsed?: number;
+  freeOrdersRemaining?: number;
+  subscriptionConversionRate?: number | null;
   support?: {
     openTickets: number;
     pendingMerchant: number;

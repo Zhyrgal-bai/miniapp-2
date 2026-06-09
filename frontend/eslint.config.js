@@ -23,6 +23,8 @@ export default defineConfig([
       // React 19 / flat config: слишком строгие для обычных паттернов (сброс state по prop, sync с URL).
       'react-hooks/set-state-in-effect': 'off',
       'react-hooks/refs': 'off',
+      'react-hooks/preserve-manual-memoization': 'off',
+      'react-refresh/only-export-components': 'off',
     },
   },
 ])

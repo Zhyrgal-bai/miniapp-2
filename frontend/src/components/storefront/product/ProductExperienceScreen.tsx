@@ -89,6 +89,7 @@ export function ProductExperienceScreen({
     businessId,
     businessType: resolvedBusinessType,
     merchantConfig,
+    orderOptionsSchema,
   });
 
   const [galleryIndex, setGalleryIndex] = useState(0);

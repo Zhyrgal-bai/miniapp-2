@@ -3,6 +3,8 @@
  * Not a DB enum — presentation + eligibility layer.
  */
 
+import { isOrderAnalyticsSuccessStatus } from "./orderAnalytics.js";
+
 export type OrderCommercePhase =
   | "BEFORE_PAYMENT"
   | "PAID_IN_FULFILLMENT"
@@ -10,7 +12,6 @@ export type OrderCommercePhase =
   | "DELIVERED"
   | "CANCELLED";
 
-const PAID_STATUSES = new Set(["CONFIRMED", "SHIPPED", "DELIVERED"]);
 const UNPAID_STATUSES = new Set(["NEW", "ACCEPTED", "PAID_PENDING"]);
 
 export function orderCommercePhase(status: string): OrderCommercePhase {
@@ -24,7 +25,7 @@ export function orderCommercePhase(status: string): OrderCommercePhase {
 }
 
 export function orderIsPaid(status: string): boolean {
-  return PAID_STATUSES.has(String(status ?? "").trim().toUpperCase());
+  return isOrderAnalyticsSuccessStatus(status);
 }
 
 export type CustomerActionKind =

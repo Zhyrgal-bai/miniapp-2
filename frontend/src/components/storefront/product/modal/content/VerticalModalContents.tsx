@@ -3,11 +3,24 @@ import {
   ProductExperienceScreen,
   type ProductExperienceScreenProps,
 } from "../../ProductExperienceScreen";
+import { ClothingPdpContent } from "./ClothingPdpContent";
+import { FlowersPdpContent } from "./FlowersPdpContent";
+import { FastfoodPdpContent } from "./FastfoodPdpContent";
+import { CoffeePdpContent } from "./CoffeePdpContent";
+import { ElectronicsPdpContent } from "./ElectronicsPdpContent";
+import { AutopartsPdpContent } from "./AutopartsPdpContent";
+import { CosmeticsPdpContent } from "./CosmeticsPdpContent";
+import { FurniturePdpContent } from "./FurniturePdpContent";
 
 type BaseProps = Omit<
   ProductExperienceScreenProps,
   "quickView" | "heroFacts" | "noticeText" | "addLabelOverride" | "layoutId"
 > & { product: Product };
+
+type VerticalProductModalContentProps = BaseProps & {
+  rendererId: "product-experience-v2" | "generic-v2";
+  forceGeneric?: boolean;
+};
 
 function withQuickView(
   props: BaseProps,
@@ -37,12 +50,36 @@ export function GenericProductModalContent(props: BaseProps): React.ReactElement
   return withQuickView(props, { layoutId: "generic" });
 }
 
-export { ClothingPdpContent as ClothingProductModalContent } from "./ClothingPdpContent";
-export { FlowersPdpContent as FlowersProductModalContent } from "./FlowersPdpContent";
-export { FastfoodPdpContent as FastfoodProductModalContent } from "./FastfoodPdpContent";
-export { CoffeePdpContent as CoffeeProductModalContent } from "./CoffeePdpContent";
-export { ElectronicsPdpContent as ElectronicsProductModalContent } from "./ElectronicsPdpContent";
-export { AutopartsPdpContent as AutopartsProductModalContent } from "./AutopartsPdpContent";
-export { CosmeticsPdpContent as CosmeticsProductModalContent } from "./CosmeticsPdpContent";
-export { FurniturePdpContent as FurnitureProductModalContent } from "./FurniturePdpContent";
+function normalizeBusinessType(props: BaseProps): string {
+  return String(props.businessType ?? props.product.businessType ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+export function VerticalProductModalContent(
+  props: VerticalProductModalContentProps,
+): React.ReactElement {
+  if (props.forceGeneric || props.rendererId === "generic-v2") {
+    return <GenericProductModalContent {...props} />;
+  }
+  const vertical = normalizeBusinessType(props);
+  if (vertical === "clothing") return <ClothingPdpContent {...props} />;
+  if (vertical === "flowers") return <FlowersPdpContent {...props} />;
+  if (vertical === "coffee") return <CoffeePdpContent {...props} />;
+  if (vertical === "fastfood") return <FastfoodPdpContent {...props} />;
+  if (vertical === "electronics") return <ElectronicsPdpContent {...props} />;
+  if (vertical === "autoparts") return <AutopartsPdpContent {...props} />;
+  if (vertical === "cosmetics") return <CosmeticsPdpContent {...props} />;
+  if (vertical === "furniture") return <FurniturePdpContent {...props} />;
+  return <GenericProductModalContent {...props} />;
+}
+
+export { ClothingPdpContent as ClothingProductModalContent };
+export { FlowersPdpContent as FlowersProductModalContent };
+export { FastfoodPdpContent as FastfoodProductModalContent };
+export { CoffeePdpContent as CoffeeProductModalContent };
+export { ElectronicsPdpContent as ElectronicsProductModalContent };
+export { AutopartsPdpContent as AutopartsProductModalContent };
+export { CosmeticsPdpContent as CosmeticsProductModalContent };
+export { FurniturePdpContent as FurnitureProductModalContent };
 

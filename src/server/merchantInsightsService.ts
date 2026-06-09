@@ -2,6 +2,7 @@ import type { OrderStatus } from "@prisma/client";
 import { buildMerchantAnalytics } from "./merchantAnalyticsService.js";
 import { prisma } from "./db.js";
 import { isFinikCredentialsReady } from "../shared/finikReady.js";
+import { ORDER_ANALYTICS_SUCCESS_STATUSES_DB } from "../shared/orderAnalytics.js";
 
 export type MerchantInsightSeverity = "info" | "success" | "warning";
 
@@ -20,7 +21,7 @@ export type MerchantInsightsPayload = {
   generatedAt: string;
 };
 
-const PAID: OrderStatus[] = ["CONFIRMED", "SHIPPED", "DELIVERED"];
+const PAID: OrderStatus[] = [...ORDER_ANALYTICS_SUCCESS_STATUSES_DB];
 
 export async function buildMerchantInsights(input: {
   businessId: number;

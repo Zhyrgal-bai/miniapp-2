@@ -9,6 +9,7 @@ import {
 } from "./inventoryService.js";
 import { syncDeliveryStageForOrderStatus } from "./deliveryService.js";
 import { prisma } from "./db.js";
+import { applyLifetimeStatusTransition } from "./merchantLifetimeAnalyticsService.js";
 
 const PRE_PAID = new Set<string>(["NEW", "ACCEPTED", "PAID_PENDING"]);
 
@@ -20,7 +21,7 @@ export async function onOrderStatusChanged(
   const lines = await loadOrderLinesForStock(orderId);
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    select: { businessId: true },
+    select: { businessId: true, total: true },
   });
   if (!order) return;
 
@@ -40,6 +41,14 @@ export async function onOrderStatusChanged(
         await restoreShippedOrderStock(tx, order.businessId, orderId, lines);
       }
     }
+    await applyLifetimeStatusTransition({
+      tx,
+      businessId: order.businessId,
+      orderId,
+      from,
+      to,
+      total: order.total,
+    });
   });
 
   if (to === "SHIPPED" || to === "DELIVERED" || to === "CONFIRMED") {
@@ -47,15 +56,26 @@ export async function onOrderStatusChanged(
   }
 }
 
-export async function onOrderPaidConfirmed(orderId: number): Promise<void> {
+export async function onOrderPaidConfirmed(
+  orderId: number,
+  previousStatus?: OrderStatus,
+): Promise<void> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    select: { businessId: true, status: true },
+    select: { businessId: true, status: true, total: true },
   });
   if (!order) return;
   const lines = await loadOrderLinesForStock(orderId);
   await prisma.$transaction(async (tx) => {
     await commitPaidOrderStock(tx, order.businessId, orderId, lines);
+    await applyLifetimeStatusTransition({
+      tx,
+      businessId: order.businessId,
+      orderId,
+      from: previousStatus ?? order.status,
+      to: "CONFIRMED",
+      total: order.total,
+    });
   });
   await syncDeliveryStageForOrderStatus(orderId, "CONFIRMED");
   const { incrementFreeOrderQuotaOnPaid } = await import(

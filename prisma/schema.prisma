@@ -180,6 +180,8 @@ model Business {
   paymentRequests PaymentRequest[]
   dailyOrderCounters BusinessDailyOrderCounter[]
   freeOrderQuotaEvents FreeOrderQuotaEvent[]
+  merchantLifetimeAnalytics MerchantLifetimeAnalytics?
+  lifetimeOrderStates MerchantLifetimeOrderState[]
 
   /// Платежи Finik только за SaaS-подписку (не заказы витрины).
   subscriptionFinikPayments SubscriptionFinikPayment[]
@@ -690,6 +692,36 @@ model FreeOrderQuotaEvent {
   businessId Int
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now())
+
+  @@index([businessId])
+}
+
+/// Phase 14: immutable merchant lifetime analytics (survives order history cleanup).
+model MerchantLifetimeAnalytics {
+  businessId Int      @id
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  createdOrders    Int @default(0)
+  successfulOrders Int @default(0)
+  successfulRevenue Int @default(0)
+  completedOrders  Int @default(0)
+  cancelledOrders  Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Per-order lifetime state (idempotent status transitions).
+model MerchantLifetimeOrderState {
+  id         Int      @id @default(autoincrement())
+  orderId    Int      @unique
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  status        OrderStatus
+  countedRevenue Int @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([businessId])
 }

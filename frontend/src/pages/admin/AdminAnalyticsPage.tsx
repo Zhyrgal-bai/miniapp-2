@@ -166,6 +166,50 @@ export default function AdminAnalyticsPage() {
             </div>
           </div>
 
+          {data.periods ? (
+            <section className="admin-dash-section">
+              <h2 className="admin-dash-section__title">Today / Week / Month / Lifetime</h2>
+              <div className="admin-kpi-grid">
+                <div className="admin-kpi-card">
+                  <span className="admin-kpi-card__label">Сегодня</span>
+                  <span className="admin-kpi-card__value">
+                    {data.periods.today.orders} / {data.periods.today.revenue} сом
+                  </span>
+                </div>
+                <div className="admin-kpi-card">
+                  <span className="admin-kpi-card__label">Неделя</span>
+                  <span className="admin-kpi-card__value">
+                    {data.periods.week.orders} / {data.periods.week.revenue} сом
+                  </span>
+                </div>
+                <div className="admin-kpi-card">
+                  <span className="admin-kpi-card__label">Месяц</span>
+                  <span className="admin-kpi-card__value">
+                    {data.periods.month.orders} / {data.periods.month.revenue} сом
+                  </span>
+                </div>
+                <div className="admin-kpi-card">
+                  <span className="admin-kpi-card__label">Lifetime</span>
+                  <span className="admin-kpi-card__value">
+                    {data.periods.lifetime.orders} / {data.periods.lifetime.revenue} сом
+                  </span>
+                </div>
+                <div className="admin-kpi-card">
+                  <span className="admin-kpi-card__label">Free quota</span>
+                  <span className="admin-kpi-card__value">
+                    {data.freeOrdersUsed ?? 0} / {data.freeOrdersRemaining ?? 0}
+                  </span>
+                </div>
+                <div className="admin-kpi-card">
+                  <span className="admin-kpi-card__label">Subscription conversion</span>
+                  <span className="admin-kpi-card__value">
+                    {fmtPct(data.subscriptionConversionRate)}
+                  </span>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
           {revenueChart && revenueChart.length > 0 ? (
             <section className="admin-dash-section">
               <h2 className="admin-dash-section__title">Выручка по дням</h2>
@@ -322,6 +366,60 @@ export default function AdminAnalyticsPage() {
                 ))}
             </div>
           </section>
+
+          {data.periods?.lifetime?.funnel ? (
+            <section className="admin-dash-section">
+              <h2 className="admin-dash-section__title">Conversion funnel (lifetime)</h2>
+              <div className="admin-kpi-grid">
+                <div className="admin-kpi-card">
+                  <span className="admin-kpi-card__label">Created</span>
+                  <span className="admin-kpi-card__value">
+                    {data.periods.lifetime.funnel.created}
+                  </span>
+                </div>
+                <div className="admin-kpi-card">
+                  <span className="admin-kpi-card__label">Paid</span>
+                  <span className="admin-kpi-card__value">
+                    {data.periods.lifetime.funnel.paid} ({fmtPct(data.periods.lifetime.funnel.paidRate)})
+                  </span>
+                </div>
+                <div className="admin-kpi-card">
+                  <span className="admin-kpi-card__label">Completed</span>
+                  <span className="admin-kpi-card__value">
+                    {data.periods.lifetime.funnel.completed} ({fmtPct(data.periods.lifetime.funnel.completedRate)})
+                  </span>
+                </div>
+                <div className="admin-kpi-card">
+                  <span className="admin-kpi-card__label">Cancelled</span>
+                  <span className="admin-kpi-card__value">
+                    {data.periods.lifetime.funnel.cancelled} ({fmtPct(data.periods.lifetime.funnel.cancelledRate)})
+                  </span>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          {data.topCategories && data.topCategories.length > 0 ? (
+            <section className="admin-dash-section">
+              <h2 className="admin-dash-section__title">Top categories</h2>
+              <div className="admin-analytics-top">
+                {data.topCategories.map((row, i) => (
+                  <div
+                    key={`${row.categoryId ?? i}-${row.name}`}
+                    className="admin-analytics-top__row"
+                  >
+                    <span>{row.name}</span>
+                    <strong>
+                      {row.quantity} шт.
+                      {typeof row.revenue === "number" && row.revenue > 0
+                        ? ` · ${row.revenue} сом`
+                        : ""}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
         </>
       )}
 

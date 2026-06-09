@@ -168,6 +168,32 @@
   color: #e53935;
 }
 
+.checkout-autofill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.checkout-autofill-chip {
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 60%, transparent);
+  background: color-mix(in srgb, var(--sf-color-surfaceAlt, var(--sf-color-surface)) 86%, transparent);
+  color: color-mix(in srgb, var(--sf-color-text) 90%, transparent);
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.checkout-autofill-chip--address {
+  border-radius: 10px;
+}
+
 .checkout-field input,
 .checkout-field select,
 .checkout-field textarea {

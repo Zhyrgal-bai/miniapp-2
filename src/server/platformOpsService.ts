@@ -1,6 +1,7 @@
 import { prisma } from "./db.js";
 import { SubscriptionStatus } from "@prisma/client";
 import { canAcceptCustomerOrders } from "./subscriptionAccess.js";
+import { ORDER_ANALYTICS_SUCCESS_STATUSES_DB } from "../shared/orderAnalytics.js";
 
 export type PlatformOpsSummary = {
   generatedAt: string;
@@ -9,6 +10,8 @@ export type PlatformOpsSummary = {
     blocked: number;
     subscriptionExpired: number;
     quotaExhausted: number;
+    quotaNearLimit: number;
+    quotaHealthy: number;
     finikNotConfigured: number;
   };
   orders: {
@@ -90,7 +93,7 @@ export async function buildPlatformOpsSummary(): Promise<PlatformOpsSummary> {
     }),
     prisma.order.count({
       where: {
-        status: { in: ["CONFIRMED", "SHIPPED", "DELIVERED"] },
+        status: { in: [...ORDER_ANALYTICS_SUCCESS_STATUSES_DB] },
         updatedAt: { gte: since24h },
       },
     }),
@@ -104,11 +107,16 @@ export async function buildPlatformOpsSummary(): Promise<PlatformOpsSummary> {
 
   let subscriptionExpired = 0;
   let finikNotConfigured = 0;
+  let quotaNearLimit = 0;
+  let quotaHealthy = 0;
   for (const b of businesses) {
     if (!canAcceptCustomerOrders(b, now)) subscriptionExpired += 1;
     const finikOk =
       Boolean(b.finikApiKey?.trim()) && Boolean(b.finikAccountId?.trim());
     if (!finikOk) finikNotConfigured += 1;
+    const remaining = Math.max(0, Number(b.freeOrdersLimit ?? 5) - Number(b.freeOrdersUsed ?? 0));
+    if (String(b.subscriptionStatus) === "FREE" && remaining <= 1) quotaNearLimit += 1;
+    if (String(b.subscriptionStatus) === "FREE" && remaining > 1) quotaHealthy += 1;
   }
 
   const alerts: string[] = [];
@@ -124,6 +132,9 @@ export async function buildPlatformOpsSummary(): Promise<PlatformOpsSummary> {
   if (quotaExhaustedStores > 0) {
     alerts.push(`stores_quota_exhausted:${quotaExhaustedStores}`);
   }
+  if (quotaNearLimit > 0) {
+    alerts.push(`stores_quota_near_limit:${quotaNearLimit}`);
+  }
 
   return {
     generatedAt: now.toISOString(),
@@ -132,6 +143,8 @@ export async function buildPlatformOpsSummary(): Promise<PlatformOpsSummary> {
       blocked: blockedStores,
       subscriptionExpired,
       quotaExhausted: quotaExhaustedStores,
+      quotaNearLimit,
+      quotaHealthy,
       finikNotConfigured,
     },
     orders: {

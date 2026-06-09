@@ -4,16 +4,8 @@ import {
   resolveModalRendererId,
 } from "../../../../storefront/templates/templateRegistry";
 import { ProductModalFrameV2 } from "../modal/ProductModalFrameV2";
-import { ClothingPdpContent } from "../modal/content/ClothingPdpContent";
-import { FlowersPdpContent } from "../modal/content/FlowersPdpContent";
-import { FastfoodPdpContent } from "../modal/content/FastfoodPdpContent";
-import { CoffeePdpContent } from "../modal/content/CoffeePdpContent";
-import { ElectronicsPdpContent } from "../modal/content/ElectronicsPdpContent";
-import { AutopartsPdpContent } from "../modal/content/AutopartsPdpContent";
-import { CosmeticsPdpContent } from "../modal/content/CosmeticsPdpContent";
-import { FurniturePdpContent } from "../modal/content/FurniturePdpContent";
 import {
-  GenericProductModalContent,
+  VerticalProductModalContent,
 } from "../modal/content/VerticalModalContents";
 
 type Props = {
@@ -22,6 +14,7 @@ type Props = {
   businessId: number;
   businessType?: string;
   templateDescriptor?: Record<string, unknown> | null;
+  modalV3Enabled?: boolean;
   catalogProducts: Product[];
   onClose: () => void;
   onSelectProduct: (p: Product) => void;
@@ -34,6 +27,7 @@ export function ProductModalHost({
   businessId,
   businessType,
   templateDescriptor,
+  modalV3Enabled = true,
   catalogProducts,
   onClose,
   onSelectProduct,
@@ -57,28 +51,17 @@ export function ProductModalHost({
     onSelectProduct,
   };
   if (rendererId === "product-experience-v2" || rendererId === "generic-v2") {
-    const vertical = String(
-      businessType ?? product.businessType ?? "",
-    ).trim().toLowerCase();
-    const content = (() => {
-      if (rendererId === "generic-v2") return <GenericProductModalContent {...commonProps} />;
-      if (vertical === "clothing") return <ClothingPdpContent {...commonProps} />;
-      if (vertical === "flowers") return <FlowersPdpContent {...commonProps} />;
-      if (vertical === "coffee") return <CoffeePdpContent {...commonProps} />;
-      if (vertical === "fastfood") return <FastfoodPdpContent {...commonProps} />;
-      if (vertical === "electronics") return <ElectronicsPdpContent {...commonProps} />;
-      if (vertical === "autoparts") return <AutopartsPdpContent {...commonProps} />;
-      if (vertical === "cosmetics") return <CosmeticsPdpContent {...commonProps} />;
-      if (vertical === "furniture") return <FurniturePdpContent {...commonProps} />;
-      return <GenericProductModalContent {...commonProps} />;
-    })();
     return (
       <ProductModalFrameV2
         open={open}
         onClose={onClose}
         maxWidth={modalBehavior.maxWidth}
       >
-        {content}
+        <VerticalProductModalContent
+          {...commonProps}
+          rendererId={rendererId}
+          forceGeneric={!modalV3Enabled}
+        />
       </ProductModalFrameV2>
     );
   }

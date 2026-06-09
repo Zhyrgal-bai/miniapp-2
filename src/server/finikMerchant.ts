@@ -536,7 +536,7 @@ async function applyFinikPaymentSuccess(
   });
 
   const { onOrderPaidConfirmed } = await import("./orderInventoryHooks.js");
-  await onOrderPaidConfirmed(order.id);
+  await onOrderPaidConfirmed(order.id, cur as import("./orderStatus.js").OrderStatus);
 
   if (!FINIK_PAID_ORDER_STATUSES.has(cur)) {
     const { consumePromoForPaidOrder } = await import("./promoRepo.js");
