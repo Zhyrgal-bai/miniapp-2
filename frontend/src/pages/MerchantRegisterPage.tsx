@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { getTelegramWebApp } from "../utils/telegram";
 import { resolveMerchantTelegramUserId } from "../utils/telegramUserId";
+import { isTelegramMiniAppEnv } from "../utils/telegramSession";
 import {
   fetchRegistrationStatus,
   submitPlatformRegisterRequest,
@@ -72,7 +73,45 @@ function parseBackButton(tg: unknown): BackBtn | null {
   return bb as BackBtn;
 }
 
+/** Phase 17.4: Telegram-first registration — browsers are guided to Telegram. */
 export default function MerchantRegisterPage() {
+  if (!isTelegramMiniAppEnv()) {
+    return <MerchantRegisterTelegramGate />;
+  }
+  return <MerchantRegisterForm />;
+}
+
+function MerchantRegisterTelegramGate() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    document.title = ARCHA_BRAND.title;
+  }, []);
+  return (
+    <div className="archa-register archa-register--gate">
+      <div className="archa-register__gate-card archa-glass archa-glass--glow">
+        <img src={ARCHA_BRAND.logoMark} alt={ARCHA_BRAND.name} width={88} height={88} />
+        <h1>Регистрация — в Telegram</h1>
+        <p>
+          ARCHA работает внутри Telegram. Откройте бота, чтобы создать магазин и управлять
+          заказами, оплатой и витриной.
+        </p>
+        <a
+          className="archa-btn-primary"
+          href={ARCHA_BRAND.telegramLoginUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Открыть в Telegram
+        </a>
+        <button type="button" className="archa-btn-ghost" onClick={() => navigate("/merchant")}>
+          На главную
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MerchantRegisterForm() {
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
 

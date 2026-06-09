@@ -208,6 +208,12 @@ model Business {
   platformListing PlatformStoreListing?
   referralCode MerchantReferralCode?
 
+  merchantPromotions MerchantPromotion[]
+  merchantCampaigns  MerchantCampaign[]
+  loyaltyProgram     LoyaltyProgram?
+  customerLoyaltyStates CustomerLoyaltyState[]
+  slugAliases        StorefrontSlugAlias[]
+
   @@index([isActive])
   @@index([subscriptionStatus])
   @@index([isBlocked])
@@ -962,6 +968,118 @@ model Promo {
   updatedAt DateTime @updatedAt
 
   @@unique([businessId, code])
+  @@index([businessId])
+}
+
+/// Phase 17: previous storefront slugs kept resolvable after a rename (SEO-safe redirects).
+model StorefrontSlugAlias {
+  id         Int      @id @default(autoincrement())
+  /// Old slug, globally unique, lowercase.
+  oldSlug    String   @unique
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@index([businessId])
+}
+
+/// Phase 16: marketing promotion definition (superset of Promo). COUPON_PERCENT
+/// mirrors to the Promo table for checkout; other types are management/analytics only.
+model MerchantPromotion {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  /// PERCENT | FIXED | FREE_DELIVERY | GIFT | BUY_X_GET_Y | COUPON_PERCENT | AUTOMATIC_PERCENT
+  type  String
+  title String
+  /// Uppercase coupon code (COUPON_PERCENT); mirrors into Promo.code.
+  code  String?
+
+  percent        Int?
+  fixedAmountSom Int?
+  minOrderSom    Int  @default(0)
+  giftProductId  Int?
+  buyQuantity    Int?
+  getQuantity    Int?
+
+  /// CRM segment target: best | high_value | frequent | returning | recent | inactive | null
+  audienceSegment String?
+
+  startsAt DateTime?
+  endsAt   DateTime?
+  active   Boolean   @default(false)
+
+  maxRedemptions Int @default(0)
+  redemptions    Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  campaigns MerchantCampaign[]
+
+  @@index([businessId])
+  @@index([businessId, active])
+}
+
+/// Phase 16: marketing campaign wrapping a promotion + audience + schedule + budget.
+model MerchantCampaign {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  title String
+
+  promotionId Int?
+  promotion   MerchantPromotion? @relation(fields: [promotionId], references: [id], onDelete: SetNull)
+
+  audienceSegment String?
+  startsAt        DateTime?
+  endsAt          DateTime?
+  budgetSom       Int      @default(0)
+  paused          Boolean  @default(false)
+  active          Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([businessId, active])
+  @@index([promotionId])
+}
+
+/// Phase 16: per-merchant loyalty program rules (1:1 with Business).
+model LoyaltyProgram {
+  businessId Int      @id
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  enabled           Boolean @default(false)
+  pointsPerOrder    Int     @default(10)
+  pointsPerSomSpent Int     @default(0)
+  redeemThreshold   Int     @default(100)
+  redeemValueSom    Int     @default(100)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Phase 16: per-customer loyalty balance (scoped by businessId + customerKey).
+model CustomerLoyaltyState {
+  id          Int      @id @default(autoincrement())
+  businessId  Int
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  /// CRM customer key: user:<id> or phone:<normalized>.
+  customerKey String
+  points      Int      @default(0)
+  visits      Int      @default(0)
+  orders      Int      @default(0)
+  /// Idempotency: last paid order id counted into this balance.
+  lastOrderId Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, customerKey])
   @@index([businessId])
 }
 

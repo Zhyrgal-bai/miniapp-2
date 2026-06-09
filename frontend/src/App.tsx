@@ -119,6 +119,22 @@ export default function App() {
       ? `${storeDisplayName} · ${ARCHA_BRAND.name}`
       : ARCHA_BRAND.title;
   }, [storeDisplayName]);
+
+  // Phase 17.5: keep meta description in sync client-side (server injects for crawlers).
+  const storeMetaDescription =
+    payload?.webProfile?.story?.trim() ||
+    payload?.webProfile?.slogan?.trim() ||
+    "";
+  useEffect(() => {
+    if (storeMetaDescription === "") return;
+    let tag = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (!tag) {
+      tag = document.createElement("meta");
+      tag.name = "description";
+      document.head.appendChild(tag);
+    }
+    tag.content = storeMetaDescription.slice(0, 200);
+  }, [storeMetaDescription]);
   const [page, setPage] = useState<AppNavPage>(initialPageFromPath);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [storeProfileOpen, setStoreProfileOpen] = useState(false);

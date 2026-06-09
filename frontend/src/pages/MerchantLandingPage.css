@@ -376,6 +376,65 @@
   color: var(--archa-text-dim);
 }
 
+/* Phase 17: business types, steps, pricing */
+.archa-landing__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.archa-landing__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.archa-landing__steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.archa-landing__step {
+  padding: 22px;
+  border-radius: 18px;
+}
+
+.archa-landing__step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-weight: 800;
+  background: rgba(127, 255, 58, 0.16);
+  color: var(--archa-text);
+  margin-bottom: 12px;
+}
+
+.archa-landing__step h3 {
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+}
+
+.archa-landing__step p {
+  margin: 0;
+  color: var(--archa-text-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .archa-landing__aurora,
   .archa-landing__logo-glow {

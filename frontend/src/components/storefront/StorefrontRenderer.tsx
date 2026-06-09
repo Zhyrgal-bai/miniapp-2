@@ -41,6 +41,9 @@ import "./catalogSearchBar.css";
 import { filterProductsBySearch } from "../../utils/filterProductsBySearch";
 import { getStorefrontCommerceMode } from "../../hooks/useStorefrontCommerceMode";
 import { WebStorefrontInfoBar } from "./commerce/WebStorefrontInfoBar";
+import { WebShowcaseHeader } from "./web/WebShowcaseHeader";
+import { WebShowcaseAbout } from "./web/WebShowcaseAbout";
+import { WebShowcaseContacts } from "./web/WebShowcaseContacts";
 import { trackStoreView } from "../../services/storefrontAnalytics";
 import { enrichProductsFromCatalog } from "../../utils/enrichProductsFromCatalog";
 import { businessTypeSupportsTableReservations } from "@repo-shared/tableReservation";
@@ -143,6 +146,18 @@ export type ResolvedStorefrontPayload = {
   orderOptionsSchema?: Record<string, unknown>;
   merchantConfig?: Record<string, unknown>;
   templateDescriptor?: Record<string, unknown>;
+  webProfile?: {
+    coverUrl: string | null;
+    slogan: string | null;
+    story: string | null;
+    accentColor: string | null;
+    social: {
+      instagram: string | null;
+      telegram: string | null;
+      whatsapp: string | null;
+      website: string | null;
+    };
+  };
 };
 
 type CategoryNode = {
@@ -534,10 +549,29 @@ export function StorefrontRenderer(props: {
             </div>
           ) : null}
           {isWebBrowse ? (
+            <div className="sf-feed__chunk sf-feed__chunk--web-showcase sf-feed__chunk--stack">
+              <WebShowcaseHeader
+                storeName={props.payload.storeName}
+                city={props.payload.storeAddress?.city ?? null}
+                profile={props.payload.webProfile ?? null}
+              />
+            </div>
+          ) : null}
+          {isWebBrowse ? (
             <div className="sf-feed__chunk sf-feed__chunk--web-info sf-feed__chunk--stack">
               <WebStorefrontInfoBar
                 storeName={props.payload.storeName}
                 storeAddress={props.payload.storeAddress}
+                telegramOpenUrl={props.payload.telegramOpenUrl ?? null}
+              />
+            </div>
+          ) : null}
+          {isWebBrowse ? (
+            <div className="sf-feed__chunk sf-feed__chunk--web-about sf-feed__chunk--stack">
+              <WebShowcaseAbout profile={props.payload.webProfile ?? null} />
+              <WebShowcaseContacts
+                profile={props.payload.webProfile ?? null}
+                storeAddress={props.payload.storeAddress ?? null}
                 telegramOpenUrl={props.payload.telegramOpenUrl ?? null}
               />
             </div>

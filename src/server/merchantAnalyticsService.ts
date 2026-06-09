@@ -58,6 +58,24 @@ export type MerchantAnalyticsPayload = {
   freeOrdersUsed: number;
   freeOrdersRemaining: number;
   subscriptionConversionRate: number | null;
+  /** Phase 15: additive customer-health snapshot (no contract removals). */
+  customers: {
+    total: number;
+    new: number;
+    returning: number;
+    repeatPurchaseRate: number;
+    averageOrdersPerCustomer: number;
+  };
+  /** Phase 16: additive marketing-health snapshot (aggregate only). */
+  marketing: {
+    activePromotions: number;
+    totalPromotions: number;
+    activeCampaigns: number;
+    totalCampaigns: number;
+    promotionRedemptions: number;
+    loyaltyEnabled: boolean;
+    loyaltyMembers: number;
+  };
   support: {
     openTickets: number;
     pendingMerchant: number;
@@ -75,6 +93,18 @@ export type MerchantAnalyticsPayload = {
 
 function dayKey(d: Date): string {
   return d.toISOString().slice(0, 10);
+}
+
+/** Active = flagged active and within optional schedule window. */
+function isMarketingActive(
+  row: { active?: boolean; startsAt?: Date | null; endsAt?: Date | null },
+  now: Date,
+): boolean {
+  if (row.active !== true) return false;
+  const t = now.getTime();
+  if (row.startsAt != null && t < row.startsAt.getTime()) return false;
+  if (row.endsAt != null && t > row.endsAt.getTime()) return false;
+  return true;
 }
 
 function toPeriodFunnel(orders: Array<{ status: string }>): PeriodFunnel {
@@ -274,6 +304,72 @@ export async function buildMerchantAnalytics(input: {
   }
   const repeatCustomers = [...buyerCounts.values()].filter((c) => c > 1).length;
 
+  // Phase 15: additive customer-health snapshot (distinct buyers across orders).
+  const buyerFirstOrder = new Map<number, number>();
+  for (const o of orders) {
+    if (o.buyerUserId == null) continue;
+    const t = o.createdAt.getTime();
+    const prev = buyerFirstOrder.get(o.buyerUserId);
+    if (prev == null || t < prev) buyerFirstOrder.set(o.buyerUserId, t);
+  }
+  const totalCustomers = buyerFirstOrder.size;
+  const newCustomers = [...buyerFirstOrder.values()].filter(
+    (t) => t >= since.getTime(),
+  ).length;
+  const buyersWithPaid = buyerCounts.size;
+  const totalPaidByBuyers = [...buyerCounts.values()].reduce((s, c) => s + c, 0);
+  const customerHealth = {
+    total: totalCustomers,
+    new: newCustomers,
+    returning: repeatCustomers,
+    repeatPurchaseRate:
+      buyersWithPaid > 0
+        ? Math.round((repeatCustomers / buyersWithPaid) * 1000) / 10
+        : 0,
+    averageOrdersPerCustomer:
+      buyersWithPaid > 0
+        ? Math.round((totalPaidByBuyers / buyersWithPaid) * 10) / 10
+        : 0,
+  };
+
+  // Phase 16: additive marketing-health snapshot (aggregate, no PII).
+  const marketingDb = prisma as any;
+  const [promotionRows, campaignRows, loyaltyRow, loyaltyMembers] = await Promise.all([
+    marketingDb.merchantPromotion.findMany({
+      where: { businessId: bid },
+      select: { active: true, startsAt: true, endsAt: true, maxRedemptions: true, redemptions: true },
+    }).catch(() => [] as any[]),
+    marketingDb.merchantCampaign.findMany({
+      where: { businessId: bid },
+      select: { active: true, paused: true, startsAt: true, endsAt: true },
+    }).catch(() => [] as any[]),
+    marketingDb.loyaltyProgram.findUnique({
+      where: { businessId: bid },
+      select: { enabled: true },
+    }).catch(() => null),
+    marketingDb.customerLoyaltyState.count({ where: { businessId: bid } }).catch(() => 0),
+  ]);
+
+  const promotionRedemptions = (promotionRows as any[]).reduce(
+    (s, p) => s + (Number(p.redemptions) || 0),
+    0,
+  );
+  const activePromotions = (promotionRows as any[]).filter((p) =>
+    isMarketingActive(p, now),
+  ).length;
+  const activeCampaigns = (campaignRows as any[]).filter((c) =>
+    c.active === true && c.paused !== true && isMarketingActive(c, now),
+  ).length;
+  const marketingHealth = {
+    activePromotions,
+    totalPromotions: (promotionRows as any[]).length,
+    activeCampaigns,
+    totalCampaigns: (campaignRows as any[]).length,
+    promotionRedemptions,
+    loyaltyEnabled: (loyaltyRow as any)?.enabled === true,
+    loyaltyMembers: Number(loyaltyMembers) || 0,
+  };
+
   const dauSince = new Date(now.getTime() - 86400000);
   const wauSince = new Date(now.getTime() - 7 * 86400000);
   const dauKeys = new Set<string>();
@@ -420,6 +516,8 @@ export async function buildMerchantAnalytics(input: {
     freeOrdersUsed,
     freeOrdersRemaining,
     subscriptionConversionRate,
+    customers: customerHealth,
+    marketing: marketingHealth,
     support: {
       openTickets,
       pendingMerchant,

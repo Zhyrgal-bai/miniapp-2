@@ -4,6 +4,8 @@ import AdminLayout from "./AdminLayout";
 import AdminOrdersPage from "./AdminOrdersPage";
 import AdminProductsPage from "./AdminProductsPage";
 import AdminAnalyticsPage from "./AdminAnalyticsPage";
+import AdminCustomersPage from "./AdminCustomersPage";
+import AdminMarketingPage from "./AdminMarketingPage";
 import AdminProductManagePage from "./AdminProductManagePage";
 import AdminCategoriesPage from "./AdminCategoriesPage";
 import AdminUsersPage from "./AdminUsersPage";
@@ -40,6 +42,8 @@ const NAV_REQUIRES: Partial<Record<AdminNavKey, MerchantPermissionId>> = {
   manage: MERCHANT_PERM.catalogEdit,
   categories: MERCHANT_PERM.catalogEdit,
   analytics: MERCHANT_PERM.analyticsView,
+  customers: MERCHANT_PERM.analyticsView,
+  marketing: MERCHANT_PERM.analyticsView,
   promos: MERCHANT_PERM.settingsManage,
   support: MERCHANT_PERM.supportManage,
   tables: MERCHANT_PERM.settingsManage,
@@ -57,6 +61,8 @@ const ROUTE_ORDER: { key: AdminNavKey; hash: string }[] = [
   { key: "categories", hash: "#/admin/categories" },
   { key: "promos", hash: "#/admin/promos" },
   { key: "analytics", hash: "#/admin/analytics" },
+  { key: "customers", hash: "#/admin/customers" },
+  { key: "marketing", hash: "#/admin/marketing" },
 ];
 
 function firstAllowedAdminHash(
@@ -214,6 +220,12 @@ export default function AdminApp({ onExit }: AdminAppProps) {
     }
     if (path.includes("/admin/analytics")) {
       return <AdminAnalyticsPage key="analytics" />;
+    }
+    if (path.includes("/admin/customers")) {
+      return <AdminCustomersPage key="customers" />;
+    }
+    if (path.includes("/admin/marketing")) {
+      return <AdminMarketingPage key="marketing" />;
     }
     if (path.includes("/admin/categories")) {
       return <AdminCategoriesPage key="categories" />;

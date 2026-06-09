@@ -1,0 +1,107 @@
+/* Phase 17: merchant web branding + slug panel. */
+
+.web-profile-panel {
+  margin-top: 16px;
+}
+
+.web-profile-panel__title {
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.web-profile-panel__section {
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--sf-color-border, #444) 35%, transparent);
+}
+
+.web-profile-panel__section:last-of-type {
+  border-bottom: 0;
+}
+
+.web-profile-panel__section h3 {
+  margin: 0 0 6px;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.web-profile-panel__hint {
+  margin: 0 0 10px;
+  font-size: 0.78rem;
+  color: color-mix(in srgb, var(--sf-color-text, #fff) 60%, transparent);
+}
+
+.web-profile-panel__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.web-profile-panel__prefix {
+  font-size: 0.85rem;
+  font-weight: 700;
+  opacity: 0.7;
+}
+
+.web-profile-panel__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+  font-size: 0.8rem;
+  color: color-mix(in srgb, var(--sf-color-text, #fff) 72%, transparent);
+}
+
+.web-profile-panel__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border, #444) 55%, transparent);
+  background: color-mix(in srgb, var(--sf-color-surface, #1d1d1d) 88%, transparent);
+  color: var(--sf-color-text, #fff);
+  font-size: 15px;
+  font-family: inherit;
+}
+
+.web-profile-panel__btn {
+  padding: 9px 14px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border, #444) 55%, transparent);
+  background: transparent;
+  color: var(--sf-color-text, #fff);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.web-profile-panel__btn--primary {
+  border-color: transparent;
+  background: var(--sf-color-primary, #ff2d7a);
+  color: var(--sf-on-primary, #fff);
+}
+
+.web-profile-panel__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.web-profile-panel__actions {
+  margin-top: 6px;
+}
+
+.web-profile-panel__status,
+.web-profile-panel__ok {
+  margin: 8px 0 0;
+  font-size: 0.82rem;
+  color: #22c55e;
+}
+
+.web-profile-panel__error {
+  margin: 8px 0 0;
+  font-size: 0.82rem;
+  color: #f87171;
+}

@@ -28,6 +28,7 @@ import {
   defaultMerchantDeliverySettings,
 } from "../shared/merchantDeliverySettings.js";
 import { isMerchantStorefrontFinikCheckoutAllowed } from "../shared/finikReady.js";
+import { extractWebProfile } from "../shared/storefrontWebProfile.js";
 import {
   parseStoreAvailabilitySettings,
   storeAvailabilityToPublic,
@@ -168,6 +169,8 @@ export async function sendStorefrontPublicPayload(
       !Array.isArray((b as any).merchantConfig)
         ? ((b as any).merchantConfig as Record<string, unknown>)
         : {};
+    // Phase 17: additive public web-profile branding (presentation only).
+    (payload as any).webProfile = extractWebProfile(merchantConfig);
     if (bt) {
       (payload as any).merchantConfig = merchantConfig;
       const tpl = templateForBusinessType(bt);

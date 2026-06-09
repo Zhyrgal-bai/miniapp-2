@@ -24,6 +24,7 @@ import {
   type CatalogFooterRailSpeed,
 } from "../../storefront/catalogFooterRailSettings";
 import { ru } from "../../i18n/ru";
+import { WebProfilePanel } from "../../components/admin/WebProfilePanel";
 
 const TEMPLATE_LABELS: Record<StoreTemplateId, string> = {
   red: "Красный",
@@ -626,6 +627,8 @@ export default function AdminDesignPage(): ReactElement {
         ) : null}
         {ok ? <p className="admin-theme-msg">{ok}</p> : null}
       </div>
+
+      <WebProfilePanel />
     </div>
   );
 }

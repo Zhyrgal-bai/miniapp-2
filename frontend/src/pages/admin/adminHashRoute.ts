@@ -14,6 +14,8 @@ export type AdminNavKey =
   | "manage"
   | "categories"
   | "analytics"
+  | "customers"
+  | "marketing"
   | "design"
   | "tables"
   | "floor"
@@ -29,6 +31,8 @@ export function adminNavKeyFromPath(path: string): AdminNavKey {
   if (path.includes("/admin/categories")) return "categories";
   if (path.includes("/admin/products/manage")) return "manage";
   if (path.includes("/admin/products")) return "products";
+  if (path.includes("/admin/customers")) return "customers";
+  if (path.includes("/admin/marketing")) return "marketing";
   if (path.includes("/admin/analytics")) return "analytics";
   if (path.includes("/admin/tables")) return "tables";
   if (path.includes("/admin/floor")) return "floor";

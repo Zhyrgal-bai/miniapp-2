@@ -30,13 +30,35 @@ const FEATURES = [
   {
     id: "analytics",
     title: "Аналитика",
-    text: "Операционные метрики и готовность магазина к продажам.",
+    text: "Операционные метрики, lifetime-аналитика и готовность магазина к продажам.",
   },
   {
-    id: "saas",
-    title: "SaaS",
-    text: "Подписка, пробный период и масштабирование без боли.",
+    id: "crm",
+    title: "CRM",
+    text: "Клиенты, сегменты, история заказов и любимые товары — без таблиц.",
   },
+  {
+    id: "marketing",
+    title: "Маркетинг",
+    text: "Акции, кампании и программа лояльности для роста продаж.",
+  },
+] as const;
+
+const BUSINESS_TYPES = [
+  { emoji: "👕", label: "Одежда" },
+  { emoji: "🌸", label: "Цветы" },
+  { emoji: "☕", label: "Кофейня" },
+  { emoji: "🍔", label: "Фастфуд" },
+  { emoji: "📱", label: "Электроника" },
+  { emoji: "🚗", label: "Автозапчасти" },
+  { emoji: "💄", label: "Косметика" },
+  { emoji: "🛋️", label: "Мебель" },
+] as const;
+
+const HOW_STEPS = [
+  { n: "1", title: "Откройте Telegram", text: "Запустите ARCHA в Telegram и подайте заявку на магазин." },
+  { n: "2", title: "Настройте витрину", text: "Каталог, оформление, доставка и оплата Finik — за минуты." },
+  { n: "3", title: "Начните продавать", text: "Первые 5 заказов бесплатно. Управление полностью в Telegram." },
 ] as const;
 
 const ease = [0.22, 1, 0.36, 1] as const;
@@ -172,6 +194,58 @@ export default function MerchantLandingPage() {
               </motion.li>
             ))}
           </ul>
+        </section>
+
+        <section className="archa-landing__section" id="business-types">
+          <p className="archa-landing__eyebrow">Verticals</p>
+          <h2>8 видов бизнеса</h2>
+          <p className="archa-landing__section-lead">
+            Готовые шаблоны витрины и карточек под каждую нишу.
+          </p>
+          <ul className="archa-landing__chips">
+            {BUSINESS_TYPES.map((b) => (
+              <li key={b.label} className="archa-landing__chip archa-glass">
+                <span aria-hidden>{b.emoji}</span> {b.label}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="archa-landing__section" id="how">
+          <p className="archa-landing__eyebrow">How it works</p>
+          <h2>Как работает ARCHA</h2>
+          <ul className="archa-landing__steps">
+            {HOW_STEPS.map((s) => (
+              <li key={s.n} className="archa-landing__step archa-glass archa-glass--glow">
+                <span className="archa-landing__step-num">{s.n}</span>
+                <h3>{s.title}</h3>
+                <p>{s.text}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="archa-landing__section" id="pricing">
+          <div className="archa-landing__faq-card archa-glass archa-glass--glow">
+            <p className="archa-landing__eyebrow">Pricing</p>
+            <h2>5 заказов бесплатно</h2>
+            <p>
+              Начните без оплаты: первые 5 заказов — бесплатно. Дальше — простая подписка
+              с первым месяцем по специальной цене. Без скрытых комиссий за заказы.
+            </p>
+            <div className="archa-landing__hero-actions">
+              <button
+                type="button"
+                className="archa-btn-primary"
+                onClick={() => navigate("/merchant/register")}
+              >
+                Начать бесплатно
+              </button>
+              <button type="button" className="archa-btn-ghost" onClick={openTelegram}>
+                Открыть в Telegram
+              </button>
+            </div>
+          </div>
         </section>
 
         <section className="archa-landing__section" id="faq">

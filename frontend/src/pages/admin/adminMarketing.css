@@ -1,0 +1,138 @@
+/* Merchant Marketing & Growth (Phase 16.7). */
+
+.admin-mkt-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.admin-mkt-input {
+  flex: 1 1 140px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border, #444) 55%, transparent);
+  background: color-mix(in srgb, var(--sf-color-surface, #1d1d1d) 88%, transparent);
+  color: var(--sf-color-text, #fff);
+  font-size: 16px;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.admin-mkt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: color-mix(in srgb, var(--sf-color-text, #fff) 70%, transparent);
+  flex: 1 1 140px;
+}
+
+.admin-mkt-btn {
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border, #444) 55%, transparent);
+  background: transparent;
+  color: var(--sf-color-text, #fff);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.admin-mkt-btn--primary {
+  border-color: transparent;
+  background: var(--sf-color-primary, #ff2d7a);
+  color: var(--sf-on-primary, #fff);
+}
+
+.admin-mkt-btn--danger {
+  color: #f87171;
+  border-color: color-mix(in srgb, #ef4444 45%, transparent);
+}
+
+.admin-mkt-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.admin-mkt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.admin-mkt-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--sf-color-border, #444) 42%, transparent);
+  background: color-mix(in srgb, var(--sf-color-surface, #1d1d1d) 82%, transparent);
+}
+
+.admin-mkt-card__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.admin-mkt-card__title {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.admin-mkt-card__meta {
+  font-size: 0.76rem;
+  color: color-mix(in srgb, var(--sf-color-text, #fff) 60%, transparent);
+}
+
+.admin-mkt-card__actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.admin-mkt-badge {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.admin-mkt-badge--gray {
+  background: color-mix(in srgb, #9ca3af 22%, transparent);
+  color: #cbd5e1;
+}
+.admin-mkt-badge--blue {
+  background: color-mix(in srgb, #3b82f6 22%, transparent);
+  color: #60a5fa;
+}
+.admin-mkt-badge--green {
+  background: color-mix(in srgb, #22c55e 22%, transparent);
+  color: #22c55e;
+}
+.admin-mkt-badge--amber {
+  background: color-mix(in srgb, #f59e0b 24%, transparent);
+  color: #fbbf24;
+}
+.admin-mkt-badge--red {
+  background: color-mix(in srgb, #ef4444 22%, transparent);
+  color: #f87171;
+}
+
+.admin-mkt-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}

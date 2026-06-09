@@ -65,6 +65,52 @@ export function slugifyStoreName(raw: string): string {
   return s.length >= 2 ? s : "";
 }
 
+/** Reserved slugs that must never be assigned to a store (route collisions). */
+export const RESERVED_STORE_SLUGS = new Set<string>([
+  "s",
+  "store",
+  "merchant",
+  "platform",
+  "admin",
+  "api",
+  "about",
+  "faq",
+  "cart",
+  "checkout",
+  "support",
+]);
+
+export type MerchantSlugValidation =
+  | { ok: true; slug: string }
+  | { ok: false; error: "TOO_SHORT" | "INVALID_CHARS" | "RESERVED" };
+
+/**
+ * Validate + normalize a merchant-requested slug (Phase 17.3).
+ * Pure: does not check DB uniqueness (caller does that).
+ */
+export function validateMerchantSlug(raw: string): MerchantSlugValidation {
+  const lowered = String(raw ?? "").trim().toLowerCase();
+  if (lowered === "") {
+    return { ok: false, error: "TOO_SHORT" };
+  }
+  // Reject anything outside latin alphanumerics, spaces and hyphens (e.g.
+  // cyrillic or symbols) — merchants type latin slugs directly, no transliteration.
+  if (/[^a-z0-9\s-]/.test(lowered)) {
+    return { ok: false, error: "INVALID_CHARS" };
+  }
+  const normalized = lowered
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (normalized.length < 2 || normalized.length > 80) {
+    return { ok: false, error: "TOO_SHORT" };
+  }
+  if (RESERVED_STORE_SLUGS.has(normalized)) {
+    return { ok: false, error: "RESERVED" };
+  }
+  return { ok: true, slug: normalized };
+}
+
 async function isBusinessSlugTaken(
   tx: Prisma.TransactionClient,
   slug: string,

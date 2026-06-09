@@ -196,6 +196,20 @@ export const StorefrontPublicApiResponseSchema = z
     pickupEta: EtaRangeWireSchema.optional(),
     deliveryZones: StoreAvailabilityWireSchema.shape.deliveryZones.optional(),
     finikCheckoutReady: z.boolean().optional(),
+    webProfile: z
+      .object({
+        coverUrl: z.string().nullable(),
+        slogan: z.string().nullable(),
+        story: z.string().nullable(),
+        accentColor: z.string().nullable(),
+        social: z.object({
+          instagram: z.string().nullable(),
+          telegram: z.string().nullable(),
+          whatsapp: z.string().nullable(),
+          website: z.string().nullable(),
+        }),
+      })
+      .optional(),
   })
   .passthrough();
 

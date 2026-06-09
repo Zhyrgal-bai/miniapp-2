@@ -111,6 +111,20 @@ const navAll: NavItem[] = [
     permission: MERCHANT_PERM.analyticsView,
   },
   {
+    href: "#/admin/customers",
+    match: "customers",
+    label: "Клиенты",
+    icon: "👤",
+    permission: MERCHANT_PERM.analyticsView,
+  },
+  {
+    href: "#/admin/marketing",
+    match: "marketing",
+    label: "Маркетинг",
+    icon: "📣",
+    permission: MERCHANT_PERM.analyticsView,
+  },
+  {
     href: "#/admin/promos",
     match: "promos",
     label: "Промокоды",

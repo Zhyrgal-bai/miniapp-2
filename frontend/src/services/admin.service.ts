@@ -244,6 +244,22 @@ export type AdminAnalytics = {
   freeOrdersUsed?: number;
   freeOrdersRemaining?: number;
   subscriptionConversionRate?: number | null;
+  customers?: {
+    total: number;
+    new: number;
+    returning: number;
+    repeatPurchaseRate: number;
+    averageOrdersPerCustomer: number;
+  };
+  marketing?: {
+    activePromotions: number;
+    totalPromotions: number;
+    activeCampaigns: number;
+    totalCampaigns: number;
+    promotionRedemptions: number;
+    loyaltyEnabled: boolean;
+    loyaltyMembers: number;
+  };
   support?: {
     openTickets: number;
     pendingMerchant: number;
@@ -316,6 +332,203 @@ export type MerchantGrowthDashboard = {
     uniqueVisitors: number;
   };
 };
+
+export type CustomerSegment =
+  | "best"
+  | "high_value"
+  | "frequent"
+  | "returning"
+  | "recent"
+  | "inactive";
+
+export type MerchantCustomerRow = {
+  customerKey: string;
+  buyerUserId: number | null;
+  telegramId: string | null;
+  username: string | null;
+  name: string;
+  phone: string | null;
+  phoneNormalized: string | null;
+  address: string | null;
+  ordersCount: number;
+  totalOrders: number;
+  cancelledOrders: number;
+  lifetimeValue: number;
+  averageOrderValue: number;
+  firstOrderAt: string | null;
+  lastOrderAt: string | null;
+  daysSinceLastOrder: number | null;
+  segments: CustomerSegment[];
+};
+
+export type MerchantCustomerListPayload = {
+  total: number;
+  returningCount: number;
+  customers: MerchantCustomerRow[];
+};
+
+export type MerchantCustomerInsights = {
+  best: MerchantCustomerRow[];
+  highValue: MerchantCustomerRow[];
+  frequent: MerchantCustomerRow[];
+  recent: MerchantCustomerRow[];
+  inactive: MerchantCustomerRow[];
+};
+
+export type MerchantCustomerDashboard = {
+  rangeDays: number;
+  totalCustomers: number;
+  newCustomers: number;
+  returningCustomers: number;
+  repeatPurchaseRate: number;
+  averageOrdersPerCustomer: number;
+  averageLifetimeValue: number;
+  totalLifetimeValue: number;
+  customerGrowth: Array<{ day: string; newCustomers: number }>;
+  topCustomers: MerchantCustomerRow[];
+  insights: MerchantCustomerInsights;
+};
+
+export type MerchantCustomerPreference = {
+  key: string;
+  label: string;
+  value: string;
+  valueLabel: string;
+  count: number;
+};
+
+export type MerchantCustomerDetail = {
+  customer: MerchantCustomerRow | null;
+  orders: Array<{
+    id: number;
+    orderNumber: string | null;
+    status: string;
+    total: number;
+    createdAt: string;
+    summary: string;
+  }>;
+  favoriteProducts: Array<{ productId: number | null; name: string; quantity: number }>;
+  favoriteCategories: Array<{ categoryId: number | null; name: string; quantity: number }>;
+  recentAddresses: string[];
+  preferences: MerchantCustomerPreference[];
+};
+
+export type MarketingPromotionType =
+  | "PERCENT"
+  | "FIXED"
+  | "FREE_DELIVERY"
+  | "GIFT"
+  | "BUY_X_GET_Y"
+  | "COUPON_PERCENT"
+  | "AUTOMATIC_PERCENT";
+
+export type MarketingPromotionStatus =
+  | "DRAFT"
+  | "SCHEDULED"
+  | "ACTIVE"
+  | "PAUSED"
+  | "ENDED";
+
+export type MarketingPromotion = {
+  id: number;
+  businessId: number;
+  type: MarketingPromotionType;
+  title: string;
+  code: string | null;
+  percent: number | null;
+  fixedAmountSom: number | null;
+  minOrderSom: number;
+  giftProductId: number | null;
+  buyQuantity: number | null;
+  getQuantity: number | null;
+  audienceSegment: CustomerSegment | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  active: boolean;
+  maxRedemptions: number;
+  redemptions: number;
+  status: MarketingPromotionStatus;
+};
+
+export type MarketingCampaignStatus =
+  | "DRAFT"
+  | "SCHEDULED"
+  | "ACTIVE"
+  | "PAUSED"
+  | "ENDED";
+
+export type MarketingCampaign = {
+  id: number;
+  businessId: number;
+  title: string;
+  promotionId: number | null;
+  audienceSegment: CustomerSegment | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  budgetSom: number;
+  paused: boolean;
+  active: boolean;
+  status: MarketingCampaignStatus;
+};
+
+export type MarketingDashboard = {
+  rangeDays: number;
+  activeCampaigns: number;
+  totalCampaigns: number;
+  activePromotions: number;
+  totalPromotions: number;
+  totalRedemptions: number;
+  customerGrowth: Array<{ day: string; newCustomers: number }>;
+  repeatCustomers: number;
+  topPromotions: Array<{ id: number; title: string; type: MarketingPromotionType; redemptions: number }>;
+  topSegments: Array<{ segment: CustomerSegment | "all"; customers: number }>;
+  bestProducts: Array<{ productId: number | null; name: string; quantity: number }>;
+  campaignRoi: Array<{ id: number; title: string; budgetSom: number; roi: number | null }>;
+};
+
+export type LoyaltyProgramRules = {
+  enabled: boolean;
+  pointsPerOrder: number;
+  pointsPerSomSpent: number;
+  redeemThreshold: number;
+  redeemValueSom: number;
+};
+
+export type MerchantLoyaltyPayload = {
+  program: LoyaltyProgramRules;
+  enrolledCustomers: number;
+  totalPointsIssued: number;
+  topCustomers: Array<{
+    customerKey: string;
+    points: number;
+    visits: number;
+    orders: number;
+    tier: "bronze" | "silver" | "gold" | "platinum";
+  }>;
+};
+
+export type WebProfile = {
+  coverUrl: string | null;
+  slogan: string | null;
+  story: string | null;
+  accentColor: string | null;
+  social: {
+    instagram: string | null;
+    telegram: string | null;
+    whatsapp: string | null;
+    website: string | null;
+  };
+};
+
+export function emptyWebProfileClient(): WebProfile {
+  return {
+    coverUrl: null,
+    slogan: null,
+    story: null,
+    accentColor: null,
+    social: { instagram: null, telegram: null, whatsapp: null, website: null },
+  };
+}
 
 export type SupportSuggestion = {
   id: string;
@@ -668,6 +881,140 @@ export const adminService = {
       rangeDays,
     });
     return d;
+  },
+
+  async getCustomers(input?: {
+    search?: string;
+    segment?: CustomerSegment | null;
+    limit?: number;
+    offset?: number;
+  }): Promise<MerchantCustomerListPayload> {
+    const d = await adminPost<MerchantCustomerListPayload>("/merchant/customers", {
+      search: input?.search ?? "",
+      segment: input?.segment ?? null,
+      limit: input?.limit ?? 50,
+      offset: input?.offset ?? 0,
+    });
+    return {
+      total: typeof d?.total === "number" ? d.total : 0,
+      returningCount: typeof d?.returningCount === "number" ? d.returningCount : 0,
+      customers: Array.isArray(d?.customers) ? d.customers : [],
+    };
+  },
+
+  async getCustomerDashboard(
+    rangeDays: 7 | 30 | 90 = 30,
+  ): Promise<MerchantCustomerDashboard> {
+    return adminPost<MerchantCustomerDashboard>("/merchant/customers/dashboard", {
+      rangeDays,
+    });
+  },
+
+  async getCustomerDetail(customerKey: string): Promise<MerchantCustomerDetail> {
+    return adminPost<MerchantCustomerDetail>("/merchant/customers/detail", {
+      customerKey,
+    });
+  },
+
+  async listMarketingPromotions(): Promise<MarketingPromotion[]> {
+    const d = await adminGet<{ promotions?: MarketingPromotion[] }>(
+      "/merchant/marketing/promotions",
+    );
+    return Array.isArray(d?.promotions) ? d.promotions : [];
+  },
+
+  async createMarketingPromotion(
+    input: Partial<MarketingPromotion>,
+  ): Promise<MarketingPromotion> {
+    return adminPost<MarketingPromotion>(
+      "/merchant/marketing/promotions",
+      input as Record<string, unknown>,
+    );
+  },
+
+  async setMarketingPromotionActive(id: number, active: boolean): Promise<void> {
+    await adminPost(`/merchant/marketing/promotions/${id}/active`, { active });
+  },
+
+  async deleteMarketingPromotion(id: number): Promise<void> {
+    await adminDelete(`/merchant/marketing/promotions/${id}`);
+  },
+
+  async listMarketingCampaigns(): Promise<MarketingCampaign[]> {
+    const d = await adminGet<{ campaigns?: MarketingCampaign[] }>(
+      "/merchant/marketing/campaigns",
+    );
+    return Array.isArray(d?.campaigns) ? d.campaigns : [];
+  },
+
+  async createMarketingCampaign(
+    input: Partial<MarketingCampaign>,
+  ): Promise<MarketingCampaign> {
+    return adminPost<MarketingCampaign>(
+      "/merchant/marketing/campaigns",
+      input as Record<string, unknown>,
+    );
+  },
+
+  async setMarketingCampaignState(
+    id: number,
+    state: { active?: boolean; paused?: boolean },
+  ): Promise<void> {
+    await adminPost(`/merchant/marketing/campaigns/${id}/state`, state);
+  },
+
+  async deleteMarketingCampaign(id: number): Promise<void> {
+    await adminDelete(`/merchant/marketing/campaigns/${id}`);
+  },
+
+  async getMarketingDashboard(
+    rangeDays: 7 | 30 | 90 = 30,
+  ): Promise<MarketingDashboard> {
+    return adminPost<MarketingDashboard>("/merchant/marketing/dashboard", {
+      rangeDays,
+    });
+  },
+
+  async getLoyalty(): Promise<MerchantLoyaltyPayload> {
+    return adminGet<MerchantLoyaltyPayload>("/merchant/loyalty");
+  },
+
+  async getWebProfile(): Promise<WebProfile> {
+    const d = await adminGet<{ profile?: WebProfile }>("/api/merchant/web-profile");
+    return d?.profile ?? emptyWebProfileClient();
+  },
+
+  async saveWebProfile(profile: WebProfile): Promise<WebProfile> {
+    const d = await adminPost<{ profile?: WebProfile }>(
+      "/api/merchant/web-profile",
+      profile as unknown as Record<string, unknown>,
+    );
+    return d?.profile ?? profile;
+  },
+
+  async checkSlugAvailability(slug: string): Promise<{
+    ok: boolean;
+    slug: string | null;
+    reason: string;
+  }> {
+    const url = new URL(resolveAdminUrl("/api/merchant/slug/availability"));
+    url.searchParams.set("slug", slug);
+    return adminFetchJson(url.toString(), { method: "GET", json: false });
+  },
+
+  async changeSlug(slug: string): Promise<{ slug: string; previousSlug: string | null }> {
+    return adminPost<{ slug: string; previousSlug: string | null }>("/api/merchant/slug", {
+      slug,
+    });
+  },
+
+  async saveLoyalty(
+    rules: Partial<LoyaltyProgramRules>,
+  ): Promise<{ program: LoyaltyProgramRules }> {
+    return adminPost<{ program: LoyaltyProgramRules }>(
+      "/merchant/loyalty",
+      rules as Record<string, unknown>,
+    );
   },
 
   async getSupportSuggestions(ticketId: number): Promise<SupportSuggestion[]> {

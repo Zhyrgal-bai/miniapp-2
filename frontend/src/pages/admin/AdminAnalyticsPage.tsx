@@ -210,6 +210,56 @@ export default function AdminAnalyticsPage() {
             </section>
           ) : null}
 
+          {data.customers ? (
+            <section className="admin-dash-section">
+              <h2 className="admin-dash-section__title">Клиенты</h2>
+              <div className="admin-kpi-grid">
+                <div className="admin-kpi-card">
+                  <span className="admin-kpi-card__label">Всего клиентов</span>
+                  <span className="admin-kpi-card__value">{data.customers.total}</span>
+                </div>
+                <div className="admin-kpi-card">
+                  <span className="admin-kpi-card__label">Новые за период</span>
+                  <span className="admin-kpi-card__value">{data.customers.new}</span>
+                </div>
+                <div className="admin-kpi-card">
+                  <span className="admin-kpi-card__label">Постоянные</span>
+                  <span className="admin-kpi-card__value">{data.customers.returning}</span>
+                </div>
+                <div className="admin-kpi-card">
+                  <span className="admin-kpi-card__label">Доля повторных</span>
+                  <span className="admin-kpi-card__value">
+                    {fmtPct(data.customers.repeatPurchaseRate)}
+                  </span>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          {data.marketing ? (
+            <section className="admin-dash-section">
+              <h2 className="admin-dash-section__title">Маркетинг</h2>
+              <div className="admin-kpi-grid">
+                <div className="admin-kpi-card">
+                  <span className="admin-kpi-card__label">Активные акции</span>
+                  <span className="admin-kpi-card__value">{data.marketing.activePromotions}</span>
+                </div>
+                <div className="admin-kpi-card">
+                  <span className="admin-kpi-card__label">Активные кампании</span>
+                  <span className="admin-kpi-card__value">{data.marketing.activeCampaigns}</span>
+                </div>
+                <div className="admin-kpi-card">
+                  <span className="admin-kpi-card__label">Использований акций</span>
+                  <span className="admin-kpi-card__value">{data.marketing.promotionRedemptions}</span>
+                </div>
+                <div className="admin-kpi-card">
+                  <span className="admin-kpi-card__label">Участники лояльности</span>
+                  <span className="admin-kpi-card__value">{data.marketing.loyaltyMembers}</span>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
           {revenueChart && revenueChart.length > 0 ? (
             <section className="admin-dash-section">
               <h2 className="admin-dash-section__title">Выручка по дням</h2>

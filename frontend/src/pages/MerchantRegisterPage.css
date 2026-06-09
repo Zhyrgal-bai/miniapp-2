@@ -1,5 +1,44 @@
 /* Страница заявки /merchant/register — ARCHA Premium */
 
+/* Phase 17.4: Telegram-first registration gate (browser) */
+.archa-register--gate {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--archa-bg, #050805);
+  color: var(--archa-text, #eef8ea);
+}
+
+.archa-register__gate-card {
+  max-width: 420px;
+  width: 100%;
+  padding: 32px 28px;
+  border-radius: 22px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.archa-register__gate-card h1 {
+  margin: 4px 0 0;
+  font-size: 1.4rem;
+}
+
+.archa-register__gate-card p {
+  margin: 0;
+  color: var(--archa-text-muted, #9fb89a);
+  line-height: 1.5;
+}
+
+.archa-register__gate-card .archa-btn-primary,
+.archa-register__gate-card .archa-btn-ghost {
+  width: 100%;
+}
+
 .mr {
   box-sizing: border-box;
   position: relative;

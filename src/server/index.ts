@@ -183,6 +183,41 @@ import { maybeEmitRetentionNudges } from "./merchantRetentionService.js";
 import { buildMerchantGrowthDashboard } from "./merchantGrowthDashboardService.js";
 import { registerLifetimeOrderCreated } from "./merchantLifetimeAnalyticsService.js";
 import {
+  buildMerchantCustomerList,
+  buildMerchantCustomerDetail,
+  buildMerchantCustomerDashboard,
+  buildMerchantCustomerInsights,
+} from "./merchantCustomerService.js";
+import {
+  listMerchantPromotions,
+  createMerchantPromotion,
+  setMerchantPromotionActive,
+  deleteMerchantPromotion,
+  listMerchantCampaigns,
+  createMerchantCampaign,
+  setMerchantCampaignState,
+  deleteMerchantCampaign,
+  buildMarketingDashboard,
+} from "./merchantMarketingService.js";
+import {
+  buildMerchantLoyalty,
+  saveLoyaltyProgram,
+} from "./merchantLoyaltyService.js";
+import {
+  changeMerchantSlug,
+  checkSlugAvailability,
+  resolveSlugOrAlias,
+} from "./merchantSlugService.js";
+import {
+  extractWebProfile,
+  mergeWebProfileIntoMerchantConfig,
+  normalizeWebProfile,
+} from "../shared/storefrontWebProfile.js";
+import {
+  isMetaInjectablePath,
+  renderSpaHtmlWithMeta,
+} from "./storefrontHtmlMeta.js";
+import {
   createMerchantNotification,
   ingestStorefrontEvents,
   listMerchantNotifications,
@@ -1344,12 +1379,22 @@ app.get("/api/storefront/by-slug/:slug", async (req: Request, res: Response) => 
       res.status(400).json({ error: API_ERR_INVALID_SLUG });
       return;
     }
-    const b = await prisma.business.findFirst({
+    let b = await prisma.business.findFirst({
       where: {
         slug: { equals: slug, mode: "insensitive" },
       } as any,
       select: businessSubscriptionGateSelect as any,
     });
+    if (!b) {
+      // Phase 17: resolve historical slug aliases so old links keep working.
+      const aliasBusinessId = await resolveSlugOrAlias(slug);
+      if (aliasBusinessId != null) {
+        b = await prisma.business.findUnique({
+          where: { id: aliasBusinessId },
+          select: businessSubscriptionGateSelect as any,
+        });
+      }
+    }
     if (!b) {
       res.status(404).json({ error: "Store not found" });
       return;
@@ -4597,6 +4642,369 @@ app.post("/merchant/growth/dashboard", async (req: Request, res: Response) => {
   }
 });
 
+// ================== MERCHANT CRM (Phase 15) ==================
+app.post("/merchant/customers", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.analyticsView);
+    if (!merchant) return;
+
+    const body = req.body as
+      | {
+          search?: unknown;
+          segment?: unknown;
+          limit?: unknown;
+          offset?: unknown;
+        }
+      | null
+      | undefined;
+
+    const allowedSegments = [
+      "best",
+      "high_value",
+      "frequent",
+      "returning",
+      "recent",
+      "inactive",
+    ] as const;
+    const segmentRaw = String(body?.segment ?? "").trim();
+    const segment = (allowedSegments as readonly string[]).includes(segmentRaw)
+      ? (segmentRaw as (typeof allowedSegments)[number])
+      : null;
+
+    const payload = await buildMerchantCustomerList({
+      businessId: merchant.businessId,
+      search: typeof body?.search === "string" ? body.search : null,
+      segment,
+      limit: Number.isFinite(Number(body?.limit)) ? Number(body?.limit) : undefined,
+      offset: Number.isFinite(Number(body?.offset)) ? Number(body?.offset) : undefined,
+    });
+    res.json(payload);
+  } catch (e) {
+    console.error("POST /merchant/customers:", e);
+    res.status(500).json({ error: "customers failed" });
+  }
+});
+
+app.post("/merchant/customers/detail", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.analyticsView);
+    if (!merchant) return;
+
+    const body = req.body as { customerKey?: unknown } | null | undefined;
+    const customerKey = String(body?.customerKey ?? "").trim();
+    if (customerKey === "") {
+      return res.status(400).json({ error: "Нужен customerKey" });
+    }
+
+    const payload = await buildMerchantCustomerDetail({
+      businessId: merchant.businessId,
+      customerKey,
+    });
+    res.json(payload);
+  } catch (e) {
+    console.error("POST /merchant/customers/detail:", e);
+    res.status(500).json({ error: "customer detail failed" });
+  }
+});
+
+app.post("/merchant/customers/dashboard", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.analyticsView);
+    if (!merchant) return;
+
+    const body = req.body as { rangeDays?: unknown } | null | undefined;
+    const rd = Number(body?.rangeDays);
+    const rangeDays = rd === 7 || rd === 30 || rd === 90 ? rd : 30;
+
+    const [dashboard, insights] = await Promise.all([
+      buildMerchantCustomerDashboard({
+        businessId: merchant.businessId,
+        rangeDays,
+      }),
+      buildMerchantCustomerInsights({ businessId: merchant.businessId }),
+    ]);
+    res.json({ ...dashboard, insights });
+  } catch (e) {
+    console.error("POST /merchant/customers/dashboard:", e);
+    res.status(500).json({ error: "customer dashboard failed" });
+  }
+});
+
+// ================== MERCHANT MARKETING & GROWTH (Phase 16) ==================
+app.get("/merchant/marketing/promotions", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.analyticsView);
+    if (!merchant) return;
+    const promotions = await listMerchantPromotions({ businessId: merchant.businessId });
+    res.json({ promotions });
+  } catch (e) {
+    console.error("GET /merchant/marketing/promotions:", e);
+    res.status(500).json({ error: "promotions failed" });
+  }
+});
+
+app.post("/merchant/marketing/promotions", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.settingsManage);
+    if (!merchant) return;
+    const result = await createMerchantPromotion({
+      businessId: merchant.businessId,
+      definition: (req.body ?? {}) as Record<string, unknown>,
+    });
+    if (!result.ok) {
+      return res.status(400).json({ error: result.error });
+    }
+    invalidateStorefrontCache(merchant.businessId);
+    res.status(201).json(result.promotion);
+  } catch (e) {
+    console.error("POST /merchant/marketing/promotions:", e);
+    res.status(500).json({ error: "create promotion failed" });
+  }
+});
+
+app.post("/merchant/marketing/promotions/:id/active", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.settingsManage);
+    if (!merchant) return;
+    const promotionId = Number(req.params.id);
+    if (!Number.isFinite(promotionId)) {
+      return res.status(400).json({ error: "Неверный id" });
+    }
+    const body = req.body as { active?: unknown } | null | undefined;
+    const result = await setMerchantPromotionActive({
+      businessId: merchant.businessId,
+      promotionId,
+      active: body?.active === true,
+    });
+    if (!result.ok) return res.status(404).json({ error: "Не найдено" });
+    invalidateStorefrontCache(merchant.businessId);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("POST /merchant/marketing/promotions/:id/active:", e);
+    res.status(500).json({ error: "update promotion failed" });
+  }
+});
+
+app.delete("/merchant/marketing/promotions/:id", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.settingsManage);
+    if (!merchant) return;
+    const promotionId = Number(req.params.id);
+    if (!Number.isFinite(promotionId)) {
+      return res.status(400).json({ error: "Неверный id" });
+    }
+    const result = await deleteMerchantPromotion({
+      businessId: merchant.businessId,
+      promotionId,
+    });
+    if (!result.ok) return res.status(404).json({ error: "Не найдено" });
+    invalidateStorefrontCache(merchant.businessId);
+    res.status(204).end();
+  } catch (e) {
+    console.error("DELETE /merchant/marketing/promotions/:id:", e);
+    res.status(500).json({ error: "delete promotion failed" });
+  }
+});
+
+app.get("/merchant/marketing/campaigns", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.analyticsView);
+    if (!merchant) return;
+    const campaigns = await listMerchantCampaigns({ businessId: merchant.businessId });
+    res.json({ campaigns });
+  } catch (e) {
+    console.error("GET /merchant/marketing/campaigns:", e);
+    res.status(500).json({ error: "campaigns failed" });
+  }
+});
+
+app.post("/merchant/marketing/campaigns", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.settingsManage);
+    if (!merchant) return;
+    const result = await createMerchantCampaign({
+      businessId: merchant.businessId,
+      definition: (req.body ?? {}) as Record<string, unknown>,
+    });
+    if (!result.ok) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.status(201).json(result.campaign);
+  } catch (e) {
+    console.error("POST /merchant/marketing/campaigns:", e);
+    res.status(500).json({ error: "create campaign failed" });
+  }
+});
+
+app.post("/merchant/marketing/campaigns/:id/state", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.settingsManage);
+    if (!merchant) return;
+    const campaignId = Number(req.params.id);
+    if (!Number.isFinite(campaignId)) {
+      return res.status(400).json({ error: "Неверный id" });
+    }
+    const body = req.body as { active?: unknown; paused?: unknown } | null | undefined;
+    const result = await setMerchantCampaignState({
+      businessId: merchant.businessId,
+      campaignId,
+      ...(typeof body?.active === "boolean" ? { active: body.active } : {}),
+      ...(typeof body?.paused === "boolean" ? { paused: body.paused } : {}),
+    });
+    if (!result.ok) return res.status(404).json({ error: "Не найдено" });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("POST /merchant/marketing/campaigns/:id/state:", e);
+    res.status(500).json({ error: "update campaign failed" });
+  }
+});
+
+app.delete("/merchant/marketing/campaigns/:id", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.settingsManage);
+    if (!merchant) return;
+    const campaignId = Number(req.params.id);
+    if (!Number.isFinite(campaignId)) {
+      return res.status(400).json({ error: "Неверный id" });
+    }
+    const result = await deleteMerchantCampaign({
+      businessId: merchant.businessId,
+      campaignId,
+    });
+    if (!result.ok) return res.status(404).json({ error: "Не найдено" });
+    res.status(204).end();
+  } catch (e) {
+    console.error("DELETE /merchant/marketing/campaigns/:id:", e);
+    res.status(500).json({ error: "delete campaign failed" });
+  }
+});
+
+app.post("/merchant/marketing/dashboard", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.analyticsView);
+    if (!merchant) return;
+    const body = req.body as { rangeDays?: unknown } | null | undefined;
+    const rd = Number(body?.rangeDays);
+    const rangeDays = rd === 7 || rd === 30 || rd === 90 ? rd : 30;
+    const payload = await buildMarketingDashboard({
+      businessId: merchant.businessId,
+      rangeDays,
+    });
+    res.json(payload);
+  } catch (e) {
+    console.error("POST /merchant/marketing/dashboard:", e);
+    res.status(500).json({ error: "marketing dashboard failed" });
+  }
+});
+
+app.get("/merchant/loyalty", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.analyticsView);
+    if (!merchant) return;
+    const payload = await buildMerchantLoyalty({ businessId: merchant.businessId });
+    res.json(payload);
+  } catch (e) {
+    console.error("GET /merchant/loyalty:", e);
+    res.status(500).json({ error: "loyalty failed" });
+  }
+});
+
+app.post("/merchant/loyalty", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.settingsManage);
+    if (!merchant) return;
+    const program = await saveLoyaltyProgram(
+      merchant.businessId,
+      (req.body ?? {}) as Record<string, unknown>,
+    );
+    res.json({ program });
+  } catch (e) {
+    console.error("POST /merchant/loyalty:", e);
+    res.status(500).json({ error: "save loyalty failed" });
+  }
+});
+
+// ================== MERCHANT WEB EXPERIENCE (Phase 17) ==================
+app.get("/api/merchant/slug/availability", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.settingsManage);
+    if (!merchant) return;
+    const slug = String(req.query.slug ?? "");
+    const result = await checkSlugAvailability({
+      businessId: merchant.businessId,
+      slug,
+    });
+    res.json(result);
+  } catch (e) {
+    console.error("GET /api/merchant/slug/availability:", e);
+    res.status(500).json({ error: "slug availability failed" });
+  }
+});
+
+app.post("/api/merchant/slug", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.settingsManage);
+    if (!merchant) return;
+    const body = req.body as { slug?: unknown } | null | undefined;
+    const slug = String(body?.slug ?? "");
+    const result = await changeMerchantSlug({
+      businessId: merchant.businessId,
+      slug,
+    });
+    if (!result.ok) {
+      return res.status(400).json({ error: result.error });
+    }
+    invalidateStorefrontCache(merchant.businessId);
+    res.json({ slug: result.slug, previousSlug: result.previousSlug });
+  } catch (e) {
+    console.error("POST /api/merchant/slug:", e);
+    res.status(500).json({ error: "slug change failed" });
+  }
+});
+
+app.get("/api/merchant/web-profile", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.settingsManage);
+    if (!merchant) return;
+    const biz = await prisma.business.findUnique({
+      where: { id: merchant.businessId },
+      select: { merchantConfig: true },
+    });
+    const profile = extractWebProfile(
+      (biz?.merchantConfig as Record<string, unknown> | null) ?? null,
+    );
+    res.json({ profile });
+  } catch (e) {
+    console.error("GET /api/merchant/web-profile:", e);
+    res.status(500).json({ error: "web profile failed" });
+  }
+});
+
+app.post("/api/merchant/web-profile", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.settingsManage);
+    if (!merchant) return;
+    const profile = normalizeWebProfile(req.body ?? {});
+    const biz = await prisma.business.findUnique({
+      where: { id: merchant.businessId },
+      select: { merchantConfig: true },
+    });
+    const merged = mergeWebProfileIntoMerchantConfig(
+      (biz?.merchantConfig as Record<string, unknown> | null) ?? null,
+      profile,
+    );
+    await prisma.business.update({
+      where: { id: merchant.businessId },
+      data: { merchantConfig: merged as any },
+    });
+    invalidateStorefrontCache(merchant.businessId);
+    res.json({ profile });
+  } catch (e) {
+    console.error("POST /api/merchant/web-profile:", e);
+    res.status(500).json({ error: "save web profile failed" });
+  }
+});
+
 app.get("/api/storefront/recommendations", async (req: Request, res: Response) => {
   try {
     const businessId = await resolveCatalogBusinessId(req, res);
@@ -6111,6 +6519,25 @@ if (SPA_AVAILABLE) {
       req.path.startsWith("/webhook")
     ) {
       return next();
+    }
+    // Phase 17: inject per-store SEO/OG meta for crawlable routes; fall back to
+    // the unmodified SPA index.html on any miss/error.
+    if (isMetaInjectablePath(req.path)) {
+      void renderSpaHtmlWithMeta(req, SPA_INDEX)
+        .then((html) => {
+          if (html == null) {
+            sendSpaIndexHtml(res, next);
+            return;
+          }
+          res.set({
+            "Cache-Control": "no-store, no-cache, must-revalidate, private",
+            Pragma: "no-cache",
+            "Content-Type": "text/html; charset=utf-8",
+          });
+          res.send(html);
+        })
+        .catch(() => sendSpaIndexHtml(res, next));
+      return;
     }
     sendSpaIndexHtml(res, next);
   });

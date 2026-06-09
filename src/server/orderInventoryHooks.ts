@@ -82,6 +82,11 @@ export async function onOrderPaidConfirmed(
     "./freeOrderQuotaService.js"
   );
   await incrementFreeOrderQuotaOnPaid(orderId);
+  // Phase 16: additive, non-blocking loyalty accrual on paid order.
+  const { accrueLoyaltyForPaidOrder } = await import(
+    "./merchantLoyaltyService.js"
+  );
+  await accrueLoyaltyForPaidOrder(orderId);
 }
 
 export async function onOrderCancelled(orderId: number, fromStatus: string): Promise<void> {

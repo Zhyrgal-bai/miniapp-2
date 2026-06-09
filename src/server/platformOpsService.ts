@@ -26,6 +26,24 @@ export type PlatformOpsSummary = {
     pendingRefundRequests: number;
     pendingReturnRequests: number;
   };
+  /** Phase 15: additive platform-wide customer activity (distinct paying buyers). */
+  customers: {
+    payingBuyers: number;
+    returningBuyers: number;
+  };
+  /** Phase 16: additive platform-wide marketing activity (aggregate only). */
+  marketing: {
+    activePromotions: number;
+    activeCampaigns: number;
+    loyaltyPrograms: number;
+  };
+  /** Phase 17: additive web-experience readiness (aggregate only, no PII). */
+  website: {
+    publishedStorefronts: number;
+    customSlugs: number;
+    missingSlug: number;
+    withWebProfile: number;
+  };
   onboarding: {
     pendingRegistrationRequests: number;
   };
@@ -52,6 +70,7 @@ export async function buildPlatformOpsSummary(): Promise<PlatformOpsSummary> {
     pendingRefund,
     pendingReturn,
     pendingRegistration,
+    buyerGroups,
   ] = await Promise.all([
     prisma.business.count({
       where: { isActive: true, isBlocked: false },
@@ -103,7 +122,50 @@ export async function buildPlatformOpsSummary(): Promise<PlatformOpsSummary> {
     }),
     prisma.returnRequest.count({ where: { status: "PENDING" } }),
     prisma.registrationRequest.count({ where: { status: "PENDING" } }),
+    prisma.order.groupBy({
+      by: ["buyerUserId"],
+      where: {
+        buyerUserId: { not: null },
+        status: { in: [...ORDER_ANALYTICS_SUCCESS_STATUSES_DB] },
+      },
+      _count: { _all: true },
+    }),
   ]);
+
+  const payingBuyers = buyerGroups.length;
+  const returningBuyers = buyerGroups.filter(
+    (g) => (g._count?._all ?? 0) > 1,
+  ).length;
+
+  // Phase 16: aggregate marketing activity across tenants (no PII).
+  const opsDb = prisma as any;
+  const [activePromotions, activeCampaigns, loyaltyPrograms] = await Promise.all([
+    opsDb.merchantPromotion.count({ where: { active: true } }).catch(() => 0),
+    opsDb.merchantCampaign.count({ where: { active: true, paused: false } }).catch(() => 0),
+    opsDb.loyaltyProgram.count({ where: { enabled: true } }).catch(() => 0),
+  ]);
+
+  // Phase 17: aggregate web-experience readiness across tenants (no PII).
+  const [publishedStorefronts, customSlugs, missingSlug, businessesForWebProfile] =
+    await Promise.all([
+      prisma.business.count({ where: { storefrontPublishedAt: { not: null } } }).catch(() => 0),
+      prisma.business.count({ where: { slug: { not: null } } }).catch(() => 0),
+      prisma.business.count({ where: { slug: null } }).catch(() => 0),
+      prisma.business
+        .findMany({ select: { merchantConfig: true } })
+        .catch(() => [] as Array<{ merchantConfig: unknown }>),
+    ]);
+  const withWebProfile = (businessesForWebProfile as Array<{ merchantConfig: unknown }>).filter(
+    (b) => {
+      const cfg = b.merchantConfig;
+      return (
+        cfg != null &&
+        typeof cfg === "object" &&
+        !Array.isArray(cfg) &&
+        (cfg as Record<string, unknown>).webProfile != null
+      );
+    },
+  ).length;
 
   let subscriptionExpired = 0;
   let finikNotConfigured = 0;
@@ -158,6 +220,21 @@ export async function buildPlatformOpsSummary(): Promise<PlatformOpsSummary> {
       pendingCancelRequests: pendingCancel,
       pendingRefundRequests: pendingRefund,
       pendingReturnRequests: pendingReturn,
+    },
+    customers: {
+      payingBuyers,
+      returningBuyers,
+    },
+    marketing: {
+      activePromotions: Number(activePromotions) || 0,
+      activeCampaigns: Number(activeCampaigns) || 0,
+      loyaltyPrograms: Number(loyaltyPrograms) || 0,
+    },
+    website: {
+      publishedStorefronts: Number(publishedStorefronts) || 0,
+      customSlugs: Number(customSlugs) || 0,
+      missingSlug: Number(missingSlug) || 0,
+      withWebProfile,
     },
     onboarding: {
       pendingRegistrationRequests: pendingRegistration,
