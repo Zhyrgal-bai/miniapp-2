@@ -1284,7 +1284,10 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
       select: { id: true, botToken: true, slug: true },
     });
     const storedToken = bizFromDb?.botToken ?? "";
-    console.log("TOKEN BEFORE DECRYPT:", `${String(storedToken).slice(0, 24)}…(len=${String(storedToken).length})`);
+    console.log(
+      "TOKEN BEFORE DECRYPT:",
+      `(redacted, len=${String(storedToken).length})`,
+    );
 
     let tokenPlain: string;
     try {
@@ -1295,9 +1298,7 @@ async function handleApproveFlow(ctx: Context, requestId: number): Promise<void>
     }
     console.log(
       "TOKEN AFTER DECRYPT:",
-      tokenPlain === ""
-        ? "(empty)"
-        : `${tokenPlain.slice(0, 10)}…(len=${tokenPlain.length})`,
+      tokenPlain === "" ? "(empty)" : `(present, len=${tokenPlain.length})`,
     );
     if (!tokenPlain || isEncryptedTokenFormat(tokenPlain.trim())) {
       console.error(

@@ -11,8 +11,10 @@ export const ARCHA_BRAND = {
   splashArt: "/image.png",
   /** Decorative background. */
   background: "/фон.png",
-  /** Favicon + PWA icons (icon-only, from brand sheet). */
-  favicon: "/favicon2.png",
+  /** Favicon + icon-only mark (intro, nav, errors, footer). */
+  favicon: "/favicon.png",
+  /** Semantic alias — same asset as favicon. */
+  logoIcon: "/favicon.png",
   icon192: "/archa-icon-192.png",
   icon512: "/archa-icon-512.png",
   themeColor: "#0a120a",

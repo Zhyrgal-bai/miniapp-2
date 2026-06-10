@@ -21,6 +21,11 @@ describe("production env validation", () => {
       true,
     );
     expect(result.errors.some((e) => e.includes("FINIK_USE_MOCK"))).toBe(true);
+    process.env.WEBHOOK_DEBUG = "1";
+    const withWebhook = validateEnvironment();
+    expect(
+      withWebhook.errors.some((e) => e.includes("WEBHOOK_DEBUG")),
+    ).toBe(true);
 
     Object.assign(process.env, prev);
   });
@@ -36,6 +41,7 @@ describe("production env validation", () => {
     delete process.env.SKIP_TELEGRAM_WEBAPP_AUTH;
     delete process.env.TELEGRAM_INIT_DEBUG;
     delete process.env.FINIK_USE_MOCK;
+    delete process.env.WEBHOOK_DEBUG;
 
     const result = validateEnvironment();
     expect(result.ok).toBe(true);

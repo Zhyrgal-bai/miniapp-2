@@ -1,5 +1,4 @@
 import type { Express, Request, Response } from "express";
-import { BusinessStaffRole } from "@prisma/client";
 import { webhooksLimiter } from "../middleware/apiRateLimits.js";
 import { prisma } from "./db.js";
 import { verifiedTelegramIdFromRequest } from "../middleware/verifiedTelegramAuth.js";
@@ -33,6 +32,24 @@ import {
 } from "./finik/finikWebhookPayload.js";
 import { verifyFinikWebhookAdmission } from "./finik/finikWebhookVerify.js";
 import { fetchFinikPaymentStatusRouted } from "./finik/finikStatusRouter.js";
+import {
+  effectiveMerchantPermissions,
+  merchantHasPermission,
+  MERCHANT_PERM,
+} from "./merchantPermissions.js";
+
+async function merchantStaffHasFinikSettingsAccess(
+  businessId: number,
+  telegramStr: string,
+): Promise<boolean> {
+  const staff = await prisma.businessStaff.findFirst({
+    where: { businessId, user: { telegramId: telegramStr } },
+    select: { role: true, permissions: true },
+  });
+  if (!staff) return false;
+  const perms = effectiveMerchantPermissions(staff.role, staff.permissions ?? []);
+  return merchantHasPermission(perms, MERCHANT_PERM.settingsManage);
+}
 
 /** Base URL для REST Finik (укажите реальный домен вашего аккаунта разработчика). */
 function finikApiBase(): string {
@@ -1193,14 +1210,7 @@ export function mountFinikSettingsRoutes(app: Express): void {
         return;
       }
 
-      const allowed = await prisma.businessStaff.findFirst({
-        where: {
-          businessId,
-          role: { in: [BusinessStaffRole.OWNER, BusinessStaffRole.ADMIN] },
-          user: { telegramId: telegramStr },
-        },
-      });
-      if (!allowed) {
+      if (!(await merchantStaffHasFinikSettingsAccess(businessId, telegramStr))) {
         res.status(403).json({ error: "Нет доступа к этому магазину" });
         return;
       }
@@ -1240,14 +1250,7 @@ export function mountFinikSettingsRoutes(app: Express): void {
         return;
       }
 
-      const allowed = await prisma.businessStaff.findFirst({
-        where: {
-          businessId,
-          role: { in: [BusinessStaffRole.OWNER, BusinessStaffRole.ADMIN] },
-          user: { telegramId: telegramStr },
-        },
-      });
-      if (!allowed) {
+      if (!(await merchantStaffHasFinikSettingsAccess(businessId, telegramStr))) {
         res.status(403).json({ error: "Нет доступа к этому магазину" });
         return;
       }

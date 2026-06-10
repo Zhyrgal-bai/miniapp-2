@@ -114,6 +114,20 @@ export function validateEnvironment(): EnvValidationResult {
         "FRONT_URL or MINI_APP_URL (https) required for Telegram Web App buttons",
       );
     }
+    if (process.env.WEBHOOK_DEBUG === "1") {
+      errors.push("WEBHOOK_DEBUG=1 is forbidden in production");
+    }
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim();
+    const cloudKey = process.env.CLOUDINARY_API_KEY?.trim();
+    const cloudSecret = process.env.CLOUDINARY_API_SECRET?.trim();
+    if (
+      (cloudName || cloudKey || cloudSecret) &&
+      !(cloudName && cloudKey && cloudSecret)
+    ) {
+      warnings.push(
+        "Cloudinary partially configured — set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET together",
+      );
+    }
   }
 
   if (!process.env.FRONT_URL?.trim() && !process.env.MINI_APP_URL?.trim()) {

@@ -1,5 +1,6 @@
 import type { MediaEntityKind, UploadResult } from "./types.js";
 import { uploadImageBuffer } from "./cloudinary.js";
+import { isSafeUploadFilename, sniffMatchesMime } from "./mimeSniff.js";
 
 export const ALLOWED_IMAGE_MIME = new Set([
   "image/jpeg",
@@ -12,7 +13,12 @@ export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export function validateImageFile(params: {
   mimetype: string | undefined;
   sizeBytes: number | undefined;
+  buffer?: Buffer;
+  originalname?: string;
 }): { ok: true; mimetype: string } | { ok: false; error: string } {
+  if (!isSafeUploadFilename(params.originalname)) {
+    return { ok: false, error: "Недопустимое имя файла" };
+  }
   const mt = (params.mimetype ?? "").trim().toLowerCase();
   if (!ALLOWED_IMAGE_MIME.has(mt)) {
     return { ok: false, error: "Недопустимый формат. Разрешены: jpeg/png/webp" };
@@ -23,6 +29,43 @@ export function validateImageFile(params: {
   }
   if (size > MAX_IMAGE_BYTES) {
     return { ok: false, error: "Файл слишком большой (лимит 5MB)" };
+  }
+  if (params.buffer != null && params.buffer.length > 0) {
+    if (!sniffMatchesMime(params.buffer, mt)) {
+      return { ok: false, error: "Содержимое файла не соответствует формату" };
+    }
+  }
+  return { ok: true, mimetype: mt };
+}
+
+export function validateReceiptFile(params: {
+  mimetype: string | undefined;
+  sizeBytes: number | undefined;
+  buffer?: Buffer;
+  originalname?: string;
+}): { ok: true; mimetype: string } | { ok: false; error: string } {
+  if (!isSafeUploadFilename(params.originalname)) {
+    return { ok: false, error: "Недопустимое имя файла" };
+  }
+  const mt = (params.mimetype ?? "").trim().toLowerCase();
+  const allowed =
+    mt === "application/pdf" ||
+    mt === "application/x-pdf" ||
+    ALLOWED_IMAGE_MIME.has(mt);
+  if (!allowed) {
+    return { ok: false, error: "Допустимы только изображение или PDF" };
+  }
+  const size = typeof params.sizeBytes === "number" ? params.sizeBytes : 0;
+  if (!Number.isFinite(size) || size <= 0) {
+    return { ok: false, error: "Пустой файл" };
+  }
+  if (size > MAX_IMAGE_BYTES) {
+    return { ok: false, error: "Файл слишком большой (лимит 5MB)" };
+  }
+  if (params.buffer != null && params.buffer.length > 0) {
+    if (!sniffMatchesMime(params.buffer, mt)) {
+      return { ok: false, error: "Содержимое файла не соответствует формату" };
+    }
   }
   return { ok: true, mimetype: mt };
 }

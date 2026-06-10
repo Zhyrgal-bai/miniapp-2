@@ -15,6 +15,7 @@ import { parseTelegramWebAppUserFromInitData } from "../server/telegramWebAppIni
 import { syncTelegramUserProfile } from "../server/telegramUserSync.js";
 import { API_ERR_STORE_UNAVAILABLE } from "../shared/apiClientMessages.js";
 import { isPublicStorefrontBookingPath } from "../shared/storefrontPublicPaths.js";
+import { resolveTenantHintFromRequest } from "../server/resolveTenantHint.js";
 
 declare global {
   namespace Express {
@@ -58,33 +59,8 @@ export function telegramFromRequest(req: Request): string | null {
 
 /** `?businessId` → `?shop` → `x-business-id` → JSON `businessId` / `shop`. */
 function businessIdHintFromRequest(req: Request): number | undefined {
-  const fromBid = parseTenantHintInt(req.query.businessId);
-  if (fromBid !== undefined) return fromBid;
-
-  const fromShop = parseTenantHintInt(req.query.shop);
-  if (fromShop !== undefined) return fromShop;
-
-  const hRaw = trimmedHeader(req, "x-business-id");
-  const fromHeader = hRaw ? parseTenantHintInt(hRaw) : undefined;
-  if (fromHeader !== undefined) return fromHeader;
-
-  const body = req.body as { businessId?: unknown; shop?: unknown } | undefined;
-  const b = body?.businessId;
-  if (typeof b === "number" && Number.isInteger(b)) {
-    const fb = parseTenantHintInt(String(b));
-    if (fb !== undefined) return fb;
-  }
-  if (typeof b === "string") {
-    const fb = parseTenantHintInt(b.trim());
-    if (fb !== undefined) return fb;
-  }
-  const shopB = body?.shop;
-  if (typeof shopB === "string") {
-    const fs = parseTenantHintInt(shopB.trim());
-    if (fs !== undefined) return fs;
-  }
-
-  return undefined;
+  const hint = resolveTenantHintFromRequest(req);
+  return hint ?? undefined;
 }
 
 export type BusinessSubscriptionGate = SubscriptionGateFields;

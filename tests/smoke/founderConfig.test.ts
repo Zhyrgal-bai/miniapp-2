@@ -29,6 +29,12 @@ describe("founder config", () => {
     expect(ids).toContain("telegram");
   });
 
+  it("uses zhyrgal4_ik as default Instagram handle", () => {
+    const ig = ARCHA_FOUNDER.socials.find((s) => s.id === "instagram");
+    expect(ig?.href).toContain("zhyrgal4_ik");
+    expect(ig?.handle).toBe("@zhyrgal4_ik");
+  });
+
   it("keeps github optional", () => {
     const github = ARCHA_FOUNDER.socials.find((s) => s.id === "github");
     expect(github).toBeTruthy();

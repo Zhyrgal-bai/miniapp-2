@@ -22,3 +22,7 @@ jobs:
 
       - name: Validate + typecheck + smoke tests
         run: node scripts/predeploy-check.mjs
+
+      - name: Dependency security audit
+        run: node scripts/security-audit.mjs
+        continue-on-error: true

@@ -1,7 +1,7 @@
 .merchant-faq-page {
   min-height: 100dvh;
-  background: #0f172a;
-  color: #e2e8f0;
+  background: var(--archa-bg, #050805);
+  color: var(--archa-text, #eef8ea);
 }
 
 .merchant-faq-page__top {
@@ -9,18 +9,25 @@
   top: 0;
   z-index: 2;
   padding: 0.65rem 0.85rem;
-  background: rgb(15 23 42 / 0.92);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgb(51 65 85);
+  background: color-mix(in srgb, var(--archa-bg, #050805) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--archa-glass-border, rgba(157, 255, 87, 0.14));
 }
 
 .merchant-faq-page__back {
   border: none;
   background: transparent;
-  color: #93c5fd;
+  color: var(--archa-green-neon, #9dff57);
   font: inherit;
   font-size: 0.92rem;
   font-weight: 600;
   cursor: pointer;
   padding: 0.35rem 0.15rem;
+  min-height: var(--archa-touch-min, 44px);
+}
+
+.merchant-faq-page__back:focus-visible {
+  outline: 2px solid var(--archa-btn-focus-ring, rgba(157, 255, 87, 0.55));
+  outline-offset: 2px;
+  border-radius: 8px;
 }

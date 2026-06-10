@@ -69,7 +69,61 @@ Production start sequence (`scripts/productionStart.mjs`):
 
 ---
 
-## 5. Emergency contacts checklist
+## 5. VPS backup (self-hosted PostgreSQL)
+
+When running on a VPS instead of Render Postgres:
+
+### Database (`pg_dump` cron)
+
+```bash
+# /etc/cron.d/archa-pg-backup (example — adjust paths)
+0 3 * * * deploy pg_dump "$DATABASE_URL" -Fc -f /var/backups/archa/db-$(date +\%F).dump
+```
+
+- Retain 7 daily + 4 weekly copies minimum.
+- Copy dumps off-site (S3, Backblaze, second VPS).
+- Encrypt backups at rest if they leave the server.
+
+### Restore drill
+
+```bash
+pg_restore -d "$TARGET_DATABASE_URL" --clean --if-exists /var/backups/archa/db-YYYY-MM-DD.dump
+cd /opt/archa && npx prisma migrate deploy
+curl -sS https://api.example.com/ready
+```
+
+Run quarterly; record RTO/RPO in ops notes.
+
+### Media (Cloudinary)
+
+Merchant images/receipts live in Cloudinary — not in `pg_dump`. Recovery = re-upload from merchant or Cloudinary console export if enabled on your plan.
+
+### Environment backup
+
+Maintain an encrypted secrets export (no plain tokens in git):
+
+| Secret | Store |
+|--------|-------|
+| `DATABASE_URL` | Vault |
+| `BOT_TOKEN_SECRET_KEY` | Vault |
+| `BOT_TOKENS` / per-store tokens | Vault + DB ciphertext |
+| `OPERATOR_PASSWORD_HASH` | Vault |
+| Finik platform PEM keys | Vault |
+| `CLOUDINARY_*` | Vault |
+
+### RTO / RPO targets (recommended)
+
+| Tier | RPO | RTO |
+|------|-----|-----|
+| Database | ≤ 24 h (daily dump) | ≤ 4 h |
+| API deploy rollback | 0 (git) | ≤ 30 min |
+| Media | Best effort | Re-upload |
+
+See also [VPS Production Hardening](./vps-production-hardening.md).
+
+---
+
+## 6. Emergency contacts checklist
 
 | Asset | Where stored |
 |-------|----------------|
@@ -82,7 +136,7 @@ Production start sequence (`scripts/productionStart.mjs`):
 
 ---
 
-## 6. Recovery test (quarterly)
+## 7. Recovery test (quarterly)
 
 - [ ] Restore staging DB from backup to test instance
 - [ ] Point staging API at restored DB
@@ -91,7 +145,7 @@ Production start sequence (`scripts/productionStart.mjs`):
 
 ---
 
-## 7. Structured log search during incidents
+## 8. Structured log search during incidents
 
 Search Render logs for JSON events:
 
@@ -102,6 +156,9 @@ Search Render logs for JSON events:
 | `inventory_reserve_failed` | Oversell attempt blocked |
 | `inventory_mismatch` | Admin catalog vs ProductStock drift |
 | `auth_reject` | Spoofed or missing initData |
+| `rate_limit_hit` | Abuse / burst traffic |
+| `tenant_access_denied` | Cross-tenant or permission deny |
+| `operator_action` | Destructive platform admin mutation |
 | `stale_order_released` | Abandoned checkout cleanup |
 
 Operator health: `GET /api/platform/admin/ops-summary`

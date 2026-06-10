@@ -1,3 +1,5 @@
+import { useState } from "react";
+import ArchaIntro, { ARCHA_INTRO_SESSION_KEY } from "../components/branding/ArchaIntro";
 import TenantBootScreen from "../components/ui/TenantBootScreen";
 import { useMerchantExperienceMode } from "../hooks/useMerchantExperienceMode";
 import MerchantLandingPage from "./MerchantLandingPage";
@@ -5,11 +7,18 @@ import PlatformPage from "./PlatformPage";
 
 /**
  * `/merchant` — dual experience:
- * - browser → SaaS landing
+ * - browser → SaaS landing (+ premium session intro)
  * - Telegram Mini App → merchant dashboard (PlatformPage)
  */
 export default function MerchantDashboardPage() {
   const { mode, booting } = useMerchantExperienceMode();
+  const [introDone, setIntroDone] = useState(() => {
+    try {
+      return sessionStorage.getItem(ARCHA_INTRO_SESSION_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
 
   if (booting || mode == null) {
     return (
@@ -24,5 +33,10 @@ export default function MerchantDashboardPage() {
     return <PlatformPage />;
   }
 
-  return <MerchantLandingPage />;
+  return (
+    <>
+      {!introDone ? <ArchaIntro onComplete={() => setIntroDone(true)} /> : null}
+      {introDone ? <MerchantLandingPage /> : null}
+    </>
+  );
 }

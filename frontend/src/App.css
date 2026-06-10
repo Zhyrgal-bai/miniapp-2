@@ -392,6 +392,14 @@ button:active {
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .tenant-boot__spinner {
+    animation: none;
+    border-top-color: color-mix(in srgb, #7fff3a 70%, transparent);
+    opacity: 0.85;
+  }
+}
+
 .tenant-boot__message {
   margin: 0;
   font-size: 1rem;

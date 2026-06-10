@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { BusinessStaffRole } from "@prisma/client";
 import {
@@ -27,5 +29,24 @@ describe("staff security boundary", () => {
     expect(merchantHasPermission(perms, MERCHANT_PERM.settingsManage)).toBe(
       true,
     );
+  });
+
+  it("SUPPORT lacks notification-related permissions by default", () => {
+    const perms = defaultPermissionsForStaffRole(BusinessStaffRole.SUPPORT);
+    expect(merchantHasPermission(perms, MERCHANT_PERM.ordersManage)).toBe(
+      false,
+    );
+    expect(merchantHasPermission(perms, MERCHANT_PERM.analyticsView)).toBe(
+      false,
+    );
+  });
+
+  it("Finik integration routes align with settingsManage permission", () => {
+    const src = readFileSync(
+      resolve(process.cwd(), "src/server/finikMerchant.ts"),
+      "utf8",
+    );
+    expect(src.includes("MERCHANT_PERM.settingsManage")).toBe(true);
+    expect(src.includes("merchantStaffHasFinikSettingsAccess")).toBe(true);
   });
 });

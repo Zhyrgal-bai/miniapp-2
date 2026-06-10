@@ -218,3 +218,45 @@ export function logStaleOrderReleased(fields: {
 }): void {
   emit("info", "stale_order_released", fields);
 }
+
+/** Rate limiter tripped (Phase 18). */
+export function logRateLimitHit(fields: {
+  kind: string;
+  ip: string;
+  method: string;
+  path: string;
+  correlationId?: string;
+}): void {
+  emit("warn", "rate_limit_hit", fields);
+}
+
+/** Merchant staff denied for tenant (Phase 18). */
+export function logTenantAccessDenied(fields: {
+  path: string;
+  businessId: number;
+  reason: string;
+  correlationId?: string;
+}): void {
+  emit("warn", "tenant_access_denied", fields);
+}
+
+/** Auth failure with structured reason (Phase 18). */
+export function logAuthFailure(fields: {
+  path: string;
+  method?: string;
+  reason: string;
+  ip?: string;
+  correlationId?: string;
+}): void {
+  emit("warn", "auth_failure", fields);
+}
+
+/** Platform operator privileged action (Phase 18). */
+export function logOperatorAction(fields: {
+  action: string;
+  operatorTelegramId?: string;
+  businessId?: number;
+  correlationId?: string;
+}): void {
+  emit("info", "operator_action", fields);
+}

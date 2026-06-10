@@ -11,6 +11,7 @@ import {
   MerchantNotificationKind,
 } from "@prisma/client";
 import { uploadImageBuffer } from "../media/cloudinary.js";
+import { validateImageFile } from "../media/upload.js";
 import { isCloudinaryConfigured } from "./cloudinary.js";
 import { prisma } from "./db.js";
 import {
@@ -749,15 +750,20 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
         if (!order) {
           return res.status(404).json({ error: NOT_FOUND });
         }
-        const mime = file.mimetype || "";
-        if (!mime.startsWith("image/")) {
-          return res.status(400).json({ error: "Только изображение" });
+        const v = validateImageFile({
+          mimetype: file.mimetype,
+          sizeBytes: file.size,
+          buffer: file.buffer,
+          originalname: file.originalname,
+        });
+        if (!v.ok) {
+          return res.status(400).json({ error: v.error });
         }
         const out = await uploadImageBuffer({
           businessId,
           kind: "support",
           buffer: file.buffer,
-          mimetype: mime,
+          mimetype: v.mimetype,
         });
         return res.json({ url: out.url, publicId: out.publicId });
       } catch (e) {

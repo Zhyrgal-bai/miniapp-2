@@ -63,21 +63,25 @@ export function FounderSection(): React.ReactElement {
           <p className="archa-founder__desc">{ARCHA_FOUNDER.description}</p>
           {socials.length > 0 ? (
             <div className="archa-founder__socials">
-              {socials.map((s) => (
-                <a
-                  key={s.id}
-                  className="archa-founder__social"
-                  href={s.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={s.label}
-                >
-                  <span className="archa-founder__social-icon" aria-hidden>
-                    {SOCIAL_ICON[s.id]}
-                  </span>
-                  <span className="archa-founder__social-label">{s.label}</span>
-                </a>
-              ))}
+              {socials.map((s) => {
+                const display = s.handle?.trim() || s.label;
+                const aria = s.handle ? `${s.label} ${s.handle}` : s.label;
+                return (
+                  <a
+                    key={s.id}
+                    className="archa-founder__social"
+                    href={s.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={aria}
+                  >
+                    <span className="archa-founder__social-icon" aria-hidden>
+                      {SOCIAL_ICON[s.id]}
+                    </span>
+                    <span className="archa-founder__social-label">{display}</span>
+                  </a>
+                );
+              })}
             </div>
           ) : null}
         </div>

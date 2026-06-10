@@ -1,3 +1,4 @@
+import { ARCHA_BRAND } from "../../../config/brandAssets";
 import "./webShowcase.css";
 
 type Props = {
@@ -11,7 +12,17 @@ type Props = {
 export function WebShowcaseFooter({ telegramOpenUrl }: Props): React.ReactElement {
   return (
     <footer className="sf-showcase-footer">
-      <span className="sf-showcase-footer__brand">Powered by ARCHA</span>
+      <div className="sf-showcase-footer__brand-wrap">
+        <img
+          className="sf-showcase-footer__icon"
+          src={ARCHA_BRAND.logoIcon}
+          alt=""
+          width={22}
+          height={22}
+          aria-hidden
+        />
+        <span className="sf-showcase-footer__brand">Powered by ARCHA</span>
+      </div>
       {telegramOpenUrl ? (
         <a
           className="sf-showcase-footer__tg"
@@ -19,7 +30,7 @@ export function WebShowcaseFooter({ telegramOpenUrl }: Props): React.ReactElemen
           target="_blank"
           rel="noopener noreferrer"
         >
-          Открыть в Telegram
+          Telegram →
         </a>
       ) : null}
     </footer>

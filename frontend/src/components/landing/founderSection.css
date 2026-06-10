@@ -5,7 +5,7 @@
   z-index: 1;
   max-width: 1040px;
   margin: 0 auto;
-  padding: clamp(48px, 8vw, 96px) 20px 0;
+  padding: clamp(56px, 9vw, 104px) 20px 0;
 }
 
 .archa-founder__head {
@@ -124,6 +124,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  min-height: var(--archa-touch-min, 44px);
   padding: 9px 16px;
   border-radius: 999px;
   border: 1px solid rgba(157, 255, 87, 0.18);
@@ -142,6 +143,11 @@
   transform: translateY(-2px);
   border-color: rgba(127, 255, 58, 0.45);
   background: rgba(127, 255, 58, 0.1);
+}
+
+.archa-founder__social:focus-visible {
+  outline: 2px solid var(--archa-btn-focus-ring, rgba(157, 255, 87, 0.55));
+  outline-offset: 2px;
 }
 
 .archa-founder__social-icon {

@@ -1,0 +1,74 @@
+/* ARCHA premium session intro — Phase 17.4A */
+
+.archa-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--archa-bg, #050805);
+  pointer-events: none;
+}
+
+.archa-intro__bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.2;
+}
+
+.archa-intro__stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.archa-intro__glow {
+  position: absolute;
+  width: clamp(120px, 32vw, 200px);
+  height: clamp(120px, 32vw, 200px);
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    rgba(127, 255, 58, 0.35),
+    rgba(90, 143, 74, 0.1) 55%,
+    transparent 75%
+  );
+  filter: blur(24px);
+  pointer-events: none;
+}
+
+.archa-intro__logo {
+  position: relative;
+  z-index: 1;
+  width: clamp(64px, 18vw, 96px);
+  height: clamp(64px, 18vw, 96px);
+  object-fit: contain;
+  filter: drop-shadow(0 0 28px rgba(127, 255, 58, 0.35));
+}
+
+.archa-intro__name {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  font-family: var(--archa-font);
+  font-size: clamp(1.1rem, 4vw, 1.5rem);
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  color: var(--archa-text, #eef8ea);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .archa-intro__glow {
+    filter: blur(16px);
+    animation: none !important;
+  }
+
+  .archa-intro__logo {
+    filter: drop-shadow(0 0 12px rgba(127, 255, 58, 0.2));
+  }
+}

@@ -97,8 +97,8 @@
 }
 
 .archa-faq--platform .archa-faq-chip {
-  border-color: rgb(71 85 105);
-  color: #cbd5e1;
+  border-color: var(--archa-glass-border, rgba(157, 255, 87, 0.14));
+  color: var(--archa-text-muted, rgba(238, 248, 234, 0.68));
 }
 
 .archa-faq-chip--active {
@@ -108,9 +108,9 @@
 }
 
 .archa-faq--platform .archa-faq-chip--active {
-  background: rgb(30 58 138 / 0.45);
-  border-color: rgb(96 165 250);
-  color: #f8fafc;
+  background: rgba(127, 255, 58, 0.16);
+  border-color: rgba(157, 255, 87, 0.45);
+  color: var(--archa-text, #eef8ea);
 }
 
 .archa-faq__list {
@@ -132,9 +132,9 @@
 }
 
 .archa-faq--platform .archa-faq-card {
-  border-color: rgb(51 65 85);
-  background: rgb(15 23 42);
-  box-shadow: none;
+  border-color: var(--archa-glass-border, rgba(157, 255, 87, 0.14));
+  background: var(--archa-glass, rgba(12, 20, 12, 0.55));
+  box-shadow: var(--archa-shadow-card, 0 16px 48px rgba(0, 0, 0, 0.45));
 }
 
 .archa-faq-card__trigger {
@@ -143,6 +143,7 @@
   justify-content: space-between;
   gap: 0.75rem;
   width: 100%;
+  min-height: var(--archa-touch-min, 44px);
   padding: 0.95rem 1rem;
   border: none;
   background: transparent;
@@ -150,6 +151,10 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+
+.archa-faq--platform .archa-faq-card__trigger:hover {
+  background: rgba(127, 255, 58, 0.06);
 }
 
 .archa-faq-card__question {
@@ -216,7 +221,34 @@
 }
 
 .archa-faq--platform .archa-faq__footer {
-  border-top-color: rgb(51 65 85);
+  border-top-color: var(--archa-glass-border, rgba(157, 255, 87, 0.14));
+}
+
+.archa-faq--platform .archa-faq__support-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--archa-touch-min, 44px);
+  padding: 0.72rem 1.1rem;
+  border: none;
+  border-radius: 0.875rem;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--archa-black, #030403);
+  cursor: pointer;
+  background: linear-gradient(135deg, #b8ff6a 0%, var(--archa-green-neon, #9dff57) 45%, #6fdc3d 100%);
+  box-shadow: 0 8px 32px rgba(127, 255, 58, 0.28);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.archa-faq--platform .archa-faq__support-btn:hover {
+  box-shadow: 0 12px 40px rgba(127, 255, 58, 0.38);
+}
+
+.archa-faq--platform .archa-faq__support-btn:focus-visible {
+  outline: 2px solid var(--archa-btn-focus-ring, rgba(157, 255, 87, 0.55));
+  outline-offset: 2px;
 }
 
 .archa-faq__footer-text {
@@ -249,5 +281,12 @@
   .archa-faq-chip {
     font-size: 0.78rem;
     padding: 0.38rem 0.62rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .archa-faq-chip,
+  .archa-faq--platform .archa-faq__support-btn {
+    transition: none;
   }
 }

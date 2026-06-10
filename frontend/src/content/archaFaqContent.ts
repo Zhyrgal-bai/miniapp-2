@@ -99,9 +99,11 @@ export const ARCHA_FAQ_ITEMS: ArchaFaqItem[] = [
     id: "who-created-archa",
     categoryId: "founders",
     question: "Кто создал ARCHA?",
-    paragraphs: ["ARCHA создана командой основателей из Кыргызстана 🇰🇬"],
+    paragraphs: [
+      "ARCHA создана командой основателей из Кыргызстана 🇰🇬. Основатель платформы — Жыргал.",
+    ],
     bullets: [
-      "Жыргалбек — Instagram @zhyrgal4_ik",
+      "Жыргал — Instagram @zhyrgal4_ik",
       "Умар — Instagram @umar09r_",
       "Шаршенбек — Instagram @_sharshenbekov_kg",
     ],

@@ -1,5 +1,7 @@
 # Global Product Maturity + Platform Hardening — Audit & Roadmap
 
+> **⚠️ Superseded in part by Phase 18 (2026-06):** See authoritative inventory at [`docs/security/phase-18-inventory.md`](./security/phase-18-inventory.md) and closeout at [`docs/security/phase-18-final-report.md`](./security/phase-18-final-report.md). Historical SEC-* IDs below are kept for traceability — do not delete.
+
 > **Philosophy:** Not new features — **production-grade scalable commerce infrastructure**.  
 > **Goal:** Remove the “quickly assembled project” feeling; one stable, mature platform.  
 > **Constraint:** Audit first → hardening → unification → optimization → QA → polish.

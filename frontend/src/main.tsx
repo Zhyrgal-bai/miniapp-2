@@ -11,6 +11,7 @@ import MerchantFaqPage from "./pages/MerchantFaqPage";
 import SubscriptionPage from "./pages/SubscriptionPage";
 import RootAppOrPlatform from "./pages/RootAppOrPlatform";
 import StoreSlugAliasRedirect from "./pages/StoreSlugAliasRedirect";
+import NotFoundRoute from "./pages/NotFoundRoute";
 import AppErrorBoundary from "./components/ui/AppErrorBoundary";
 import "leaflet/dist/leaflet.css";
 import "./design/archaPremium.css";
@@ -57,7 +58,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               <Route path="/store/:slug" element={<StoreSlugAliasRedirect />} />
               <Route path="/s/:slug" element={<App />} />
               <Route path="/" element={<RootAppOrPlatform />} />
-              <Route path="*" element={<App />} />
+              <Route path="*" element={<NotFoundRoute />} />
             </Routes>
           </StorefrontPayloadProvider>
         </ThemeProvider>

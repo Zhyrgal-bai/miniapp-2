@@ -1,12 +1,18 @@
 import type { Request } from "express";
 import rateLimit from "express-rate-limit";
+import { logRateLimitHit } from "../server/structuredLog.js";
+
+function trustProxyEnabled(): boolean {
+  return process.env.TRUST_PROXY === "1" || process.env.TRUST_PROXY === "true";
+}
 
 function logSuspicious(kind: string, req: Request): void {
   const path =
     typeof req.path === "string" && req.path !== ""
       ? req.path
       : new URL(req.url, "http://localhost").pathname;
-  console.warn(`[rate-limit:${kind}]`, {
+  logRateLimitHit({
+    kind,
     ip: req.ip ?? "",
     method: req.method,
     path,
@@ -19,7 +25,19 @@ function skipTrustedPaymentWebhook(req: Request): boolean {
     typeof req.path === "string" && req.path !== ""
       ? req.path
       : new URL(req.url, "http://localhost").pathname;
-  return path === "/api/payments/finik-webhook";
+  return (
+    path === "/api/payments/finik-webhook" ||
+    path === "/api/platform/subscription-finik-webhook"
+  );
+}
+
+function isSubscriptionFinikWebhook(req: Request): boolean {
+  if (req.method !== "POST") return false;
+  const path =
+    typeof req.path === "string" && req.path !== ""
+      ? req.path
+      : new URL(req.url, "http://localhost").pathname;
+  return path === "/api/platform/subscription-finik-webhook";
 }
 
 function makeLimiter(opts: {
@@ -34,9 +52,9 @@ function makeLimiter(opts: {
     legacyHeaders: false,
     standardHeaders: "draft-7",
     validate: {
-      trustProxy: false,
-      xForwardedForHeader: false,
-      forwardedHeader: false,
+      trustProxy: trustProxyEnabled(),
+      xForwardedForHeader: trustProxyEnabled(),
+      forwardedHeader: trustProxyEnabled(),
     },
     skip: (req) =>
       skipTrustedPaymentWebhook(req) || (opts.skip?.(req) ?? false),
@@ -85,4 +103,10 @@ export const webhooksLimiter = makeLimiter({
 export const supportLimiter = makeLimiter({
   limit: Number(process.env.SUPPORT_RATE_LIMIT_PER_MIN ?? 30) || 30,
   kind: "support",
+});
+
+/** Client telemetry ingest. */
+export const telemetryLimiter = makeLimiter({
+  limit: Number(process.env.TELEMETRY_RATE_LIMIT_PER_MIN ?? 20) || 20,
+  kind: "telemetry",
 });

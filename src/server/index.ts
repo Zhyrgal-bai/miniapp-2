@@ -12,7 +12,6 @@ import {
   OrderStatus as PrismaOrderStatus,
   Prisma,
 } from "@prisma/client";
-import cors from "cors";
 import {
   isCloudinaryConfigured,
   uploadImageToCloudinary,
@@ -107,7 +106,11 @@ import {
   type ResolvedStorefrontPayload,
 } from "../storefront/schema.js";
 import { validateUx } from "../ux/validators.js";
-import { validateImageFile, uploadTenantImage } from "../media/upload.js";
+import {
+  validateImageFile,
+  validateReceiptFile,
+  uploadTenantImage,
+} from "../media/upload.js";
 import { extractCloudinaryPublicIds, safeDeleteCloudinaryAsset } from "../media/delete.js";
 import { invalidateStorefrontCache } from "./storefrontCache.js";
 import { buildMerchantAnalytics } from "./merchantAnalyticsService.js";
@@ -338,7 +341,14 @@ import {
   webhooksLimiter,
   supportLimiter,
   merchantMutationLimiter,
+  telemetryLimiter,
 } from "../middleware/apiRateLimits.js";
+import { corsMiddleware } from "../middleware/security/corsPolicy.js";
+import { securityHeadersMiddleware } from "../middleware/security/securityHeaders.js";
+import { requestTimeoutMiddleware } from "../middleware/security/requestTimeout.js";
+import { safeErrorEnvelopeMiddleware } from "../middleware/security/safeErrorEnvelope.js";
+import { resolveTenantHintFromRequest } from "./resolveTenantHint.js";
+import { assertBusinessScope } from "./businessScope.js";
 import { routeRequiresMerchantMutationLimiter } from "../middleware/privilegedRoutes.js";
 import { correlationIdMiddleware } from "../middleware/correlationId.js";
 import { finikWebhookRawBody } from "../middleware/finikWebhookBody.js";
@@ -453,21 +463,10 @@ const app = express();
 /** Корректный client IP за прокси (Render / nginx) для rate limit вебхука */
 app.set("trust proxy", 1);
 
-app.use(
-  cors({
-    origin: "*",
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "x-telegram-id",
-      "x-telegram-init-data",
-      "x-business-id",
-      "x-operator-session",
-      "x-correlation-id",
-    ],
-  })
-);
+app.use(corsMiddleware);
+app.use(securityHeadersMiddleware);
+app.use(safeErrorEnvelopeMiddleware);
+app.use(requestTimeoutMiddleware);
 app.use(correlationIdMiddleware);
 app.use(finikWebhookRawBody);
 app.use(jsonBodyLimits);
@@ -528,6 +527,7 @@ app.use((req: Request, _res: Response, next: () => void) => {
   next();
 });
 app.use("/api/", apiLimiter);
+app.use("/api/platform/subscription-finik-webhook", webhooksLimiter);
 app.use("/api/platform", requireTelegramAuth);
 mountFinikWebhookRoutes(app);
 mountFinikSettingsRoutes(app);
@@ -544,8 +544,9 @@ app.get("/api/platform/admin/whoami", async (req: Request, res: Response) => {
       res.status(500).json({ error: "Внутренняя ошибка авторизации Mini App" });
       return;
     }
+    const isProd = process.env.NODE_ENV === "production";
     res.json({
-      telegramId,
+      telegramId: isProd ? "[redacted]" : telegramId,
       isPlatformAdmin: isPlatformAdminTelegramId(telegramId),
     });
   } catch (e) {
@@ -2153,7 +2154,8 @@ app.post("/api/platform/admin/reject", async (req: Request, res: Response) => {
 
 app.post("/api/platform/admin/block", async (req: Request, res: Response) => {
   try {
-    if (!(await requireOperatorRecentReauth(req, res))) return;
+    const unlocked = await requireOperatorRecentReauth(req, res);
+    if (!unlocked) return;
     const businessId = Number(
       (req.body as { businessId?: unknown }).businessId,
     );
@@ -2170,6 +2172,12 @@ app.post("/api/platform/admin/block", async (req: Request, res: Response) => {
       return;
     }
     await adminBlockBusiness(businessId);
+    const { logOperatorAction } = await import("./structuredLog.js");
+    logOperatorAction({
+      action: "block_business",
+      operatorTelegramId: unlocked.telegramId,
+      businessId,
+    });
     res.json({ ok: true });
   } catch (e) {
     console.error("POST /api/platform/admin/block:", e);
@@ -2237,7 +2245,8 @@ app.get("/api/platform/admin/businesses", async (req: Request, res: Response) =>
 
 app.post("/api/platform/admin/disable", async (req: Request, res: Response) => {
   try {
-    if (!(await requireOperatorRecentReauth(req, res))) return;
+    const unlocked = await requireOperatorRecentReauth(req, res);
+    if (!unlocked) return;
     const businessId = Number(
       (req.body as { businessId?: unknown }).businessId,
     );
@@ -2254,6 +2263,12 @@ app.post("/api/platform/admin/disable", async (req: Request, res: Response) => {
       return;
     }
     await adminDeactivateBusiness(businessId);
+    const { logOperatorAction } = await import("./structuredLog.js");
+    logOperatorAction({
+      action: "disable_business",
+      operatorTelegramId: unlocked.telegramId,
+      businessId,
+    });
     res.json({ ok: true });
   } catch (e) {
     console.error("POST /api/platform/admin/disable:", e);
@@ -2407,6 +2422,12 @@ app.post("/api/platform/admin/purge-business", async (req: Request, res: Respons
       res.status(out.statusCode).json({ error: out.message });
       return;
     }
+    const { logOperatorAction } = await import("./structuredLog.js");
+    logOperatorAction({
+      action: "purge_business",
+      operatorTelegramId: unlocked.telegramId,
+      businessId,
+    });
     res.json({ ok: true });
   } catch (e) {
     console.error("POST /api/platform/admin/purge-business:", e);
@@ -2870,44 +2891,7 @@ function parseTenantBusinessDigits(trimmedNonEmpty: string): number | undefined 
  * Тенант витрины / публичных API: порядок `?businessId` → `?shop` → `x-business-id` → `body.businessId`.
  */
 function businessIdFromNonApiHint(req: Request): number | null {
-  const fromBid = parseTenantBusinessDigits(
-    queryParamToTrimmedString(req.query.businessId)
-  );
-  if (fromBid !== undefined) return fromBid;
-
-  const fromShop = parseTenantBusinessDigits(
-    queryParamToTrimmedString(req.query.shop)
-  );
-  if (fromShop !== undefined) return fromShop;
-
-  const rawH = req.headers["x-business-id"];
-  const hdr =
-    typeof rawH === "string"
-      ? rawH.trim()
-      : Array.isArray(rawH) && typeof rawH[0] === "string"
-        ? rawH[0].trim()
-        : "";
-  const fromHeader = parseTenantBusinessDigits(hdr);
-  if (fromHeader !== undefined) return fromHeader;
-
-  const body = req.body as { businessId?: unknown } | undefined;
-  const b = body?.businessId;
-  if (typeof b === "number" && Number.isInteger(b)) {
-    const fromBody = parseTenantBusinessDigits(String(b));
-    if (fromBody !== undefined) return fromBody;
-  }
-  if (typeof b === "string") {
-    const fromBody = parseTenantBusinessDigits(b.trim());
-    if (fromBody !== undefined) return fromBody;
-  }
-
-  const rawShopBody = (req.body as { shop?: unknown } | undefined)?.shop;
-  if (typeof rawShopBody === "string") {
-    const fromShopBody = parseTenantBusinessDigits(rawShopBody.trim());
-    if (fromShopBody !== undefined) return fromShopBody;
-  }
-
-  return null;
+  return resolveTenantHintFromRequest(req);
 }
 
 type MerchantStaffContext = {
@@ -2980,6 +2964,12 @@ async function requireMerchantStaff(
   const staffRecord = await findBusinessStaffByTelegramId(businessId, telegramId);
 
   if (!staffRecord) {
+    const { logTenantAccessDenied } = await import("./structuredLog.js");
+    logTenantAccessDenied({
+      path: req.path ?? req.url,
+      businessId,
+      reason: "no_staff_membership",
+    });
     res.status(403).json({ error: "Нет доступа к этому магазину" });
     return null;
   }
@@ -2993,6 +2983,12 @@ async function requireMerchantStaff(
     requiredPermission != null &&
     !merchantHasPermission(effectivePermissions, requiredPermission)
   ) {
+    const { logTenantAccessDenied } = await import("./structuredLog.js");
+    logTenantAccessDenied({
+      path: req.path ?? req.url,
+      businessId,
+      reason: "insufficient_permission",
+    });
     res.status(403).json({ error: "Недостаточно прав" });
     return null;
   }
@@ -3108,8 +3104,12 @@ app.post(
   async (req: Request, res: Response) => {
     const webhookRouteToken = String(req.params.webhookRouteToken ?? "").trim();
     console.log("WEBHOOK HIT:", req.params);
-    if (process.env.WEBHOOK_DEBUG === "1") {
-      console.log("WEBHOOK BODY:", req.body);
+    if (process.env.WEBHOOK_DEBUG === "1" && process.env.NODE_ENV !== "production") {
+      const bodyKeys =
+        req.body != null && typeof req.body === "object"
+          ? Object.keys(req.body as object).slice(0, 12)
+          : [];
+      console.log("WEBHOOK BODY keys:", bodyKeys);
     }
 
     let businessId: number | null = null;
@@ -3131,9 +3131,7 @@ app.post(
 
     console.log(
       "[webhook] slug → business:",
-      webhookRouteToken.length >= 10
-        ? `${webhookRouteToken.slice(0, 10)}…`
-        : webhookRouteToken,
+      `tokenLen=${webhookRouteToken.length}`,
       "businessId:",
       businessId,
     );
@@ -3268,7 +3266,7 @@ app.get("/test-telegram", async (req: Request, res: Response) => {
 
 // ================== CHECK ADMIN ==================
 /** Мини-приложение: только OWNER / ADMIN этого `shop`/`businessId` (платформенные ADMIN_IDS не дают доступ к чужим данным). */
-app.post("/check-admin", async (req: Request, res: Response) => {
+app.post("/check-admin", strictLimiter, async (req: Request, res: Response) => {
   try {
     const uid = verifiedTelegramIdFromRequest(req);
     if (!uid) {
@@ -3577,7 +3575,7 @@ app.post(
   },
 );
 
-app.post("/api/telemetry/client-error", async (req: Request, res: Response) => {
+app.post("/api/telemetry/client-error", telemetryLimiter, async (req: Request, res: Response) => {
   try {
     const body = req.body as {
       message?: unknown;
@@ -3623,7 +3621,12 @@ app.post(
       if (!file?.buffer?.length) {
         return res.status(400).json({ error: "Нет файла" });
       }
-      const v = validateImageFile({ mimetype: file.mimetype, sizeBytes: file.size });
+      const v = validateImageFile({
+        mimetype: file.mimetype,
+        sizeBytes: file.size,
+        buffer: file.buffer,
+        originalname: file.originalname,
+      });
       if (!v.ok) return res.status(400).json({ error: v.error });
       const asset = await uploadTenantImage({
         businessId: m.businessId,
@@ -3659,7 +3662,12 @@ app.post(
       const assets: any[] = [];
       for (const file of files) {
         if (!file.buffer?.length) continue;
-        const v = validateImageFile({ mimetype: file.mimetype, sizeBytes: file.size });
+        const v = validateImageFile({
+          mimetype: file.mimetype,
+          sizeBytes: file.size,
+          buffer: file.buffer,
+          originalname: file.originalname,
+        });
         if (!v.ok) continue;
         const asset = await uploadTenantImage({
           businessId: m.businessId,
@@ -5071,7 +5079,10 @@ app.post("/api/storefront/events", async (req: Request, res: Response) => {
 
 app.get("/merchant/notifications", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, [
+      MERCHANT_PERM.ordersManage,
+      MERCHANT_PERM.analyticsView,
+    ]);
     if (!merchant) return;
     const limit = Number(req.query.limit);
     const out = await listMerchantNotifications({
@@ -5087,7 +5098,10 @@ app.get("/merchant/notifications", async (req: Request, res: Response) => {
 
 app.post("/merchant/notifications/read-all", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, [
+      MERCHANT_PERM.ordersManage,
+      MERCHANT_PERM.analyticsView,
+    ]);
     if (!merchant) return;
     await markMerchantNotificationsRead({ businessId: merchant.businessId });
     res.json({ ok: true });
@@ -5099,7 +5113,10 @@ app.post("/merchant/notifications/read-all", async (req: Request, res: Response)
 
 app.post("/merchant/notifications/:id/read", async (req: Request, res: Response) => {
   try {
-    const merchant = await requireMerchantStaff(req, res);
+    const merchant = await requireMerchantStaff(req, res, [
+      MERCHANT_PERM.ordersManage,
+      MERCHANT_PERM.analyticsView,
+    ]);
     if (!merchant) return;
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) {
@@ -6192,19 +6209,29 @@ app.post(
       if (!Number.isFinite(id)) {
         return res.status(400).json({ error: "Неверный id" });
       }
-      const mime = file.mimetype || "";
-      const allowed =
-        mime === "application/pdf" ||
-        mime === "application/x-pdf" ||
-        mime.startsWith("image/");
-      if (!allowed) {
-        return res
-          .status(400)
-          .json({ error: "Допустимы только изображение или PDF" });
+      const v = validateReceiptFile({
+        mimetype: file.mimetype,
+        sizeBytes: file.size,
+        buffer: file.buffer,
+        originalname: file.originalname,
+      });
+      if (!v.ok) {
+        return res.status(400).json({ error: v.error });
       }
 
       const existing = await prisma.order.findUnique({ where: { id } });
-      if (!existing || existing.businessId !== merchant.businessId) {
+      try {
+        assertBusinessScope({
+          authenticatedBusinessId: merchant.businessId,
+          resourceBusinessId: existing?.businessId,
+          resourceId: id,
+        });
+      } catch (scopeErr) {
+        const { respondBusinessScopeError } = await import("./businessScope.js");
+        if (respondBusinessScopeError(res, scopeErr, "Заказ не найден")) return;
+        throw scopeErr;
+      }
+      if (!existing) {
         return res.status(404).json({ error: "Заказ не найден" });
       }
 
@@ -6224,7 +6251,7 @@ app.post(
 
       const { secureUrl, receiptType } = await uploadReceiptToCloudinary(
         file.buffer,
-        mime
+        v.mimetype,
       );
 
       const receiptData = {

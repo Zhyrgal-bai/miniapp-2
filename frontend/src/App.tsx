@@ -21,7 +21,6 @@ import { useCartStore } from "./store/useCartStore";
 import { useAdminPanelVisible, useAdminAccessBootstrap } from "@/utils/admin";
 import { fetchMyOrders } from "./services/myOrdersApi";
 import { getWebAppUserId } from "./utils/telegramUserId";
-import { getTelegramWebApp } from "./utils/telegram";
 import { ensureTelegramMobileUx } from "./utils/telegramWebAppBootstrap";
 import { resetBodyScrollLock } from "./utils/bodyScrollLock";
 import {
@@ -57,6 +56,8 @@ import { useStorefrontPayload } from "./components/storefront/runtime/Storefront
 import { ARCHA_BRAND } from "./config/brandAssets";
 import TenantBootScreen from "./components/ui/TenantBootScreen";
 import StoreNotFoundScreen from "./components/storefront/runtime/StoreNotFoundScreen";
+import { ArchaErrorShellWithRetry } from "./components/errors/ArchaErrorShell";
+import "./design/archaPremium.css";
 import {
   buildStorefrontLayoutCssVars,
   kitFromTemplateId,
@@ -759,7 +760,7 @@ export default function App() {
     );
   }
 
-  if (storeNotFound && slugHint) {
+  if (storeNotFound) {
     return (
       <StoreNotFoundScreen
         slug={slugHint}
@@ -770,44 +771,13 @@ export default function App() {
   }
 
   if (shopMissing) {
-    const openViaTelegram = () => {
-      const tg = getTelegramWebApp();
-      const close = (tg as { close?: () => void } | undefined)?.close;
-      if (typeof close === "function") {
-        close();
-      } else {
-        window.location.reload();
-      }
-    };
     return (
-      <div className="app app--shop-missing">
-        <div className="shop-missing" role="alert">
-          <p className="shop-missing__title">Не удалось открыть витрину</p>
-          <p className="shop-missing__hint">
-            Откройте Mini App через кнопку «Открыть» в Telegram. Старые ссылки{" "}
-            <code className="shop-missing__code">?shop=ID</code> /{" "}
-            <code className="shop-missing__code">?businessId=ID</code> поддерживаются и будут
-            автоматически перенаправлены на{" "}
-            <code className="shop-missing__code">/s/slug</code>.
-          </p>
-          {storefrontError ? (
-            <p className="shop-missing__hint" style={{ marginTop: 6 }}>
-              {storefrontError}
-            </p>
-          ) : null}
-          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-            <button type="button" className="checkout-btn" onClick={() => void refreshStorefront()}>
-              Повторить
-            </button>
-            <button type="button" className="checkout-btn" onClick={() => window.location.reload()}>
-              Обновить
-            </button>
-            <button type="button" className="go-shop" onClick={openViaTelegram}>
-              Открыть через Telegram
-            </button>
-          </div>
-        </div>
-      </div>
+      <ArchaErrorShellWithRetry
+        kind="no_tenant"
+        detail={storefrontError}
+        showCode={false}
+        onRetry={() => void refreshStorefront()}
+      />
     );
   }
 

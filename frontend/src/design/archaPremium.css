@@ -25,6 +25,13 @@
   --archa-shadow-card: 0 16px 48px rgba(0, 0, 0, 0.45);
   --archa-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --archa-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Phase 17.4 — platform presentation tokens */
+  --archa-error-bg: #050805;
+  --archa-btn-focus-ring: rgba(157, 255, 87, 0.55);
+  --archa-section-gap: clamp(2.5rem, 6vw, 4rem);
+  --archa-type-sm: 0.875rem;
+  --archa-type-base: 0.9375rem;
+  --archa-type-lg: clamp(1.5rem, 3vw, 2rem);
 }
 
 .archa-glass {
@@ -91,6 +98,12 @@
 
 .archa-btn-primary:active {
   transform: scale(0.98);
+}
+
+.archa-btn-primary:focus-visible,
+.archa-btn-ghost:focus-visible {
+  outline: 2px solid var(--archa-btn-focus-ring);
+  outline-offset: 2px;
 }
 
 .archa-btn-ghost {

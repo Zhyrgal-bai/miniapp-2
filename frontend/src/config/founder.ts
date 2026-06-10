@@ -1,3 +1,5 @@
+import { ARCHA_BRAND } from "./brandAssets";
+
 /**
  * ARCHA founder configuration (Phase 17.1).
  *
@@ -11,6 +13,8 @@ export type FounderSocialId = "instagram" | "telegram" | "github";
 export type FounderSocial = {
   id: FounderSocialId;
   label: string;
+  /** Display handle, e.g. @zhyrgal4_ik */
+  handle?: string;
   href: string;
   enabled: boolean;
 };
@@ -23,7 +27,10 @@ function envUrl(key: string, fallback: string): string {
 /** Public assets with non-ASCII names must be referenced URL-encoded. */
 const FOUNDER_PHOTO = encodeURI("/Жыргал.jpeg");
 
-const INSTAGRAM_URL = envUrl("VITE_ARCHA_FOUNDER_INSTAGRAM", "https://instagram.com/archa.kg");
+const INSTAGRAM_URL = envUrl(
+  "VITE_ARCHA_FOUNDER_INSTAGRAM",
+  "https://instagram.com/zhyrgal4_ik",
+);
 const TELEGRAM_URL = envUrl("VITE_ARCHA_FOUNDER_TELEGRAM", "https://t.me/archa_kg_bot");
 const GITHUB_URL = envUrl("VITE_ARCHA_FOUNDER_GITHUB", "");
 
@@ -37,8 +44,20 @@ export const ARCHA_FOUNDER = {
   photo: FOUNDER_PHOTO,
   photoAlt: "Основатель ARCHA — Жыргал",
   socials: [
-    { id: "instagram", label: "Instagram", href: INSTAGRAM_URL, enabled: INSTAGRAM_URL !== "" },
-    { id: "telegram", label: "Telegram", href: TELEGRAM_URL, enabled: TELEGRAM_URL !== "" },
+    {
+      id: "instagram",
+      label: "Instagram",
+      handle: "@zhyrgal4_ik",
+      href: INSTAGRAM_URL,
+      enabled: INSTAGRAM_URL !== "",
+    },
+    {
+      id: "telegram",
+      label: "Telegram",
+      handle: ARCHA_BRAND.telegramBotHandle,
+      href: TELEGRAM_URL,
+      enabled: TELEGRAM_URL !== "",
+    },
     { id: "github", label: "GitHub", href: GITHUB_URL, enabled: GITHUB_URL !== "" },
   ] as FounderSocial[],
 } as const;

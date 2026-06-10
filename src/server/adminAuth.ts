@@ -65,7 +65,10 @@ export function isPlatformOperator(userId: unknown): boolean {
   return isAdmin(userId);
 }
 
-/** Все admin endpoint: verified operator id. */
+/**
+ * @deprecated Use `requireOperatorUnlock` / `requireOperatorRecentReauth` instead.
+ * Legacy helper kept for backward compatibility only.
+ */
 export function denyIfNotAdmin(req: Request, res: Response): boolean {
   if (!isAdmin(adminUserIdFromRequest(req))) {
     res.status(403).json({ message: "Нет прав" });

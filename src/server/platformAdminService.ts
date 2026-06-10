@@ -307,9 +307,7 @@ export async function approveRegistrationRequestById(
   }
   console.log(
     "TOKEN AFTER DECRYPT:",
-    tokenPlain === ""
-      ? "(empty)"
-      : `${tokenPlain.slice(0, 10)}…(len=${tokenPlain.length})`,
+    tokenPlain === "" ? "(empty)" : `(present, len=${tokenPlain.length})`,
   );
   if (!tokenPlain || isEncryptedTokenFormat(tokenPlain.trim())) {
     console.error(

@@ -101,7 +101,14 @@ function operatorPasswordConfigFromEnv(): OperatorPasswordConfig | null {
   const hash = String(process.env.OPERATOR_PASSWORD_HASH ?? "").trim();
   if (hash !== "") return { kind: "hash", value: hash };
   const plain = String(process.env.ADMIN_PANEL_PASSWORD ?? "").trim();
-  if (plain !== "") return { kind: "plain", value: plain };
+  if (plain !== "") {
+    if (process.env.NODE_ENV === "production") {
+      console.warn(
+        "[registrationBotAdminPanel] ADMIN_PANEL_PASSWORD is deprecated; use OPERATOR_PASSWORD_HASH",
+      );
+    }
+    return { kind: "plain", value: plain };
+  }
   return null;
 }
 

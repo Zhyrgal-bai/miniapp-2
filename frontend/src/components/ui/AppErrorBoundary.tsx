@@ -1,4 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import ArchaErrorShell from "../errors/ArchaErrorShell";
+import "../../design/archaPremium.css";
 
 type Props = { children: ReactNode };
 
@@ -18,34 +20,19 @@ export default class AppErrorBoundary extends Component<Props, State> {
   render(): ReactNode {
     if (this.state.error) {
       return (
-        <div className="app app--shop-missing">
-          <div className="shop-missing" role="alert">
-            <p className="shop-missing__title">Не удалось открыть приложение</p>
-            <p className="shop-missing__hint">
-              Произошла ошибка при загрузке. Закройте Mini App и откройте снова из бота.
-            </p>
-            <p className="shop-missing__hint" style={{ marginTop: 8, fontSize: "0.85rem" }}>
-              {this.state.error.message}
-            </p>
-            <div
-              style={{
-                display: "flex",
-                gap: 10,
-                justifyContent: "center",
-                flexWrap: "wrap",
-                marginTop: 16,
-              }}
-            >
-              <button
-                type="button"
-                className="checkout-btn"
-                onClick={() => window.location.reload()}
-              >
-                Повторить
-              </button>
-            </div>
-          </div>
-        </div>
+        <ArchaErrorShell
+          kind="crash"
+          detail={this.state.error.message}
+          showCode={false}
+          actions={[
+            {
+              label: "Повторить",
+              onClick: () => window.location.reload(),
+              variant: "primary",
+            },
+            { label: "На ARCHA", href: "/merchant", variant: "ghost" },
+          ]}
+        />
       );
     }
     return this.props.children;

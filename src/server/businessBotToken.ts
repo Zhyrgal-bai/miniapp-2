@@ -42,11 +42,8 @@ export function plainBotTokenFromStored(stored: string | null | undefined): stri
   try {
     if (isEncryptedTokenFormat(raw)) {
       const realToken = decrypt(raw).trim().replace(/^[\uFEFF\s]+/, "");
-      if (
-        process.env.TELEGRAM_INIT_DEBUG === "1" &&
-        realToken !== ""
-      ) {
-        console.log("Using token:", realToken.slice(0, 10));
+      if (process.env.TELEGRAM_INIT_DEBUG === "1" && realToken !== "") {
+        console.log("Using token: (redacted, len=%d)", realToken.length);
       }
       return realToken;
     }

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { routeRequiresVerifiedTelegram } from "../../src/middleware/privilegedRoutes.js";
 import { verifiedTelegramIdFromRequest } from "../../src/middleware/verifiedTelegramAuth.js";
@@ -162,6 +164,70 @@ describe("my-businesses auth gate", () => {
         mockReq("GET", "/api/storefront/by-slug/demo"),
       ),
     ).toBe(false);
+  });
+});
+
+describe("initData policy (Phase 18)", () => {
+  it("rejects expired auth_date", async () => {
+    const { validateInitDataPolicy } = await import(
+      "../../src/middleware/telegramInitDataPolicy.js"
+    );
+    const old = Math.floor(Date.now() / 1000) - 90_000;
+    const initData = `auth_date=${old}&user=%7B%22id%22%3A1%7D`;
+    const result = validateInitDataPolicy(initData);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe("expired_initdata");
+  });
+
+  it("rejects invalid auth_date", async () => {
+    const { validateInitDataPolicy } = await import(
+      "../../src/middleware/telegramInitDataPolicy.js"
+    );
+    const result = validateInitDataPolicy("auth_date=not-a-number");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe("invalid_auth_date");
+  });
+
+  it("rejects replay when guard enabled", async () => {
+    const prev = process.env.TELEGRAM_INITDATA_REPLAY_GUARD;
+    process.env.TELEGRAM_INITDATA_REPLAY_GUARD = "1";
+    const { validateInitDataPolicy } = await import(
+      "../../src/middleware/telegramInitDataPolicy.js"
+    );
+    const now = Math.floor(Date.now() / 1000);
+    const initData = `auth_date=${now}&hash=abc`;
+    expect(validateInitDataPolicy(initData).ok).toBe(true);
+    const replay = validateInitDataPolicy(initData);
+    expect(replay.ok).toBe(false);
+    if (!replay.ok) expect(replay.reason).toBe("replay");
+    process.env.TELEGRAM_INITDATA_REPLAY_GUARD = prev;
+  });
+
+  it("production never accepts x-telegram-id header alone", () => {
+    const prev = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    const req = {
+      headers: { "x-telegram-id": "999888777" },
+      body: {},
+      query: {},
+    } as unknown as Request;
+    expect(verifiedTelegramIdFromRequest(req)).toBeNull();
+    process.env.NODE_ENV = prev;
+  });
+});
+
+describe("merchant notifications permission (Phase 18)", () => {
+  it("notifications routes require ordersManage or analyticsView", () => {
+    const src = readFileSync(
+      resolve(process.cwd(), "src/server/index.ts"),
+      "utf8",
+    );
+    expect(src.includes('app.get("/merchant/notifications"')).toBe(true);
+    expect(
+      src.match(
+        /merchant\/notifications[\s\S]{0,400}MERCHANT_PERM\.ordersManage[\s\S]{0,200}MERCHANT_PERM\.analyticsView/,
+      ),
+    ).not.toBeNull();
   });
 });
 

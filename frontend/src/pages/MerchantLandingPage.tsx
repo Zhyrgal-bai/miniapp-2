@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { ARCHA_BRAND } from "../config/brandAssets";
+import { enabledFounderSocials } from "../config/founder";
 import { ru } from "../i18n/ru";
 import { FounderSection } from "../components/landing/FounderSection";
 import "../design/archaPremium.css";
@@ -62,6 +63,34 @@ const HOW_STEPS = [
   { n: "3", title: "Начните продавать", text: "Первые 5 заказов бесплатно. Управление полностью в Telegram." },
 ] as const;
 
+const WHY_TELEGRAM = [
+  {
+    title: "Аудитория уже здесь",
+    text: "Клиенты не устанавливают приложения — магазин открывается в привычном мессенджере.",
+  },
+  {
+    title: "Заказ и оплата в одном месте",
+    text: "Каталог, корзина, Finik и уведомления — без отдельного сайта и сложной интеграции.",
+  },
+  {
+    title: "Управление с телефона",
+    text: "Панель мерчанта, CRM и аналитика — прямо в Telegram Mini App.",
+  },
+] as const;
+
+const LANDING_FAQ = [
+  {
+    id: "what",
+    q: "Что такое ARCHA?",
+    a: "ARCHA — платформа для интернет-магазинов внутри Telegram. Каталог, заказы, оплата и управление без отдельного сайта.",
+  },
+  {
+    id: "start",
+    q: "Как начать?",
+    a: "Создайте магазин или войдите через Telegram — после одобления заявки откроется панель управления Mini App.",
+  },
+] as const;
+
 const ease = [0.22, 1, 0.36, 1] as const;
 
 const heroStagger = {
@@ -77,9 +106,15 @@ const fadeUp = {
 export default function MerchantLandingPage() {
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
+  const [openFaqId, setOpenFaqId] = useState<string | null>(LANDING_FAQ[0]?.id ?? null);
+  const founderSocials = enabledFounderSocials();
 
   useEffect(() => {
     document.title = ARCHA_BRAND.title;
+    document.documentElement.style.scrollBehavior = "smooth";
+    return () => {
+      document.documentElement.style.scrollBehavior = "";
+    };
   }, []);
 
   const openTelegram = () => {
@@ -98,13 +133,15 @@ export default function MerchantLandingPage() {
         transition={{ duration: 0.5, ease }}
       >
         <a className="archa-landing__nav-brand" href="/merchant">
-          <img src={ARCHA_BRAND.favicon} alt="" width={36} height={36} />
+          <img src={ARCHA_BRAND.logoIcon} alt="" width={36} height={36} />
           <span>{ARCHA_BRAND.name}</span>
         </a>
         <nav className="archa-landing__nav-links" aria-label="Разделы">
           <a href="#features">Возможности</a>
+          <a href="#why-telegram">Telegram</a>
           <a href="#faq">FAQ</a>
           <a href="#about">О проекте</a>
+          <a href="#founder">Основатель</a>
         </nav>
         <button type="button" className="archa-btn-ghost archa-landing__nav-cta" onClick={openTelegram}>
           Войти через Telegram
@@ -125,8 +162,8 @@ export default function MerchantLandingPage() {
                 className="archa-landing__hero-mark"
                 src={ARCHA_BRAND.logoMark}
                 alt={ARCHA_BRAND.name}
-                width={120}
-                height={120}
+                width={88}
+                height={88}
               />
             </motion.div>
             <motion.img
@@ -135,6 +172,9 @@ export default function MerchantLandingPage() {
               alt={ARCHA_BRAND.name}
               variants={fadeUp}
             />
+            <motion.p className="archa-landing__hero-kicker" variants={fadeUp}>
+              Telegram-first commerce для предпринимателей
+            </motion.p>
             <motion.p className="archa-landing__hero-headline" variants={fadeUp}>
               {ARCHA_BRAND.heroTagline}
             </motion.p>
@@ -172,7 +212,7 @@ export default function MerchantLandingPage() {
             viewport={{ once: true, margin: "-80px" }}
             transition={{ duration: 0.55, ease }}
           >
-            <p className="archa-landing__eyebrow">Platform</p>
+            <p className="archa-landing__eyebrow">Платформа</p>
             <h2>Возможности</h2>
             <p className="archa-landing__section-lead">
               Всё, что нужно локальному бизнесу для продаж в Telegram — в одной premium-панели.
@@ -189,7 +229,7 @@ export default function MerchantLandingPage() {
                 transition={{ duration: 0.45, delay: i * 0.06, ease }}
                 whileHover={reduceMotion ? undefined : { y: -4, transition: { duration: 0.2 } }}
               >
-                <span className={`archa-landing__feature-icon archa-landing__feature-icon--${f.id}`} />
+                <span className={`archa-landing__feature-icon archa-landing__feature-icon--${f.id}`} aria-hidden />
                 <h3>{f.title}</h3>
                 <p>{f.text}</p>
               </motion.li>
@@ -197,8 +237,15 @@ export default function MerchantLandingPage() {
           </ul>
         </section>
 
-        <section className="archa-landing__section" id="business-types">
-          <p className="archa-landing__eyebrow">Verticals</p>
+        <motion.section
+          className="archa-landing__section"
+          id="business-types"
+          initial={reduceMotion ? false : { opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-60px" }}
+          transition={{ duration: 0.55, ease }}
+        >
+          <p className="archa-landing__eyebrow">Вертикали</p>
           <h2>8 видов бизнеса</h2>
           <p className="archa-landing__section-lead">
             Готовые шаблоны витрины и карточек под каждую нишу.
@@ -210,10 +257,17 @@ export default function MerchantLandingPage() {
               </li>
             ))}
           </ul>
-        </section>
+        </motion.section>
 
-        <section className="archa-landing__section" id="how">
-          <p className="archa-landing__eyebrow">How it works</p>
+        <motion.section
+          className="archa-landing__section"
+          id="how"
+          initial={reduceMotion ? false : { opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-60px" }}
+          transition={{ duration: 0.55, ease }}
+        >
+          <p className="archa-landing__eyebrow">Как это работает</p>
           <h2>Как работает ARCHA</h2>
           <ul className="archa-landing__steps">
             {HOW_STEPS.map((s) => (
@@ -224,11 +278,42 @@ export default function MerchantLandingPage() {
               </li>
             ))}
           </ul>
-        </section>
+        </motion.section>
 
-        <section className="archa-landing__section" id="pricing">
-          <div className="archa-landing__faq-card archa-glass archa-glass--glow">
-            <p className="archa-landing__eyebrow">Pricing</p>
+        <motion.section
+          className="archa-landing__section archa-landing__section--why"
+          id="why-telegram"
+          initial={reduceMotion ? false : { opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-60px" }}
+          transition={{ duration: 0.55, ease }}
+        >
+          <p className="archa-landing__eyebrow">Почему Telegram</p>
+          <h2>Commerce там, где уже общаются клиенты</h2>
+          <p className="archa-landing__section-lead">
+            ARCHA не заменяет Telegram — он превращает его в полноценную витрину и панель управления.
+          </p>
+          <ul className="archa-landing__why-list">
+            {WHY_TELEGRAM.map((item) => (
+              <li key={item.title} className="archa-landing__why-card archa-glass archa-glass--glow">
+                <h3>{item.title}</h3>
+                <p>{item.text}</p>
+              </li>
+            ))}
+          </ul>
+        </motion.section>
+
+        <motion.section
+          className="archa-landing__section"
+          id="pricing"
+          initial={reduceMotion ? false : { opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-60px" }}
+          transition={{ duration: 0.55, ease }}
+        >
+          <div className="archa-landing__pricing-card archa-glass archa-glass--glow">
+            <span className="archa-landing__pricing-badge">Рекомендуем</span>
+            <p className="archa-landing__eyebrow">Тариф</p>
             <h2>5 заказов бесплатно</h2>
             <p>
               Начните без оплаты: первые 5 заказов — бесплатно. Дальше — простая подписка
@@ -247,37 +332,55 @@ export default function MerchantLandingPage() {
               </button>
             </div>
           </div>
-        </section>
+        </motion.section>
 
         <section className="archa-landing__section" id="faq">
           <div className="archa-landing__faq-card archa-glass archa-glass--glow">
             <p className="archa-landing__eyebrow">FAQ</p>
             <h2>Быстрые ответы</h2>
-            <h3>Что такое ARCHA?</h3>
-            <p>
-              ARCHA — платформа для интернет-магазинов внутри Telegram. Каталог, заказы, оплата и
-              управление без отдельного сайта.
-            </p>
-            <h3>Как начать?</h3>
-            <p>
-              Создайте магазин или войдите через Telegram — после одобления заявки откроется
-              панель управления Mini App.
-            </p>
+            <ul className="archa-landing__faq-list">
+              {LANDING_FAQ.map((item) => {
+                const open = openFaqId === item.id;
+                return (
+                  <li key={item.id} className={`archa-landing__faq-item${open ? " archa-landing__faq-item--open" : ""}`}>
+                    <button
+                      type="button"
+                      className="archa-landing__faq-trigger"
+                      aria-expanded={open}
+                      onClick={() => setOpenFaqId(open ? null : item.id)}
+                    >
+                      <span>{item.q}</span>
+                      <span className="archa-landing__faq-chevron" aria-hidden>
+                        {open ? "−" : "+"}
+                      </span>
+                    </button>
+                    {open ? <p className="archa-landing__faq-answer">{item.a}</p> : null}
+                  </li>
+                );
+              })}
+            </ul>
             <button type="button" className="archa-btn-ghost" onClick={() => navigate("/merchant/faq")}>
               Все вопросы и ответы
             </button>
           </div>
         </section>
 
-        <section className="archa-landing__section" id="about">
+        <motion.section
+          className="archa-landing__section"
+          id="about"
+          initial={reduceMotion ? false : { opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-60px" }}
+          transition={{ duration: 0.55, ease }}
+        >
           <div className="archa-landing__about archa-glass archa-glass--glow">
             <img src={ARCHA_BRAND.logoMark} alt={ARCHA_BRAND.name} width={96} height={96} />
             <div>
-              <p className="archa-landing__eyebrow">About</p>
-              <h2>О проекте</h2>
+              <p className="archa-landing__eyebrow">О проекте</p>
+              <h2>ARCHA из Кыргызстана</h2>
               <p>
                 ARCHA — команда из Кыргызстана 🇰🇬. Tech Nature: juniper, горы и circuit — символ
-                устойчивого digital commerce.
+                устойчивого digital commerce для предпринимателей региона.
               </p>
               <a
                 className="archa-landing__link"
@@ -289,7 +392,7 @@ export default function MerchantLandingPage() {
               </a>
             </div>
           </div>
-        </section>
+        </motion.section>
 
         <FounderSection />
 
@@ -311,8 +414,26 @@ export default function MerchantLandingPage() {
       </main>
 
       <footer className="archa-landing__footer">
-        <span>{ARCHA_BRAND.name}</span>
+        <div className="archa-landing__footer-start">
+          <img src={ARCHA_BRAND.logoIcon} alt="" width={28} height={28} className="archa-landing__footer-icon" />
+          <span>{ARCHA_BRAND.name}</span>
+        </div>
         <span>{ARCHA_BRAND.tagline}</span>
+        {founderSocials.length > 0 ? (
+          <nav className="archa-landing__footer-socials" aria-label="Социальные сети">
+            {founderSocials.map((s) => (
+              <a
+                key={s.id}
+                href={s.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="archa-landing__footer-social"
+              >
+                {s.handle ?? s.label}
+              </a>
+            ))}
+          </nav>
+        ) : null}
         <span className="archa-landing__footer-brand">
           Built in Kyrgyzstan 🇰🇬 · ARCHA Generation One · 2026
         </span>

@@ -18,6 +18,10 @@ import {
   telegramUserIdStringFromInitData,
   validateTelegramInitData,
 } from "../server/telegramWebAppInitData.js";
+import {
+  logInitDataPolicyReject,
+  validateInitDataPolicy,
+} from "./telegramInitDataPolicy.js";
 
 const HEADER = "x-telegram-init-data";
 
@@ -134,6 +138,20 @@ function tryToken(
   if (token === "" || triedTokens.has(token)) return false;
   triedTokens.add(token);
   if (!validateTelegramInitData(initData, token)) return false;
+  const policy = validateInitDataPolicy(initData);
+  if (!policy.ok) {
+    logInitDataPolicyReject(authPath(req), authMethod(req), policy.reason);
+    logPrivilegedRouteReject({
+      path: authPath(req),
+      method: authMethod(req),
+      reason: policy.reason,
+      status: 403,
+    });
+    res.status(403).json({
+      error: "Сессия Telegram устарела. Закройте и откройте Mini App снова.",
+    });
+    return true;
+  }
   acceptInitData(req, res, next, initData, source);
   return true;
 }

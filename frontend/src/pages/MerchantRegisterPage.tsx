@@ -21,6 +21,7 @@ import {
 import "./MerchantRegisterPage.css";
 import "../design/archaPremium.css";
 import { ARCHA_BRAND } from "../config/brandAssets";
+import TenantBootScreen from "../components/ui/TenantBootScreen";
 
 const SS_SHOP = "miniapp-active-shop";
 
@@ -335,10 +336,7 @@ function MerchantRegisterForm() {
 
   if (gateLoading) {
     return (
-      <div className="mr">
-        <div className="mr__bg" aria-hidden />
-        <p className="mr__loading">Загрузка…</p>
-      </div>
+      <TenantBootScreen variant="platform" message="Проверяем доступ…" slowAfterMs={20_000} />
     );
   }
 
@@ -384,7 +382,7 @@ function MerchantRegisterForm() {
       <div className="mr__bg" aria-hidden />
       <header className="mr__header">
         <img
-          src="/logo.png"
+          src={ARCHA_BRAND.logoMark}
           alt={ARCHA_BRAND.name}
           width={44}
           height={44}

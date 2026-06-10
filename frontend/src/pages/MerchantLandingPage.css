@@ -77,11 +77,20 @@
 }
 
 .archa-landing__nav-links {
-  display: none;
-  gap: 1.5rem;
+  display: flex;
+  gap: 1rem;
   margin-left: auto;
   margin-right: auto;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  max-width: min(100%, 520px);
+  padding-bottom: 2px;
+}
+
+.archa-landing__nav-links::-webkit-scrollbar {
+  display: none;
 }
 
 .archa-landing__nav-links a {
@@ -103,7 +112,10 @@
 
 @media (min-width: 768px) {
   .archa-landing__nav-links {
-    display: flex;
+    gap: 1.5rem;
+    font-size: 0.875rem;
+    max-width: none;
+    overflow: visible;
   }
 
   .archa-landing__nav-cta {
@@ -171,8 +183,17 @@
   margin-top: 0.25rem;
 }
 
+.archa-landing__hero-kicker {
+  margin: 1rem 0 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--archa-green-muted);
+}
+
 .archa-landing__hero-headline {
-  margin: 1.25rem 0 0;
+  margin: 0.65rem 0 0;
   max-width: 28rem;
   font-size: clamp(1.35rem, 3.5vw, 1.75rem);
   line-height: 1.35;
@@ -273,14 +294,26 @@
 }
 
 .archa-landing__feature-icon {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 2.25rem;
   height: 2.25rem;
   border-radius: 0.65rem;
   background: linear-gradient(135deg, rgba(157, 255, 87, 0.25), rgba(157, 255, 87, 0.05));
   border: 1px solid var(--archa-glass-border-strong);
   box-shadow: 0 0 24px rgba(127, 255, 58, 0.15);
+  font-size: 1.05rem;
+  line-height: 1;
 }
+
+.archa-landing__feature-icon--orders::before { content: "📦"; }
+.archa-landing__feature-icon--payments::before { content: "💳"; }
+.archa-landing__feature-icon--delivery::before { content: "🚚"; }
+.archa-landing__feature-icon--bot::before { content: "🤖"; }
+.archa-landing__feature-icon--analytics::before { content: "📊"; }
+.archa-landing__feature-icon--crm::before { content: "👥"; }
+.archa-landing__feature-icon--marketing::before { content: "📣"; }
 
 .archa-landing__feature-card h3 {
   margin: 1rem 0 0.4rem;
@@ -370,11 +403,48 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   padding: 24px 20px max(24px, env(safe-area-inset-bottom));
   border-top: 1px solid rgba(157, 255, 87, 0.08);
   font-size: 0.8125rem;
   color: var(--archa-text-dim);
+}
+
+.archa-landing__footer-start {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--archa-text-muted);
+}
+
+.archa-landing__footer-icon {
+  border-radius: 8px;
+  box-shadow: 0 0 12px rgba(127, 255, 58, 0.2);
+}
+
+.archa-landing__footer-socials {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
+.archa-landing__footer-social {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(157, 255, 87, 0.18);
+  color: var(--archa-text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.archa-landing__footer-social:hover {
+  border-color: rgba(127, 255, 58, 0.45);
+  color: var(--archa-green-neon);
 }
 
 .archa-landing__footer-brand {
@@ -413,6 +483,135 @@
   margin: 20px 0 0;
   padding: 0;
   list-style: none;
+  position: relative;
+}
+
+@media (min-width: 768px) {
+  .archa-landing__steps::before {
+    content: "";
+    position: absolute;
+    top: 40px;
+    left: 12%;
+    right: 12%;
+    height: 2px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(157, 255, 87, 0.35) 15%,
+      rgba(157, 255, 87, 0.35) 85%,
+      transparent
+    );
+    pointer-events: none;
+  }
+}
+
+.archa-landing__why-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.archa-landing__why-card {
+  padding: 1.25rem 1.15rem;
+  border-radius: var(--archa-radius-lg);
+  transition: box-shadow 0.25s ease, transform 0.2s ease;
+}
+
+.archa-landing__why-card:hover {
+  box-shadow: var(--archa-shadow-glow), var(--archa-shadow-card);
+  transform: translateY(-2px);
+}
+
+.archa-landing__why-card h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.archa-landing__why-card p {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--archa-text-muted);
+}
+
+.archa-landing__pricing-card {
+  position: relative;
+  padding: 1.75rem 1.5rem;
+  border-radius: var(--archa-radius-xl);
+}
+
+.archa-landing__pricing-badge {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--archa-black);
+  background: linear-gradient(135deg, #b8ff6a, var(--archa-green-neon));
+}
+
+.archa-landing__faq-list {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+}
+
+.archa-landing__faq-item {
+  border-top: 1px solid rgba(157, 255, 87, 0.1);
+}
+
+.archa-landing__faq-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--archa-touch-min, 44px);
+  padding: 12px 0;
+  border: none;
+  background: transparent;
+  color: var(--archa-text);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.archa-landing__faq-trigger:focus-visible {
+  outline: 2px solid var(--archa-btn-focus-ring, rgba(157, 255, 87, 0.55));
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.archa-landing__faq-chevron {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(127, 255, 58, 0.12);
+  color: var(--archa-green-neon);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.archa-landing__faq-answer {
+  margin: 0 0 12px;
+  padding-bottom: 4px;
+  line-height: 1.6;
+  color: var(--archa-text-muted);
+  font-size: 0.9rem;
 }
 
 .archa-landing__step {
@@ -449,5 +648,9 @@
   .archa-landing__aurora,
   .archa-landing__logo-glow {
     animation: none;
+  }
+
+  .archa-landing__why-card:hover {
+    transform: none;
   }
 }
