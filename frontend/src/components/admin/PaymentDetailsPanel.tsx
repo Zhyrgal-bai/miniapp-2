@@ -41,6 +41,7 @@ export default function PaymentDetailsPanel() {
     card: "",
     qr: "",
   });
+  const [qrPublicId, setQrPublicId] = useState<string | null>(null);
   const [rows, setRows] = useState<AdminPaymentDetail[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -77,6 +78,7 @@ export default function PaymentDetailsPanel() {
         other: values.other,
         card: values.card,
         qr: values.qr,
+        qrPublicId,
       });
       await load();
     } catch (err) {
@@ -92,8 +94,9 @@ export default function PaymentDetailsPanel() {
     setQrUploading(true);
     setError(null);
     try {
-      const url = await adminService.uploadImage(file);
-      setValues((prev) => ({ ...prev, qr: url }));
+      const asset = await adminService.uploadImage(file);
+      setValues((prev) => ({ ...prev, qr: asset.url }));
+      setQrPublicId(asset.publicId);
     } catch (err) {
       console.error(err);
       setError(formatAdminApiError(err));

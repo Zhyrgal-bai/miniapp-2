@@ -64,7 +64,56 @@ export async function uploadImageBuffer(params: {
     publicId: String(res.public_id ?? ""),
     width: Number(res.width ?? 0) || 0,
     height: Number(res.height ?? 0) || 0,
+    ...(res.format != null ? { format: String(res.format) } : {}),
   };
+}
+
+export type ListedCloudinaryAsset = {
+  publicId: string;
+  bytes?: number;
+  format?: string;
+  createdAt?: string;
+};
+
+/** List Cloudinary assets under business_{id}/ prefix (paginated). */
+export async function listTenantAssets(
+  businessId: number,
+  kind?: string,
+): Promise<ListedCloudinaryAsset[]> {
+  assertCloudinaryConfigured();
+  const prefix =
+    kind != null && kind.trim() !== ""
+      ? businessFolder(businessId, kind as Exclude<MediaEntityKind, "receipts">)
+      : `business_${businessId}/`;
+
+  const out: ListedCloudinaryAsset[] = [];
+  let nextCursor: string | undefined;
+
+  do {
+    const page = await cloudinary.api.resources({
+      type: "upload",
+      prefix,
+      max_results: 500,
+      ...(nextCursor ? { next_cursor: nextCursor } : {}),
+    });
+    const resources = Array.isArray(page.resources) ? page.resources : [];
+    for (const r of resources) {
+      const publicId = typeof r.public_id === "string" ? r.public_id : "";
+      if (!publicId) continue;
+      out.push({
+        publicId,
+        bytes: typeof r.bytes === "number" ? r.bytes : undefined,
+        format: typeof r.format === "string" ? r.format : undefined,
+        createdAt: typeof r.created_at === "string" ? r.created_at : undefined,
+      });
+    }
+    nextCursor =
+      typeof page.next_cursor === "string" && page.next_cursor !== ""
+        ? page.next_cursor
+        : undefined;
+  } while (nextCursor);
+
+  return out;
 }
 
 export async function deleteImage(publicId: string): Promise<void> {

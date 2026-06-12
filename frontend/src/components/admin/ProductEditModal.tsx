@@ -9,7 +9,7 @@ import {
   schemaKeysFromProductSchema,
   stripProductAttributesToSchema,
 } from "@repo-shared/productAttributeNormalization";
-import type { Category, Product, ProductStatus } from "../../types";
+import type { Category, Product, ProductImageMeta, ProductStatus } from "../../types";
 import { DynamicVariantEditor } from "./DynamicVariantEditor";
 import { ClothingVariantEditor } from "./ClothingVariantEditor";
 import {
@@ -72,6 +72,7 @@ export default function ProductEditModal({
   const [discountPercent, setDiscountPercent] = useState<number | "">("");
   const [description, setDescription] = useState("");
   const [images, setImages] = useState<string[]>([]);
+  const [imagesMeta, setImagesMeta] = useState<ProductImageMeta[]>([]);
   const [mainIdx, setMainIdx] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [colorDrafts, setColorDrafts] = useState<ClothingColorDraft[]>([
@@ -113,6 +114,7 @@ export default function ProductEditModal({
     setDescription(p.description ?? "");
     const imgs = getProductImages(p);
     setImages([...imgs]);
+    setImagesMeta(Array.isArray(p.imagesMeta) ? [...p.imagesMeta] : []);
     setMainIdx(0);
     setColorDrafts(productToColorDrafts(p));
     const bt = String(p.businessType ?? merchantBusinessType ?? "clothing");
@@ -197,7 +199,11 @@ export default function ProductEditModal({
 
   const removeImageAt = (index: number) => {
     setImages((prev) => {
+      const removedUrl = prev[index];
       const next = prev.filter((_, i) => i !== index);
+      if (removedUrl) {
+        setImagesMeta((meta) => meta.filter((m) => m.url !== removedUrl));
+      }
       setMainIdx((m) => {
         if (next.length === 0) return 0;
         if (index === m) return 0;
@@ -214,8 +220,9 @@ export default function ProductEditModal({
     setUploading(true);
     setSaveError(null);
     try {
-      const urls = await adminService.uploadImages(Array.from(files));
-      setImages((prev) => [...prev, ...urls]);
+      const assets = await adminService.uploadImages(Array.from(files));
+      setImages((prev) => [...prev, ...assets.map((a) => a.url)]);
+      setImagesMeta((prev) => [...prev, ...assets.filter((a) => a.publicId)]);
     } catch (err) {
       setSaveError(
         err instanceof Error ? err.message : "Ошибка загрузки изображений"
@@ -285,6 +292,10 @@ export default function ProductEditModal({
             return [main, ...images.filter((_, j) => j !== i)];
           })();
 
+    const orderedMeta = ordered
+      .map((url) => imagesMeta.find((m) => m.url === url))
+      .filter((m): m is ProductImageMeta => m != null);
+
     setSaving(true);
     try {
       const basePatch = {
@@ -299,6 +310,7 @@ export default function ProductEditModal({
         description: description.trim(),
         images: ordered,
         image: ordered[0] ?? "",
+        imagesMeta: orderedMeta,
       };
       if (showClothingVariants) {
         await adminService.updateProduct(productId, {

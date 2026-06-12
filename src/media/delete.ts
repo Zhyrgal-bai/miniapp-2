@@ -1,4 +1,5 @@
 import { deleteImage, isCloudinaryConfigured } from "./cloudinary.js";
+import { resolvePublicIdsFromUrls } from "./publicIdFromUrl.js";
 
 function collectPublicIdsFromUnknown(v: unknown, out: Set<string>): void {
   if (v == null) return;
@@ -28,10 +29,27 @@ export function extractCloudinaryPublicIds(input: unknown): string[] {
   return Array.from(out);
 }
 
+/** Resolve product image publicIds from imagesMeta, falling back to URL parse. */
+export function resolveProductImagePublicIds(product: {
+  imagesMeta?: unknown;
+  images?: string[];
+  image?: string | null;
+}): string[] {
+  const fromMeta = extractCloudinaryPublicIds(product.imagesMeta);
+  if (fromMeta.length > 0) return fromMeta;
+  const urls = [
+    ...(Array.isArray(product.images) ? product.images : []),
+    ...(product.image ? [product.image] : []),
+  ];
+  return resolvePublicIdsFromUrls(urls);
+}
+
 export async function safeDeleteCloudinaryAsset(params: {
   businessId: number;
   publicId: string | null | undefined;
   kindPrefix?: string;
+  /** Allow legacy global receipt paths (telegram-miniapp/receipts). */
+  allowGlobalReceiptPaths?: boolean;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const pid = typeof params.publicId === "string" ? params.publicId.trim() : "";
   if (!pid) return { ok: true };
@@ -39,10 +57,18 @@ export async function safeDeleteCloudinaryAsset(params: {
     return { ok: false, error: "Cloudinary not configured" };
   }
   const prefix = `business_${params.businessId}/`;
-  if (!pid.startsWith(prefix)) {
+  const isTenantAsset = pid.startsWith(prefix);
+  const isGlobalReceipt =
+    params.allowGlobalReceiptPaths &&
+    pid.startsWith("telegram-miniapp/receipts/");
+  if (!isTenantAsset && !isGlobalReceipt) {
     return { ok: false, error: "Refuse to delete чужой asset" };
   }
-  if (params.kindPrefix && !pid.startsWith(`${prefix}${params.kindPrefix}/`)) {
+  if (
+    isTenantAsset &&
+    params.kindPrefix &&
+    !pid.startsWith(`${prefix}${params.kindPrefix}/`)
+  ) {
     return { ok: false, error: "Refuse to delete asset из другой папки" };
   }
   try {

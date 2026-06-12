@@ -134,6 +134,17 @@ import {
   uploadTenantImage,
 } from "../media/upload.js";
 import { extractCloudinaryPublicIds, safeDeleteCloudinaryAsset } from "../media/delete.js";
+import {
+  auditProductImagesOnCreate,
+  imagesMetaToJson,
+  prepareProductImagesMeta,
+  syncProductImagesOnUpdate,
+} from "../media/productMediaService.js";
+import { syncLogoReplaceCleanup } from "../media/themeMediaService.js";
+import { syncQrReplaceCleanup } from "../media/themeMediaService.js";
+import { scanTenantOrphans } from "../media/orphanScanner.js";
+import { getTenantMediaStats } from "../media/storageAnalytics.js";
+import { startMediaDestroyScheduler } from "../media/mediaDestroyScheduler.js";
 import { invalidateStorefrontCache } from "./storefrontCache.js";
 import { buildMerchantAnalytics } from "./merchantAnalyticsService.js";
 import { buildMerchantWorkload } from "./merchantWorkloadService.js";
@@ -2233,6 +2244,44 @@ app.post("/api/platform/admin/unblock", async (req: Request, res: Response) => {
   }
 });
 
+app.get(
+  "/api/platform/admin/businesses/:businessId/media/orphans",
+  async (req: Request, res: Response) => {
+    try {
+      const unlocked = await requireOperatorUnlock(req, res);
+      if (!unlocked) return;
+      const businessId = Number(req.params.businessId);
+      if (!Number.isFinite(businessId) || businessId <= 0) {
+        return res.status(400).json({ error: "Неверный businessId" });
+      }
+      const result = await scanTenantOrphans(prisma, businessId);
+      res.json({ ...result, dryRun: true });
+    } catch (e) {
+      console.error("GET platform media orphans:", e);
+      res.status(500).json({ error: "Ошибка сервера" });
+    }
+  },
+);
+
+app.get(
+  "/api/platform/admin/businesses/:businessId/media/stats",
+  async (req: Request, res: Response) => {
+    try {
+      const unlocked = await requireOperatorUnlock(req, res);
+      if (!unlocked) return;
+      const businessId = Number(req.params.businessId);
+      if (!Number.isFinite(businessId) || businessId <= 0) {
+        return res.status(400).json({ error: "Неверный businessId" });
+      }
+      const stats = await getTenantMediaStats(prisma, businessId);
+      res.json(stats);
+    } catch (e) {
+      console.error("GET platform media stats:", e);
+      res.status(500).json({ error: "Ошибка сервера" });
+    }
+  },
+);
+
 app.get("/api/platform/admin/businesses", async (req: Request, res: Response) => {
   try {
     const unlocked = await requireOperatorUnlock(req, res);
@@ -2735,7 +2784,31 @@ app.put("/api/business/:businessId/theme", async (req: Request, res: Response) =
     }
 
     const patchTouchesLogo =
-      patch !== null && typeof patch === "object" && "logoUrl" in patch;
+      patch !== null &&
+      typeof patch === "object" &&
+      ("logoUrl" in patch || "logoPublicId" in patch);
+
+    const patchLogoPublicId =
+      patch != null && typeof patch === "object" && !Array.isArray(patch)
+        ? (patch as { logoPublicId?: unknown }).logoPublicId
+        : undefined;
+    const nextLogoPublicId =
+      patchLogoPublicId === null || patchLogoPublicId === ""
+        ? null
+        : typeof patchLogoPublicId === "string"
+          ? patchLogoPublicId.trim() || null
+          : result.merged.logoPublicId;
+
+    if (patchTouchesLogo) {
+      await syncLogoReplaceCleanup({
+        prisma,
+        businessId: bid,
+        prevThemeConfig: business.themeConfig,
+        nextLogoUrl: result.merged.logoUrl,
+        nextLogoPublicId,
+        actor: { actorType: "merchant", actorUserId: staff.id },
+      });
+    }
 
     await prisma.$transaction(async (tx) => {
       await tx.business.update({
@@ -3752,12 +3825,43 @@ app.post("/settings", async (req: Request, res: Response) => {
     const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.settingsManage);
     if (!merchant) return;
     const body = req.body as Record<string, unknown>;
+
+    const prevSettings = await prisma.settings.findUnique({
+      where: { businessId: merchant.businessId },
+    });
+
+    const nextQr =
+      body.qr === null || body.qr === ""
+        ? null
+        : body.qr != null
+          ? String(body.qr).trim() || null
+          : (prevSettings?.qr ?? null);
+    const nextQrPublicId =
+      body.qrPublicId === null || body.qrPublicId === ""
+        ? null
+        : body.qrPublicId != null
+          ? String(body.qrPublicId).trim() || null
+          : (prevSettings?.qrPublicId ?? null);
+
+    if (body.qr !== undefined || body.qrPublicId !== undefined) {
+      await syncQrReplaceCleanup({
+        prisma,
+        businessId: merchant.businessId,
+        prevQr: prevSettings?.qr ?? null,
+        prevQrPublicId: prevSettings?.qrPublicId ?? null,
+        nextQr,
+        nextQrPublicId,
+        actor: { actorType: "merchant", actorUserId: merchant.staffId },
+      });
+    }
+
     const data = {
       mbank: body.mbank,
       optima: body.optima,
       obank: body.obank ?? body.other,
       card: body.card,
       qr: body.qr,
+      qrPublicId: body.qrPublicId,
     } as Record<string, unknown>;
     const settings = await upsertPaymentSettings(
       prisma,
@@ -4173,6 +4277,7 @@ app.post("/products", async (req: Request, res: Response) => {
       price?: unknown;
       image?: unknown;
       images?: unknown;
+      imagesMeta?: unknown;
       description?: unknown;
       categoryId?: unknown;
       attributes?: unknown;
@@ -4189,6 +4294,7 @@ app.post("/products", async (req: Request, res: Response) => {
       price,
       image,
       images,
+      imagesMeta: imagesMetaRaw,
       description,
       categoryId,
       attributes,
@@ -4269,6 +4375,12 @@ app.post("/products", async (req: Request, res: Response) => {
 
     const createStatus = parseProductStatus(statusRaw) ?? "ACTIVE";
 
+    const imagesMeta = prepareProductImagesMeta({
+      urls: imageList,
+      prevImagesMeta: [],
+      incomingImagesMeta: imagesMetaRaw,
+    });
+
     const product = await prisma.product.create({
       // Prisma Client types may lag schema changes in editor; runtime column exists after migration.
       data: {
@@ -4276,6 +4388,7 @@ app.post("/products", async (req: Request, res: Response) => {
         price: Number(price),
         image: primaryImage,
         images: imageList,
+        imagesMeta: imagesMetaToJson(imagesMeta) as Prisma.InputJsonValue,
         description:
           description != null && String(description).trim() !== ""
             ? String(description).trim()
@@ -4288,6 +4401,14 @@ app.post("/products", async (req: Request, res: Response) => {
       include: {
         category: true,
       },
+    });
+
+    await auditProductImagesOnCreate({
+      prisma,
+      businessId: merchant.businessId,
+      productId: product.id,
+      imagesMeta,
+      actor: { actorType: "merchant", actorUserId: merchant.staffId },
     });
 
     const variantRows = extractVariantsFromProductPayload(vAttr.value, variants);
@@ -6450,6 +6571,7 @@ app.post(
       const { secureUrl, receiptType } = await uploadReceiptToCloudinary(
         file.buffer,
         v.mimetype,
+        merchant.businessId,
       );
 
       const receiptData = {
@@ -6481,6 +6603,7 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       price?: unknown;
       image?: unknown;
       images?: unknown;
+      imagesMeta?: unknown;
       description?: unknown;
       categoryId?: unknown;
       attributes?: unknown;
@@ -6503,6 +6626,7 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       price,
       image,
       images,
+      imagesMeta: imagesMetaRaw,
       description,
       categoryId,
       attributes,
@@ -6520,6 +6644,7 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       price === undefined &&
       image === undefined &&
       images === undefined &&
+      imagesMetaRaw === undefined &&
       description === undefined &&
       categoryId === undefined &&
       attributes === undefined &&
@@ -6544,6 +6669,7 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       attributes?: Record<string, unknown>;
       preparationMinutes?: number | null;
       status?: "ACTIVE" | "DRAFT" | "ARCHIVED";
+      imagesMeta?: Prisma.InputJsonValue;
     } = {};
 
     if (name !== undefined) scalar.name = String(name);
@@ -6605,6 +6731,32 @@ app.put("/products/:id", async (req: Request, res: Response) => {
     const exists = await prisma.product.findUnique({ where: { id } });
     if (!exists || exists.businessId !== merchant.businessId) {
       return res.status(404).json({ error: "Товар не найден" });
+    }
+
+    const imagesTouched = images !== undefined || image !== undefined;
+    if (imagesTouched) {
+      const nextUrls =
+        scalar.images ??
+        (exists.images?.length ? exists.images : exists.image ? [exists.image] : []);
+      const { imagesMeta } = await syncProductImagesOnUpdate({
+        prisma,
+        businessId: merchant.businessId,
+        productId: id,
+        exists,
+        nextUrls,
+        incomingImagesMeta: imagesMetaRaw,
+        actor: { actorType: "merchant", actorUserId: merchant.staffId },
+      });
+      scalar.imagesMeta = imagesMetaToJson(imagesMeta) as Prisma.InputJsonValue;
+    } else if (imagesMetaRaw !== undefined) {
+      const nextUrls =
+        exists.images?.length ? exists.images : exists.image ? [exists.image] : [];
+      const imagesMeta = prepareProductImagesMeta({
+        urls: nextUrls,
+        prevImagesMeta: exists.imagesMeta,
+        incomingImagesMeta: imagesMetaRaw,
+      });
+      scalar.imagesMeta = imagesMetaToJson(imagesMeta) as Prisma.InputJsonValue;
     }
 
     if (
@@ -6881,6 +7033,11 @@ void (async () => {
       startStaleOrderCleanupScheduler();
     } catch (e) {
       console.error("startStaleOrderCleanupScheduler:", e);
+    }
+    try {
+      startMediaDestroyScheduler();
+    } catch (e) {
+      console.error("startMediaDestroyScheduler:", e);
     }
     try {
       startTableReservationScheduler();

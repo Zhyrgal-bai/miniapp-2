@@ -3,20 +3,25 @@ import { isCloudinaryConfigured, uploadImageBuffer } from "../media/cloudinary.j
 
 export { isCloudinaryConfigured };
 
-/** Чек оплаты: изображение или PDF → Cloudinary, папка receipts. */
+/** Чек оплаты: изображение или PDF → Cloudinary. Новые — в business_{id}/receipts. */
 export async function uploadReceiptToCloudinary(
   buffer: Buffer,
-  mimetype: string
+  mimetype: string,
+  businessId?: number,
 ): Promise<{ secureUrl: string; receiptType: "pdf" | "image" }> {
   if (!isCloudinaryConfigured()) {
     throw new Error("CLOUDINARY_NOT_CONFIGURED");
   }
   const isPdf =
     mimetype === "application/pdf" || mimetype === "application/x-pdf";
+  const folder =
+    businessId != null && Number.isInteger(businessId) && businessId > 0
+      ? `business_${businessId}/receipts`
+      : "telegram-miniapp/receipts";
   const result = await new Promise<any>((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
-        folder: "telegram-miniapp/receipts",
+        folder,
         resource_type: isPdf ? "raw" : "image",
         secure: true,
       },

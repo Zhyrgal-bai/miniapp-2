@@ -60,6 +60,7 @@ export default function AdminDesignPage(): ReactElement {
   const [bannerTitle, setBannerTitle] = useState("");
   const [bannerSubtitle, setBannerSubtitle] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
+  const [logoPublicId, setLogoPublicId] = useState<string | null>(null);
   const [brandTagline, setBrandTagline] = useState("");
   const [logoUploadBusy, setLogoUploadBusy] = useState(false);
 
@@ -89,6 +90,7 @@ export default function AdminDesignPage(): ReactElement {
     setBannerTitle(theme.banner.title);
     setBannerSubtitle(theme.banner.subtitle);
     setLogoUrl(theme.logoUrl ?? "");
+    setLogoPublicId(theme.logoPublicId ?? null);
   }, [
     serverTemplateId,
     theme.primaryColor,
@@ -100,6 +102,7 @@ export default function AdminDesignPage(): ReactElement {
     theme.banner.title,
     theme.banner.subtitle,
     theme.logoUrl,
+    theme.logoPublicId,
   ]);
 
   const syncBrandingFromPayload = useCallback(() => {
@@ -192,8 +195,9 @@ export default function AdminDesignPage(): ReactElement {
     setLogoUploadBusy(true);
     setError(null);
     try {
-      const url = await adminService.uploadImage(file);
-      setLogoUrl(url);
+      const asset = await adminService.uploadImage(file);
+      setLogoUrl(asset.url);
+      setLogoPublicId(asset.publicId);
       setOk("Логотип загружен. Нажмите «Сохранить».");
     } catch (e) {
       setError(formatAdminApiError(e));
@@ -224,6 +228,7 @@ export default function AdminDesignPage(): ReactElement {
           subtitle: bannerSubtitle,
         },
         logoUrl: logoUrl.trim() === "" ? null : logoUrl.trim(),
+        logoPublicId: logoUrl.trim() === "" ? null : logoPublicId,
         ...(templateId != null ? { templateId } : {}),
       };
       await saveBusinessThemePut(businessId, patch);
@@ -469,7 +474,10 @@ export default function AdminDesignPage(): ReactElement {
               type="button"
               className="admin-theme-reset"
               disabled={saving || logoUploadBusy}
-              onClick={() => setLogoUrl("")}
+              onClick={() => {
+                setLogoUrl("");
+                setLogoPublicId(null);
+              }}
             >
               Удалить логотип
             </button>

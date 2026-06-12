@@ -20,6 +20,7 @@ export type ResolvedStoreTheme = {
   cardColor: string;
   textColor: string;
   logoUrl: string | null;
+  logoPublicId: string | null;
   layout: StoreLayout;
   banner: StoreBannerConfig;
   /** Design tokens v2 for builder/UX system (safe, schema-driven). */
@@ -57,6 +58,7 @@ export const TEMPLATES: Record<StoreTemplateId, ResolvedStoreTheme> = {
     cardColor: "#2a0000",
     textColor: "#ffffff",
     logoUrl: null,
+    logoPublicId: null,
     layout: "classic",
     banner: {
       enabled: true,
@@ -71,6 +73,7 @@ export const TEMPLATES: Record<StoreTemplateId, ResolvedStoreTheme> = {
     cardColor: "#1e293b",
     textColor: "#ffffff",
     logoUrl: null,
+    logoPublicId: null,
     layout: "modern",
     banner: {
       enabled: true,
@@ -85,6 +88,7 @@ export const TEMPLATES: Record<StoreTemplateId, ResolvedStoreTheme> = {
     cardColor: "#f1f5f9",
     textColor: "#000000",
     logoUrl: null,
+    logoPublicId: null,
     layout: "modern",
     banner: {
       enabled: true,
@@ -99,6 +103,7 @@ export const TEMPLATES: Record<StoreTemplateId, ResolvedStoreTheme> = {
     cardColor: "#1a1814",
     textColor: "#f5f0e6",
     logoUrl: null,
+    logoPublicId: null,
     layout: "classic",
     banner: {
       enabled: true,
@@ -113,6 +118,7 @@ export const TEMPLATES: Record<StoreTemplateId, ResolvedStoreTheme> = {
     cardColor: "#ffffff",
     textColor: "#0b1220",
     logoUrl: null,
+    logoPublicId: null,
     layout: "modern",
     banner: {
       enabled: true,
@@ -127,6 +133,7 @@ export const TEMPLATES: Record<StoreTemplateId, ResolvedStoreTheme> = {
     cardColor: "#0f111a",
     textColor: "#ffffff",
     logoUrl: null,
+    logoPublicId: null,
     layout: "modern",
     banner: {
       enabled: true,
@@ -141,6 +148,7 @@ export const TEMPLATES: Record<StoreTemplateId, ResolvedStoreTheme> = {
     cardColor: "#050b1a",
     textColor: "#e5f6ff",
     logoUrl: null,
+    logoPublicId: null,
     layout: "modern",
     banner: {
       enabled: true,
@@ -237,6 +245,14 @@ export function mergeThemeFromUnknown(
     else logoUrl = base.logoUrl;
   }
 
+  let logoPublicId: string | null = base.logoPublicId;
+  const rawLogoPid = stored.logoPublicId;
+  if (rawLogoPid === null || rawLogoPid === "") logoPublicId = null;
+  else if (typeof rawLogoPid === "string") {
+    const t = rawLogoPid.trim().slice(0, 512);
+    logoPublicId = t !== "" ? t : null;
+  }
+
   let layout: StoreLayout = base.layout;
   const rawLayout = stored.layout;
   if (rawLayout === "classic" || rawLayout === "modern") {
@@ -274,6 +290,7 @@ export function mergeThemeFromUnknown(
     cardColor: pickColor("cardColor"),
     textColor: pickColor("textColor"),
     logoUrl,
+    logoPublicId,
     layout,
     banner,
     tokens,
@@ -287,6 +304,7 @@ export type ThemePatchPayload = Partial<{
   cardColor: string;
   textColor: string;
   logoUrl: string | null;
+  logoPublicId?: string | null;
   layout: StoreLayout;
   templateId: string | null;
   banner: Partial<StoreBannerConfig>;

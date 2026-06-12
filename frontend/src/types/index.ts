@@ -31,6 +31,14 @@ export interface ProductColor {
   hex: string;
 }
 
+export interface ProductImageMeta {
+  url: string;
+  publicId: string;
+  width: number;
+  height: number;
+  format?: string;
+}
+
 export interface Product {
   id?: number;
   name: string;
@@ -38,6 +46,7 @@ export interface Product {
   image: string;
 
   images?: string[];
+  imagesMeta?: ProductImageMeta[];
   colors?: ProductColor[];
   sizes?: Size[];
 

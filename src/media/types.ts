@@ -11,6 +11,15 @@ export type CloudinaryImageAsset = {
   publicId: string;
   width: number;
   height: number;
+  format?: string;
+};
+
+export type ProductImageMeta = {
+  url: string;
+  publicId: string;
+  width: number;
+  height: number;
+  format?: string;
 };
 
 export type UploadResult = CloudinaryImageAsset;

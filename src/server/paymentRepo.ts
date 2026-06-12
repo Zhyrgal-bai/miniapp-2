@@ -74,13 +74,26 @@ export async function upsertPaymentSettings(
   businessId: number,
   body: Record<string, unknown>
 ): Promise<Settings> {
-  const data = {
+  const data: {
+    mbank: string | null;
+    optima: string | null;
+    other: string | null;
+    card: string | null;
+    qr: string | null;
+    qrPublicId?: string | null;
+  } = {
     mbank: strOrNull(body.mbank),
     optima: strOrNull(body.optima),
     other: strOrNull(body.obank ?? body.other),
     card: strOrNull(body.card),
     qr: strOrNull(body.qr),
   };
+  if ("qrPublicId" in body) {
+    data.qrPublicId =
+      body.qrPublicId === null || body.qrPublicId === ""
+        ? null
+        : strOrNull(body.qrPublicId);
+  }
   return client.settings.upsert({
     where: { businessId },
     create: { businessId, ...data },

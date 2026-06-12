@@ -13,6 +13,7 @@ import {
 } from "../bot/dynamicBots.js";
 import { applyBusinessTemplate } from "./applyBusinessTemplate.js";
 import { prisma } from "./db.js";
+import { purgeTenantCloudinaryAssets } from "../media/tenantMediaPurge.js";
 import {
   plainBotTokenFromStored,
   hashBotTokenSha256Hex,
@@ -757,6 +758,15 @@ export async function purgeBusinessCompletelyForOwner(
     };
   }
 
+  try {
+    await purgeTenantCloudinaryAssets(prisma, businessId, {
+      actorType: "merchant",
+      actorUserId: user.id,
+    });
+  } catch (e) {
+    console.error("[purgeBusinessCompletelyForOwner] cloudinary:", e);
+  }
+
   const purged = await purgeBusinessFromDatabase(businessId);
   if (!purged.ok) return purged;
 
@@ -789,6 +799,14 @@ export async function purgeBusinessCompletelyForPlatformAdmin(
   businessId: number,
   adminTelegramId: string,
 ): Promise<PurgeBusinessOutcome> {
+  try {
+    await purgeTenantCloudinaryAssets(prisma, businessId, {
+      actorType: "operator",
+    });
+  } catch (e) {
+    console.error("[purgeBusinessCompletelyForPlatformAdmin] cloudinary:", e);
+  }
+
   const purged = await purgeBusinessFromDatabase(businessId);
   if (!purged.ok) return purged;
 

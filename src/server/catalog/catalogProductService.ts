@@ -5,7 +5,9 @@ import {
   type ProductBulkPatch,
   type ProductListSort,
 } from "../../shared/catalogTypes.js";
-import { extractCloudinaryPublicIds, safeDeleteCloudinaryAsset } from "../../media/delete.js";
+import { resolveProductImagePublicIds } from "../../media/delete.js";
+import { destroyPublicIdsBestEffort } from "../../media/mediaCleanupService.js";
+import { logMediaAudit } from "../../media/mediaAuditService.js";
 
 export type CatalogProductRow = Product & {
   category: { id: number; name: string; parentId: number | null; parent?: { id: number; name: string } | null };
@@ -131,6 +133,13 @@ export async function archiveProduct(
     where: { id },
     data: { status: "ARCHIVED" },
   });
+  await logMediaAudit(prisma, {
+    businessId,
+    event: "ARCHIVE",
+    productId: id,
+    actor: { actorType: "merchant" },
+    details: { imageCount: product.images?.length ?? 0 },
+  });
   return { ok: true, product };
 }
 
@@ -145,6 +154,13 @@ export async function restoreProduct(
   const product = await prisma.product.update({
     where: { id },
     data: { status: "ACTIVE" },
+  });
+  await logMediaAudit(prisma, {
+    businessId,
+    event: "RESTORE",
+    productId: id,
+    actor: { actorType: "merchant" },
+    details: { imageCount: product.images?.length ?? 0 },
   });
   return { ok: true, product };
 }
@@ -301,14 +317,17 @@ export async function purgeProductPermanent(
   }
 
   try {
-    const ids = extractCloudinaryPublicIds((exists as { imagesMeta?: unknown }).imagesMeta);
-    for (const pid of ids) {
-      await safeDeleteCloudinaryAsset({
-        businessId,
-        publicId: pid,
-        kindPrefix: "products",
-      });
-    }
+    const ids = resolveProductImagePublicIds(exists);
+    await destroyPublicIdsBestEffort({
+      prisma,
+      businessId,
+      publicIds: ids,
+      reason: "product_permanent_purge",
+      auditEvent: "PURGE",
+      actor: { actorType: "operator" },
+      skipReferenceGuard: false,
+      allowLegacyStorefrontProductPaths: true,
+    });
   } catch (e) {
     console.error("product purge cloudinary:", e);
   }

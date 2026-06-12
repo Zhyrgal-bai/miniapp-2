@@ -147,6 +147,16 @@ export function applyThemePatchAndValidate(
     next.logoUrl = logoSan;
   }
 
+  if (patch.logoPublicId !== undefined) {
+    if (patch.logoPublicId === null || patch.logoPublicId === "") {
+      next.logoPublicId = null;
+    } else if (typeof patch.logoPublicId === "string") {
+      next.logoPublicId = patch.logoPublicId.trim().slice(0, 512) || null;
+    } else {
+      return { ok: false, error: "logoPublicId: строка или null" };
+    }
+  }
+
   if (patch.layout !== undefined) {
     if (patch.layout !== "classic" && patch.layout !== "modern") {
       return { ok: false, error: "layout: classic или modern" };
@@ -185,6 +195,7 @@ export function applyThemePatchAndValidate(
     cardColor: next.cardColor,
     textColor: next.textColor,
     logoUrl: next.logoUrl,
+    logoPublicId: next.logoPublicId,
     layout: next.layout,
     banner: {
       enabled: next.banner.enabled,

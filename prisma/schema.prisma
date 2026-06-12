@@ -195,6 +195,8 @@ model Business {
   cancelRequests  CancelRequest[]
   refundRequests  RefundRequest[]
   refundAuditLogs RefundAuditLog[]
+  mediaAuditLogs  MediaAuditLog[]
+  mediaDestroyJobs MediaDestroyJob[]
   productStocks   ProductStock[]
   stockMovements  StockMovement[]
   diningTables    DiningTable[]
@@ -447,6 +449,7 @@ model Settings {
   other  String?
   card   String?
   qr     String?
+  qrPublicId String?
 
   /// онлайн ККМ: `finik` при регистрации с ключом; полная оплата — отдельная интеграция.
   paymentProvider String?
@@ -913,6 +916,56 @@ model RefundAuditLog {
   @@index([refundRequestId])
   @@index([businessId, createdAt])
   @@index([orderId])
+}
+
+enum MediaAuditEvent {
+  UPLOAD
+  REPLACE
+  DELETE
+  ARCHIVE
+  RESTORE
+  PURGE
+  CLEANUP
+  RETRY
+}
+
+model MediaAuditLog {
+  id          Int             @id @default(autoincrement())
+  businessId  Int
+  business    Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  event       MediaAuditEvent
+  publicId    String?
+  productId   Int?
+  actorType   String
+  actorUserId Int?
+  details     Json            @default("{}")
+  createdAt   DateTime        @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([publicId])
+}
+
+enum MediaDestroyJobStatus {
+  PENDING
+  DONE
+  FAILED
+}
+
+model MediaDestroyJob {
+  id          Int                   @id @default(autoincrement())
+  businessId  Int
+  business    Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  publicId    String
+  reason      String
+  status      MediaDestroyJobStatus @default(PENDING)
+  attempts    Int                   @default(0)
+  nextRetryAt DateTime              @default(now())
+  lastError   String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  @@index([status, nextRetryAt])
+  @@index([businessId])
 }
 
 /// Promotions scoped per tenant (no global `@unique(code)` across businesses).

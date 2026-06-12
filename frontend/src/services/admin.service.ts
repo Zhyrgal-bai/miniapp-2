@@ -6,6 +6,14 @@ import {
   adminFetchVoid,
 } from "./adminRequest";
 
+export type UploadAsset = {
+  url: string;
+  publicId: string;
+  width: number;
+  height: number;
+  format?: string;
+};
+
 /** Относительный путь или уже полный `https://...` (не дублируем API_BASE_URL). */
 function resolveAdminUrl(path: string): string {
   const trimmed = path.trim();
@@ -715,6 +723,7 @@ export const adminService = {
         | "variants"
         | "attributes"
         | "status"
+        | "imagesMeta"
       >
     >
   ): Promise<Product> {
@@ -733,6 +742,7 @@ export const adminService = {
     other?: string;
     card?: string;
     qr?: string;
+    qrPublicId?: string | null;
   }): Promise<unknown> {
     const payload = {
       ...data,
@@ -796,7 +806,7 @@ export const adminService = {
 
   listAllOrders: fetchAdminOrders,
 
-  async uploadImage(file: File): Promise<string> {
+  async uploadImage(file: File): Promise<UploadAsset> {
     const form = new FormData();
     form.append("file", file);
     const url = `${API_BASE_URL}/upload`;
@@ -805,13 +815,26 @@ export const adminService = {
       json: false,
       body: form,
     });
-    const j = (await res.json()) as { url?: string; secure_url?: string };
-    const out = j.url ?? j.secure_url;
-    if (!out) throw new Error("Сервер не вернул ссылку на файл");
-    return out;
+    const j = (await res.json()) as UploadAsset & { secure_url?: string };
+    const outUrl = j.url ?? j.secure_url;
+    if (!outUrl || !j.publicId) {
+      throw new Error("Сервер не вернул метаданные файла");
+    }
+    return {
+      url: outUrl,
+      publicId: j.publicId,
+      width: j.width ?? 0,
+      height: j.height ?? 0,
+      ...(j.format ? { format: j.format } : {}),
+    };
   },
 
-  async uploadImages(files: File[]): Promise<string[]> {
+  async uploadImageUrl(file: File): Promise<string> {
+    const asset = await adminService.uploadImage(file);
+    return asset.url;
+  },
+
+  async uploadImages(files: File[]): Promise<UploadAsset[]> {
     if (files.length === 0) return [];
     const form = new FormData();
     for (const f of files) {
@@ -823,10 +846,35 @@ export const adminService = {
       json: false,
       body: form,
     });
-    const j = (await res.json()) as { urls?: string[]; assets?: Array<{ url?: string }> };
-    if (Array.isArray(j.urls)) return j.urls;
-    if (Array.isArray(j.assets)) return j.assets.map((a) => String(a.url ?? "")).filter(Boolean);
+    const j = (await res.json()) as {
+      urls?: string[];
+      assets?: UploadAsset[];
+    };
+    if (Array.isArray(j.assets)) {
+      return j.assets
+        .map((a) => ({
+          url: String(a.url ?? ""),
+          publicId: String(a.publicId ?? ""),
+          width: Number(a.width ?? 0) || 0,
+          height: Number(a.height ?? 0) || 0,
+          ...(a.format ? { format: a.format } : {}),
+        }))
+        .filter((a) => a.url && a.publicId);
+    }
+    if (Array.isArray(j.urls)) {
+      return j.urls.map((u) => ({
+        url: u,
+        publicId: "",
+        width: 0,
+        height: 0,
+      }));
+    }
     return [];
+  },
+
+  async uploadImageUrls(files: File[]): Promise<string[]> {
+    const assets = await adminService.uploadImages(files);
+    return assets.map((a) => a.url);
   },
 
   async updateOrderStatus(

@@ -2,7 +2,7 @@ import { showSuccessToast } from "../../store/toast.store";
 import { useEffect, useMemo, useState } from "react";
 import { useAdminStore } from "../../store/admin.store";
 import { adminService } from "../../services/admin.service";
-import type { Category, Product, Variant } from "../../types";
+import type { Category, Product, ProductImageMeta, Variant } from "../../types";
 import { categoryRoots } from "../../utils/categoryTree";
 import { DynamicFieldRenderer } from "./DynamicFieldRenderer";
 import { DynamicVariantEditor } from "./DynamicVariantEditor";
@@ -35,6 +35,7 @@ const ProductForm = () => {
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState<number | "">("");
   const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [imagesMeta, setImagesMeta] = useState<ProductImageMeta[]>([]);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [mainCategoryId, setMainCategoryId] = useState<number | "">("");
@@ -103,12 +104,9 @@ const ProductForm = () => {
     setUploadingImages(true);
     setFormError(null);
     try {
-      const next = [...imageUrls];
-      for (const file of Array.from(files)) {
-        const url = await adminService.uploadImage(file);
-        next.push(url);
-      }
-      setImageUrls(next);
+      const assets = await adminService.uploadImages(Array.from(files));
+      setImageUrls((prev) => [...prev, ...assets.map((a) => a.url)]);
+      setImagesMeta((prev) => [...prev, ...assets.filter((a) => a.publicId)]);
     } catch (err) {
       console.error(err);
       setFormError(
@@ -179,11 +177,16 @@ const ProductForm = () => {
       return;
     }
 
+    const orderedMeta = imageUrls
+      .map((url) => imagesMeta.find((m) => m.url === url))
+      .filter((m): m is ProductImageMeta => m != null);
+
     const data = {
       name: name.trim(),
       price: priceNum,
       image: imageUrls[0] ?? "",
       images: imageUrls,
+      imagesMeta: orderedMeta.length > 0 ? orderedMeta : imagesMeta,
       categoryId,
       isNew,
       isPopular,
