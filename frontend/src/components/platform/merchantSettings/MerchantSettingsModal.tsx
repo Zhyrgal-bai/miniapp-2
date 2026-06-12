@@ -141,6 +141,7 @@ export function MerchantSettingsModal(props: MerchantSettingsModalProps): ReactE
     view !== "payment" &&
     (view !== "bot" || props.isPlatformAdmin);
 
+  /** Оператор: sticky footer. Мерчант (platform-managed): кнопка в панели оплаты. */
   const showPaymentSave = view === "payment" && props.isPlatformAdmin;
 
   const hasStickyFooter = showSaveFooter || showPaymentSave;

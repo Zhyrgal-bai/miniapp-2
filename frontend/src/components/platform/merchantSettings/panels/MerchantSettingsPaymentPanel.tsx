@@ -23,6 +23,7 @@ type Props = {
 export function MerchantSettingsPaymentPanel(props: Props): ReactElement {
   const ready = Boolean(props.snap?.finikReady);
   const platformManaged = props.snap?.finikPlatformManaged === true;
+  const showOperatorWebhook = props.isPlatformAdmin;
 
   return (
     <div className="mp-pay-status">
@@ -56,19 +57,21 @@ export function MerchantSettingsPaymentPanel(props: Props): ReactElement {
           Account ID
           <strong>{props.snap?.finikHasAccountId ? "Подключён" : "Не задан"}</strong>
         </div>
-        <div className="mp-pay-status__chip">
-          Webhook
-          <strong>
-            {props.snap?.finikWebhookUrl?.trim() ? "Настроен" : "Нет URL"}
-          </strong>
-        </div>
+        {showOperatorWebhook ? (
+          <div className="mp-pay-status__chip">
+            Webhook
+            <strong>
+              {props.snap?.finikWebhookUrl?.trim() ? "Настроен" : "Нет URL"}
+            </strong>
+          </div>
+        ) : null}
         <div className="mp-pay-status__chip">
           Статус
           <strong>{ready ? "Готов к оплате" : "Ожидает настройки"}</strong>
         </div>
       </div>
 
-      {props.snap?.finikWebhookUrl?.trim() ? (
+      {showOperatorWebhook && props.snap?.finikWebhookUrl?.trim() ? (
         <div className="mp-pay-status__webhook">
           <span className="mp-settings-field__label">Webhook URL</span>
           <code className="mp-pay-status__webhook-url">{props.snap.finikWebhookUrl}</code>
@@ -117,9 +120,16 @@ export function MerchantSettingsPaymentPanel(props: Props): ReactElement {
               {props.finikMsg}
             </p>
           ) : null}
+          <button
+            type="button"
+            className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg mt-2"
+            disabled={props.disabled || props.snap == null || props.finikSaving}
+            onClick={() => props.onSaveFinik()}
+          >
+            {props.finikSaving ? "Сохранение…" : "Сохранить"}
+          </button>
           <p className="mp-settings-field__hint">
-            Сохранение — кнопкой внизу экрана «Сохранить Finik». API Key хранится на
-            стороне ARCHA.
+            API Key и webhook настраиваются на стороне ARCHA — вам нужен только Account ID.
           </p>
         </div>
       ) : null}
@@ -201,9 +211,14 @@ export function MerchantSettingsPaymentPanel(props: Props): ReactElement {
                 {props.finikMsg}
               </p>
             ) : null}
-            <p className="mp-settings-field__hint">
-              Сохранение — кнопкой внизу экрана «Сохранить Finik».
-            </p>
+            <button
+              type="button"
+              className="mp-btn mp-btn--primary mp-btn--block mp-btn--lg mt-2"
+              disabled={props.disabled || props.snap == null || props.finikSaving}
+              onClick={() => props.onSaveFinik()}
+            >
+              {props.finikSaving ? "Сохранение…" : "Сохранить Finik"}
+            </button>
           </div>
         </details>
       ) : null}
