@@ -17,6 +17,7 @@ import {
   finikUseMockForBusiness,
   isFinikCredentialsReady,
   isFinikLegacyHttpReady,
+  isMerchantFinikPlatformManaged,
 } from "../shared/finikReady.js";
 import {
   isPlatformFinikOfficialReady,
@@ -895,6 +896,8 @@ async function handleFinikWebhookForBusiness(
 
     const verify = await verifyFinikWebhookAdmission({
       finikSecret: business.finikSecret,
+      finikApiKey: business.finikApiKey,
+      finikAccountId: business.finikAccountId,
       req,
       rawBody,
       body,
@@ -1215,7 +1218,16 @@ export function mountFinikSettingsRoutes(app: Express): void {
         return;
       }
 
-      const ready = isFinikCredentialsReady(b.finikApiKey, b.finikAccountId);
+      const platformManaged = isMerchantFinikPlatformManaged({
+        finikApiKey: b.finikApiKey,
+        finikAccountId: b.finikAccountId,
+        finikSecret: b.finikSecret,
+      });
+      const ready = isFinikCredentialsReady(
+        b.finikApiKey,
+        b.finikAccountId,
+        b.finikSecret,
+      );
       const legacyHttpReady = isFinikLegacyHttpReady(b.finikApiKey, b.finikSecret);
       res.json({
         businessId: b.id,
@@ -1225,6 +1237,7 @@ export function mountFinikSettingsRoutes(app: Express): void {
         finikHasAccountId: finikHasAccountId(b.finikAccountId),
         finikLegacyHttpReady: legacyHttpReady,
         finikHasSecret: finikHasSecret(b.finikSecret),
+        finikPlatformManaged: platformManaged,
         webhookUrl: buildFinikWebhookUrl(publicApiOrigin(), b.id),
       });
     } catch (e) {
@@ -1255,32 +1268,33 @@ export function mountFinikSettingsRoutes(app: Express): void {
         return;
       }
 
-      const finikApiKey =
-        typeof body.finikApiKey === "string" ? body.finikApiKey.trim() : "";
-      const finikAccountId =
-        typeof body.finikAccountId === "string" ? body.finikAccountId.trim() : "";
-      const finikSecret =
-        typeof body.finikSecret === "string" ? body.finikSecret.trim() : "";
-
-      await prisma.business.update({
-        where: { id: businessId },
-        data: {
-          finikApiKey: finikApiKey === "" ? null : finikApiKey,
-          finikAccountId: finikAccountId === "" ? null : finikAccountId,
-          finikSecret: finikSecret === "" ? null : finikSecret,
-        },
-      });
-
-      const ready = isFinikCredentialsReady(
-        finikApiKey === "" ? null : finikApiKey,
-        finikAccountId === "" ? null : finikAccountId,
+      const { savePlatformFinikForMerchant } = await import(
+        "./platformMerchantStoreSettings.js"
       );
+      const out = await savePlatformFinikForMerchant({
+        telegramId: telegramStr,
+        businessId,
+        ...(body.finikApiKey !== undefined
+          ? { finikApiKey: body.finikApiKey }
+          : {}),
+        ...(body.finikAccountId !== undefined
+          ? { finikAccountId: body.finikAccountId }
+          : {}),
+        ...(body.finikSecret !== undefined
+          ? { finikSecret: body.finikSecret }
+          : {}),
+      });
+      if (!out.ok) {
+        res.status(out.statusCode).json({ error: out.error });
+        return;
+      }
       res.json({
         ok: true,
         businessId,
-        finikConfigured: ready,
-        finikReady: ready,
-        webhookUrl: buildFinikWebhookUrl(publicApiOrigin(), businessId),
+        finikConfigured: out.finikReady,
+        finikReady: out.finikReady,
+        finikPlatformManaged: out.finikPlatformManaged,
+        webhookUrl: out.finikWebhookUrl,
       });
     } catch (e) {
       console.error("POST /integrations/finik:", e);

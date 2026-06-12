@@ -137,16 +137,20 @@ export async function buildMerchantInsights(input: {
     select: {
       finikApiKey: true,
       finikAccountId: true,
+      finikSecret: true,
       storefrontPublishedAt: true,
       categories: { select: { id: true }, take: 1 },
     },
   });
-  if (biz && !isFinikCredentialsReady(biz.finikApiKey, biz.finikAccountId)) {
+  if (
+    biz &&
+    !isFinikCredentialsReady(biz.finikApiKey, biz.finikAccountId, biz.finikSecret)
+  ) {
     insights.push({
       code: "onboarding.finik",
       severity: "info",
       title: "Нет оплаты Finik",
-      body: "Подключите Finik, чтобы принимать оплату в витрине.",
+      body: "Укажите Account ID Finik в настройках оплаты, чтобы принимать оплату в витрине.",
       actionLabel: "Настройки",
       actionHref: "/admin/settings",
     });

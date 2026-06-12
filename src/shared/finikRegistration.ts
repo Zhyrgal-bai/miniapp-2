@@ -2,6 +2,7 @@ import {
   isValidFinikAccountId,
   isValidFinikApiKey,
 } from "../bot/saasRegistrationValidation.js";
+import { isFinikPlatformManagedMerchantsEnabled } from "../server/finik/resolveFinikTenantCredentials.js";
 
 export function isFinikSkipInput(raw: string): boolean {
   const t = raw.trim();
@@ -12,10 +13,10 @@ export function isFinikSkipInput(raw: string): boolean {
 
 export type ParsedFinikRegistration =
   | { ok: true; skip: true }
-  | { ok: true; skip: false; finikApiKey: string; finikAccountId: string }
+  | { ok: true; skip: false; finikAccountId: string; finikApiKey?: string }
   | { ok: false; error: string };
 
-/** Нормализация пары Finik для заявки / provision (skip = оба пустые). */
+/** Нормализация Finik для заявки / provision (skip = пустые поля). */
 export function parseFinikRegistrationFields(input: {
   finikApiKey?: string | null;
   finikAccountId?: string | null;
@@ -28,6 +29,29 @@ export function parseFinikRegistrationFields(input: {
   if (key === "" && account === "") {
     return { ok: true, skip: true };
   }
+
+  if (isFinikPlatformManagedMerchantsEnabled()) {
+    if (key !== "" && account === "") {
+      return {
+        ok: false,
+        error: "Укажите Account ID Finik",
+      };
+    }
+    if (account === "") {
+      return { ok: true, skip: true };
+    }
+    if (!isValidFinikAccountId(account)) {
+      return { ok: false, error: "Некорректный Account ID Finik" };
+    }
+    if (key !== "") {
+      if (!isValidFinikApiKey(key)) {
+        return { ok: false, error: "Некорректный API Key Finik" };
+      }
+      return { ok: true, skip: false, finikAccountId: account, finikApiKey: key };
+    }
+    return { ok: true, skip: false, finikAccountId: account };
+  }
+
   if (key === "" && account !== "") {
     return {
       ok: false,
@@ -46,7 +70,12 @@ export function parseFinikRegistrationFields(input: {
   if (!isValidFinikAccountId(account)) {
     return { ok: false, error: "Некорректный Account ID Finik" };
   }
-  return { ok: true, skip: false, finikApiKey: key, finikAccountId: account };
+  return {
+    ok: true,
+    skip: false,
+    finikAccountId: account,
+    finikApiKey: key,
+  };
 }
 
 export function finikRegistrationAdminLine(input: {
@@ -56,6 +85,9 @@ export function finikRegistrationAdminLine(input: {
   const parsed = parseFinikRegistrationFields(input);
   if (parsed.ok && parsed.skip) return "не подключён";
   if (!parsed.ok) return "ошибка данных";
+  if (isFinikPlatformManagedMerchantsEnabled()) {
+    return "Account ID";
+  }
   return "API Key + Account ID";
 }
 

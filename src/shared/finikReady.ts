@@ -1,5 +1,22 @@
 /** Единый критерий готовности Finik для заказов, вебхуков и кабинета мерчанта. */
 
+import {
+  isFinikPlatformManagedMerchantsEnabled,
+  isMerchantFinikCheckoutReady,
+  isMerchantFinikPlatformManaged,
+  isPlatformFinikEnvReady,
+  resolveMerchantFinikMode,
+} from "../server/finik/resolveFinikTenantCredentials.js";
+import { isPlatformFinikOfficialReady } from "./platformFinik.js";
+
+export {
+  isFinikPlatformManagedMerchantsEnabled,
+  isMerchantFinikCheckoutReady,
+  isMerchantFinikPlatformManaged,
+  isPlatformFinikEnvReady,
+  resolveMerchantFinikMode,
+};
+
 export const FINIK_LEGACY_HTTP_UNAVAILABLE_ERROR =
   "Онлайн-оплата Finik временно недоступна: требуется завершение настройки на сервере. Обратитесь в поддержку.";
 
@@ -8,13 +25,23 @@ export function isFinikUseMockEnabled(): boolean {
   return v === "1" || v === "true";
 }
 
-/** Готовность по официальной модели Finik: API Key + Account ID. */
+/** Готовность Finik для магазина (кабинет / витрина). */
 export function isFinikCredentialsReady(
   finikApiKey: string | null | undefined,
   finikAccountId: string | null | undefined,
+  finikSecret?: string | null | undefined,
 ): boolean {
   if (isFinikUseMockEnabled()) {
     return true;
+  }
+  const business = { finikApiKey, finikAccountId, finikSecret };
+  if (
+    isFinikPlatformManagedMerchantsEnabled() &&
+    isMerchantFinikPlatformManaged(business)
+  ) {
+    return (
+      finikHasAccountId(finikAccountId) && isPlatformFinikOfficialReady()
+    );
   }
   return finikHasApiKey(finikApiKey) && finikHasAccountId(finikAccountId);
 }
@@ -41,13 +68,23 @@ export function isFinikOfficialPrivateKeyConfigured(): boolean {
   return (process.env.FINIK_RSA_PRIVATE_KEY_PATH?.trim() ?? "") !== "";
 }
 
-/** Official Acquiring create: API Key + Account ID + private key на сервере. */
+/** Official Acquiring create: platform-managed (accountId + platform ENV) or legacy pair. */
 export function canUseOfficialFinikCreate(business: {
   finikApiKey: string | null | undefined;
   finikAccountId: string | null | undefined;
+  finikSecret?: string | null | undefined;
 }): boolean {
   if (isFinikUseMockEnabled()) {
     return false;
+  }
+  if (
+    isFinikPlatformManagedMerchantsEnabled() &&
+    isMerchantFinikPlatformManaged(business)
+  ) {
+    return (
+      finikHasAccountId(business.finikAccountId) &&
+      isPlatformFinikOfficialReady()
+    );
   }
   return (
     finikHasApiKey(business.finikApiKey) &&
@@ -72,6 +109,12 @@ export function canCreateFinikPayment(business: {
 }): boolean {
   if (isFinikUseMockEnabled()) {
     return true;
+  }
+  if (
+    isFinikPlatformManagedMerchantsEnabled() &&
+    isMerchantFinikPlatformManaged(business)
+  ) {
+    return canUseOfficialFinikCreate(business);
   }
   return (
     canUseOfficialFinikCreate(business) ||
@@ -102,7 +145,13 @@ export function isMerchantStorefrontFinikCheckoutAllowed(business: {
   finikAccountId: string | null | undefined;
   finikSecret: string | null | undefined;
 }): boolean {
-  if (!isFinikCredentialsReady(business.finikApiKey, business.finikAccountId)) {
+  if (
+    !isFinikCredentialsReady(
+      business.finikApiKey,
+      business.finikAccountId,
+      business.finikSecret,
+    )
+  ) {
     return false;
   }
   if (finikUseMockForBusiness(business)) {
@@ -111,13 +160,22 @@ export function isMerchantStorefrontFinikCheckoutAllowed(business: {
   return canCreateFinikPayment(business);
 }
 
-/** Mock create session: нет mock env, API Key или Account ID. */
+/** Mock create session when credentials incomplete for active mode. */
 export function finikUseMockForBusiness(business: {
   finikApiKey: string | null | undefined;
   finikAccountId: string | null | undefined;
+  finikSecret?: string | null | undefined;
 }): boolean {
+  if (isFinikUseMockEnabled()) {
+    return true;
+  }
+  if (
+    isFinikPlatformManagedMerchantsEnabled() &&
+    isMerchantFinikPlatformManaged(business)
+  ) {
+    return !isMerchantFinikCheckoutReady(business);
+  }
   return (
-    isFinikUseMockEnabled() ||
     !finikHasApiKey(business.finikApiKey) ||
     !finikHasAccountId(business.finikAccountId)
   );

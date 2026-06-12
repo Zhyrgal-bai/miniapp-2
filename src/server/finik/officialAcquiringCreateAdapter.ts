@@ -5,6 +5,10 @@ import {
   getOfficialAcquiringCreatePath,
 } from "./finikCreateConfig.js";
 import { getFinikAccountId, getFinikApiKey } from "./finikKeys.js";
+import {
+  isFinikPlatformManagedMerchantsEnabled,
+  isMerchantFinikPlatformManaged,
+} from "./resolveFinikTenantCredentials.js";
 import { logFinikCreateHttpError } from "./finikCreateLogging.js";
 import { normalizeOfficialFinikCreateResponse } from "./finikCreateResponseNormalizer.js";
 import { signFinikOfficialRequest } from "./finikRsaSigning.js";
@@ -22,6 +26,16 @@ function officialAcquiringHost(): string {
 
 function resolveOfficialApiKey(ctx: FinikCreateContext): string {
   if (ctx.tenant.kind === "business") {
+    if (
+      isFinikPlatformManagedMerchantsEnabled() &&
+      isMerchantFinikPlatformManaged({
+        finikApiKey: ctx.tenant.finikApiKey,
+        finikAccountId: ctx.tenant.finikAccountId,
+        finikSecret: ctx.tenant.finikSecret,
+      })
+    ) {
+      return getFinikApiKey();
+    }
     const k = ctx.tenant.finikApiKey?.trim() ?? "";
     if (k !== "") return k;
   }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   finikRegistrationAdminLine,
   finikRegistrationComplete,
@@ -6,6 +6,12 @@ import {
 } from "../../src/shared/finikRegistration.js";
 
 describe("finikRegistration", () => {
+  const envBackup = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...envBackup };
+  });
+
   it("skips when both fields empty", () => {
     const r = parseFinikRegistrationFields({});
     expect(r).toEqual({ ok: true, skip: true });
@@ -59,4 +65,21 @@ describe("finikRegistration", () => {
     ).toBe(true);
   });
 
+  describe("platform-managed mode", () => {
+    it("accepts account id only", () => {
+      process.env.FINIK_PLATFORM_MANAGED_MERCHANTS = "1";
+      const r = parseFinikRegistrationFields({ finikAccountId: "acct-5678" });
+      expect(r).toEqual({
+        ok: true,
+        skip: false,
+        finikAccountId: "acct-5678",
+      });
+      expect(finikRegistrationAdminLine({ finikAccountId: "acct-5678" })).toBe(
+        "Account ID",
+      );
+      expect(
+        finikRegistrationComplete({ finikAccountId: "acct-5678" }),
+      ).toBe(true);
+    });
+  });
 });

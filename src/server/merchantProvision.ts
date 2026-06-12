@@ -60,7 +60,8 @@ export async function provisionMerchantStoreInTx(
       slug,
       botToken: tokenFields.botToken,
       botTokenHash: tokenFields.botTokenHash,
-      finikApiKey: useFinikPayment ? finik.finikApiKey : null,
+      finikApiKey:
+        useFinikPayment && finik.finikApiKey != null ? finik.finikApiKey : null,
       finikAccountId: useFinikPayment ? finik.finikAccountId : null,
       businessType: normalizeProvisionBusinessType(params.businessType) as any,
       isActive: true,

@@ -769,9 +769,16 @@ export async function registrationFlow(
       return true;
     }
     sess.data.phone = phone;
-    sess.step = "finikApiKey";
+    const { isFinikPlatformManagedMerchantsEnabled } = await import(
+      "../server/finik/resolveFinikTenantCredentials.js"
+    );
+    sess.step = isFinikPlatformManagedMerchantsEnabled()
+      ? "finikAccountId"
+      : "finikApiKey";
     await ctx.reply(
-      "Введите API Key Finik (онлайн ККМ).\n\nЧтобы пропустить Finik, отправьте: `-` или `skip` или `нет`.",
+      isFinikPlatformManagedMerchantsEnabled()
+        ? "Введите Account ID Finik (номер счёта в Finik для приёма оплат).\n\nЧтобы пропустить Finik, отправьте: `-` или `skip` или `нет`."
+        : "Введите API Key Finik (онлайн ККМ).\n\nЧтобы пропустить Finik, отправьте: `-` или `skip` или `нет`.",
       wizardExtra(ctx),
     );
     return true;
@@ -803,11 +810,17 @@ export async function registrationFlow(
   if (sess.step === "finikAccountId") {
     const accountInput = trimmedInput.trim();
     if (isFinikSkipInput(accountInput)) {
-      await ctx.reply(
-        "Account ID обязателен, если указан API Key. Введите Account ID или нажмите /start и пропустите Finik на шаге API Key.",
-        wizardExtra(ctx),
-      );
-      return true;
+      const hadApiKey = Boolean(sess.data.finikApiKey?.trim());
+      if (hadApiKey) {
+        await ctx.reply(
+          "Account ID обязателен, если указан API Key. Введите Account ID или нажмите /start и пропустите Finik на шаге API Key.",
+          wizardExtra(ctx),
+        );
+        return true;
+      }
+      delete sess.data.finikApiKey;
+      delete sess.data.finikAccountId;
+      return submitRegistrationFromBotSession(ctx, sess, _bot);
     }
     if (!isValidFinikAccountId(accountInput)) {
       await ctx.reply(

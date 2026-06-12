@@ -154,6 +154,24 @@ describe("finikReady", () => {
     expect(buildFinikWebhookUrl("", 1)).toBeNull();
   });
 
+  it("platform-managed merchant ready with account id only when flag and env set", () => {
+    delete process.env.FINIK_USE_MOCK;
+    process.env.FINIK_PLATFORM_MANAGED_MERCHANTS = "1";
+    process.env.FINIK_API_KEY = "platform-key";
+    process.env.FINIK_ACCOUNT_ID = "platform-acct";
+    process.env.FINIK_PRIVATE_KEY = "pem";
+    process.env.FINIK_PUBLIC_KEY = "pub";
+
+    const business = {
+      finikApiKey: null,
+      finikAccountId: "merchant-acct",
+      finikSecret: null,
+    };
+    expect(isFinikCredentialsReady(null, "merchant-acct", null)).toBe(true);
+    expect(canCreateFinikPayment(business)).toBe(true);
+    expect(isMerchantStorefrontFinikCheckoutAllowed(business)).toBe(true);
+  });
+
   it("storefront checkout blocked without keys or mock adapter", () => {
     delete process.env.FINIK_USE_MOCK;
     delete process.env.FINIK_RSA_PRIVATE_KEY;

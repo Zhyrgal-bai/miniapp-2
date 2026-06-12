@@ -159,7 +159,10 @@ export async function validateAndPersistPlatformRegistration(
         name: storeRaw,
         botToken,
         phone,
-        finikApiKey: finikParsed.ok && !finikParsed.skip ? finikParsed.finikApiKey : null,
+        finikApiKey:
+          finikParsed.ok && !finikParsed.skip
+            ? (finikParsed.finikApiKey ?? null)
+            : null,
         finikAccountId:
           finikParsed.ok && !finikParsed.skip ? finikParsed.finikAccountId : null,
         businessType,

@@ -13,6 +13,8 @@ import {
   finikHasSecret,
   isFinikCredentialsReady,
   isFinikLegacyHttpReady,
+  isFinikPlatformManagedMerchantsEnabled,
+  isMerchantFinikPlatformManaged,
 } from "../shared/finikReady.js";
 import { publicApiOrigin } from "./finikMerchant.js";
 import { validateMerchantConfig } from "./templateValidation.js";
@@ -56,6 +58,8 @@ export type PlatformStoreSettingsDTO = {
   /** Legacy HTTP (до Phase 3). */
   finikLegacyHttpReady: boolean;
   finikHasSecret: boolean;
+  /** Platform ENV signs payments; merchant stores Account ID only. */
+  finikPlatformManaged: boolean;
   finikWebhookUrl: string | null;
   pendingBotTokenChange: boolean;
   businessType: string;
@@ -118,7 +122,16 @@ export async function getPlatformStoreSettingsForMerchant(input: {
     select: { id: true },
   });
 
-  const ready = isFinikCredentialsReady(b.finikApiKey, b.finikAccountId);
+  const platformManaged = isMerchantFinikPlatformManaged({
+    finikApiKey: b.finikApiKey,
+    finikAccountId: b.finikAccountId,
+    finikSecret: b.finikSecret,
+  });
+  const ready = isFinikCredentialsReady(
+    b.finikApiKey,
+    b.finikAccountId,
+    b.finikSecret,
+  );
   const legacyHttpReady = isFinikLegacyHttpReady(b.finikApiKey, b.finikSecret);
   const origin = publicApiOrigin();
 
@@ -133,6 +146,7 @@ export async function getPlatformStoreSettingsForMerchant(input: {
       finikHasAccountId: finikHasAccountId(b.finikAccountId),
       finikLegacyHttpReady: legacyHttpReady,
       finikHasSecret: finikHasSecret(b.finikSecret),
+      finikPlatformManaged: platformManaged,
       finikWebhookUrl: buildFinikWebhookUrl(origin, b.id),
       pendingBotTokenChange: pending != null,
       businessType: String((b as any).businessType ?? ""),
@@ -390,7 +404,7 @@ export async function updatePlatformStoreSettingsForMerchant(input: {
         await prisma.business.update({
           where: { id: input.businessId },
           data: {
-            finikApiKey: parsed.finikApiKey,
+            finikApiKey: parsed.finikApiKey ?? null,
             finikAccountId: parsed.finikAccountId,
           },
         });
@@ -501,6 +515,7 @@ export async function savePlatformFinikForMerchant(input: {
       finikHasAccountId: boolean;
       finikLegacyHttpReady: boolean;
       finikHasSecret: boolean;
+      finikPlatformManaged: boolean;
       finikWebhookUrl: string | null;
     }
   | { ok: false; statusCode: number; error: string }
@@ -537,7 +552,9 @@ export async function savePlatformFinikForMerchant(input: {
     return {
       ok: false,
       statusCode: 400,
-      error: "Укажите API Key и Account ID Finik или очистите поля для отключения.",
+      error: isFinikPlatformManagedMerchantsEnabled()
+        ? "Укажите Account ID Finik или очистите поле для отключения."
+        : "Укажите API Key и Account ID Finik или очистите поля для отключения.",
     };
   }
 
@@ -566,10 +583,16 @@ export async function savePlatformFinikForMerchant(input: {
     : null;
 
   const disconnect =
-    keyProvided &&
-    keyRaw === "" &&
-    (!accountProvided || accountRaw === "") &&
-    (!secretProvided || secretRaw === "");
+    isFinikPlatformManagedMerchantsEnabled() &&
+    accountProvided &&
+    accountRaw === "" &&
+    !keyProvided &&
+    !secretProvided
+      ? true
+      : keyProvided &&
+        keyRaw === "" &&
+        (!accountProvided || accountRaw === "") &&
+        (!secretProvided || secretRaw === "");
 
   if (disconnect) {
     await prisma.business.update({
@@ -618,19 +641,36 @@ export async function savePlatformFinikForMerchant(input: {
       nextSecret = secretRaw;
     }
 
-    if (!finikHasApiKey(nextKey)) {
-      return {
-        ok: false,
-        statusCode: 400,
-        error: "Укажите API Key Finik",
-      };
-    }
-    if (!finikHasAccountId(nextAccount)) {
-      return {
-        ok: false,
-        statusCode: 400,
-        error: "Укажите Account ID Finik",
-      };
+    const platformManagedSave =
+      isFinikPlatformManagedMerchantsEnabled() &&
+      !finikHasApiKey(nextKey) &&
+      !finikHasSecret(nextSecret);
+
+    if (platformManagedSave) {
+      if (!finikHasAccountId(nextAccount)) {
+        return {
+          ok: false,
+          statusCode: 400,
+          error: "Укажите Account ID Finik",
+        };
+      }
+      nextKey = null;
+      nextSecret = null;
+    } else {
+      if (!finikHasApiKey(nextKey)) {
+        return {
+          ok: false,
+          statusCode: 400,
+          error: "Укажите API Key Finik",
+        };
+      }
+      if (!finikHasAccountId(nextAccount)) {
+        return {
+          ok: false,
+          statusCode: 400,
+          error: "Укажите Account ID Finik",
+        };
+      }
     }
 
     await prisma.business.update({
@@ -667,6 +707,7 @@ export async function savePlatformFinikForMerchant(input: {
     finikHasAccountId: s.finikHasAccountId,
     finikLegacyHttpReady: s.finikLegacyHttpReady,
     finikHasSecret: s.finikHasSecret,
+    finikPlatformManaged: s.finikPlatformManaged,
     finikWebhookUrl: s.finikWebhookUrl,
   };
 }

@@ -1031,6 +1031,16 @@ export default function PlatformPage() {
       setFinikErr("Нет данных пользователя Telegram.");
       return;
     }
+    const platformManaged = settingsSnap?.finikPlatformManaged === true;
+    if (
+      platformManaged &&
+      finikAccountIdDraft.trim() === "" &&
+      settingsSnap?.finikHasAccountId
+    ) {
+      setFinikErr(null);
+      setFinikMsg("Нет изменений для сохранения.");
+      return;
+    }
     setFinikSaving(true);
     setFinikErr(null);
     setFinikMsg(null);
@@ -1038,9 +1048,11 @@ export default function PlatformPage() {
       const out = await postPlatformUpdateFinik({
         telegramId: merchantTelegramId,
         businessId: settingsBusinessId,
-        finikApiKey: finikKeyDraft.trim(),
         finikAccountId: finikAccountIdDraft.trim(),
-        ...(finikSecretDraft.trim() !== ""
+        ...(!platformManaged && finikKeyDraft.trim() !== ""
+          ? { finikApiKey: finikKeyDraft.trim() }
+          : {}),
+        ...(!platformManaged && finikSecretDraft.trim() !== ""
           ? { finikSecret: finikSecretDraft.trim() }
           : {}),
       });
@@ -1053,6 +1065,7 @@ export default function PlatformPage() {
           finikHasAccountId: out.finikHasAccountId,
           finikLegacyHttpReady: out.finikLegacyHttpReady,
           finikHasSecret: out.finikHasSecret,
+          finikPlatformManaged: out.finikPlatformManaged,
           finikWebhookUrl: out.finikWebhookUrl,
         });
       }

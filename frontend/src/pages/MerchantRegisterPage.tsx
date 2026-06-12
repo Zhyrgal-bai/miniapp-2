@@ -127,7 +127,6 @@ function MerchantRegisterForm() {
   );
   const [botToken, setBotToken] = useState("");
   const [phone, setPhone] = useState("");
-  const [finikApiKey, setFinikApiKey] = useState("");
   const [finikAccountId, setFinikAccountId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
@@ -219,15 +218,11 @@ function MerchantRegisterForm() {
   }, []);
 
   const finikPairError = useMemo(() => {
-    const key = finikApiKey.trim();
     const account = finikAccountId.trim();
-    if (key === "" && account === "") return null;
-    if (key === "" && account !== "") return "Укажите API Key вместе с Account ID";
-    if (key !== "" && account === "") return "Укажите Account ID Finik";
-    if (key.length < 4) return "API Key слишком короткий";
+    if (account === "") return null;
     if (account.length < 2) return "Account ID слишком короткий";
     return null;
-  }, [finikApiKey, finikAccountId]);
+  }, [finikAccountId]);
 
   const addressStepError = useMemo(() => {
     if (step !== 3) return null;
@@ -299,7 +294,6 @@ function MerchantRegisterForm() {
       setSubmitting(true);
       setSubmitError(null);
       try {
-        const key = finikApiKey.trim();
         const account = finikAccountId.trim();
         await submitPlatformRegisterRequest({
           storeName: storeName.trim(),
@@ -312,9 +306,7 @@ function MerchantRegisterForm() {
           telegramId: uid,
           businessType,
           ownerUsername,
-          ...(key !== "" && account !== ""
-            ? { finikApiKey: key, finikAccountId: account }
-            : {}),
+          ...(account !== "" ? { finikAccountId: account } : {}),
         });
         trackPlatformFunnel("register_submit");
         try {
@@ -541,23 +533,9 @@ function MerchantRegisterForm() {
               <div className="mr__card-head">
                 <h1 className="mr__title">Finik (опционально)</h1>
                 <p className="mr__subtitle">
-                  API Key и Account ID можно указать сейчас или после одобрения в
-                  настройках магазина
+                  Укажите Account ID Finik для приёма оплат. Можно пропустить и
+                  добавить после одобрения в настройках магазина
                 </p>
-              </div>
-              <div className="mr__field">
-                <label className="mr__label" htmlFor="mr-finik-key">
-                  API Key
-                </label>
-                <input
-                  id="mr-finik-key"
-                  type="password"
-                  autoComplete="off"
-                  placeholder="Оставьте пустым, чтобы пропустить"
-                  value={finikApiKey}
-                  onChange={(e) => setFinikApiKey(e.target.value)}
-                  className="mr__input mr__input--mono"
-                />
               </div>
               <div className="mr__field mr__field--solo">
                 <label className="mr__label" htmlFor="mr-finik-account">
@@ -618,8 +596,8 @@ function MerchantRegisterForm() {
                 <div className="mr__review-row">
                   <dt>Finik</dt>
                   <dd>
-                    {finikApiKey.trim() !== "" && finikAccountId.trim() !== ""
-                      ? "API Key + Account ID"
+                    {finikAccountId.trim() !== ""
+                      ? "Account ID"
                       : "не подключён"}
                   </dd>
                 </div>

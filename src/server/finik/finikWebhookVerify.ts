@@ -5,6 +5,10 @@ import { Signer } from "@mancho.devs/authorizer";
 import type { Request } from "express";
 import { verifyFinikWebhookSignature } from "../finikWebhookCrypto.js";
 import { getFinikPublicKey } from "./finikKeys.js";
+import {
+  isFinikPlatformManagedMerchantsEnabled,
+  isMerchantFinikPlatformManaged,
+} from "./resolveFinikTenantCredentials.js";
 import type { FinikOfficialRequestBody } from "./finikRsaSigning.js";
 
 export type FinikWebhookVerifyMode = "legacy_hmac" | "official_rsa" | "dev_skip";
@@ -112,13 +116,22 @@ function hasOfficialRsaMaterial(req: Request): boolean {
  */
 export async function verifyFinikWebhookAdmission(input: {
   finikSecret: string | null | undefined;
+  finikApiKey?: string | null | undefined;
+  finikAccountId?: string | null | undefined;
   req: Request;
   rawBody: string;
   body: Record<string, unknown>;
   webhookPath: string;
 }): Promise<FinikWebhookVerifyResult> {
   const isProd = process.env.NODE_ENV === "production";
-  const canLegacy = !!input.finikSecret?.trim();
+  const platformManaged =
+    isFinikPlatformManagedMerchantsEnabled() &&
+    isMerchantFinikPlatformManaged({
+      finikApiKey: input.finikApiKey,
+      finikAccountId: input.finikAccountId,
+      finikSecret: input.finikSecret,
+    });
+  const canLegacy = !platformManaged && !!input.finikSecret?.trim();
   const canOfficial = isFinikOfficialPublicKeyConfigured();
 
   if (isProd && !canLegacy && !canOfficial) {

@@ -410,6 +410,7 @@ export type PlatformStoreSettingsDTO = {
   finikHasAccountId: boolean;
   finikLegacyHttpReady: boolean;
   finikHasSecret: boolean;
+  finikPlatformManaged: boolean;
   finikWebhookUrl: string | null;
   pendingBotTokenChange: boolean;
   businessType: string;
@@ -438,6 +439,7 @@ export async function fetchPlatformStoreSettings(params: {
     finikHasAccountId?: boolean;
     finikLegacyHttpReady?: boolean;
     finikHasSecret?: boolean;
+    finikPlatformManaged?: boolean;
     finikWebhookUrl?: string | null;
     pendingBotTokenChange?: boolean;
     businessType?: unknown;
@@ -545,6 +547,7 @@ export async function fetchPlatformStoreSettings(params: {
     finikHasAccountId: Boolean(j.finikHasAccountId),
     finikLegacyHttpReady: Boolean(j.finikLegacyHttpReady),
     finikHasSecret: Boolean(j.finikHasSecret),
+    finikPlatformManaged: Boolean(j.finikPlatformManaged),
     finikWebhookUrl:
       typeof j.finikWebhookUrl === "string" && j.finikWebhookUrl.trim() !== ""
         ? j.finikWebhookUrl.trim()
@@ -706,13 +709,14 @@ export type PlatformFinikSaveResult = {
   finikHasAccountId: boolean;
   finikLegacyHttpReady: boolean;
   finikHasSecret: boolean;
+  finikPlatformManaged: boolean;
   finikWebhookUrl: string | null;
 };
 
 export async function postPlatformUpdateFinik(payload: {
   telegramId: number;
   businessId: number;
-  finikApiKey: string;
+  finikApiKey?: string;
   finikAccountId: string;
   finikSecret?: string;
 }): Promise<PlatformFinikSaveResult> {
@@ -726,13 +730,16 @@ export async function postPlatformUpdateFinik(payload: {
     finikHasAccountId?: boolean;
     finikLegacyHttpReady?: boolean;
     finikHasSecret?: boolean;
+    finikPlatformManaged?: boolean;
     finikWebhookUrl?: string | null;
   }>(apiAbsoluteUrl("/api/platform/update-finik"), {
     method: "POST",
     businessId: payload.businessId,
     body: JSON.stringify({
       businessId: payload.businessId,
-      finikApiKey: payload.finikApiKey,
+      ...(payload.finikApiKey !== undefined
+        ? { finikApiKey: payload.finikApiKey }
+        : {}),
       finikAccountId: payload.finikAccountId,
       ...(payload.finikSecret !== undefined && payload.finikSecret !== ""
         ? { finikSecret: payload.finikSecret }
@@ -754,6 +761,7 @@ export async function postPlatformUpdateFinik(payload: {
     finikHasAccountId: Boolean(j.finikHasAccountId),
     finikLegacyHttpReady: Boolean(j.finikLegacyHttpReady),
     finikHasSecret: Boolean(j.finikHasSecret),
+    finikPlatformManaged: Boolean(j.finikPlatformManaged),
     finikWebhookUrl:
       typeof j.finikWebhookUrl === "string" && j.finikWebhookUrl.trim() !== ""
         ? j.finikWebhookUrl.trim()
