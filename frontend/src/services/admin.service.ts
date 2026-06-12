@@ -636,9 +636,17 @@ export const adminService = {
     params.set("limit", String(query.limit ?? 50));
     params.set("offset", String(query.offset ?? 0));
     if (query.sort) params.set("sort", query.sort);
-    const data = await adminGet<{ items: Product[]; total: number; limit: number; offset: number }>(
-      `/products?${params.toString()}`,
-    );
+    const data = await adminGet<
+      Product[] | { items: Product[]; total: number; limit: number; offset: number }
+    >(`/products?${params.toString()}`);
+    if (Array.isArray(data)) {
+      return {
+        items: data,
+        total: data.length,
+        limit: query.limit ?? 50,
+        offset: query.offset ?? 0,
+      };
+    }
     return {
       items: Array.isArray(data?.items) ? data.items : [],
       total: Number(data?.total ?? 0),

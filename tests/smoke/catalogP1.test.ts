@@ -19,7 +19,20 @@ describe("catalog P1 — product status", () => {
     expect(parseProductStatus("active")).toBe("ACTIVE");
     expect(parseProductStatus("DRAFT")).toBe("DRAFT");
     expect(parseProductStatus("archived")).toBe("ARCHIVED");
+    expect(parseProductStatus("archive")).toBe("ARCHIVED");
     expect(parseProductStatus("bad")).toBe(null);
+  });
+
+  it("ARCHIVED filter requires merchant access and parses correctly", () => {
+    const q = parseProductListQuery({ status: "ARCHIVED" });
+    expect(q.statuses).toEqual(["ARCHIVED"]);
+    expect(q.allStatuses).toBe(false);
+    expect(queryRequiresMerchantCatalogAccess(q)).toBe(true);
+  });
+
+  it("parses status from query array (Express duplicate param shape)", () => {
+    const q = parseProductListQuery({ status: ["DRAFT", "ignored"] });
+    expect(q.statuses).toEqual(["DRAFT"]);
   });
 
   it("defaults list query to ACTIVE only", () => {
@@ -109,6 +122,30 @@ describe("catalog P1 — category tree", () => {
     expect(wouldCreateCategoryCycleFromRows(rows, 1, 3)).toBe(true);
     expect(wouldCreateCategoryCycleFromRows(rows, 2, 2)).toBe(true);
     expect(wouldCreateCategoryCycleFromRows(rows, 3, 1)).toBe(false);
+  });
+});
+
+describe("catalog P1 — status filter regression", () => {
+  it("status=all includes all lifecycle values in query mode", () => {
+    const q = parseProductListQuery({ status: "all", limit: "50", offset: "0" });
+    expect(q.allStatuses).toBe(true);
+    expect(q.statuses).toBe(null);
+    expect(q.paginated).toBe(true);
+  });
+
+  it("each single status filter maps to exact enum", () => {
+    for (const st of ["ACTIVE", "DRAFT", "ARCHIVED"] as const) {
+      const q = parseProductListQuery({ status: st });
+      expect(q.statuses).toEqual([st]);
+    }
+  });
+
+  it("bulk archive patch uses ARCHIVED enum", () => {
+    expect(parseProductBulkPatch({ status: "ARCHIVED" })).toEqual({ status: "ARCHIVED" });
+  });
+
+  it("bulk restore patch uses ACTIVE enum", () => {
+    expect(parseProductBulkPatch({ status: "ACTIVE" })).toEqual({ status: "ACTIVE" });
   });
 });
 

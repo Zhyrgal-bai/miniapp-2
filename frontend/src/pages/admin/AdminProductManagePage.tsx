@@ -15,6 +15,14 @@ const STATUS_LABELS: Record<ProductStatus, string> = {
   ARCHIVED: "В архиве",
 };
 
+/** Toolbar filter options — values must match backend ProductStatus + `all`. */
+const STATUS_FILTER_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "all", label: "Все статусы" },
+  { value: "ACTIVE", label: "Активные" },
+  { value: "DRAFT", label: "Черновики" },
+  { value: "ARCHIVED", label: "Архив" },
+];
+
 function sortToApi(sort: SortMode): string {
   if (sort === "price-asc") return "price_asc";
   if (sort === "price-desc") return "price_desc";
@@ -110,7 +118,7 @@ export default function AdminProductManagePage() {
         next.delete(p.id!);
         return next;
       });
-      await load();
+      setStatusFilter("ARCHIVED");
     } catch (e) {
       showErrorToast(formatAdminApiError(e));
     }
@@ -120,7 +128,7 @@ export default function AdminProductManagePage() {
     if (p.id == null) return;
     try {
       await adminService.restoreProduct(p.id);
-      await load();
+      setStatusFilter("ACTIVE");
     } catch (e) {
       showErrorToast(formatAdminApiError(e));
     }
@@ -148,7 +156,9 @@ export default function AdminProductManagePage() {
             : "DRAFT";
       await adminService.bulkUpdateProducts({ ids, status });
       setSelected(new Set());
-      await load();
+      if (action === "archive") setStatusFilter("ARCHIVED");
+      else if (action === "restore" || action === "active") setStatusFilter("ACTIVE");
+      else if (action === "draft") setStatusFilter("DRAFT");
     } catch (e) {
       showErrorToast(formatAdminApiError(e));
     }
@@ -245,10 +255,11 @@ export default function AdminProductManagePage() {
           onChange={(e) => setStatusFilter(e.target.value)}
           aria-label="Статус"
         >
-          <option value="all">Все статусы</option>
-          <option value="ACTIVE">Активные</option>
-          <option value="DRAFT">Черновики</option>
-          <option value="ARCHIVED">Архив</option>
+          {STATUS_FILTER_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
         </select>
         <select
           className="admin-select admin-pm-select"

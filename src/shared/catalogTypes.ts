@@ -30,7 +30,13 @@ export type ProductBulkPatch = {
 export function parseProductStatus(raw: unknown): ProductStatus | null {
   const s = String(raw ?? "").trim().toUpperCase();
   if (s === "ACTIVE" || s === "DRAFT" || s === "ARCHIVED") return s;
+  if (s === "ARCHIVE") return "ARCHIVED";
   return null;
+}
+
+function normalizeQueryScalar(raw: unknown): unknown {
+  if (Array.isArray(raw)) return raw[0];
+  return raw;
 }
 
 export function parseProductListSort(raw: unknown): ProductListSort {
@@ -53,7 +59,7 @@ export function parseProductListQuery(params: Record<string, unknown>): ParsedPr
     if (Number.isFinite(n)) categoryId = n;
   }
 
-  const statusRaw = params.status;
+  const statusRaw = normalizeQueryScalar(params.status);
   let allStatuses = false;
   let statuses: ProductStatus[] | null = null;
 

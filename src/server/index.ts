@@ -5301,12 +5301,15 @@ app.get("/products", async (req: Request, res: Response) => {
     const bt = business?.businessType ?? null;
 
     const result = await listProducts(businessId, query);
+    const mapped = Array.isArray(result)
+      ? await mapCatalogProductsToJson(businessId, result, bt)
+      : await mapCatalogProductsToJson(businessId, result.items, bt);
     if (Array.isArray(result)) {
-      res.json(await mapCatalogProductsToJson(businessId, result, bt));
+      res.json(mapped);
       return;
     }
     res.json({
-      items: await mapCatalogProductsToJson(businessId, result.items, bt),
+      items: mapped,
       total: result.total,
       limit: result.limit,
       offset: result.offset,
