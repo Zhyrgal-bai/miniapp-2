@@ -3,7 +3,6 @@ import type {
   FinikCreateApiMode,
   FinikCreateApiModeUsed,
   FinikCreateContext,
-  FinikCreateResult,
 } from "./finikCreateTypes.js";
 
 export function logFinikCreateAttempt(fields: {
@@ -62,13 +61,109 @@ export function logFinikStatusAttempt(fields: {
   apiMode: "official" | "legacy";
   businessId?: number;
   paymentId: string;
-  path: string;
+  url: string;
+  httpMethod: string;
   orderId?: number;
 }): void {
   emitStructuredLog("info", "finik_status_attempt", {
     apiMode: fields.apiMode,
     paymentId: fields.paymentId,
-    path: fields.path,
+    url: fields.url,
+    httpMethod: fields.httpMethod,
+    ...(fields.businessId != null ? { businessId: fields.businessId } : {}),
+    ...(fields.orderId != null ? { orderId: fields.orderId } : {}),
+  });
+}
+
+export function logFinikStatusResponse(fields: {
+  apiMode: "official" | "legacy";
+  businessId?: number;
+  paymentId: string;
+  url: string;
+  httpStatus: number;
+  responseHeaders: Record<string, string>;
+  rawBodyPreview: string;
+  jsonParseSucceeded: boolean;
+  orderId?: number;
+}): void {
+  emitStructuredLog("info", "finik_status_response", {
+    apiMode: fields.apiMode,
+    paymentId: fields.paymentId,
+    url: fields.url,
+    httpStatus: fields.httpStatus,
+    responseHeaders: fields.responseHeaders,
+    rawBodyPreview: fields.rawBodyPreview,
+    jsonParseSucceeded: fields.jsonParseSucceeded,
+    ...(fields.businessId != null ? { businessId: fields.businessId } : {}),
+    ...(fields.orderId != null ? { orderId: fields.orderId } : {}),
+  });
+}
+
+export function logFinikStatusSigningFailed(fields: {
+  apiMode: "official" | "legacy";
+  businessId?: number;
+  paymentId: string;
+  url: string;
+  errorMessage: string;
+  errorStack?: string;
+  orderId?: number;
+}): void {
+  emitStructuredLog("error", "finik_status_signing_failed", {
+    apiMode: fields.apiMode,
+    paymentId: fields.paymentId,
+    url: fields.url,
+    errorMessage: fields.errorMessage,
+    ...(fields.errorStack ? { errorStack: fields.errorStack } : {}),
+    ...(fields.businessId != null ? { businessId: fields.businessId } : {}),
+    ...(fields.orderId != null ? { orderId: fields.orderId } : {}),
+  });
+}
+
+export function logFinikStatusParseFailed(fields: {
+  apiMode: "official" | "legacy";
+  businessId?: number;
+  paymentId: string;
+  url: string;
+  httpStatus: number;
+  parsedJson: Record<string, unknown>;
+  candidateStatusFields: Record<string, unknown>;
+  extractedStatus: string;
+  orderId?: number;
+}): void {
+  emitStructuredLog("warn", "finik_status_parse_failed", {
+    apiMode: fields.apiMode,
+    paymentId: fields.paymentId,
+    url: fields.url,
+    httpStatus: fields.httpStatus,
+    parsedJson: fields.parsedJson,
+    candidateStatusFields: fields.candidateStatusFields,
+    extractedStatus: fields.extractedStatus,
+    ...(fields.businessId != null ? { businessId: fields.businessId } : {}),
+    ...(fields.orderId != null ? { orderId: fields.orderId } : {}),
+  });
+}
+
+export type FinikStatusAdapterAttempt = {
+  url: string;
+  httpStatus?: number;
+  reason: "http_error" | "parse_failed" | "signing_failed" | "network_error";
+};
+
+export function logFinikStatusAdapterFailed(fields: {
+  apiMode: "official" | "legacy";
+  businessId?: number;
+  paymentId: string;
+  attempts: readonly FinikStatusAdapterAttempt[];
+  finalReason: string;
+  orderId?: number;
+}): void {
+  emitStructuredLog("error", "finik_status_adapter_failed", {
+    apiMode: fields.apiMode,
+    paymentId: fields.paymentId,
+    attemptedUrls: fields.attempts.map((a) => a.url),
+    attemptHttpStatuses: fields.attempts.map((a) => a.httpStatus ?? null),
+    attemptReasons: fields.attempts.map((a) => a.reason),
+    finalReason: fields.finalReason,
     ...(fields.businessId != null ? { businessId: fields.businessId } : {}),
     ...(fields.orderId != null ? { orderId: fields.orderId } : {}),
   });
@@ -115,7 +210,11 @@ export function logFinikOrderPaymentSync(fields: {
   businessId: number;
   orderId: number;
   paymentId?: string;
+  paymentMethod?: string | null;
   paymentState?: string;
+  successMapping?: "paid" | "pending" | "failed";
+  oldStatus?: string;
+  newStatus?: string;
   error?: string;
 }): void {
   emitStructuredLog("info", "finik_order_payment_sync", {
@@ -123,7 +222,13 @@ export function logFinikOrderPaymentSync(fields: {
     businessId: fields.businessId,
     orderId: fields.orderId,
     ...(fields.paymentId ? { paymentId: fields.paymentId } : {}),
+    ...(fields.paymentMethod != null
+      ? { paymentMethod: fields.paymentMethod }
+      : {}),
     ...(fields.paymentState ? { paymentState: fields.paymentState } : {}),
+    ...(fields.successMapping ? { successMapping: fields.successMapping } : {}),
+    ...(fields.oldStatus ? { oldStatus: fields.oldStatus } : {}),
+    ...(fields.newStatus ? { newStatus: fields.newStatus } : {}),
     ...(fields.error ? { error: fields.error } : {}),
   });
 }

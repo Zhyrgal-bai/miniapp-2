@@ -808,6 +808,7 @@ export async function syncFinikOrderPayment(
     businessId,
     orderId,
     paymentId: order.paymentId.trim(),
+    paymentMethod: order.paymentMethod,
   });
 
   const cur = String(order.status ?? "").toUpperCase();
@@ -839,17 +840,28 @@ export async function syncFinikOrderPayment(
       businessId,
       orderId,
       paymentId: order.paymentId.trim(),
+      paymentMethod: order.paymentMethod,
       error: remote.error,
     });
     return { ok: false, statusCode: 502, error: remote.error };
   }
+
+  const successMapping: "paid" | "pending" | "failed" = FINIK_FAILED_STATUSES.has(
+    remote.status,
+  )
+    ? "failed"
+    : FINIK_SUCCESS_STATUSES.has(remote.status)
+      ? "paid"
+      : "pending";
 
   logFinikOrderPaymentSync({
     phase: "status_fetched",
     businessId,
     orderId,
     paymentId: order.paymentId.trim(),
+    paymentMethod: order.paymentMethod,
     paymentState: remote.status,
+    successMapping,
   });
 
   if (FINIK_FAILED_STATUSES.has(remote.status)) {
@@ -875,12 +887,30 @@ export async function syncFinikOrderPayment(
   );
 
   if (!applied.ok) {
+    logFinikOrderPaymentSync({
+      phase: "apply_failed",
+      businessId,
+      orderId,
+      paymentId: order.paymentId.trim(),
+      paymentMethod: order.paymentMethod,
+      error: applied.error,
+    });
     return {
       ok: false,
       statusCode: applied.statusCode,
       error: applied.error,
     };
   }
+
+  logFinikOrderPaymentSync({
+    phase: "apply_success",
+    businessId,
+    orderId,
+    paymentId: order.paymentId.trim(),
+    paymentMethod: order.paymentMethod,
+    oldStatus: order.status,
+    newStatus: "CONFIRMED",
+  });
 
   const fresh = await prisma.order.findUnique({
     where: { id: order.id },

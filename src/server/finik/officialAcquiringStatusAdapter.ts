@@ -4,20 +4,30 @@ import {
 } from "./finikCreateConfig.js";
 import { getFinikApiKey } from "./finikKeys.js";
 import {
+  logFinikStatusAdapterFailed,
   logFinikStatusAttempt,
   logFinikStatusHttpError,
+  logFinikStatusParseFailed,
+  logFinikStatusResponse,
   logFinikStatusResult,
+  logFinikStatusSigningFailed,
+  type FinikStatusAdapterAttempt,
 } from "./finikCreateLogging.js";
 import {
   isFinikPlatformManagedMerchantsEnabled,
   isMerchantFinikPlatformManaged,
 } from "./resolveFinikTenantCredentials.js";
 import { signFinikOfficialGetRequest } from "./finikRsaSigning.js";
-import { normalizeFinikPaymentStatusResponse } from "./finikStatusResponseNormalizer.js";
+import {
+  diagnoseFinikPaymentStatusParse,
+  normalizeFinikPaymentStatusResponse,
+} from "./finikStatusResponseNormalizer.js";
 import type {
   FinikPaymentStatusResult,
   FinikStatusBusinessCredentials,
 } from "./finikStatusTypes.js";
+
+const RAW_BODY_PREVIEW_MAX = 500;
 
 function officialAcquiringHost(): string {
   return new URL(getOfficialAcquiringBaseUrl()).host;
@@ -39,6 +49,30 @@ function resolveOfficialApiKey(business: FinikStatusBusinessCredentials): string
   return getFinikApiKey();
 }
 
+function pickResponseHeaders(res: Response): Record<string, string> {
+  const keys = [
+    "content-type",
+    "content-length",
+    "location",
+    "x-request-id",
+    "x-amzn-requestid",
+    "x-amz-request-id",
+  ] as const;
+  const out: Record<string, string> = {};
+  for (const key of keys) {
+    const v = res.headers.get(key);
+    if (v != null && v.trim() !== "") {
+      out[key] = v.trim();
+    }
+  }
+  return out;
+}
+
+function previewRawBody(raw: string): string {
+  if (raw.length <= RAW_BODY_PREVIEW_MAX) return raw;
+  return `${raw.slice(0, RAW_BODY_PREVIEW_MAX)}…`;
+}
+
 async function fetchOfficialStatusAtPath(input: {
   path: string;
   apiKey: string;
@@ -47,17 +81,27 @@ async function fetchOfficialStatusAtPath(input: {
   businessId?: number;
   orderId?: number;
 }): Promise<
-  | { ok: true; status: string; amount: number | null; path: string }
-  | { ok: false; httpStatus?: number; path: string }
+  | { ok: true; status: string; amount: number | null; path: string; url: string }
+  | {
+      ok: false;
+      httpStatus?: number;
+      path: string;
+      url: string;
+      reason: FinikStatusAdapterAttempt["reason"];
+    }
 > {
   const url = `${getOfficialAcquiringBaseUrl()}${input.path}`;
-  logFinikStatusAttempt({
-    apiMode: "official",
+  const httpMethod = "GET";
+  const logCtx = {
+    apiMode: "official" as const,
     paymentId: input.paymentId,
-    path: input.path,
+    url,
+    httpMethod,
     ...(input.businessId != null ? { businessId: input.businessId } : {}),
     ...(input.orderId != null ? { orderId: input.orderId } : {}),
-  });
+  };
+
+  logFinikStatusAttempt(logCtx);
 
   let signature: string;
   let timestamp: string;
@@ -67,20 +111,68 @@ async function fetchOfficialStatusAtPath(input: {
       path: input.path,
       apiKey: input.apiKey,
     }));
-  } catch {
-    return { ok: false, path: input.path };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : undefined;
+    logFinikStatusSigningFailed({
+      apiMode: "official",
+      paymentId: input.paymentId,
+      url,
+      errorMessage: message,
+      ...(stack ? { errorStack: stack } : {}),
+      ...(input.businessId != null ? { businessId: input.businessId } : {}),
+      ...(input.orderId != null ? { orderId: input.orderId } : {}),
+    });
+    return { ok: false, path: input.path, url, reason: "signing_failed" };
   }
 
-  const res = await fetch(url, {
-    method: "GET",
-    headers: {
-      "x-api-key": input.apiKey,
-      "x-api-timestamp": timestamp,
-      signature,
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: httpMethod,
+      headers: {
+        "x-api-key": input.apiKey,
+        "x-api-timestamp": timestamp,
+        signature,
+      },
+    });
+  } catch {
+    return {
+      ok: false,
+      path: input.path,
+      url,
+      reason: "network_error",
+    };
+  }
 
-  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  const rawBody = await res.text();
+  let jsonParseSucceeded = false;
+  let json: Record<string, unknown> = {};
+  if (rawBody.trim() !== "") {
+    try {
+      const parsed: unknown = JSON.parse(rawBody);
+      if (parsed != null && typeof parsed === "object" && !Array.isArray(parsed)) {
+        json = parsed as Record<string, unknown>;
+        jsonParseSucceeded = true;
+      }
+    } catch {
+      jsonParseSucceeded = false;
+    }
+  } else {
+    jsonParseSucceeded = true;
+  }
+
+  logFinikStatusResponse({
+    apiMode: "official",
+    paymentId: input.paymentId,
+    url,
+    httpStatus: res.status,
+    responseHeaders: pickResponseHeaders(res),
+    rawBodyPreview: previewRawBody(rawBody),
+    jsonParseSucceeded,
+    ...(input.businessId != null ? { businessId: input.businessId } : {}),
+    ...(input.orderId != null ? { orderId: input.orderId } : {}),
+  });
 
   if (!res.ok) {
     logFinikStatusHttpError({
@@ -91,12 +183,36 @@ async function fetchOfficialStatusAtPath(input: {
       ...(input.businessId != null ? { businessId: input.businessId } : {}),
       ...(input.orderId != null ? { orderId: input.orderId } : {}),
     });
-    return { ok: false, httpStatus: res.status, path: input.path };
+    return {
+      ok: false,
+      httpStatus: res.status,
+      path: input.path,
+      url,
+      reason: "http_error",
+    };
   }
 
   const parsed = normalizeFinikPaymentStatusResponse(json);
   if (parsed.status === "") {
-    return { ok: false, httpStatus: res.status, path: input.path };
+    const diagnosis = diagnoseFinikPaymentStatusParse(json);
+    logFinikStatusParseFailed({
+      apiMode: "official",
+      paymentId: input.paymentId,
+      url,
+      httpStatus: res.status,
+      parsedJson: json,
+      candidateStatusFields: diagnosis.candidateStatusFields,
+      extractedStatus: diagnosis.extractedStatus,
+      ...(input.businessId != null ? { businessId: input.businessId } : {}),
+      ...(input.orderId != null ? { orderId: input.orderId } : {}),
+    });
+    return {
+      ok: false,
+      httpStatus: res.status,
+      path: input.path,
+      url,
+      reason: "parse_failed",
+    };
   }
 
   return {
@@ -104,6 +220,7 @@ async function fetchOfficialStatusAtPath(input: {
     status: parsed.status,
     amount: parsed.amount,
     path: input.path,
+    url,
   };
 }
 
@@ -138,6 +255,7 @@ export async function fetchOfficialFinikPaymentStatus(
 
   const host = officialAcquiringHost();
   const paths = listOfficialAcquiringStatusPaths(pid);
+  const attempts: FinikStatusAdapterAttempt[] = [];
   let lastHttpStatus: number | undefined;
 
   try {
@@ -170,11 +288,30 @@ export async function fetchOfficialFinikPaymentStatus(
           apiMode: "official",
         };
       }
+      attempts.push({
+        url: out.url,
+        ...(out.httpStatus != null ? { httpStatus: out.httpStatus } : {}),
+        reason: out.reason,
+      });
       if (out.httpStatus != null) {
         lastHttpStatus = out.httpStatus;
       }
+      if (out.reason === "network_error") {
+        break;
+      }
     }
-  } catch {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logFinikStatusAdapterFailed({
+      apiMode: "official",
+      paymentId: pid,
+      attempts,
+      finalReason: `network_error:${message}`,
+      ...(queryContext?.businessId != null
+        ? { businessId: queryContext.businessId }
+        : {}),
+      ...(queryContext?.orderId != null ? { orderId: queryContext.orderId } : {}),
+    });
     logFinikStatusResult({
       apiMode: "official",
       ok: false,
@@ -191,6 +328,60 @@ export async function fetchOfficialFinikPaymentStatus(
       retryable: true,
     };
   }
+
+  if (attempts.some((a) => a.reason === "network_error")) {
+    logFinikStatusAdapterFailed({
+      apiMode: "official",
+      paymentId: pid,
+      attempts,
+      finalReason: "network_error",
+      ...(queryContext?.businessId != null
+        ? { businessId: queryContext.businessId }
+        : {}),
+      ...(queryContext?.orderId != null ? { orderId: queryContext.orderId } : {}),
+    });
+    logFinikStatusResult({
+      apiMode: "official",
+      ok: false,
+      paymentId: pid,
+      ...(queryContext?.businessId != null
+        ? { businessId: queryContext.businessId }
+        : {}),
+      ...(queryContext?.orderId != null ? { orderId: queryContext.orderId } : {}),
+    });
+    return {
+      ok: false,
+      error: "Ошибка сети при запросе статуса Finik Official API",
+      apiMode: "official",
+      retryable: true,
+    };
+  }
+
+  const finalReason =
+    attempts.length === 0
+      ? "no_paths_configured"
+      : attempts.some((a) => a.reason === "network_error")
+        ? "network_error"
+        : attempts.every((a) => a.reason === "signing_failed")
+          ? "signing_failed"
+          : attempts.every((a) => a.reason === "parse_failed")
+            ? "parse_failed"
+            : attempts.some((a) => a.httpStatus === 404)
+              ? "http_404"
+              : attempts.some((a) => a.httpStatus === 403)
+                ? "http_403"
+                : "all_attempts_exhausted";
+
+  logFinikStatusAdapterFailed({
+    apiMode: "official",
+    paymentId: pid,
+    attempts,
+    finalReason,
+    ...(queryContext?.businessId != null
+      ? { businessId: queryContext.businessId }
+      : {}),
+    ...(queryContext?.orderId != null ? { orderId: queryContext.orderId } : {}),
+  });
 
   logFinikStatusResult({
     apiMode: "official",

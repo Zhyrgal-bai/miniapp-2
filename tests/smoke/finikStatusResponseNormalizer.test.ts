@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { normalizeFinikPaymentStatusResponse } from "../../src/server/finik/finikStatusResponseNormalizer.js";
+import {
+  diagnoseFinikPaymentStatusParse,
+  normalizeFinikPaymentStatusResponse,
+} from "../../src/server/finik/finikStatusResponseNormalizer.js";
 
 describe("normalizeFinikPaymentStatusResponse", () => {
   it("maps official SUCCEEDED and amount", () => {
@@ -19,5 +22,14 @@ describe("normalizeFinikPaymentStatusResponse", () => {
     });
     expect(out.status).toBe("failed");
     expect(out.amount).toBe(99);
+  });
+
+  it("diagnoseFinikPaymentStatusParse lists candidate fields when status missing", () => {
+    const diagnosis = diagnoseFinikPaymentStatusParse({
+      transactionId: "tx-only",
+      Data: { paymentState: "DONE" },
+    });
+    expect(diagnosis.extractedStatus).toBe("");
+    expect(diagnosis.candidateStatusFields).toEqual({});
   });
 });

@@ -76,3 +76,34 @@ export function normalizeFinikPaymentStatusResponse(
   }
   return { status: "", amount: pickAmountFromRecord(json) };
 }
+
+/** Diagnostic-only: fields inspected when status parse fails (no logic change). */
+export function diagnoseFinikPaymentStatusParse(json: Record<string, unknown>): {
+  candidateStatusFields: Record<string, unknown>;
+  extractedStatus: string;
+} {
+  const candidateStatusFields: Record<string, unknown> = {};
+  for (const record of nestedPayloadRecords(json)) {
+    for (const key of STATUS_FIELD_KEYS) {
+      if (key in record) {
+        candidateStatusFields[key] = record[key];
+      }
+    }
+    for (const nestKey of ["data", "Data", "result", "payment", "Payment"] as const) {
+      const nested = record[nestKey];
+      if (nested != null && typeof nested === "object" && !Array.isArray(nested)) {
+        for (const key of STATUS_FIELD_KEYS) {
+          const nk = `${nestKey}.${key}`;
+          if (key in (nested as Record<string, unknown>)) {
+            candidateStatusFields[nk] = (nested as Record<string, unknown>)[key];
+          }
+        }
+      }
+    }
+  }
+  const normalized = normalizeFinikPaymentStatusResponse(json);
+  return {
+    candidateStatusFields,
+    extractedStatus: normalized.status,
+  };
+}
