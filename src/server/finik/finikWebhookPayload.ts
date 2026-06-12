@@ -30,28 +30,87 @@ function uniqueStrings(values: readonly string[]): string[] {
   return out;
 }
 
+function nestedDataRecord(
+  body: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const raw = body.Data ?? body.data;
+  if (raw != null && typeof raw === "object" && !Array.isArray(raw)) {
+    return raw as Record<string, unknown>;
+  }
+  return null;
+}
+
 /** Извлекает payment refs в порядке приоритета Finik official + legacy. */
 export function extractFinikWebhookPaymentIds(
   body: Record<string, unknown>,
 ): string[] {
+  const data = nestedDataRecord(body);
   return uniqueStrings([
     pickNonEmptyString(body.paymentId),
     pickNonEmptyString(body.payment_id),
+    pickNonEmptyString(body.PaymentId),
     pickNonEmptyString(body.transactionId),
     pickNonEmptyString(body.transaction_id),
     pickNonEmptyString(body.id),
     pickNonEmptyString(body.orderId),
     pickNonEmptyString(body.order_id),
+    ...(data
+      ? [
+          pickNonEmptyString(data.paymentId),
+          pickNonEmptyString(data.payment_id),
+          pickNonEmptyString(data.PaymentId),
+          pickNonEmptyString(data.transactionId),
+          pickNonEmptyString(data.transaction_id),
+        ]
+      : []),
   ]);
+}
+
+function pickExternalId(body: Record<string, unknown>): string | null {
+  const data = nestedDataRecord(body);
+  const raw =
+    body.external_id ??
+    body.externalId ??
+    data?.external_id ??
+    data?.externalId;
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  return s !== "" ? s : null;
+}
+
+function pickWebhookStatus(body: Record<string, unknown>): string {
+  const data = nestedDataRecord(body);
+  const statusRaw =
+    body.status ??
+    body.payment_status ??
+    body.state ??
+    body.Status ??
+    data?.status ??
+    data?.payment_status ??
+    data?.state;
+  return String(statusRaw ?? "").toLowerCase();
+}
+
+function pickWebhookAmount(body: Record<string, unknown>): number | null {
+  const data = nestedDataRecord(body);
+  const amountRaw =
+    body.amount ??
+    body.total ??
+    body.sum ??
+    body.payment_amount ??
+    body.Amount ??
+    data?.amount ??
+    data?.Amount ??
+    data?.total;
+  if (amountRaw == null) return null;
+  const n = Number(amountRaw);
+  return Number.isFinite(n) ? Math.round(n) : null;
 }
 
 export function parseFinikWebhookPayload(
   body: Record<string, unknown>,
 ): ParsedFinikWebhookPayload {
   const paymentIdCandidates = extractFinikWebhookPaymentIds(body);
-  const statusRaw = body.status ?? body.payment_status ?? body.state;
-  const amountRaw = body.amount ?? body.total ?? body.sum ?? body.payment_amount;
-  const externalRaw = body.external_id ?? body.externalId;
   const orderIdBodyRaw = body.order_id ?? body.orderId;
 
   let orderIdFromBody: number | null = null;
@@ -60,21 +119,12 @@ export function parseFinikWebhookPayload(
     if (Number.isFinite(n) && n > 0) orderIdFromBody = Math.floor(n);
   }
 
-  let amount: number | null = null;
-  if (amountRaw != null) {
-    const n = Number(amountRaw);
-    if (Number.isFinite(n)) amount = Math.round(n);
-  }
-
   return {
     paymentId: paymentIdCandidates[0] ?? "",
     paymentIdCandidates,
-    status: String(statusRaw ?? "").toLowerCase(),
-    amount,
-    externalId:
-      externalRaw != null && String(externalRaw).trim() !== ""
-        ? String(externalRaw).trim()
-        : null,
+    status: pickWebhookStatus(body),
+    amount: pickWebhookAmount(body),
+    externalId: pickExternalId(body),
     orderIdFromBody,
   };
 }

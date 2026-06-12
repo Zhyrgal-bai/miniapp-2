@@ -20,12 +20,13 @@ export const LEGACY_FINIK_CREATE_RESPONSE_MAP: FinikCreateResponseFieldMap = {
  */
 export const OFFICIAL_FINIK_CREATE_RESPONSE_MAP: FinikCreateResponseFieldMap = {
   paymentId: [
-    "transactionId",
-    "transaction_id",
-    "itemId",
-    "item_id",
+    "PaymentId",
     "paymentId",
     "payment_id",
+    "itemId",
+    "item_id",
+    "transactionId",
+    "transaction_id",
     "id",
   ],
   paymentUrl: [

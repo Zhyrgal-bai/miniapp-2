@@ -57,3 +57,73 @@ export function logFinikCreateHttpError(fields: {
     ...(fields.correlationId ? { correlationId: fields.correlationId } : {}),
   });
 }
+
+export function logFinikStatusAttempt(fields: {
+  apiMode: "official" | "legacy";
+  businessId?: number;
+  paymentId: string;
+  path: string;
+  orderId?: number;
+}): void {
+  emitStructuredLog("info", "finik_status_attempt", {
+    apiMode: fields.apiMode,
+    paymentId: fields.paymentId,
+    path: fields.path,
+    ...(fields.businessId != null ? { businessId: fields.businessId } : {}),
+    ...(fields.orderId != null ? { orderId: fields.orderId } : {}),
+  });
+}
+
+export function logFinikStatusHttpError(fields: {
+  apiMode: "official" | "legacy";
+  httpStatus: number;
+  paymentId: string;
+  path: string;
+  businessId?: number;
+  orderId?: number;
+}): void {
+  emitStructuredLog("error", "finik_status_http_error", {
+    apiMode: fields.apiMode,
+    httpStatus: fields.httpStatus,
+    paymentId: fields.paymentId,
+    path: fields.path,
+    ...(fields.businessId != null ? { businessId: fields.businessId } : {}),
+    ...(fields.orderId != null ? { orderId: fields.orderId } : {}),
+  });
+}
+
+export function logFinikStatusResult(fields: {
+  apiMode: "official" | "legacy";
+  ok: boolean;
+  paymentId: string;
+  status?: string;
+  businessId?: number;
+  orderId?: number;
+}): void {
+  emitStructuredLog(fields.ok ? "info" : "warn", "finik_status_result", {
+    apiMode: fields.apiMode,
+    ok: fields.ok,
+    paymentId: fields.paymentId,
+    ...(fields.status ? { status: fields.status } : {}),
+    ...(fields.businessId != null ? { businessId: fields.businessId } : {}),
+    ...(fields.orderId != null ? { orderId: fields.orderId } : {}),
+  });
+}
+
+export function logFinikOrderPaymentSync(fields: {
+  phase: "start" | "status_fetched" | "apply_success" | "apply_failed";
+  businessId: number;
+  orderId: number;
+  paymentId?: string;
+  paymentState?: string;
+  error?: string;
+}): void {
+  emitStructuredLog("info", "finik_order_payment_sync", {
+    phase: fields.phase,
+    businessId: fields.businessId,
+    orderId: fields.orderId,
+    ...(fields.paymentId ? { paymentId: fields.paymentId } : {}),
+    ...(fields.paymentState ? { paymentState: fields.paymentState } : {}),
+    ...(fields.error ? { error: fields.error } : {}),
+  });
+}

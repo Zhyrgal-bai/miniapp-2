@@ -12,6 +12,7 @@ import {
   getOfficialAcquiringBaseUrl,
   getOfficialAcquiringCreatePath,
   getOfficialAcquiringCreateUrl,
+  getOfficialAcquiringStatusPath,
 } from "../../src/server/finik/finikCreateConfig.js";
 import {
   normalizeLegacyFinikCreateResponse,
@@ -57,6 +58,15 @@ describe("finikCreateScaffold", () => {
     );
     expect(getOfficialAcquiringCreateUrl()).toBe(
       `https://api.acquiring.averspay.kg${getOfficialAcquiringCreatePath()}`,
+    );
+  });
+
+  it("status path follows FINIK_API_URL /payment suffix", () => {
+    delete process.env.FINIK_OFFICIAL_ACQUIRING_STATUS_PATH;
+    delete process.env.FINIK_OFFICIAL_ACQUIRING_CREATE_PATH;
+    process.env.FINIK_API_URL = "https://api.acquiring.averspay.kg/payment";
+    expect(getOfficialAcquiringStatusPath("abc-123")).toBe(
+      "/payment/abc-123",
     );
   });
 

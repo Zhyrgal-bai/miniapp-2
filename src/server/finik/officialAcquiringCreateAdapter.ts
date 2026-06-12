@@ -83,6 +83,12 @@ function buildOfficialPaymentBody(
   };
   if (isPlatformSubscriptionFlow(ctx) && ctx.externalId.trim() !== "") {
     data.externalId = ctx.externalId.trim();
+  } else if (
+    ctx.flow === "storefront_order" &&
+    ctx.externalId.trim() !== ""
+  ) {
+    // Correlates webhook → order when Finik echoes transactionId ≠ PaymentId.
+    data.externalId = ctx.externalId.trim();
   }
 
   return {

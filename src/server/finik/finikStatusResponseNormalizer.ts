@@ -7,6 +7,7 @@ const STATUS_FIELD_KEYS = [
   "payment_status",
   "state",
   "paymentStatus",
+  "Status",
 ] as const;
 
 const AMOUNT_FIELD_KEYS = [
@@ -27,7 +28,7 @@ function pickString(json: Record<string, unknown>, keys: readonly string[]): str
   return "";
 }
 
-function pickAmount(json: Record<string, unknown>): number | null {
+function pickAmountFromRecord(json: Record<string, unknown>): number | null {
   for (const key of AMOUNT_FIELD_KEYS) {
     const raw = json[key];
     if (raw == null) continue;
@@ -48,12 +49,30 @@ function pickAmount(json: Record<string, unknown>): number | null {
   return null;
 }
 
+function nestedPayloadRecords(
+  json: Record<string, unknown>,
+): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [json];
+  for (const key of ["data", "Data", "result", "payment", "Payment"] as const) {
+    const raw = json[key];
+    if (raw != null && typeof raw === "object" && !Array.isArray(raw)) {
+      out.push(raw as Record<string, unknown>);
+    }
+  }
+  return out;
+}
+
 export function normalizeFinikPaymentStatusResponse(
   json: Record<string, unknown>,
 ): { status: string; amount: number | null } {
-  const statusRaw = pickString(json, STATUS_FIELD_KEYS);
-  return {
-    status: statusRaw.toLowerCase(),
-    amount: pickAmount(json),
-  };
+  for (const record of nestedPayloadRecords(json)) {
+    const statusRaw = pickString(record, STATUS_FIELD_KEYS);
+    if (statusRaw !== "") {
+      return {
+        status: statusRaw.toLowerCase(),
+        amount: pickAmountFromRecord(record) ?? pickAmountFromRecord(json),
+      };
+    }
+  }
+  return { status: "", amount: pickAmountFromRecord(json) };
 }

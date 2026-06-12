@@ -9,6 +9,7 @@ import {
   isFinikWebhookReplay,
 } from "./finikWebhookCrypto.js";
 import { correlationIdFromRequest } from "../middleware/correlationId.js";
+import { logFinikOrderPaymentSync } from "./finik/finikCreateLogging.js";
 import {
   buildFinikWebhookUrl,
   finikHasAccountId,
@@ -611,6 +612,7 @@ async function fetchFinikPaymentStatus(
     finikSecret: string | null;
   },
   paymentId: string,
+  queryContext?: { businessId?: number; orderId?: number },
 ): Promise<
   | { ok: true; status: string; amount: number | null }
   | { ok: false; error: string }
@@ -619,7 +621,11 @@ async function fetchFinikPaymentStatus(
     return { ok: false, error: "Finik mock: статус только через webhook" };
   }
 
-  const remote = await fetchFinikPaymentStatusRouted(business, paymentId);
+  const remote = await fetchFinikPaymentStatusRouted(
+    business,
+    paymentId,
+    queryContext,
+  );
   if (!remote.ok) {
     if (remote.apiMode === "legacy" || remote.apiMode === "official") {
       console.error(
@@ -797,6 +803,13 @@ export async function syncFinikOrderPayment(
     return { ok: false, statusCode: 400, error: "Нет paymentId Finik" };
   }
 
+  logFinikOrderPaymentSync({
+    phase: "start",
+    businessId,
+    orderId,
+    paymentId: order.paymentId.trim(),
+  });
+
   const cur = String(order.status ?? "").toUpperCase();
   if (FINIK_PAID_ORDER_STATUSES.has(cur)) {
     return {
@@ -815,10 +828,29 @@ export async function syncFinikOrderPayment(
     return { ok: false, statusCode: 404, error: "Магазин не найден" };
   }
 
-  const remote = await fetchFinikPaymentStatus(business, order.paymentId.trim());
+  const remote = await fetchFinikPaymentStatus(
+    business,
+    order.paymentId.trim(),
+    { businessId, orderId },
+  );
   if (!remote.ok) {
+    logFinikOrderPaymentSync({
+      phase: "apply_failed",
+      businessId,
+      orderId,
+      paymentId: order.paymentId.trim(),
+      error: remote.error,
+    });
     return { ok: false, statusCode: 502, error: remote.error };
   }
+
+  logFinikOrderPaymentSync({
+    phase: "status_fetched",
+    businessId,
+    orderId,
+    paymentId: order.paymentId.trim(),
+    paymentState: remote.status,
+  });
 
   if (FINIK_FAILED_STATUSES.has(remote.status)) {
     return { ok: true, paymentState: "failed", order };
@@ -927,6 +959,14 @@ async function handleFinikWebhookForBusiness(
       return;
     }
 
+    logCommerceEvent({
+      phase: "payment_webhook",
+      businessId,
+      paymentId: parsed.paymentId,
+      detail: `admitted:${verify.mode}${parsed.externalId ? `:ext=${parsed.externalId}` : ""}`,
+      ...(corrId ? { correlationId: corrId } : {}),
+    });
+
     if (
       isFinikWebhookReplay(businessId, parsed.paymentId, parsed.status)
     ) {
@@ -940,13 +980,6 @@ async function handleFinikWebhookForBusiness(
       res.json({ ok: true, duplicate: true, replay: true });
       return;
     }
-
-    logCommerceEvent({
-      phase: "payment_webhook",
-      businessId,
-      paymentId: parsed.paymentId,
-      ...(corrId ? { correlationId: corrId } : {}),
-    });
 
     if (FINIK_FAILED_STATUSES.has(parsed.status)) {
       let order: { id: number; status: string; reservationId: number | null } | null =
@@ -1038,6 +1071,11 @@ async function handleFinikWebhookForBusiness(
     const order = await resolveFinikWebhookOrder(businessId, parsed);
 
     if (!order) {
+      logPaymentFailure({
+        businessId,
+        paymentId: parsed.paymentId,
+        reason: "webhook_order_not_found",
+      });
       res.status(404).json({ error: "Order not found" });
       return;
     }

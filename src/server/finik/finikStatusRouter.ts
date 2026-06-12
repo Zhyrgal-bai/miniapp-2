@@ -35,6 +35,7 @@ function resolveStatusApiMode(): FinikStatusApiMode {
 export async function fetchFinikPaymentStatusRouted(
   business: FinikStatusBusinessCredentials,
   paymentId: string,
+  queryContext?: { businessId?: number; orderId?: number },
 ): Promise<FinikPaymentStatusResult> {
   if (finikUseMockForBusiness(business)) {
     return {
@@ -45,7 +46,7 @@ export async function fetchFinikPaymentStatusRouted(
 
   const mode = resolveStatusApiMode();
   if (mode === "official") {
-    return fetchOfficialFinikPaymentStatus(business, paymentId);
+    return fetchOfficialFinikPaymentStatus(business, paymentId, queryContext);
   }
   return fetchLegacyFinikPaymentStatus(business, paymentId);
 }

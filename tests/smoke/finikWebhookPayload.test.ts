@@ -26,4 +26,20 @@ describe("finikWebhookPayload", () => {
     expect(p.externalId).toBe("7:99");
     expect(p.amount).toBe(500);
   });
+
+  it("parses official nested Data.externalId for order correlation", () => {
+    const p = parseFinikWebhookPayload({
+      transactionId: "finik-tx-99",
+      Status: "SUCCEEDED",
+      Amount: 1200,
+      Data: {
+        externalId: "5:42",
+        accountId: "merchant-acct",
+      },
+    });
+    expect(p.paymentId).toBe("finik-tx-99");
+    expect(p.status).toBe("succeeded");
+    expect(p.externalId).toBe("5:42");
+    expect(p.amount).toBe(1200);
+  });
 });

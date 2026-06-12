@@ -54,20 +54,58 @@ export function getOfficialAcquiringCreatePath(): string {
   return p.startsWith("/") ? p : `/${p}`;
 }
 
+/** Default status path aligned with FINIK_API_URL / create path when env unset. */
+function defaultOfficialAcquiringStatusPathTemplate(): string {
+  const explicitCreate = process.env.FINIK_OFFICIAL_ACQUIRING_CREATE_PATH?.trim();
+  if (explicitCreate !== undefined && explicitCreate !== "") {
+    if (explicitCreate.endsWith("/payment")) {
+      return `${explicitCreate}/{paymentId}`;
+    }
+    if (explicitCreate.includes("{paymentId}")) {
+      return explicitCreate;
+    }
+  }
+  const apiUrl = process.env.FINIK_API_URL?.trim() ?? "";
+  if (apiUrl.endsWith("/payment") || apiUrl.endsWith("/payment/")) {
+    return "/payment/{paymentId}";
+  }
+  return "/v1/payment/{paymentId}";
+}
+
+function resolveOfficialAcquiringStatusPathTemplate(): string {
+  const explicit = process.env.FINIK_OFFICIAL_ACQUIRING_STATUS_PATH?.trim();
+  if (explicit !== undefined && explicit !== "") {
+    return explicit;
+  }
+  return defaultOfficialAcquiringStatusPathTemplate();
+}
+
 /**
  * Official GET payment status (не описан в Telegraph; дефолт — симметрия с create).
  * Placeholder: `{paymentId}` (URL-encoded).
  */
 export function getOfficialAcquiringStatusPath(paymentId: string): string {
-  const template = (
-    process.env.FINIK_OFFICIAL_ACQUIRING_STATUS_PATH ||
-    "/v1/payment/{paymentId}"
-  ).trim();
+  const template = resolveOfficialAcquiringStatusPathTemplate();
   const path = template.replace(
     "{paymentId}",
     encodeURIComponent(paymentId.trim()),
   );
   return path.startsWith("/") ? path : `/${path}`;
+}
+
+/** Fallback paths when Finik host uses `/payment` without `/v1`. */
+export function listOfficialAcquiringStatusPaths(paymentId: string): string[] {
+  const primary = getOfficialAcquiringStatusPath(paymentId);
+  const paths = [primary];
+  const alt = `/payment/${encodeURIComponent(paymentId.trim())}`;
+  if (primary !== alt && !paths.includes(alt)) {
+    paths.push(alt);
+  }
+  const v1Alt = `/v1/payment/${encodeURIComponent(paymentId.trim())}`;
+  if (primary !== v1Alt && !paths.includes(v1Alt)) {
+    paths.push(v1Alt);
+  }
+  return paths;
 }
 
 export function getOfficialAcquiringStatusUrl(paymentId: string): string {
