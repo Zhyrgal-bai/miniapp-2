@@ -83,6 +83,28 @@ import {
 } from "./platformOperatorAuth.js";
 import { toPublicProduct, findStockConsistencyIssues } from "../shared/productDto.js";
 import {
+  parseProductBulkPatch,
+  parseProductListQuery,
+  parseProductStatus,
+  parseBulkProductIds,
+  queryRequiresMerchantCatalogAccess,
+} from "../shared/catalogTypes.js";
+import {
+  archiveProduct,
+  bulkPatchProducts,
+  duplicateProduct,
+  listProducts,
+  purgeProductPermanent,
+  restoreProduct,
+  isProductVisibleOnStorefront,
+  type CatalogProductRow,
+} from "./catalog/catalogProductService.js";
+import {
+  buildCategoryTree,
+  reorderCategories,
+  updateCategory,
+} from "./catalog/categoryCatalogService.js";
+import {
   API_ERR_BUSINESS_NOT_FOUND,
   API_ERR_FORBIDDEN,
   API_ERR_INVALID_BUSINESS_ID,
@@ -3001,6 +3023,19 @@ async function requireMerchantStaff(
   };
 }
 
+async function merchantHasCatalogEdit(req: Request): Promise<boolean> {
+  const telegramId = telegramIdFromRequest(req);
+  const businessId = businessIdFromNonApiHint(req);
+  if (!telegramId || businessId == null) return false;
+  const staffRecord = await findBusinessStaffByTelegramId(businessId, telegramId);
+  if (!staffRecord) return false;
+  const effectivePermissions = effectiveMerchantPermissions(
+    staffRecord.role,
+    staffRecord.permissions ?? [],
+  );
+  return merchantHasPermission(effectivePermissions, MERCHANT_PERM.catalogEdit);
+}
+
 attachStaffRoutes(app, { requireStoreOwnerForApi });
 
 /** Каталог / settings / заказы клиента по магазину: валидный id + строка Business в БД. */
@@ -3921,58 +3956,102 @@ app.get("/categories", async (_req: Request, res: Response) => {
     if (!businessId) return;
     const categories = await prisma.category.findMany({
       where: { businessId },
-      orderBy: { id: "asc" },
+      orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
       include: { _count: { select: { products: true } } },
     });
 
-    type Row = (typeof categories)[number];
-    const byId = new Map<number, Row>();
-    for (const c of categories) byId.set(c.id, c);
+    const rows = categories.map((c) => ({
+      id: c.id,
+      name: c.name,
+      parentId: c.parentId ?? null,
+      sortOrder: c.sortOrder,
+      productsCount: c._count.products,
+      config: (c as { config?: unknown }).config ?? {},
+    }));
 
-    const nodeById = new Map<
-      number,
-      {
-        id: number;
-        name: string;
-        parentId: number | null;
-        productsCount: number;
-        config: unknown;
-        children: any[];
-      }
-    >();
-
-    for (const c of categories) {
-      nodeById.set(c.id, {
-        id: c.id,
-        name: c.name,
-        parentId: (c as unknown as { parentId?: number | null }).parentId ?? null,
-        productsCount: c._count.products,
-        config: (c as unknown as { config?: unknown }).config ?? {},
-        children: [],
-      });
-    }
-
-    const roots: any[] = [];
-    for (const c of categories) {
-      const node = nodeById.get(c.id)!;
-      const parentId =
-        (c as unknown as { parentId?: number | null }).parentId ?? null;
-      if (parentId == null) {
-        roots.push(node);
-        continue;
-      }
-      const parent = nodeById.get(parentId);
-      if (!parent) {
-        roots.push(node);
-        continue;
-      }
-      parent.children.push(node);
-    }
-
-    res.json(roots);
+    res.json(buildCategoryTree(rows));
   } catch (e) {
     console.error("GET CATEGORIES ERROR:", e);
     res.status(500).json({ error: "Ошибка получения категорий" });
+  }
+});
+
+app.patch("/categories/reorder", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.catalogEdit);
+    if (!merchant) return;
+    const body = req.body as { updates?: unknown };
+    if (!Array.isArray(body.updates) || body.updates.length === 0) {
+      return res.status(400).json({ error: "Укажите updates" });
+    }
+    const updates: Array<{ id: number; sortOrder: number; parentId?: number | null }> = [];
+    for (const raw of body.updates) {
+      if (raw == null || typeof raw !== "object" || Array.isArray(raw)) {
+        return res.status(400).json({ error: "Неверный формат updates" });
+      }
+      const o = raw as Record<string, unknown>;
+      const id = Number(o.id);
+      const sortOrder = Number(o.sortOrder);
+      if (!Number.isFinite(id) || !Number.isFinite(sortOrder)) {
+        return res.status(400).json({ error: "Неверный формат updates" });
+      }
+      const item: { id: number; sortOrder: number; parentId?: number | null } = {
+        id,
+        sortOrder,
+      };
+      if (o.parentId !== undefined) {
+        item.parentId =
+          o.parentId == null || o.parentId === ""
+            ? null
+            : Number(o.parentId);
+      }
+      updates.push(item);
+    }
+    const result = await reorderCategories(merchant.businessId, updates);
+    if (!result.ok) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    res.json(result);
+  } catch (e) {
+    console.error("PATCH /categories/reorder:", e);
+    res.status(500).json({ error: "Ошибка сортировки категорий" });
+  }
+});
+
+app.patch("/categories/:id", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.catalogEdit);
+    if (!merchant) return;
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ error: "Неверный id" });
+    }
+    const body = req.body as {
+      name?: unknown;
+      parentId?: unknown;
+      sortOrder?: unknown;
+    };
+    const input: {
+      name?: string;
+      parentId?: number | null;
+      sortOrder?: number;
+    } = {};
+    if (body.name !== undefined) input.name = String(body.name);
+    if (body.parentId !== undefined) {
+      input.parentId =
+        body.parentId == null || body.parentId === ""
+          ? null
+          : Number(body.parentId);
+    }
+    if (body.sortOrder !== undefined) input.sortOrder = Number(body.sortOrder);
+    const result = await updateCategory(merchant.businessId, id, input);
+    if (!result.ok) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    res.json(result.category);
+  } catch (e) {
+    console.error("PATCH /categories/:id:", e);
+    res.status(500).json({ error: "Ошибка обновления категории" });
   }
 });
 
@@ -4102,6 +4181,7 @@ app.post("/products", async (req: Request, res: Response) => {
       isSale?: unknown;
       isNew?: unknown;
       isPopular?: unknown;
+      status?: unknown;
     };
 
     const {
@@ -4117,6 +4197,7 @@ app.post("/products", async (req: Request, res: Response) => {
       isSale,
       isNew,
       isPopular,
+      status: statusRaw,
     } = body;
 
     const attributesWithCommerce: Record<string, unknown> =
@@ -4186,6 +4267,8 @@ app.post("/products", async (req: Request, res: Response) => {
       return res.status(400).json({ error: vAttr.error, details: vAttr.details });
     }
 
+    const createStatus = parseProductStatus(statusRaw) ?? "ACTIVE";
+
     const product = await prisma.product.create({
       // Prisma Client types may lag schema changes in editor; runtime column exists after migration.
       data: {
@@ -4200,6 +4283,7 @@ app.post("/products", async (req: Request, res: Response) => {
         categoryId: normalizedCategoryId,
         businessId: merchant.businessId,
         attributes: vAttr.value,
+        status: createStatus,
       } as any,
       include: {
         category: true,
@@ -5152,35 +5236,81 @@ function orderStatusRu(status: string): string {
   return map[status] ?? map[status.toLowerCase()] ?? status;
 }
 
+async function mapCatalogProductsToJson(
+  businessId: number,
+  products: CatalogProductRow[],
+  businessType: string | null,
+) {
+  const stockMap = await loadStockRowsByProductIds(
+    businessId,
+    products.map((p) => p.id),
+  );
+  return products.map((p) => ({
+    ...toPublicProduct(p, {
+      businessType: businessType as any,
+      stockRows: stockMap.get(p.id) ?? [],
+    }),
+    status: p.status,
+    category: p.category,
+  }));
+}
+
 // ================== GET PRODUCTS ==================
+app.patch("/products/bulk", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.catalogEdit);
+    if (!merchant) return;
+    const ids = parseBulkProductIds(req.body);
+    if (!ids) {
+      return res.status(400).json({ error: "Укажите ids" });
+    }
+    const patch = parseProductBulkPatch(req.body);
+    if (!patch) {
+      return res.status(400).json({ error: "Нет полей для обновления" });
+    }
+    try {
+      const result = await bulkPatchProducts(merchant.businessId, ids, patch);
+      res.json(result);
+    } catch (e) {
+      if (e instanceof Error && e.message === "INVALID_CATEGORY") {
+        return res.status(400).json({ error: "Неверная категория" });
+      }
+      throw e;
+    }
+  } catch (e) {
+    console.error("PATCH /products/bulk:", e);
+    res.status(500).json({ error: "Ошибка массового обновления" });
+  }
+});
+
 app.get("/products", async (req: Request, res: Response) => {
   try {
     const businessId = await resolveCatalogBusinessId(req, res);
     if (!businessId) return;
-    const [products, business] = await Promise.all([
-      prisma.product.findMany({
-        where: { businessId },
-        include: { category: true },
-      }),
-      prisma.business.findUnique({
-        where: { id: businessId },
-        select: { businessType: true },
-      }),
-    ]);
+
+    const query = parseProductListQuery(req.query as Record<string, unknown>);
+    if (queryRequiresMerchantCatalogAccess(query)) {
+      const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.catalogEdit);
+      if (!merchant) return;
+    }
+
+    const business = await prisma.business.findUnique({
+      where: { id: businessId },
+      select: { businessType: true },
+    });
     const bt = business?.businessType ?? null;
-    const stockMap = await loadStockRowsByProductIds(
-      businessId,
-      products.map((p) => p.id),
-    );
-    res.json(
-      products.map((p) => ({
-        ...toPublicProduct(p, {
-          businessType: bt,
-          stockRows: stockMap.get(p.id) ?? [],
-        }),
-        category: p.category,
-      })),
-    );
+
+    const result = await listProducts(businessId, query);
+    if (Array.isArray(result)) {
+      res.json(await mapCatalogProductsToJson(businessId, result, bt));
+      return;
+    }
+    res.json({
+      items: await mapCatalogProductsToJson(businessId, result.items, bt),
+      total: result.total,
+      limit: result.limit,
+      offset: result.offset,
+    });
   } catch (error) {
     console.error("GET PRODUCTS ERROR:", error);
     res.status(500).json({ error: "Ошибка получения товаров" });
@@ -5198,7 +5328,13 @@ app.get("/products/:id", async (req: Request, res: Response) => {
     const [product, business] = await Promise.all([
       prisma.product.findUnique({
         where: { id },
-        include: { category: true },
+        include: {
+          category: {
+            include: {
+              parent: { select: { id: true, name: true } },
+            },
+          },
+        },
       }),
       prisma.business.findUnique({
         where: { id: businessId },
@@ -5211,17 +5347,76 @@ app.get("/products/:id", async (req: Request, res: Response) => {
     if (product.businessId !== businessId) {
       return res.status(404).json({ error: "Товар не найден" });
     }
+    if (!isProductVisibleOnStorefront(product.status)) {
+      const canManage = await merchantHasCatalogEdit(req);
+      if (!canManage) {
+        return res.status(404).json({ error: "Товар не найден" });
+      }
+    }
     const stockMap = await loadStockRowsByProductIds(businessId, [product.id]);
     res.json({
       ...toPublicProduct(product, {
         businessType: business?.businessType ?? null,
         stockRows: stockMap.get(product.id) ?? [],
       }),
+      status: product.status,
       category: product.category,
     });
   } catch (error) {
     console.error("GET PRODUCT ERROR:", error);
     res.status(500).json({ error: "Ошибка получения товара" });
+  }
+});
+
+app.post("/products/:id/restore", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.catalogEdit);
+    if (!merchant) return;
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ error: "Неверный id" });
+    }
+    const result = await restoreProduct(merchant.businessId, id);
+    if (!result.ok) {
+      return res.status(result.status).json({ error: "Товар не найден" });
+    }
+    res.json(result.product);
+  } catch (e) {
+    console.error("POST /products/:id/restore:", e);
+    res.status(500).json({ error: "Ошибка восстановления товара" });
+  }
+});
+
+app.post("/products/:id/duplicate", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.catalogEdit);
+    if (!merchant) return;
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ error: "Неверный id" });
+    }
+    const result = await duplicateProduct(merchant.businessId, id);
+    if (!result.ok) {
+      return res.status(result.status).json({ error: "Товар не найден" });
+    }
+    const stockMap = await loadStockRowsByProductIds(merchant.businessId, [
+      result.product.id,
+    ]);
+    const business = await prisma.business.findUnique({
+      where: { id: merchant.businessId },
+      select: { businessType: true },
+    });
+    res.status(201).json({
+      ...toPublicProduct(result.product, {
+        businessType: business?.businessType ?? null,
+        stockRows: stockMap.get(result.product.id) ?? [],
+      }),
+      status: result.product.status,
+      category: result.product.category,
+    });
+  } catch (e) {
+    console.error("POST /products/:id/duplicate:", e);
+    res.status(500).json({ error: "Ошибка дублирования товара" });
   }
 });
 
@@ -6292,6 +6487,7 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       isSale?: unknown;
       isNew?: unknown;
       isPopular?: unknown;
+      status?: unknown;
     };
 
     const id = Number(req.params.id);
@@ -6313,6 +6509,7 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       isSale,
       isNew,
       isPopular,
+      status: statusRaw,
     } = body;
 
     if (
@@ -6328,7 +6525,8 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       preparationMinutes === undefined &&
       isSale === undefined &&
       isNew === undefined &&
-      isPopular === undefined
+      isPopular === undefined &&
+      statusRaw === undefined
     ) {
       return res.status(400).json({ error: "Нет полей для обновления" });
     }
@@ -6342,6 +6540,7 @@ app.put("/products/:id", async (req: Request, res: Response) => {
       categoryId?: number;
       attributes?: Record<string, unknown>;
       preparationMinutes?: number | null;
+      status?: "ACTIVE" | "DRAFT" | "ARCHIVED";
     } = {};
 
     if (name !== undefined) scalar.name = String(name);
@@ -6391,6 +6590,13 @@ app.put("/products/:id", async (req: Request, res: Response) => {
         }
         scalar.preparationMinutes = Math.round(m);
       }
+    }
+    if (statusRaw !== undefined) {
+      const st = parseProductStatus(statusRaw);
+      if (!st) {
+        return res.status(400).json({ error: "Неверный статус товара" });
+      }
+      scalar.status = st;
     }
 
     const exists = await prisma.product.findUnique({ where: { id } });
@@ -6497,7 +6703,7 @@ app.put("/products/:id", async (req: Request, res: Response) => {
   }
 });
 
-// ================== DELETE PRODUCT ==================
+// ================== DELETE PRODUCT (archive) ==================
 app.delete("/products/:id", async (req: Request, res: Response) => {
   try {
     const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.catalogEdit);
@@ -6507,33 +6713,40 @@ app.delete("/products/:id", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Неверный id" });
     }
 
-    const exists = await prisma.product.findUnique({ where: { id } });
-    if (!exists || exists.businessId !== merchant.businessId) {
-      return res.status(404).json({ error: "Товар не найден" });
+    const result = await archiveProduct(merchant.businessId, id);
+    if (!result.ok) {
+      return res.status(result.status).json({ error: "Товар не найден" });
     }
-
-    // Safe delete sync: remove cloudinary assets referenced by Product.imagesMeta.
-    try {
-      const ids = extractCloudinaryPublicIds((exists as any).imagesMeta);
-      for (const pid of ids) {
-        await safeDeleteCloudinaryAsset({
-          businessId: merchant.businessId,
-          publicId: pid,
-          kindPrefix: "products",
-        });
-      }
-    } catch (e) {
-      console.error("product delete sync:", e);
-    }
-
-    await prisma.product.delete({ where: { id } });
 
     res.status(204).send();
   } catch (e) {
     console.error("DELETE PRODUCT ERROR:", e);
-    res.status(500).json({ error: "Ошибка удаления товара" });
+    res.status(500).json({ error: "Ошибка архивации товара" });
   }
 });
+
+app.delete(
+  "/api/platform/admin/businesses/:businessId/products/:id",
+  async (req: Request, res: Response) => {
+    try {
+      const operator = await requireOperatorRecentReauth(req, res);
+      if (!operator) return;
+      const businessId = Number(req.params.businessId);
+      const id = Number(req.params.id);
+      if (!Number.isFinite(businessId) || !Number.isFinite(id)) {
+        return res.status(400).json({ error: "Неверный id" });
+      }
+      const result = await purgeProductPermanent(businessId, id);
+      if (!result.ok) {
+        return res.status(result.status).json({ error: "Товар не найден" });
+      }
+      res.status(204).send();
+    } catch (e) {
+      console.error("DELETE platform product purge:", e);
+      res.status(500).json({ error: "Ошибка удаления товара" });
+    }
+  },
+);
 
 /** Раздача Vite SPA с того же хоста, что и API (Render): иначе Mini App на API_URL видит только текст «Server is working». */
 if (SPA_AVAILABLE) {

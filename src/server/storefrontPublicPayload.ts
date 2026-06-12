@@ -17,6 +17,7 @@ import {
   API_ERR_STOREFRONT_INVALID,
 } from "../shared/apiClientMessages.js";
 import { toPublicProduct } from "../shared/productDto.js";
+import { buildCategoryTree } from "./catalog/categoryCatalogService.js";
 import { loadStockRowsByProductIds } from "./inventoryService.js";
 import { getFeaturedPromoForStorefront } from "./promoRepo.js";
 import { rejectUnlessCanAcceptCustomerOrders } from "./subscriptionCustomerGate.js";
@@ -193,29 +194,15 @@ export async function sendStorefrontPublicPayload(
     if (enabledTypes.has("categories")) {
       const categories = await prisma.category.findMany({
         where: { businessId },
-        orderBy: { id: "asc" },
+        orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
       });
-      const nodeById = new Map<number, any>();
-      for (const c of categories) {
-        nodeById.set(c.id, {
-          id: c.id,
-          name: c.name,
-          parentId: (c as any).parentId ?? null,
-          children: [],
-        });
-      }
-      const roots: any[] = [];
-      for (const c of categories) {
-        const node = nodeById.get(c.id)!;
-        const pid = (c as any).parentId ?? null;
-        if (pid == null) roots.push(node);
-        else {
-          const parent = nodeById.get(pid);
-          if (parent) parent.children.push(node);
-          else roots.push(node);
-        }
-      }
-      (payload as any).categories = roots;
+      const rows = categories.map((c) => ({
+        id: c.id,
+        name: c.name,
+        parentId: (c as { parentId?: number | null }).parentId ?? null,
+        sortOrder: c.sortOrder,
+      }));
+      (payload as any).categories = buildCategoryTree(rows);
     }
 
     const featuredPromo = await getFeaturedPromoForStorefront(prisma, businessId);
@@ -228,7 +215,7 @@ export async function sendStorefrontPublicPayload(
       const lim = Number((sec?.config as any)?.limit ?? 8);
       const take = Number.isFinite(lim) && lim > 0 ? Math.min(lim, 24) : 8;
       const products = await prisma.product.findMany({
-        where: { businessId },
+        where: { businessId, status: "ACTIVE" },
         orderBy: { id: "desc" },
         take,
       });

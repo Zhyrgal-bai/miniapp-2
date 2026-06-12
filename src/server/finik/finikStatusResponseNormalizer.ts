@@ -76,7 +76,6 @@ export function normalizeFinikPaymentStatusResponse(
   }
   return { status: "", amount: pickAmountFromRecord(json) };
 }
-
 /** Diagnostic-only: fields inspected when status parse fails (no logic change). */
 export function diagnoseFinikPaymentStatusParse(json: Record<string, unknown>): {
   candidateStatusFields: Record<string, unknown>;
@@ -107,3 +106,4 @@ export function diagnoseFinikPaymentStatusParse(json: Record<string, unknown>): 
     extractedStatus: normalized.status,
   };
 }
+

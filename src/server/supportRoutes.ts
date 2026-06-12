@@ -23,6 +23,7 @@ import {
   type MerchantPermissionId,
 } from "./merchantPermissions.js";
 import { createMerchantNotification } from "./merchantNotificationsService.js";
+import { findActiveReturnRequest } from "./refund/refundEligibility.js";
 import { checkActionCooldown, touchActionCooldown } from "./abuseGuardService.js";
 import { buildSupportSuggestions } from "./supportSuggestionService.js";
 import { orderDisplayLabel } from "../shared/orderDisplay.js";
@@ -33,8 +34,11 @@ import {
 import {
   createCancelRequestForOrder,
   createRefundRequestForOrder,
+  createRefundRequestByMerchant,
   isCancelStatus,
   isRefundStatus,
+  isRefundMethod,
+  listRefundAuditLogs,
   patchCancelRequestMerchant,
   patchRefundRequestMerchant,
 } from "./supportOrderActions.js";
@@ -856,6 +860,11 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
           .json({ error: "Возврат доступен после доставки заказа" });
       }
 
+      const activeReturn = await findActiveReturnRequest(businessId, orderId, userId);
+      if (activeReturn) {
+        return res.status(400).json({ error: "Заявка на возврат уже в работе" });
+      }
+
       if (orderItemId != null) {
         const line = order.items.find((i) => i.id === orderItemId);
         if (!line) {
@@ -963,10 +972,10 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
 
       void createMerchantNotification({
         businessId,
-        kind: MerchantNotificationKind.SUPPORT_TICKET,
+        kind: MerchantNotificationKind.RETURN_REQUEST,
         title: "Заявка на возврат",
         body: reasonRaw.slice(0, 120),
-        href: "/admin/support",
+        href: "/admin/support?tab=returns",
       });
 
       const full = await prisma.returnRequest.findFirst({
@@ -1645,6 +1654,63 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
     }
   );
 
+  app.post("/merchant/support/refund-requests", async (req: Request, res: Response) => {
+    try {
+      const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.supportManage);
+      if (!merchant) return;
+
+      const telegramId = telegramIdFromRequest(req);
+      if (!telegramId) {
+        return res.status(400).json({ error: "Нужен userId (Telegram)" });
+      }
+      const staffUser = await prisma.user.findUnique({
+        where: { telegramId },
+        select: { id: true },
+      });
+      if (!staffUser) {
+        return res.status(403).json({ error: "Нет доступа" });
+      }
+
+      const body = req.body as {
+        orderId?: unknown;
+        reason?: unknown;
+        comment?: unknown;
+        merchantComment?: unknown;
+      };
+      const orderId = parseOrderId(body.orderId);
+      if (orderId == null) {
+        return res.status(400).json({ error: "Нужен orderId" });
+      }
+
+      const payload: {
+        businessId: number;
+        orderId: number;
+        actorUserId: number;
+        reason?: string;
+        comment?: string;
+        merchantComment?: string;
+      } = {
+        businessId: merchant.businessId,
+        orderId,
+        actorUserId: staffUser.id,
+      };
+      if (typeof body.reason === "string") payload.reason = body.reason;
+      if (typeof body.comment === "string") payload.comment = body.comment;
+      if (typeof body.merchantComment === "string") {
+        payload.merchantComment = body.merchantComment;
+      }
+
+      const result = await createRefundRequestByMerchant(payload);
+      if (!result.ok) {
+        return res.status(result.statusCode).json({ error: result.error });
+      }
+      return res.status(201).json(jsonWithBigInt(result.row));
+    } catch (e) {
+      console.error("POST /merchant/support/refund-requests:", e);
+      res.status(500).json({ error: "Ошибка" });
+    }
+  });
+
   app.get("/merchant/support/refund-requests", async (req: Request, res: Response) => {
     try {
       const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.supportManage);
@@ -1682,11 +1748,36 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
           status?: unknown;
           merchantComment?: unknown;
           refundAmount?: unknown;
+          refundMethod?: unknown;
         };
         const statusRaw =
           typeof body.status === "string" ? body.status.trim() : "";
         if (!isRefundStatus(statusRaw)) {
           return res.status(400).json({ error: "Нужен допустимый status" });
+        }
+
+        let refundMethodWire: "MANUAL" | "FINIK" | "AUTO" | undefined;
+        if (
+          body.refundMethod !== undefined &&
+          body.refundMethod !== null &&
+          body.refundMethod !== ""
+        ) {
+          const m =
+            typeof body.refundMethod === "string" ? body.refundMethod.trim() : "";
+          if (!isRefundMethod(m)) {
+            return res.status(400).json({ error: "Неверный refundMethod" });
+          }
+          refundMethodWire = m;
+        }
+
+        const telegramId = telegramIdFromRequest(req);
+        let actorUserId: number | null = null;
+        if (telegramId) {
+          const staffUser = await prisma.user.findUnique({
+            where: { telegramId },
+            select: { id: true },
+          });
+          actorUserId = staffUser?.id ?? null;
         }
 
         let refundAmount: number | null | undefined = undefined;
@@ -1709,16 +1800,22 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
           status: typeof statusRaw;
           merchantComment?: string | null;
           refundAmount?: number | null;
+          refundMethod?: "MANUAL" | "FINIK" | "AUTO";
+          actorUserId?: number | null;
         } = {
           businessId: merchant.businessId,
           refundId,
           status: statusRaw,
+          actorUserId,
         };
         if (merchantComment !== undefined) {
           refundPatch.merchantComment = merchantComment;
         }
         if (refundAmount !== undefined) {
           refundPatch.refundAmount = refundAmount;
+        }
+        if (refundMethodWire !== undefined) {
+          refundPatch.refundMethod = refundMethodWire;
         }
 
         const result = await patchRefundRequestMerchant(refundPatch);
@@ -1731,6 +1828,27 @@ export function attachSupportRoutes(app: Express, deps: Deps): void {
         res.status(500).json({ error: "Ошибка" });
       }
     }
+  );
+
+  app.get(
+    "/merchant/support/refund-requests/:refundId/audit",
+    async (req: Request, res: Response) => {
+      try {
+        const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.supportManage);
+        if (!merchant) return;
+
+        const refundId = parseTicketIdParam(req.params.refundId);
+        if (refundId == null) {
+          return res.status(400).json({ error: "Неверная заявка" });
+        }
+
+        const rows = await listRefundAuditLogs(merchant.businessId, refundId);
+        return res.json(jsonWithBigInt(rows));
+      } catch (e) {
+        console.error("GET /merchant/support/refund-requests/:id/audit:", e);
+        res.status(500).json({ error: "Ошибка" });
+      }
+    },
   );
 }
 

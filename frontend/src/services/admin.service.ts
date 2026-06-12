@@ -1,5 +1,5 @@
 import { API_BASE_URL, apiAbsoluteUrl } from "./api";
-import type { Category, Product } from "../types";
+import type { Category, Product, ProductStatus } from "../types";
 import {
   adminFetch,
   adminFetchJson,
@@ -595,9 +595,56 @@ export const adminService = {
           : undefined,
     };
   },
-  async getProducts(): Promise<Product[]> {
-    const data = await adminGet<Product[]>("/products");
-    return Array.isArray(data) ? data : [];
+  async getProducts(query?: {
+    q?: string;
+    categoryId?: number;
+    status?: string;
+    limit?: number;
+    offset?: number;
+    sort?: string;
+  }): Promise<Product[]> {
+    const params = new URLSearchParams();
+    params.set("status", query?.status ?? "all");
+    if (query?.q?.trim()) params.set("q", query.q.trim());
+    if (query?.categoryId != null) params.set("categoryId", String(query.categoryId));
+    if (query?.limit != null) params.set("limit", String(query.limit));
+    if (query?.offset != null) params.set("offset", String(query.offset));
+    if (query?.sort) params.set("sort", query.sort);
+    const qs = params.toString();
+    const data = await adminGet<Product[] | { items: Product[] }>(
+      `/products${qs ? `?${qs}` : ""}`,
+    );
+    if (Array.isArray(data)) return data;
+    if (data && typeof data === "object" && Array.isArray((data as { items?: Product[] }).items)) {
+      return (data as { items: Product[] }).items;
+    }
+    return [];
+  },
+
+  async getProductsPage(query: {
+    q?: string;
+    categoryId?: number;
+    status?: string;
+    limit?: number;
+    offset?: number;
+    sort?: string;
+  }): Promise<{ items: Product[]; total: number; limit: number; offset: number }> {
+    const params = new URLSearchParams();
+    params.set("status", query.status ?? "all");
+    if (query.q?.trim()) params.set("q", query.q.trim());
+    if (query.categoryId != null) params.set("categoryId", String(query.categoryId));
+    params.set("limit", String(query.limit ?? 50));
+    params.set("offset", String(query.offset ?? 0));
+    if (query.sort) params.set("sort", query.sort);
+    const data = await adminGet<{ items: Product[]; total: number; limit: number; offset: number }>(
+      `/products?${params.toString()}`,
+    );
+    return {
+      items: Array.isArray(data?.items) ? data.items : [],
+      total: Number(data?.total ?? 0),
+      limit: Number(data?.limit ?? 50),
+      offset: Number(data?.offset ?? 0),
+    };
   },
 
   async getProduct(id: number): Promise<Product> {
@@ -622,6 +669,26 @@ export const adminService = {
     await adminDelete(`/products/${id}`);
   },
 
+  async archiveProduct(id: number): Promise<void> {
+    await adminDelete(`/products/${id}`);
+  },
+
+  async restoreProduct(id: number): Promise<Product> {
+    return adminPost<Product>(`/products/${id}/restore`, {});
+  },
+
+  async duplicateProduct(id: number): Promise<Product> {
+    return adminPost<Product>(`/products/${id}/duplicate`, {});
+  },
+
+  async bulkUpdateProducts(input: {
+    ids: number[];
+    status?: ProductStatus;
+    categoryId?: number;
+  }): Promise<{ updated: number }> {
+    return adminPatch<{ updated: number }>("/products/bulk", input);
+  },
+
   async updateProduct(
     id: number,
     patch: Partial<
@@ -639,6 +706,7 @@ export const adminService = {
         | "discountPercent"
         | "variants"
         | "attributes"
+        | "status"
       >
     >
   ): Promise<Product> {
@@ -1040,6 +1108,21 @@ export const adminService = {
     await adminDelete(apiAbsoluteUrl(`/categories/${id}`));
   },
 
+  async updateCategory(
+    id: number,
+    patch: { name?: string; parentId?: number | null; sortOrder?: number },
+  ): Promise<Category> {
+    return adminPatch<Category>(apiAbsoluteUrl(`/categories/${id}`), patch);
+  },
+
+  async reorderCategories(
+    updates: Array<{ id: number; sortOrder: number; parentId?: number | null }>,
+  ): Promise<{ updated: number }> {
+    return adminPatch<{ updated: number }>(apiAbsoluteUrl("/categories/reorder"), {
+      updates,
+    });
+  },
+
   async getStaffRows(businessId: number): Promise<AdminStaffRow[]> {
     const data = await adminStaffFetch<unknown>("/api/staff", businessId, {
       method: "GET",
@@ -1218,12 +1301,29 @@ export const adminService = {
       status: string;
       merchantComment?: string | null;
       refundAmount?: number | null;
+      refundMethod?: "MANUAL" | "FINIK" | "AUTO";
     }
   ): Promise<unknown> {
     return adminPatch<unknown>(
       `/merchant/support/refund-requests/${id}`,
       patch as Record<string, unknown>
     );
+  },
+
+  async createRefundRequest(body: {
+    orderId: number;
+    reason?: string;
+    comment?: string;
+    merchantComment?: string;
+  }): Promise<unknown> {
+    return adminPost<unknown>("/merchant/support/refund-requests", body);
+  },
+
+  async listRefundAuditLogs(refundId: number): Promise<unknown[]> {
+    const data = await adminGet<unknown[]>(
+      `/merchant/support/refund-requests/${refundId}/audit`
+    );
+    return Array.isArray(data) ? data : [];
   },
 
   async getMerchantWorkload(): Promise<{

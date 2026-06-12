@@ -20,7 +20,10 @@ export interface Category {
   parent?: Category | null;
   children?: Category[];
   productsCount?: number;
+  sortOrder?: number;
 }
+
+export type ProductStatus = "ACTIVE" | "DRAFT" | "ARCHIVED";
 
 /** Цвет в новой модели (опционально, вместе с `sizes`). */
 export interface ProductColor {
@@ -61,4 +64,6 @@ export interface Product {
   totalAvailable?: number;
 
   businessType?: string;
+
+  status?: ProductStatus;
 }

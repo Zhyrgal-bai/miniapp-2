@@ -3,7 +3,131 @@ import { adminService } from "../../services/admin.service";
 import { showErrorToast } from "../../store/toast.store";
 import { formatAdminApiError } from "../../utils/adminApiError";
 import type { Category } from "../../types";
-import { categoryRoots } from "../../utils/categoryTree";
+import { categoryRoots, flattenCategories } from "../../utils/categoryTree";
+
+function CategoryNodeEditor({
+  node,
+  allFlat,
+  rootOptions,
+  onChanged,
+}: {
+  node: Category;
+  allFlat: Category[];
+  rootOptions: Category[];
+  onChanged: () => void;
+}) {
+  const [name, setName] = useState(node.name);
+  const [parentId, setParentId] = useState<number | "">(
+    node.parentId ?? "",
+  );
+
+  useEffect(() => {
+    setName(node.name);
+    setParentId(node.parentId ?? "");
+  }, [node.id, node.name, node.parentId]);
+
+  const siblings = useMemo(() => {
+    const pid = node.parentId ?? null;
+    return allFlat
+      .filter((c) => (c.parentId ?? null) === pid)
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id);
+  }, [allFlat, node.parentId]);
+
+  const siblingIndex = siblings.findIndex((s) => s.id === node.id);
+
+  async function saveName() {
+    const trimmed = name.trim();
+    if (trimmed === "" || trimmed === node.name) return;
+    try {
+      await adminService.updateCategory(node.id, { name: trimmed });
+      onChanged();
+    } catch (e) {
+      showErrorToast(formatAdminApiError(e));
+    }
+  }
+
+  async function saveParent() {
+    const next = parentId === "" ? null : parentId;
+    const current = node.parentId ?? null;
+    if (next === current) return;
+    try {
+      await adminService.updateCategory(node.id, { parentId: next });
+      onChanged();
+    } catch (e) {
+      showErrorToast(formatAdminApiError(e));
+    }
+  }
+
+  async function move(direction: "up" | "down") {
+    const idx = siblingIndex;
+    if (idx < 0) return;
+    const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= siblings.length) return;
+    const a = siblings[idx]!;
+    const b = siblings[targetIdx]!;
+    const aOrder = a.sortOrder ?? idx;
+    const bOrder = b.sortOrder ?? targetIdx;
+    try {
+      await adminService.reorderCategories([
+        { id: a.id, sortOrder: bOrder },
+        { id: b.id, sortOrder: aOrder },
+      ]);
+      onChanged();
+    } catch (e) {
+      showErrorToast(formatAdminApiError(e));
+    }
+  }
+
+  async function onDelete(id: number) {
+    try {
+      await adminService.deleteCategory(id);
+      onChanged();
+    } catch (e) {
+      showErrorToast(formatAdminApiError(e));
+    }
+  }
+
+  return (
+    <div className={`admin-cat-node${node.parentId != null ? " admin-cat-node--child" : ""}`}>
+      <input
+        className="admin-input admin-cat-node__name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onBlur={() => void saveName()}
+      />
+      <select
+        className="admin-select admin-cat-node__parent"
+        value={parentId}
+        onChange={(e) => {
+          const v = e.target.value === "" ? "" : Number(e.target.value);
+          setParentId(v);
+        }}
+        onBlur={() => void saveParent()}
+      >
+        <option value="">Main категория</option>
+        {rootOptions
+          .filter((r) => r.id !== node.id)
+          .map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.name}
+            </option>
+          ))}
+      </select>
+      <span className="admin-cat-node__count">{node.productsCount ?? 0} товаров</span>
+      <div className="admin-cat-node__actions">
+        <button type="button" className="admin-pm-card__btn" onClick={() => void move("up")}>
+          ↑
+        </button>
+        <button type="button" className="admin-pm-card__btn" onClick={() => void move("down")}>
+          ↓
+        </button>
+        <button type="button" className="delete" onClick={() => void onDelete(node.id)}>
+          Удалить
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function AdminCategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -30,6 +154,7 @@ export default function AdminCategoriesPage() {
   }, [load]);
 
   const rootCategories = useMemo(() => categoryRoots(categories), [categories]);
+  const flatCategories = useMemo(() => flattenCategories(categories), [categories]);
   const parentOptions = rootCategories;
 
   const onCreate = async () => {
@@ -46,21 +171,12 @@ export default function AdminCategoriesPage() {
     }
   };
 
-  const onDelete = async (id: number) => {
-    try {
-      await adminService.deleteCategory(id);
-      await load();
-    } catch (e) {
-      showErrorToast(formatAdminApiError(e));
-    }
-  };
-
   return (
     <div className="admin-dash-page">
       <header className="admin-dash-page__head">
         <h1 className="admin-dash-page__title">Категории</h1>
         <p className="admin-dash-page__subtitle">
-          Дерево категорий каталога: main категории и подкатегории.
+          Дерево категорий: переименование, перемещение, порядок на витрине.
         </p>
       </header>
 
@@ -118,26 +234,21 @@ export default function AdminCategoriesPage() {
         <div className="admin-dash-card">
           {rootCategories.map((main) => (
             <div key={main.id} className="admin-cat-tree">
-              <div className="admin-cat-node">
-                <strong>{main.name}</strong>
-                <span>{main.productsCount ?? 0} товаров</span>
-                <button type="button" className="delete" onClick={() => void onDelete(main.id)}>
-                  Удалить
-                </button>
-              </div>
+              <CategoryNodeEditor
+                node={main}
+                allFlat={flatCategories}
+                rootOptions={rootCategories}
+                onChanged={load}
+              />
               <div className="admin-cat-children">
                 {(main.children ?? []).map((sub) => (
-                  <div key={sub.id} className="admin-cat-node admin-cat-node--child">
-                    <span>{sub.name}</span>
-                    <span>{sub.productsCount ?? 0} товаров</span>
-                    <button
-                      type="button"
-                      className="delete"
-                      onClick={() => void onDelete(sub.id)}
-                    >
-                      Удалить
-                    </button>
-                  </div>
+                  <CategoryNodeEditor
+                    key={sub.id}
+                    node={sub}
+                    allFlat={flatCategories}
+                    rootOptions={rootCategories}
+                    onChanged={load}
+                  />
                 ))}
               </div>
             </div>

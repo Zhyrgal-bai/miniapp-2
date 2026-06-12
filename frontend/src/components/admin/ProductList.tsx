@@ -47,7 +47,7 @@ const ProductList = () => {
               }}
               className="delete"
             >
-              Удалить
+              В архив
             </button>
           </div>
         );

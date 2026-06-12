@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { adminService, type SupportSuggestion } from "../../services/admin.service";
-import { showErrorToast } from "../../store/toast.store";
+import { showErrorToast, showSuccessToast } from "../../store/toast.store";
 import { formatAdminApiError } from "../../utils/adminApiError";
 import { SF_ADMIN_SUPPORT_TAB_KEY } from "../../utils/accountMenuStorage";
 import { formatTimeAgoRu } from "../../utils/formatTimeAgo";
@@ -96,6 +96,9 @@ export default function AdminSupportPage() {
   const [suggestions, setSuggestions] = useState<SupportSuggestion[]>([]);
   const [internalNote, setInternalNote] = useState("");
   const [merchantComment, setMerchantComment] = useState("");
+  const [refundMethod, setRefundMethod] = useState<"AUTO" | "MANUAL" | "FINIK">("AUTO");
+  const [refundCompleteAmount, setRefundCompleteAmount] = useState("");
+  const [merchantRefundOrderId, setMerchantRefundOrderId] = useState("");
   const [busy, setBusy] = useState(false);
 
   const loadTickets = useCallback(async () => {
@@ -292,6 +295,7 @@ export default function AdminSupportPage() {
       status: string;
       merchantComment?: string | null;
       refundAmount?: number | null;
+      refundMethod?: "MANUAL" | "FINIK" | "AUTO";
     }
   ) {
     setBusy(true);
@@ -658,6 +662,50 @@ export default function AdminSupportPage() {
       {!loading && tab === "refunds" && (
         <div className="admin-support-grid">
           <div className="sf-inbox admin-support-list">
+            <div className="admin-form-row" style={{ padding: 12, flexDirection: "column", gap: 8 }}>
+              <label className="admin-field-label" htmlFor="merchant-refund-order-id">
+                Инициировать возврат (ID заказа)
+              </label>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <input
+                  id="merchant-refund-order-id"
+                  className="admin-input"
+                  type="number"
+                  min={1}
+                  placeholder="orderId"
+                  value={merchantRefundOrderId}
+                  disabled={busy}
+                  onChange={(e) => setMerchantRefundOrderId(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="admin-order-card__btn admin-order-card__btn--ship"
+                  disabled={busy || !merchantRefundOrderId.trim()}
+                  onClick={() => {
+                    const orderId = Number(merchantRefundOrderId.trim());
+                    if (!Number.isFinite(orderId) || orderId <= 0) {
+                      showErrorToast("Нужен корректный ID заказа");
+                      return;
+                    }
+                    setBusy(true);
+                    void adminService
+                      .createRefundRequest({
+                        orderId,
+                        merchantComment: merchantComment.trim() || undefined,
+                      })
+                      .then(async () => {
+                        setMerchantRefundOrderId("");
+                        await loadRefunds();
+                        showSuccessToast("Заявка на возврат создана");
+                      })
+                      .catch((e) => showErrorToast(formatAdminApiError(e)))
+                      .finally(() => setBusy(false));
+                  }}
+                >
+                  Создать возврат
+                </button>
+              </div>
+            </div>
             {refunds.length === 0 && (
               <p className="admin-dash-page__muted" style={{ padding: 16 }}>
                 Нет заявок на возврат денег
@@ -709,6 +757,25 @@ export default function AdminSupportPage() {
                 </p>
                 {pickString(selectedRefund.comment) ? (
                   <p>Комментарий покупателя: {pickString(selectedRefund.comment)}</p>
+                ) : null}
+                {pickString(selectedRefund.refundMethod) ? (
+                  <p>
+                    Способ возврата:{" "}
+                    <strong>{pickString(selectedRefund.refundMethod)}</strong>
+                  </p>
+                ) : null}
+                {pickString(selectedRefund.paymentReference) ? (
+                  <p className="admin-dash-page__muted">
+                    Платёж: {pickString(selectedRefund.paymentReference)}
+                  </p>
+                ) : null}
+                {pickString(selectedRefund.refundReference) ? (
+                  <p className="admin-dash-page__muted">
+                    Refund ref: {pickString(selectedRefund.refundReference)}
+                  </p>
+                ) : null}
+                {(selectedRefund as { initiatedByMerchant?: boolean }).initiatedByMerchant ? (
+                  <p className="admin-dash-page__muted">Инициировано магазином</p>
                 ) : null}
                 <RequestTimeline kind="refund" status={pickString(selectedRefund.status) ?? "REQUESTED"} />
                 <label className="admin-field-label" htmlFor="refund-merchant-comment">
@@ -769,31 +836,73 @@ export default function AdminSupportPage() {
                     </>
                   )}
                   {pickString(selectedRefund.status) === "APPROVED" && (
-                    <button
-                      type="button"
-                      className="admin-order-card__btn admin-order-card__btn--confirm"
-                      disabled={busy}
-                      onClick={() => {
-                        const orderTotal = (selectedRefund.order as { total?: number } | undefined)?.total;
-                        const raw = window.prompt(
-                          "Сумма возврата (сом, целое число)",
-                          String(orderTotal ?? "")
-                        );
-                        if (raw == null) return;
-                        const n = Number(raw.trim());
-                        if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
-                          showErrorToast("Нужно целое число ≥ 0");
-                          return;
+                    <>
+                      <label className="admin-field-label" htmlFor="refund-method">
+                        Способ возврата
+                      </label>
+                      <select
+                        id="refund-method"
+                        className="admin-input"
+                        value={refundMethod}
+                        disabled={busy}
+                        onChange={(e) =>
+                          setRefundMethod(e.target.value as "AUTO" | "MANUAL" | "FINIK")
                         }
-                        void patchRefund(selectedRefundId!, {
-                          status: "REFUNDED",
-                          refundAmount: n,
-                          merchantComment: merchantComment.trim() || null,
-                        });
-                      }}
-                    >
-                      Деньги возвращены
-                    </button>
+                      >
+                        <option value="AUTO">AUTO (Finik → ручной fallback)</option>
+                        <option value="MANUAL">MANUAL (комментарий обязателен)</option>
+                        <option value="FINIK">FINIK (только API)</option>
+                      </select>
+                      <label className="admin-field-label" htmlFor="refund-complete-amount">
+                        Сумма возврата (сом)
+                      </label>
+                      <input
+                        id="refund-complete-amount"
+                        className="admin-input"
+                        type="number"
+                        min={1}
+                        value={refundCompleteAmount}
+                        disabled={busy}
+                        placeholder={String(
+                          (selectedRefund.order as { total?: number } | undefined)?.total ?? ""
+                        )}
+                        onChange={(e) => setRefundCompleteAmount(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="admin-order-card__btn admin-order-card__btn--confirm"
+                        disabled={busy}
+                        onClick={() => {
+                          const orderTotal =
+                            (selectedRefund.order as { total?: number } | undefined)?.total ?? 0;
+                          const raw = refundCompleteAmount.trim();
+                          const n = raw === "" ? orderTotal : Number(raw);
+                          if (!Number.isFinite(n) || n <= 0 || !Number.isInteger(n)) {
+                            showErrorToast("Сумма должна быть целым числом > 0");
+                            return;
+                          }
+                          if (n > orderTotal) {
+                            showErrorToast("Сумма не может превышать сумму заказа");
+                            return;
+                          }
+                          if (
+                            refundMethod === "MANUAL" &&
+                            merchantComment.trim().length === 0
+                          ) {
+                            showErrorToast("Для MANUAL нужен комментарий магазина");
+                            return;
+                          }
+                          void patchRefund(selectedRefundId!, {
+                            status: "REFUNDED",
+                            refundAmount: n,
+                            refundMethod,
+                            merchantComment: merchantComment.trim() || null,
+                          });
+                        }}
+                      >
+                        Деньги возвращены
+                      </button>
+                    </>
                   )}
                 </div>
               </>

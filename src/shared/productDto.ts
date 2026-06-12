@@ -33,6 +33,7 @@ export type PublicProduct = {
   variants: PublicProductVariant[];
   totalAvailable: number;
   businessType?: BusinessType | null;
+  status?: "ACTIVE" | "DRAFT" | "ARCHIVED";
 };
 
 type DbProductLike = {
@@ -46,6 +47,7 @@ type DbProductLike = {
   discountPercent?: number | null;
   preparationMinutes?: number | null;
   attributes?: unknown;
+  status?: "ACTIVE" | "DRAFT" | "ARCHIVED";
 };
 
 export type ToPublicProductOptions = {
@@ -120,6 +122,7 @@ export function toPublicProduct(
     variants,
     totalAvailable,
     businessType,
+    ...(raw.status != null ? { status: raw.status } : {}),
   };
 }
 

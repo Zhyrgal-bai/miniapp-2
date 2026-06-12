@@ -1,15 +1,32 @@
 import {
   CancelRequestStatus,
+  RefundAuditActorType,
+  RefundMethod,
   RefundRequestStatus,
   SupportSenderType,
   SupportTicketStatus,
 } from "@prisma/client";
 import { orderCommercePhase, orderIsPaid } from "../shared/orderCommerce.js";
+import {
+  parseRefundMethod,
+  validateRefundAmount,
+  type RefundMethodWire,
+} from "../shared/refundValidation.js";
 import { prisma } from "./db.js";
-import { createMerchantNotification } from "./merchantNotificationsService.js";
 import { orderDisplayLabel } from "../shared/orderDisplay.js";
-
-const PRE_DELIVERY_PAID = new Set(["CONFIRMED", "SHIPPED"]);
+import { appendRefundAuditLog } from "./refund/refundAuditService.js";
+import { resolveRefundCompletion } from "./refund/refundCompletion.js";
+import {
+  assertRefundOrderEligible,
+  findActiveRefundRequest,
+  loadRefundOrderForBusiness,
+  refundPaymentRefs,
+} from "./refund/refundEligibility.js";
+import {
+  notifyCustomerRefundStatus,
+  notifyMerchantRefundEvent,
+} from "./refund/refundNotifyService.js";
+import { applyRefundReversals } from "./refund/refundReversalService.js";
 
 async function appendSupportSystemMessage(opts: {
   businessId: number;
@@ -57,7 +74,7 @@ async function appendSupportSystemMessage(opts: {
 async function archiveSupportThreads(
   businessId: number,
   orderId: number,
-  userId: number
+  userId: number,
 ): Promise<void> {
   await prisma.supportTicket.updateMany({
     where: {
@@ -68,6 +85,56 @@ async function archiveSupportThreads(
     },
     data: { status: SupportTicketStatus.CLOSED },
   });
+}
+
+async function createRefundRequestRow(input: {
+  businessId: number;
+  orderId: number;
+  userId: number;
+  reason?: string;
+  comment?: string | null;
+  initiatedByMerchant: boolean;
+  actorType: RefundAuditActorType;
+  actorUserId?: number | null;
+  paymentReference: string | null;
+  externalReference: string;
+}): Promise<{ id: number; orderNumber: string | null; orderTotal: number }> {
+  const row = await prisma.$transaction(async (tx) => {
+    const created = await tx.refundRequest.create({
+      data: {
+        businessId: input.businessId,
+        orderId: input.orderId,
+        userId: input.userId,
+        reason: input.reason?.trim().slice(0, 200) || null,
+        comment: input.comment?.trim().slice(0, 2000) || null,
+        status: RefundRequestStatus.REQUESTED,
+        initiatedByMerchant: input.initiatedByMerchant,
+        paymentReference: input.paymentReference,
+        externalReference: input.externalReference,
+      },
+      include: { order: { select: { orderNumber: true, total: true } } },
+    });
+
+    await appendRefundAuditLog(tx, {
+      refundRequestId: created.id,
+      businessId: input.businessId,
+      orderId: input.orderId,
+      actorType: input.actorType,
+      actorUserId: input.actorUserId ?? null,
+      fromStatus: null,
+      toStatus: RefundRequestStatus.REQUESTED,
+      paymentReference: input.paymentReference,
+      merchantNote: input.comment ?? null,
+    });
+
+    return created;
+  });
+
+  return {
+    id: row.id,
+    orderNumber: row.order.orderNumber,
+    orderTotal: row.order.total,
+  };
 }
 
 export async function createCancelRequestForOrder(opts: {
@@ -138,12 +205,13 @@ export async function createCancelRequestForOrder(opts: {
     text: `Заявка на отмену заказа ${label}${opts.comment?.trim() ? `.\n\n${opts.comment.trim()}` : "."}`,
   });
 
+  const { createMerchantNotification } = await import("./merchantNotificationsService.js");
   void createMerchantNotification({
     businessId: opts.businessId,
-    kind: "SUPPORT_TICKET",
+    kind: "CANCEL_REQUEST",
     title: "Заявка на отмену заказа",
     body: orderDisplayLabel(order),
-    href: "/admin/support",
+    href: "/admin/support?tab=cancellations",
   });
 
   return { ok: true, row };
@@ -156,40 +224,16 @@ export async function createRefundRequestForOrder(opts: {
   reason?: string;
   comment?: string;
 }): Promise<{ ok: true; row: unknown } | { ok: false; statusCode: number; error: string }> {
-  const order = await prisma.order.findFirst({
-    where: {
-      id: opts.orderId,
-      businessId: opts.businessId,
-      buyerUserId: opts.userId,
-    },
-  });
+  const order = await loadRefundOrderForBusiness(opts.businessId, opts.orderId);
   if (!order) {
     return { ok: false, statusCode: 404, error: "Заказ не найден" };
   }
-  const st = String(order.status).toUpperCase();
-  if (!PRE_DELIVERY_PAID.has(st)) {
-    return {
-      ok: false,
-      statusCode: 400,
-      error: "Возврат денег доступен после оплаты и до доставки",
-    };
-  }
 
-  const pending = await prisma.refundRequest.findFirst({
-    where: {
-      businessId: opts.businessId,
-      orderId: opts.orderId,
-      userId: opts.userId,
-      status: {
-        in: [
-          RefundRequestStatus.REQUESTED,
-          RefundRequestStatus.REVIEWING,
-          RefundRequestStatus.APPROVED,
-        ],
-      },
-    },
-  });
-  if (pending) {
+  const eligible = await assertRefundOrderEligible(order, { buyerUserId: opts.userId });
+  if (!eligible.ok) return eligible;
+
+  const active = await findActiveRefundRequest(opts.businessId, opts.orderId);
+  if (active) {
     return {
       ok: false,
       statusCode: 400,
@@ -197,46 +241,151 @@ export async function createRefundRequestForOrder(opts: {
     };
   }
 
-  const row = await prisma.refundRequest.create({
-    data: {
-      businessId: opts.businessId,
-      orderId: opts.orderId,
-      userId: opts.userId,
-      reason: opts.reason?.trim().slice(0, 200) || null,
-      comment: opts.comment?.trim().slice(0, 2000) || null,
-      status: RefundRequestStatus.REQUESTED,
-    },
+  const refs = refundPaymentRefs(order);
+  const created = await createRefundRequestRow({
+    businessId: opts.businessId,
+    orderId: opts.orderId,
+    userId: opts.userId,
+    ...(opts.reason !== undefined ? { reason: opts.reason } : {}),
+    ...(opts.comment !== undefined ? { comment: opts.comment } : {}),
+    initiatedByMerchant: false,
+    actorType: RefundAuditActorType.CUSTOMER,
+    actorUserId: opts.userId,
+    paymentReference: refs.paymentReference,
+    externalReference: refs.externalReference,
   });
 
+  const label = orderDisplayLabel({ id: order.id, orderNumber: order.orderNumber });
   await appendSupportSystemMessage({
     businessId: opts.businessId,
     orderId: opts.orderId,
     userId: opts.userId,
-    text: `Заявка на возврат денег по заказу ${orderDisplayLabel(order)}${opts.comment?.trim() ? `.\n\n${opts.comment.trim()}` : "."}`,
+    text: `Заявка на возврат денег по заказу ${label}${opts.comment?.trim() ? `.\n\n${opts.comment.trim()}` : "."}`,
   });
 
-  void createMerchantNotification({
+  void notifyMerchantRefundEvent({
     businessId: opts.businessId,
-    kind: "SUPPORT_TICKET",
-    title: "Заявка на возврат денег",
-    body: orderDisplayLabel(order),
-    href: "/admin/support",
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    kind: "customer_requested",
   });
 
+  void notifyCustomerRefundStatus({
+    businessId: opts.businessId,
+    userId: opts.userId,
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    status: RefundRequestStatus.REQUESTED,
+    orderTotal: order.total,
+  });
+
+  const row = await prisma.refundRequest.findUnique({ where: { id: created.id } });
+  return { ok: true, row };
+}
+
+export async function createRefundRequestByMerchant(opts: {
+  businessId: number;
+  orderId: number;
+  actorUserId: number;
+  reason?: string;
+  comment?: string;
+  merchantComment?: string;
+}): Promise<{ ok: true; row: unknown } | { ok: false; statusCode: number; error: string }> {
+  const order = await loadRefundOrderForBusiness(opts.businessId, opts.orderId);
+  if (!order) {
+    return { ok: false, statusCode: 404, error: "Заказ не найден" };
+  }
+
+  const eligible = await assertRefundOrderEligible(order);
+  if (!eligible.ok) return eligible;
+
+  if (order.buyerUserId == null) {
+    return { ok: false, statusCode: 400, error: "У заказа нет покупателя" };
+  }
+
+  const active = await findActiveRefundRequest(opts.businessId, opts.orderId);
+  if (active) {
+    return {
+      ok: false,
+      statusCode: 400,
+      error: "Заявка на возврат денег уже в работе",
+    };
+  }
+
+  const refs = refundPaymentRefs(order);
+  const note = opts.merchantComment?.trim() || opts.comment?.trim() || opts.reason?.trim();
+  const merchantCreatePayload: {
+    businessId: number;
+    orderId: number;
+    userId: number;
+    reason: string;
+    initiatedByMerchant: true;
+    actorType: typeof RefundAuditActorType.MERCHANT;
+    actorUserId: number;
+    paymentReference: string | null;
+    externalReference: string;
+    comment?: string | null;
+  } = {
+    businessId: opts.businessId,
+    orderId: opts.orderId,
+    userId: order.buyerUserId,
+    reason: opts.reason ?? "Инициировано магазином",
+    initiatedByMerchant: true,
+    actorType: RefundAuditActorType.MERCHANT,
+    actorUserId: opts.actorUserId,
+    paymentReference: refs.paymentReference,
+    externalReference: refs.externalReference,
+  };
+  if (opts.comment !== undefined) {
+    merchantCreatePayload.comment = opts.comment;
+  } else if (note) {
+    merchantCreatePayload.comment = note;
+  }
+  const created = await createRefundRequestRow(merchantCreatePayload);
+
+  const label = orderDisplayLabel({ id: order.id, orderNumber: order.orderNumber });
+  await appendSupportSystemMessage({
+    businessId: opts.businessId,
+    orderId: opts.orderId,
+    userId: order.buyerUserId,
+    text: `Магазин открыл заявку на возврат по заказу ${label}.${note ? `\n\n${note}` : ""}`,
+  });
+
+  void notifyCustomerRefundStatus({
+    businessId: opts.businessId,
+    userId: order.buyerUserId,
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    status: RefundRequestStatus.REQUESTED,
+    orderTotal: order.total,
+  });
+
+  void notifyMerchantRefundEvent({
+    businessId: opts.businessId,
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    kind: "created",
+    initiatedByMerchant: true,
+  });
+
+  const row = await prisma.refundRequest.findUnique({ where: { id: created.id } });
   return { ok: true, row };
 }
 
 function allowedCancelTransition(
   from: CancelRequestStatus,
-  to: CancelRequestStatus
+  to: CancelRequestStatus,
 ): boolean {
   if (from === to) return true;
-  return from === CancelRequestStatus.PENDING && (to === CancelRequestStatus.APPROVED || to === CancelRequestStatus.REJECTED);
+  return (
+    from === CancelRequestStatus.PENDING &&
+    (to === CancelRequestStatus.APPROVED || to === CancelRequestStatus.REJECTED)
+  );
 }
 
 function allowedRefundTransition(
   from: RefundRequestStatus,
-  to: RefundRequestStatus
+  to: RefundRequestStatus,
 ): boolean {
   const m: Record<RefundRequestStatus, RefundRequestStatus[]> = {
     REQUESTED: ["REVIEWING", "APPROVED", "REJECTED"],
@@ -246,6 +395,37 @@ function allowedRefundTransition(
     REFUNDED: [],
   };
   return m[from]?.includes(to) ?? false;
+}
+
+async function resolveRefundCompletionForRow(
+  existing: {
+    id: number;
+    businessId: number;
+    orderId: number;
+    paymentReference: string | null;
+    order: { paymentId: string | null };
+  },
+  amountSom: number,
+  methodWire: RefundMethodWire,
+  merchantComment: string | null | undefined,
+): Promise<
+  | {
+      ok: true;
+      refundMethod: RefundMethod;
+      refundReference: string | null;
+      transactionReference: string | null;
+    }
+  | { ok: false; statusCode: number; error: string }
+> {
+  return resolveRefundCompletion({
+    businessId: existing.businessId,
+    orderId: existing.orderId,
+    paymentReference: existing.paymentReference,
+    orderPaymentId: existing.order.paymentId,
+    amountSom,
+    methodWire,
+    merchantComment,
+  });
 }
 
 export async function patchCancelRequestMerchant(opts: {
@@ -296,18 +476,18 @@ export async function patchCancelRequestMerchant(opts: {
     await archiveSupportThreads(
       existing.businessId,
       existing.orderId,
-      existing.userId
+      existing.userId,
     );
     const { onOrderCancelled } = await import("./orderInventoryHooks.js");
     await onOrderCancelled(existing.orderId, existing.order.status);
   }
 
   const msg =
-      opts.status === CancelRequestStatus.APPROVED
-        ? `Отмена заказа ${orderDisplayLabel(existing.order)} одобрена.${opts.merchantComment?.trim() ? `\n\n${opts.merchantComment.trim()}` : ""}`
-        : opts.status === CancelRequestStatus.REJECTED
-          ? `Заявка на отмену отклонена.${opts.merchantComment?.trim() ? `\n\n${opts.merchantComment.trim()}` : ""}`
-          : null;
+    opts.status === CancelRequestStatus.APPROVED
+      ? `Отмена заказа ${orderDisplayLabel(existing.order)} одобрена.${opts.merchantComment?.trim() ? `\n\n${opts.merchantComment.trim()}` : ""}`
+      : opts.status === CancelRequestStatus.REJECTED
+        ? `Заявка на отмену отклонена.${opts.merchantComment?.trim() ? `\n\n${opts.merchantComment.trim()}` : ""}`
+        : null;
 
   if (msg) {
     await appendSupportSystemMessage({
@@ -327,6 +507,8 @@ export async function patchRefundRequestMerchant(opts: {
   status: RefundRequestStatus;
   merchantComment?: string | null;
   refundAmount?: number | null;
+  refundMethod?: RefundMethodWire | null;
+  actorUserId?: number | null;
 }): Promise<{ ok: true; row: unknown } | { ok: false; statusCode: number; error: string }> {
   const existing = await prisma.refundRequest.findFirst({
     where: { id: opts.refundId, businessId: opts.businessId },
@@ -335,81 +517,245 @@ export async function patchRefundRequestMerchant(opts: {
   if (!existing) {
     return { ok: false, statusCode: 404, error: "Не найдено" };
   }
+
+  if (existing.status === RefundRequestStatus.REFUNDED) {
+    return { ok: false, statusCode: 409, error: "Возврат уже выполнен" };
+  }
+
   if (!allowedRefundTransition(existing.status, opts.status)) {
     return { ok: false, statusCode: 400, error: "Неверный переход статуса" };
   }
 
-  let refundAmount: number | null | undefined = undefined;
-  if (opts.refundAmount !== undefined) {
-    if (opts.refundAmount === null) refundAmount = null;
-    else if (
-      Number.isFinite(opts.refundAmount) &&
-      opts.refundAmount >= 0 &&
-      Number.isInteger(opts.refundAmount)
-    ) {
-      refundAmount = opts.refundAmount;
-    } else {
-      return { ok: false, statusCode: 400, error: "Неверная сумма возврата" };
-    }
+  const orderEligible = await assertRefundOrderEligible(
+    {
+      id: existing.orderId,
+      businessId: existing.businessId,
+      status: existing.order.status,
+      total: existing.order.total,
+      paymentId: existing.order.paymentId,
+      buyerUserId: existing.userId,
+      orderNumber: existing.order.orderNumber,
+    },
+    opts.status === RefundRequestStatus.REFUNDED
+      ? undefined
+      : { buyerUserId: existing.userId },
+  );
+  if (opts.status === RefundRequestStatus.REFUNDED && !orderEligible.ok) {
+    return orderEligible;
   }
 
-  const row = await prisma.$transaction(async (tx) => {
-    const updateData: {
-      status: RefundRequestStatus;
-      merchantComment?: string | null;
-      refundAmount?: number | null;
-    } = { status: opts.status };
-    if (opts.merchantComment !== undefined) {
-      updateData.merchantComment =
-        opts.merchantComment?.trim().slice(0, 2000) || null;
+  let resolvedAmount: number | undefined;
+  if (opts.status === RefundRequestStatus.REFUNDED) {
+    const amountInput =
+      opts.refundAmount !== undefined && opts.refundAmount !== null
+        ? opts.refundAmount
+        : existing.refundAmount ?? existing.order.total;
+    const validated = validateRefundAmount(amountInput, existing.order.total);
+    if (!validated.ok) {
+      return { ok: false, statusCode: 400, error: validated.error };
     }
-    if (refundAmount !== undefined) {
-      updateData.refundAmount = refundAmount;
+    resolvedAmount = validated.amount;
+  } else if (opts.refundAmount !== undefined && opts.refundAmount !== null) {
+    const validated = validateRefundAmount(opts.refundAmount, existing.order.total);
+    if (!validated.ok) {
+      return { ok: false, statusCode: 400, error: validated.error };
     }
-    const updated = await tx.refundRequest.update({
-      where: { id: existing.id },
-      data: updateData,
-    });
+    resolvedAmount = validated.amount;
+  }
 
-    if (opts.status === RefundRequestStatus.REFUNDED) {
-      await tx.order.update({
-        where: { id: existing.orderId },
-        data: { status: "CANCELLED", paymentId: null },
+  let completion:
+    | {
+        refundMethod: RefundMethod;
+        refundReference: string | null;
+        transactionReference: string | null;
+      }
+    | undefined;
+
+  if (opts.status === RefundRequestStatus.REFUNDED) {
+    const methodWire = opts.refundMethod ?? "AUTO";
+    const resolved = await resolveRefundCompletionForRow(
+      existing,
+      resolvedAmount!,
+      methodWire,
+      opts.merchantComment,
+    );
+    if (!resolved.ok) return resolved;
+    completion = {
+      refundMethod: resolved.refundMethod,
+      refundReference: resolved.refundReference,
+      transactionReference: resolved.transactionReference,
+    };
+  }
+
+  const priorOrderStatus = existing.order.status;
+  let updatedRow: typeof existing;
+
+  try {
+    updatedRow = await prisma.$transaction(async (tx) => {
+      if (opts.status === RefundRequestStatus.REFUNDED) {
+        const already = await tx.refundRequest.findFirst({
+          where: {
+            orderId: existing.orderId,
+            status: RefundRequestStatus.REFUNDED,
+            id: { not: existing.id },
+          },
+          select: { id: true },
+        });
+        if (already) {
+          throw new Error("REFUND_ALREADY_COMPLETED");
+        }
+      }
+
+      const updateResult = await tx.refundRequest.updateMany({
+        where: {
+          id: existing.id,
+          businessId: opts.businessId,
+          status: existing.status,
+        },
+        data: {
+          status: opts.status,
+          ...(opts.merchantComment !== undefined
+            ? {
+                merchantComment:
+                  opts.merchantComment?.trim().slice(0, 2000) || null,
+              }
+            : {}),
+          ...(resolvedAmount !== undefined ? { refundAmount: resolvedAmount } : {}),
+          ...(completion
+            ? {
+                refundMethod: completion.refundMethod,
+                refundReference: completion.refundReference,
+                transactionReference: completion.transactionReference,
+                ...(opts.status === RefundRequestStatus.REFUNDED
+                  ? { refundedAt: new Date() }
+                  : {}),
+                paymentReference:
+                  existing.paymentReference ??
+                  existing.order.paymentId?.trim() ??
+                  null,
+              }
+            : {}),
+        },
       });
-    }
 
-    return updated;
-  });
+      if (updateResult.count === 0) {
+        throw new Error("REFUND_CONFLICT");
+      }
+
+      if (opts.status === RefundRequestStatus.REFUNDED) {
+        await tx.order.update({
+          where: { id: existing.orderId, status: { not: "CANCELLED" } },
+          data: { status: "CANCELLED", paymentId: null },
+        });
+      }
+
+      const updated = await tx.refundRequest.findUniqueOrThrow({
+        where: { id: existing.id },
+        include: { order: true },
+      });
+
+      await appendRefundAuditLog(tx, {
+        refundRequestId: existing.id,
+        businessId: existing.businessId,
+        orderId: existing.orderId,
+        actorType: RefundAuditActorType.MERCHANT,
+        actorUserId: opts.actorUserId ?? null,
+        fromStatus: existing.status,
+        toStatus: opts.status,
+        refundAmount: resolvedAmount ?? existing.refundAmount,
+        refundMethod: completion?.refundMethod ?? updated.refundMethod,
+        paymentReference:
+          updated.paymentReference ?? updated.order.paymentId ?? null,
+        merchantNote: opts.merchantComment ?? updated.merchantComment,
+      });
+
+      return updated;
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === "REFUND_ALREADY_COMPLETED" || msg === "REFUND_CONFLICT") {
+      return { ok: false, statusCode: 409, error: "Возврат уже выполнен или статус изменился" };
+    }
+    throw e;
+  }
 
   if (opts.status === RefundRequestStatus.REFUNDED) {
     await archiveSupportThreads(
       existing.businessId,
       existing.orderId,
-      existing.userId
+      existing.userId,
     );
     const { onOrderCancelled } = await import("./orderInventoryHooks.js");
-    await onOrderCancelled(existing.orderId, existing.order.status);
+    await onOrderCancelled(existing.orderId, priorOrderStatus);
+    await applyRefundReversals(existing.orderId);
+
+    void notifyCustomerRefundStatus({
+      businessId: existing.businessId,
+      userId: existing.userId,
+      orderId: existing.orderId,
+      orderNumber: existing.order.orderNumber,
+      status: RefundRequestStatus.REFUNDED,
+      refundAmount: resolvedAmount ?? existing.refundAmount,
+      orderTotal: existing.order.total,
+    });
+
+    void notifyMerchantRefundEvent({
+      businessId: existing.businessId,
+      orderId: existing.orderId,
+      orderNumber: existing.order.orderNumber,
+      kind: "completed",
+      refundAmount: resolvedAmount ?? existing.refundAmount,
+    });
+  } else {
+    void notifyCustomerRefundStatus({
+      businessId: existing.businessId,
+      userId: existing.userId,
+      orderId: existing.orderId,
+      orderNumber: existing.order.orderNumber,
+      status: opts.status,
+      refundAmount: resolvedAmount ?? existing.refundAmount,
+      orderTotal: existing.order.total,
+    });
   }
 
   const statusMsg: Partial<Record<RefundRequestStatus, string>> = {
-      REVIEWING: "Заявка на возврат денег принята на проверку.",
-      APPROVED: "Возврат денег одобрен. Ожидайте зачисления.",
-      REJECTED: "Заявка на возврат денег отклонена.",
-      REFUNDED: `Возврат ${refundAmount ?? existing.refundAmount ?? existing.order.total} сом выполнен.`,
+    REVIEWING: "Заявка на возврат денег принята на проверку.",
+    APPROVED: "Возврат денег одобрен. Ожидайте зачисления.",
+    REJECTED: "Заявка на возврат денег отклонена.",
+    REFUNDED: `Возврат ${resolvedAmount ?? existing.refundAmount ?? existing.order.total} сом выполнен.`,
   };
   const base = statusMsg[opts.status];
   if (base) {
+    const methodNote =
+      opts.status === RefundRequestStatus.REFUNDED && completion
+        ? `\n\nСпособ: ${completion.refundMethod}`
+        : "";
     await appendSupportSystemMessage({
       businessId: existing.businessId,
       orderId: existing.orderId,
       userId: existing.userId,
       text: opts.merchantComment?.trim()
-        ? `${base}\n\n${opts.merchantComment.trim()}`
-        : base,
+        ? `${base}${methodNote}\n\n${opts.merchantComment.trim()}`
+        : `${base}${methodNote}`,
     });
   }
 
-  return { ok: true, row };
+  return { ok: true, row: updatedRow };
+}
+
+export async function listRefundAuditLogs(
+  businessId: number,
+  refundId: number,
+): Promise<unknown[]> {
+  const row = await prisma.refundRequest.findFirst({
+    where: { id: refundId, businessId },
+    select: { id: true },
+  });
+  if (!row) return [];
+  return prisma.refundAuditLog.findMany({
+    where: { refundRequestId: refundId, businessId },
+    orderBy: { createdAt: "asc" },
+  });
 }
 
 export function isCancelStatus(s: string): s is CancelRequestStatus {
@@ -418,4 +764,8 @@ export function isCancelStatus(s: string): s is CancelRequestStatus {
 
 export function isRefundStatus(s: string): s is RefundRequestStatus {
   return (Object.values(RefundRequestStatus) as string[]).includes(s);
+}
+
+export function isRefundMethod(s: string): s is RefundMethodWire {
+  return parseRefundMethod(s) != null;
 }

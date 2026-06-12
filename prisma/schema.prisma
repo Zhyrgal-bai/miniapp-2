@@ -194,6 +194,7 @@ model Business {
   returnRequests  ReturnRequest[]
   cancelRequests  CancelRequest[]
   refundRequests  RefundRequest[]
+  refundAuditLogs RefundAuditLog[]
   productStocks   ProductStock[]
   stockMovements  StockMovement[]
   diningTables    DiningTable[]
@@ -465,6 +466,8 @@ model Category {
   parent   Category? @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Cascade)
   children Category[] @relation("CategoryTree")
 
+  sortOrder Int @default(0)
+
   config Json? @default("{}")
 
   products Product[]
@@ -474,6 +477,7 @@ model Category {
 
   @@index([businessId])
   @@index([businessId, parentId])
+  @@index([businessId, parentId, sortOrder])
   @@index([parentId])
   @@unique([businessId, parentId, name])
 }
@@ -501,6 +505,8 @@ model Product {
   /// Kitchen prep duration in minutes (Phase 6D reservation preorders).
   preparationMinutes Int?
 
+  status ProductStatus @default(ACTIVE)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -509,6 +515,14 @@ model Product {
 
   @@index([businessId])
   @@index([categoryId])
+  @@index([businessId, status])
+  @@index([businessId, categoryId, status])
+}
+
+enum ProductStatus {
+  ACTIVE
+  DRAFT
+  ARCHIVED
 }
 
 enum OrderStatus {
@@ -575,6 +589,18 @@ enum RefundRequestStatus {
   APPROVED
   REJECTED
   REFUNDED
+}
+
+enum RefundMethod {
+  MANUAL
+  FINIK
+  AUTO
+}
+
+enum RefundAuditActorType {
+  CUSTOMER
+  MERCHANT
+  SYSTEM
 }
 
 enum DeliveryMode {
@@ -849,10 +875,43 @@ model RefundRequest {
   merchantComment String?
   refundAmount    Int?
   status          RefundRequestStatus @default(REQUESTED)
+  /// How money was returned (nullable = legacy row before P1).
+  refundMethod         RefundMethod?
+  /// Snapshot of order.paymentId at refund time.
+  paymentReference     String?
+  transactionReference String?
+  refundReference      String?
+  externalReference    String?
+  initiatedByMerchant  Boolean             @default(false)
+  refundedAt           DateTime?
+  auditLogs            RefundAuditLog[]
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
   @@index([businessId, status])
+  @@index([orderId])
+  @@index([orderId, status])
+}
+
+model RefundAuditLog {
+  id              Int                  @id @default(autoincrement())
+  refundRequestId Int
+  refundRequest   RefundRequest        @relation(fields: [refundRequestId], references: [id], onDelete: Cascade)
+  businessId      Int
+  business        Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orderId         Int
+  actorType       RefundAuditActorType
+  actorUserId     Int?
+  fromStatus      RefundRequestStatus?
+  toStatus        RefundRequestStatus
+  refundAmount    Int?
+  refundMethod    RefundMethod?
+  paymentReference String?
+  merchantNote    String?
+  createdAt       DateTime             @default(now())
+
+  @@index([refundRequestId])
+  @@index([businessId, createdAt])
   @@index([orderId])
 }
 

@@ -9,7 +9,7 @@ import {
   schemaKeysFromProductSchema,
   stripProductAttributesToSchema,
 } from "@repo-shared/productAttributeNormalization";
-import type { Category, Product } from "../../types";
+import type { Category, Product, ProductStatus } from "../../types";
 import { DynamicVariantEditor } from "./DynamicVariantEditor";
 import { ClothingVariantEditor } from "./ClothingVariantEditor";
 import {
@@ -90,12 +90,14 @@ export default function ProductEditModal({
     resolved: businessTypeReady,
   } = useResolvedBusinessType();
   const [attributes, setAttributes] = useState<Record<string, unknown>>({});
+  const [status, setStatus] = useState<ProductStatus>("ACTIVE");
 
   const rootCategories = useMemo(() => categoryRoots(categories), [categories]);
 
   const resetFromProduct = useCallback((p: Product) => {
     setName(p.name);
     setPrice(p.price);
+    setStatus(p.status ?? "ACTIVE");
     const subId = p.categoryId ?? p.category?.id ?? "";
     const parentId = p.category?.parentId ?? p.category?.parent?.id ?? "";
     setMainCategoryId(parentId);
@@ -289,6 +291,7 @@ export default function ProductEditModal({
         name: name.trim(),
         price: Math.round(priceNum),
         categoryId,
+        status,
         isNew,
         isPopular,
         isSale,
@@ -426,6 +429,21 @@ export default function ProductEditModal({
                 mainSelectId="em-main-cat"
                 subSelectId="em-sub-cat"
               />
+              <div className="admin-form-section">
+                <label className="admin-field-label" htmlFor="em-status">
+                  Статус
+                </label>
+                <select
+                  id="em-status"
+                  className="admin-select"
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as ProductStatus)}
+                >
+                  <option value="ACTIVE">Активен (на витрине)</option>
+                  <option value="DRAFT">Черновик</option>
+                  <option value="ARCHIVED">В архиве</option>
+                </select>
+              </div>
               <div className="admin-form-section">
                 <span className="admin-field-label">Фильтры</span>
                 <div className="admin-sizes">
