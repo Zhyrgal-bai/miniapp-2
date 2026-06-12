@@ -23,14 +23,28 @@ export function getLegacyFinikCreatePaymentPath(): string {
   return p.startsWith("/") ? p : `/${p}`;
 }
 
-/** Official Acquiring beta (Finik / Averspay). */
+/** Normalize base URL; tolerate FINIK_API_URL ending with `/payment`. */
+function normalizeOfficialAcquiringBaseUrl(raw: string): string {
+  let url = raw.trim().replace(/\/$/, "");
+  if (url.endsWith("/payment")) {
+    url = url.slice(0, -"/payment".length);
+  }
+  if (url.endsWith("/v1/payment")) {
+    url = url.slice(0, -"/v1/payment".length);
+  }
+  return url.replace(/\/$/, "");
+}
+
+/** Official Acquiring (Finik / Averspay). FINIK_API_URL is an alias for base URL. */
 export function getOfficialAcquiringBaseUrl(): string {
-  return (
-    process.env.FINIK_OFFICIAL_ACQUIRING_BASE_URL ||
-    "https://beta.api.acquiring.averspay.kg"
-  )
-    .trim()
-    .replace(/\/$/, "");
+  const fromEnv =
+    process.env.FINIK_OFFICIAL_ACQUIRING_BASE_URL?.trim() ||
+    process.env.FINIK_API_URL?.trim() ||
+    "";
+  if (fromEnv !== "") {
+    return normalizeOfficialAcquiringBaseUrl(fromEnv);
+  }
+  return "https://beta.api.acquiring.averspay.kg";
 }
 
 export function getOfficialAcquiringCreatePath(): string {

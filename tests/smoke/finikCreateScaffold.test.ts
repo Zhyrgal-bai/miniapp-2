@@ -8,7 +8,11 @@ import {
   mockCreateAdapter,
   officialAcquiringCreateAdapter,
 } from "../../src/server/finik/index.js";
-import { getOfficialAcquiringCreatePath } from "../../src/server/finik/finikCreateConfig.js";
+import {
+  getOfficialAcquiringBaseUrl,
+  getOfficialAcquiringCreatePath,
+  getOfficialAcquiringCreateUrl,
+} from "../../src/server/finik/finikCreateConfig.js";
 import {
   normalizeLegacyFinikCreateResponse,
   normalizeOfficialFinikCreateResponse,
@@ -43,6 +47,17 @@ describe("finikCreateScaffold", () => {
   it("defaults FINIK_CREATE_API_MODE to legacy", () => {
     delete process.env.FINIK_CREATE_API_MODE;
     expect(getFinikCreateApiMode()).toBe("legacy");
+  });
+
+  it("FINIK_API_URL alias sets official base and create url", () => {
+    delete process.env.FINIK_OFFICIAL_ACQUIRING_BASE_URL;
+    process.env.FINIK_API_URL = "https://api.acquiring.averspay.kg/payment";
+    expect(getOfficialAcquiringBaseUrl()).toBe(
+      "https://api.acquiring.averspay.kg",
+    );
+    expect(getOfficialAcquiringCreateUrl()).toBe(
+      `https://api.acquiring.averspay.kg${getOfficialAcquiringCreatePath()}`,
+    );
   });
 
   it("invalid mode falls back to legacy", () => {
