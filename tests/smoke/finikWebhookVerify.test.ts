@@ -51,6 +51,7 @@ describe("finikWebhookVerify", () => {
     process.env.NODE_ENV = "production";
     process.env.FINIK_PRIVATE_KEY = privatePem;
     process.env.FINIK_PUBLIC_KEY = publicPem;
+    process.env.FINIK_WEBHOOK_PUBLIC_KEY = publicPem;
     process.env.FINIK_API_KEY = "api-key-test";
     reloadFinikKeysFromEnv();
 

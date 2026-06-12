@@ -68,11 +68,17 @@ export function extractFinikWebhookPaymentIds(
 
 function pickExternalId(body: Record<string, unknown>): string | null {
   const data = nestedDataRecord(body);
+  const fields =
+    typeof body.fields === "object" && body.fields !== null && !Array.isArray(body.fields)
+      ? (body.fields as Record<string, unknown>)
+      : null;
   const raw =
     body.external_id ??
     body.externalId ??
     data?.external_id ??
-    data?.externalId;
+    data?.externalId ??
+    fields?.external_id ??
+    fields?.externalId;
   if (raw == null) return null;
   const s = String(raw).trim();
   return s !== "" ? s : null;

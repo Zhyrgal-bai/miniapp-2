@@ -88,6 +88,7 @@ async function fetchOfficialStatusAtPath(input: {
       path: string;
       url: string;
       reason: FinikStatusAdapterAttempt["reason"];
+      missingAuthToken?: boolean;
     }
 > {
   const url = `${getOfficialAcquiringBaseUrl()}${input.path}`;
@@ -183,12 +184,19 @@ async function fetchOfficialStatusAtPath(input: {
       ...(input.businessId != null ? { businessId: input.businessId } : {}),
       ...(input.orderId != null ? { orderId: input.orderId } : {}),
     });
+    const missingAuthToken =
+      res.status === 403 &&
+      (rawBody.includes("Missing Authentication Token") ||
+        String(json.message ?? json.Message ?? "").includes(
+          "Missing Authentication Token",
+        ));
     return {
       ok: false,
       httpStatus: res.status,
       path: input.path,
       url,
       reason: "http_error",
+      ...(missingAuthToken ? { missingAuthToken: true } : {}),
     };
   }
 
@@ -292,6 +300,7 @@ export async function fetchOfficialFinikPaymentStatus(
         url: out.url,
         ...(out.httpStatus != null ? { httpStatus: out.httpStatus } : {}),
         reason: out.reason,
+        ...(out.missingAuthToken ? { missingAuthToken: true } : {}),
       });
       if (out.httpStatus != null) {
         lastHttpStatus = out.httpStatus;
@@ -354,6 +363,41 @@ export async function fetchOfficialFinikPaymentStatus(
       error: "Ошибка сети при запросе статуса Finik Official API",
       apiMode: "official",
       retryable: true,
+    };
+  }
+
+  const httpErrors = attempts.filter((a) => a.reason === "http_error");
+  const allMissingAuthToken =
+    httpErrors.length > 0 &&
+    httpErrors.every((a) => a.missingAuthToken === true);
+
+  if (allMissingAuthToken) {
+    logFinikStatusAdapterFailed({
+      apiMode: "official",
+      paymentId: pid,
+      attempts,
+      finalReason: "official_get_not_supported",
+      ...(queryContext?.businessId != null
+        ? { businessId: queryContext.businessId }
+        : {}),
+      ...(queryContext?.orderId != null ? { orderId: queryContext.orderId } : {}),
+    });
+    logFinikStatusResult({
+      apiMode: "official",
+      ok: false,
+      paymentId: pid,
+      ...(queryContext?.businessId != null
+        ? { businessId: queryContext.businessId }
+        : {}),
+      ...(queryContext?.orderId != null ? { orderId: queryContext.orderId } : {}),
+    });
+    return {
+      ok: false,
+      error:
+        "Finik Official: статус платежа подтверждается через webhook (GET status API недоступен)",
+      apiMode: "official",
+      retryable: false,
+      code: "finik_official_status_not_available",
     };
   }
 

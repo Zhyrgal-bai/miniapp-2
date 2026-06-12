@@ -486,6 +486,27 @@ async function findOrderByFinikExternalId(
   return mapPrismaOrderToFinikRow(order);
 }
 
+async function findOrderByFinikAmountFallback(
+  businessId: number,
+  amount: number | null,
+): Promise<FinikOrderRow | null> {
+  if (amount == null || !Number.isFinite(amount)) return null;
+  const total = Math.round(amount);
+  const orders = await prisma.order.findMany({
+    where: {
+      businessId,
+      paymentMethod: "finik",
+      status: "NEW",
+      total,
+    },
+    orderBy: { createdAt: "desc" },
+    take: 2,
+    include: { buyerUser: true },
+  });
+  if (orders.length !== 1) return null;
+  return mapPrismaOrderToFinikRow(orders[0]!);
+}
+
 async function resolveFinikWebhookOrder(
   businessId: number,
   parsed: ReturnType<typeof parseFinikWebhookPayload>,
@@ -495,7 +516,9 @@ async function resolveFinikWebhookOrder(
     parsed.paymentIdCandidates,
   );
   if (byPayment) return byPayment;
-  return findOrderByFinikExternalId(businessId, parsed.externalId);
+  const byExternal = await findOrderByFinikExternalId(businessId, parsed.externalId);
+  if (byExternal) return byExternal;
+  return findOrderByFinikAmountFallback(businessId, parsed.amount);
 }
 
 export function isFinikOrderPaymentMethod(
@@ -523,7 +546,7 @@ const FINIK_PAID_ORDER_STATUSES = new Set([
 
 async function applyFinikPaymentSuccess(
   order: FinikOrderRow,
-  opts?: { expectedAmount?: number | null }
+  opts?: { expectedAmount?: number | null; finikTransactionId?: string | null },
 ): Promise<
   | { ok: true; duplicate: boolean; order: FinikOrderRow }
   | { ok: false; error: string; statusCode: number }
@@ -548,9 +571,15 @@ async function applyFinikPaymentSuccess(
     return { ok: false, statusCode: 400, error: "Order cancelled" };
   }
 
+  const finikTx = opts?.finikTransactionId?.trim() ?? "";
   const updated = await prisma.order.update({
     where: { id: order.id },
-    data: { status: "CONFIRMED" },
+    data: {
+      status: "CONFIRMED",
+      ...(finikTx !== "" && finikTx !== (order.paymentId?.trim() ?? "")
+        ? { paymentId: finikTx }
+        : {}),
+    },
     include: { buyerUser: true },
   });
 
@@ -1149,7 +1178,10 @@ async function handleFinikWebhookForBusiness(
         reservationId: order.reservationId,
         buyerUser: order.buyerUser,
       },
-      { expectedAmount: parsed.amount ?? order.total }
+      {
+        expectedAmount: parsed.amount ?? order.total,
+        finikTransactionId: parsed.paymentId,
+      },
     );
 
     if (!applied.ok) {

@@ -19,4 +19,5 @@ export type FinikPaymentStatusResult =
       error: string;
       apiMode?: FinikStatusApiMode;
       retryable?: boolean;
+      code?: string;
     };

@@ -48,4 +48,35 @@ describe("officialAcquiringStatusAdapter", () => {
       signature: "sig",
     });
   });
+
+  it("returns status_not_available on Missing Authentication Token 403", async () => {
+    process.env.FINIK_RSA_PRIVATE_KEY =
+      "-----BEGIN PRIVATE KEY-----\\nX\\n-----END PRIVATE KEY-----";
+    process.env.FINIK_API_URL = "https://api.acquiring.averspay.kg/payment";
+    delete process.env.FINIK_OFFICIAL_ACQUIRING_STATUS_PATH;
+
+    vi.spyOn(finikRsaSigning, "signFinikOfficialGetRequest").mockResolvedValue({
+      signature: "sig",
+      timestamp: "1730000000000",
+    });
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ message: "Missing Authentication Token" }), {
+          status: 403,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    const out = await fetchOfficialFinikPaymentStatus(
+      { finikApiKey: "test-key", finikAccountId: "acct", finikSecret: null },
+      "1419bec1-0000-0000-0000-000000000099",
+    );
+
+    expect(out.ok).toBe(false);
+    if (!out.ok) {
+      expect(out.code).toBe("finik_official_status_not_available");
+    }
+  });
 });

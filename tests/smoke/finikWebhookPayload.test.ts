@@ -42,4 +42,14 @@ describe("finikWebhookPayload", () => {
     expect(p.externalId).toBe("5:42");
     expect(p.amount).toBe(1200);
   });
+
+  it("parses externalId from fields object", () => {
+    const p = parseFinikWebhookPayload({
+      transactionId: "tx-1",
+      status: "SUCCEEDED",
+      amount: 300,
+      fields: { externalId: "3:88", amount: 300 },
+    });
+    expect(p.externalId).toBe("3:88");
+  });
 });

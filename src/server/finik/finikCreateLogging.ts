@@ -147,6 +147,7 @@ export type FinikStatusAdapterAttempt = {
   url: string;
   httpStatus?: number;
   reason: "http_error" | "parse_failed" | "signing_failed" | "network_error";
+  missingAuthToken?: boolean;
 };
 
 export function logFinikStatusAdapterFailed(fields: {
