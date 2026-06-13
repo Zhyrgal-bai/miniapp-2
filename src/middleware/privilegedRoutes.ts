@@ -1,6 +1,10 @@
 import type { Request, Response, NextFunction } from "express";
 import { requireVerifiedTelegram } from "./verifiedTelegramAuth.js";
 import { storefrontBookingRequiresVerifiedTelegram, storefrontReservationGuestRequiresVerifiedTelegram } from "../shared/storefrontPublicPaths.js";
+import {
+  parseProductListQuery,
+  queryRequiresMerchantCatalogAccess,
+} from "../shared/catalogTypes.js";
 
 const MERCHANT_WRITE_PREFIXES = [
   "/products",
@@ -73,7 +77,11 @@ export function routeRequiresVerifiedTelegram(req: Request): boolean {
 
   if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
     if (isMerchantStaffReadPath(path)) return true;
-    if (path === "/products" || /^\/products\/\d+$/.test(path)) return false;
+    if (path === "/products") {
+      const query = parseProductListQuery(req.query as Record<string, unknown>);
+      return queryRequiresMerchantCatalogAccess(query);
+    }
+    if (/^\/products\/\d+$/.test(path)) return false;
     if (path === "/categories") return false;
     return false;
   }

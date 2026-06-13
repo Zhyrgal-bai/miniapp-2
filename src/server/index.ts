@@ -17,7 +17,10 @@ import {
   uploadImageToCloudinary,
   uploadReceiptToCloudinary,
 } from "./cloudinary.js";
-import { verifiedTelegramIdFromRequest } from "../middleware/verifiedTelegramAuth.js";
+import {
+  runRequireTelegramAuth,
+  verifiedTelegramIdFromRequest,
+} from "../middleware/verifiedTelegramAuth.js";
 import { listMerchantOwnedBusinesses } from "./merchantDashboard.js";
 import { listPlatformOwnerBusinesses } from "./platformMyBusinesses.js";
 import {
@@ -5472,6 +5475,8 @@ app.get("/products/:id", async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Товар не найден" });
     }
     if (!isProductVisibleOnStorefront(product.status)) {
+      const authed = await runRequireTelegramAuth(req, res);
+      if (!authed) return;
       const canManage = await merchantHasCatalogEdit(req);
       if (!canManage) {
         return res.status(404).json({ error: "Товар не найден" });

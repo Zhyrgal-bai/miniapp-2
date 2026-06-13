@@ -9,11 +9,17 @@ import {
 } from "../../frontend/src/permissions/merchantPermissions.js";
 import type { Request } from "express";
 
-function mockReq(method: string, path: string, initDataUser?: string): Request {
+function mockReq(
+  method: string,
+  path: string,
+  initDataUser?: string,
+  query?: Record<string, string>,
+): Request {
   return {
     method,
     path,
     url: path,
+    query: query ?? {},
     headers: initDataUser
       ? {}
       : {},
@@ -28,10 +34,33 @@ describe("merchant auth hardening", () => {
     ).toBe(true);
   });
 
-  it("GET /products is public catalog", () => {
+  it("GET /products is public catalog for storefront default (ACTIVE only)", () => {
     expect(routeRequiresVerifiedTelegram(mockReq("GET", "/products"))).toBe(
       false,
     );
+    expect(
+      routeRequiresVerifiedTelegram(
+        mockReq("GET", "/products", undefined, { status: "ACTIVE" }),
+      ),
+    ).toBe(false);
+  });
+
+  it("GET /products with merchant status filters requires verified telegram", () => {
+    expect(
+      routeRequiresVerifiedTelegram(
+        mockReq("GET", "/products", undefined, { status: "all" }),
+      ),
+    ).toBe(true);
+    expect(
+      routeRequiresVerifiedTelegram(
+        mockReq("GET", "/products", undefined, { status: "ARCHIVED" }),
+      ),
+    ).toBe(true);
+    expect(
+      routeRequiresVerifiedTelegram(
+        mockReq("GET", "/products", undefined, { status: "DRAFT" }),
+      ),
+    ).toBe(true);
   });
 
   it("GET /orders requires verified telegram (admin list)", () => {

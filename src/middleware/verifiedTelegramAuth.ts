@@ -2,6 +2,35 @@ import type { NextFunction, Request, Response } from "express";
 import { requireTelegramAuth } from "./requireTelegramAuth.js";
 import { logAuthReject } from "../server/structuredLog.js";
 
+/**
+ * Run `requireTelegramAuth` inline (for routes that skip global gate but need staff auth).
+ * Resolves true when initData verified and req.platformTelegramId is set; false if response sent.
+ */
+export function runRequireTelegramAuth(
+  req: Request,
+  res: Response,
+): Promise<boolean> {
+  if (verifiedTelegramIdFromRequest(req)) return Promise.resolve(true);
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const settle = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      resolve(ok);
+    };
+
+    type ResEnd = typeof res.end;
+    const origEnd = res.end.bind(res) as ResEnd;
+    res.end = ((...args: Parameters<ResEnd>) => {
+      if (!settled) settle(false);
+      return origEnd(...args);
+    }) as ResEnd;
+
+    void requireTelegramAuth(req, res, () => settle(true));
+  });
+}
+
 function isProduction(): boolean {
   return process.env.NODE_ENV === "production";
 }
