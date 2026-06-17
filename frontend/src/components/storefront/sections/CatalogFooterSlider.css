@@ -115,6 +115,11 @@
   width: 100%;
 }
 
+.sf-product-rail__track--marquee {
+  width: max-content;
+  justify-content: flex-start;
+}
+
 .sf-product-rail__track--animate {
   animation: sf-product-rail-marquee var(--sf-rail-dur) linear infinite;
 }

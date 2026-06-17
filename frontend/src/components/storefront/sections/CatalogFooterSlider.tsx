@@ -16,7 +16,7 @@ import { buildCloudinaryResponsiveUrl } from "../../../utils/cloudinaryTransform
 import { getDiscountPercent, getEffectivePrice, getPrimaryImage } from "../../../utils/product";
 import "./CatalogFooterSlider.css";
 
-/** JS marquee speed — reliable in Telegram WebView (CSS transform animation often stalls). */
+/** JS marquee speed — transform animation works in Telegram WebView. */
 const RAIL_SCROLL_PX_PER_SEC: Record<CatalogFooterRailSpeed, number> = {
   slow: 28,
   medium: 44,
@@ -173,7 +173,8 @@ export function CatalogFooterSlider(props: {
   }, [cfg?.enabled, props.catalogProducts]);
 
   const count = resolved.length;
-  const viewportRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const offsetRef = useRef(0);
 
   const [paused, setPaused] = useState(false);
 
@@ -197,42 +198,39 @@ export function CatalogFooterSlider(props: {
     return resolved;
   }, [resolved, count, rail.autoMove, rail.infiniteLoop, reducedMotion]);
 
+  /** Transform-based marquee — does not depend on scrollLeft or overflow-x:auto. */
   useEffect(() => {
-    if (!canAnimate || rail.direction !== "right") return;
-    const vp = viewportRef.current;
-    if (!vp) return;
-    const loopW = vp.scrollWidth / 2;
-    if (loopW > vp.clientWidth) {
-      vp.scrollLeft = loopW;
+    if (!canAnimate) {
+      const track = trackRef.current;
+      if (track) track.style.transform = "";
+      offsetRef.current = 0;
+      return;
     }
-  }, [canAnimate, rail.direction, loopSlides.length]);
 
-  /** Scroll-based marquee — works in TMA where CSS keyframe transform may not run. */
-  useEffect(() => {
-    if (!canAnimate) return;
-    const vp = viewportRef.current;
-    if (!vp) return;
+    const track = trackRef.current;
+    if (!track) return;
 
     let rafId = 0;
     let lastTs = 0;
-    const dir = rail.direction === "right" ? -1 : 1;
+    const dir = rail.direction === "right" ? 1 : -1;
     const speed = RAIL_SCROLL_PX_PER_SEC[rail.speed];
 
     const step = (ts: number) => {
-      const el = viewportRef.current;
+      const el = trackRef.current;
       if (!el) return;
 
       if (!paused) {
         const dt = lastTs > 0 ? Math.min((ts - lastTs) / 1000, 0.05) : 0;
         if (dt > 0) {
-          el.scrollLeft += dir * speed * dt;
           const loopW = el.scrollWidth / 2;
-          if (loopW > el.clientWidth) {
-            if (dir > 0 && el.scrollLeft >= loopW) {
-              el.scrollLeft -= loopW;
-            } else if (dir < 0 && el.scrollLeft <= 0) {
-              el.scrollLeft += loopW;
+          if (loopW > 0) {
+            offsetRef.current += dir * speed * dt;
+            if (dir < 0 && offsetRef.current <= -loopW) {
+              offsetRef.current += loopW;
+            } else if (dir > 0 && offsetRef.current >= loopW) {
+              offsetRef.current -= loopW;
             }
+            el.style.transform = `translate3d(${offsetRef.current}px, 0, 0)`;
           }
         }
       }
@@ -241,8 +239,12 @@ export function CatalogFooterSlider(props: {
     };
 
     rafId = window.requestAnimationFrame(step);
-    return () => window.cancelAnimationFrame(rafId);
-  }, [canAnimate, paused, rail.direction, rail.speed]);
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      track.style.transform = "";
+      offsetRef.current = 0;
+    };
+  }, [canAnimate, paused, rail.direction, rail.speed, loopSlides.length]);
 
   const openSlide = useCallback(
     (slide: ResolvedSlide) => {
@@ -262,6 +264,14 @@ export function CatalogFooterSlider(props: {
 
   const sectionTitle = cfg.title.trim() !== "" ? cfg.title : "Подборка";
 
+  const trackClass = [
+    "sf-product-rail__track",
+    count > 1 ? "sf-product-rail__track--scroll" : "",
+    canAnimate ? "sf-product-rail__track--marquee" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <section className="sf-product-rail-section" aria-label={sectionTitle}>
       <header className="sf-product-rail__head">
@@ -271,7 +281,6 @@ export function CatalogFooterSlider(props: {
       <div className="sf-product-rail__wrap">
         <div className="sf-product-rail">
           <div
-            ref={viewportRef}
             className="sf-product-rail__viewport"
             onMouseEnter={() => {
               if (canAnimate) setPaused(true);
@@ -280,7 +289,7 @@ export function CatalogFooterSlider(props: {
               if (canAnimate) setPaused(false);
             }}
           >
-            <div className="sf-product-rail__track">
+            <div ref={trackRef} className={trackClass}>
               {loopSlides.map((slide, i) => (
                 <ProductRailCard
                   key={
