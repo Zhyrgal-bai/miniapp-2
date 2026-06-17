@@ -5,7 +5,6 @@ import {
   useRef,
   useState,
   type ReactElement,
-  type TouchEvent,
 } from "react";
 import type { Product } from "../../../types";
 import {
@@ -16,9 +15,6 @@ import { storefrontMotionLevelFromStyleConfig } from "../../../storefront/buildS
 import { buildCloudinaryResponsiveUrl } from "../../../utils/cloudinaryTransforms";
 import { getDiscountPercent, getEffectivePrice, getPrimaryImage } from "../../../utils/product";
 import "./CatalogFooterSlider.css";
-
-const RESUME_AUTO_MS = 2600;
-const SWIPE_THRESHOLD_PX = 36;
 
 /** JS marquee speed — reliable in Telegram WebView (CSS transform animation often stalls). */
 const RAIL_SCROLL_PX_PER_SEC: Record<CatalogFooterRailSpeed, number> = {
@@ -178,11 +174,8 @@ export function CatalogFooterSlider(props: {
 
   const count = resolved.length;
   const viewportRef = useRef<HTMLDivElement>(null);
-  const touchStartX = useRef<number | null>(null);
-  const resumeTimer = useRef<number | null>(null);
 
   const [paused, setPaused] = useState(false);
-  const [manualScroll, setManualScroll] = useState(false);
 
   const reducedMotion =
     typeof window !== "undefined" &&
@@ -194,11 +187,7 @@ export function CatalogFooterSlider(props: {
   const motionDisabled = motionLevel === "none";
 
   const canAnimate =
-    count > 1 &&
-    rail.autoMove &&
-    !reducedMotion &&
-    !motionDisabled &&
-    !manualScroll;
+    count > 1 && rail.autoMove && !reducedMotion && !motionDisabled;
 
   const loopSlides = useMemo(() => {
     if (count <= 1) return resolved;
@@ -207,25 +196,6 @@ export function CatalogFooterSlider(props: {
     }
     return resolved;
   }, [resolved, count, rail.autoMove, rail.infiniteLoop, reducedMotion]);
-
-  const clearResumeTimer = useCallback(() => {
-    if (resumeTimer.current != null) {
-      window.clearTimeout(resumeTimer.current);
-      resumeTimer.current = null;
-    }
-  }, []);
-
-  const scheduleResume = useCallback(() => {
-    if (!rail.autoMove) return;
-    clearResumeTimer();
-    resumeTimer.current = window.setTimeout(() => {
-      setPaused(false);
-      setManualScroll(false);
-      resumeTimer.current = null;
-    }, RESUME_AUTO_MS);
-  }, [rail.autoMove, clearResumeTimer]);
-
-  useEffect(() => () => clearResumeTimer(), [clearResumeTimer]);
 
   useEffect(() => {
     if (!canAnimate || rail.direction !== "right") return;
@@ -274,35 +244,6 @@ export function CatalogFooterSlider(props: {
     return () => window.cancelAnimationFrame(rafId);
   }, [canAnimate, paused, rail.direction, rail.speed]);
 
-  const pauseForInteraction = useCallback(() => {
-    if (!rail.pauseOnTouch) return;
-    setPaused(true);
-    if (count > 1) setManualScroll(true);
-    clearResumeTimer();
-  }, [rail.pauseOnTouch, count, clearResumeTimer]);
-
-  const onTouchStart = useCallback(
-    (e: TouchEvent) => {
-      pauseForInteraction();
-      touchStartX.current = e.touches[0]?.clientX ?? null;
-    },
-    [pauseForInteraction],
-  );
-
-  const onTouchEnd = useCallback(
-    (e: TouchEvent) => {
-      const start = touchStartX.current;
-      touchStartX.current = null;
-      const vp = viewportRef.current;
-      if (start != null && vp && manualScroll) {
-        const dx = (e.changedTouches[0]?.clientX ?? 0) - start;
-        if (Math.abs(dx) >= SWIPE_THRESHOLD_PX) vp.scrollLeft += -dx;
-      }
-      scheduleResume();
-    },
-    [manualScroll, scheduleResume],
-  );
-
   const openSlide = useCallback(
     (slide: ResolvedSlide) => {
       if (slide.product != null && props.onOpenProduct) {
@@ -320,21 +261,6 @@ export function CatalogFooterSlider(props: {
   if (!cfg?.enabled || resolved.length === 0) return null;
 
   const sectionTitle = cfg.title.trim() !== "" ? cfg.title : "Подборка";
-  const viewportScrollable = count > 1;
-
-  const trackClass = [
-    "sf-product-rail__track",
-    viewportScrollable ? "sf-product-rail__track--scroll" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  const viewportClass = [
-    "sf-product-rail__viewport",
-    viewportScrollable ? "sf-product-rail__viewport--scroll" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
 
   return (
     <section className="sf-product-rail-section" aria-label={sectionTitle}>
@@ -346,20 +272,15 @@ export function CatalogFooterSlider(props: {
         <div className="sf-product-rail">
           <div
             ref={viewportRef}
-            className={viewportClass}
-            onTouchStart={onTouchStart}
-            onTouchEnd={onTouchEnd}
+            className="sf-product-rail__viewport"
             onMouseEnter={() => {
               if (canAnimate) setPaused(true);
             }}
             onMouseLeave={() => {
-              if (canAnimate) {
-                setPaused(false);
-                setManualScroll(false);
-              }
+              if (canAnimate) setPaused(false);
             }}
           >
-            <div className={trackClass}>
+            <div className="sf-product-rail__track">
               {loopSlides.map((slide, i) => (
                 <ProductRailCard
                   key={

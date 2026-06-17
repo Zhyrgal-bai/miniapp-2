@@ -57,7 +57,7 @@
   position: relative;
   width: 100%;
   overflow: hidden;
-  touch-action: pan-x pan-y;
+  touch-action: pan-y;
   mask-image: linear-gradient(
     90deg,
     transparent 0%,
@@ -72,7 +72,6 @@
     #000 95%,
     transparent 100%
   );
-  touch-action: pan-x;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -153,6 +152,7 @@
   overflow: hidden;
   text-align: left;
   cursor: pointer;
+  touch-action: manipulation;
   background: color-mix(in srgb, var(--sf-color-card, #141414) 92%, #000);
   box-shadow:
     0 10px 28px color-mix(in srgb, #000 24%, transparent),
