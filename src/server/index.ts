@@ -4261,6 +4261,32 @@ app.patch("/categories/:id", async (req: Request, res: Response) => {
   }
 });
 
+app.post("/categories/restore-defaults", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.catalogEdit);
+    if (!merchant) return;
+    const business = await prisma.business.findUnique({
+      where: { id: merchant.businessId },
+      select: { businessType: true },
+    });
+    const bt = (business as { businessType?: string } | null)?.businessType;
+    if (typeof bt !== "string" || bt.trim() === "") {
+      return res.status(400).json({ error: "У магазина не задан тип бизнеса" });
+    }
+    const { restoreDefaultCategories } = await import("./applyBusinessTemplate.js");
+    const result = await restoreDefaultCategories({
+      prisma,
+      businessId: merchant.businessId,
+      businessType: bt as import("@prisma/client").BusinessType,
+    });
+    invalidateStorefrontCache(merchant.businessId);
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    console.error("POST /categories/restore-defaults:", e);
+    res.status(500).json({ error: "Не удалось восстановить категории" });
+  }
+});
+
 app.post("/categories", async (req: Request, res: Response) => {
   try {
     const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.catalogEdit);

@@ -1160,6 +1160,13 @@ export const adminService = {
     });
   },
 
+  async restoreDefaultCategories(): Promise<{ created: number; skipped: number }> {
+    return adminPost<{ created: number; skipped: number }>(
+      apiAbsoluteUrl("/categories/restore-defaults"),
+      {},
+    );
+  },
+
   async deleteCategory(id: number): Promise<void> {
     await adminDelete(apiAbsoluteUrl(`/categories/${id}`));
   },

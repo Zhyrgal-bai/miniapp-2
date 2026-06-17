@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { adminService } from "../../services/admin.service";
-import { showErrorToast } from "../../store/toast.store";
+import { showErrorToast, showSuccessToast } from "../../store/toast.store";
 import { formatAdminApiError } from "../../utils/adminApiError";
 import type { Category } from "../../types";
 import { categoryRoots, flattenCategories } from "../../utils/categoryTree";
@@ -134,6 +134,7 @@ export default function AdminCategoriesPage() {
   const [name, setName] = useState("");
   const [parentId, setParentId] = useState<number | "">("");
   const [loading, setLoading] = useState(true);
+  const [restoring, setRestoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -168,6 +169,23 @@ export default function AdminCategoriesPage() {
       await load();
     } catch (e) {
       showErrorToast(formatAdminApiError(e));
+    }
+  };
+
+  const onRestoreDefaults = async () => {
+    setRestoring(true);
+    try {
+      const result = await adminService.restoreDefaultCategories();
+      await load();
+      showSuccessToast(
+        result.created > 0
+          ? `Восстановлено категорий: ${result.created}`
+          : "Стандартные категории уже на месте",
+      );
+    } catch (e) {
+      showErrorToast(formatAdminApiError(e));
+    } finally {
+      setRestoring(false);
     }
   };
 
@@ -224,14 +242,32 @@ export default function AdminCategoriesPage() {
       {!loading && rootCategories.length === 0 && (
         <div className="admin-dash-card admin-empty-categories">
           <p className="admin-form-hint">
-            Категорий пока нет. Создайте main-категорию (например «Букеты») или
-            подкатегорию для существующей.
+            Категорий нет — они могли быть удалены. Восстановите стандартный набор для
+            вашего типа магазина или создайте категорию вручную.
           </p>
+          <button
+            type="button"
+            className="admin-submit-btn"
+            disabled={restoring}
+            onClick={() => void onRestoreDefaults()}
+          >
+            {restoring ? "Восстановление…" : "Восстановить стандартные категории"}
+          </button>
         </div>
       )}
 
       {!loading && rootCategories.length > 0 && (
         <div className="admin-dash-card">
+          <div className="admin-form-section" style={{ marginBottom: 12 }}>
+            <button
+              type="button"
+              className="admin-secondary-btn"
+              disabled={restoring}
+              onClick={() => void onRestoreDefaults()}
+            >
+              {restoring ? "Восстановление…" : "Добавить недостающие стандартные"}
+            </button>
+          </div>
           {rootCategories.map((main) => (
             <div key={main.id} className="admin-cat-tree">
               <CategoryNodeEditor

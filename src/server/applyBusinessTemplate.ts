@@ -6,6 +6,21 @@ type CategoryCreateResult = {
   key: string;
 };
 
+type TemplateCategoryNode = {
+  key: string;
+  name: string;
+  children?: TemplateCategoryNode[];
+  config?: Record<string, unknown>;
+};
+
+function readCategoryKey(config: unknown): string | null {
+  if (config != null && typeof config === "object" && !Array.isArray(config)) {
+    const k = (config as Record<string, unknown>).key;
+    if (typeof k === "string" && k.trim() !== "") return k.trim().toLowerCase();
+  }
+  return null;
+}
+
 async function createCategoryTree(
   prisma: PrismaClient,
   businessId: number,
@@ -127,5 +142,74 @@ export async function applyBusinessTemplate(params: {
       }
     }
   });
+}
+
+/** Re-creates missing template categories (does not delete existing). */
+export async function restoreDefaultCategories(params: {
+  prisma: PrismaClient;
+  businessId: number;
+  businessType: BusinessType;
+}): Promise<{ created: number; skipped: number }> {
+  const tpl = templateForBusinessType(params.businessType);
+  const existing = await params.prisma.category.findMany({
+    where: { businessId: params.businessId },
+    select: { id: true, name: true, parentId: true, config: true },
+  });
+
+  const existsByKey = new Set<string>();
+  const existsByNameParent = new Set<string>();
+  for (const c of existing) {
+    const key = readCategoryKey(c.config);
+    if (key) existsByKey.add(key);
+    existsByNameParent.add(`${c.parentId ?? "root"}::${c.name.trim().toLowerCase()}`);
+  }
+
+  let created = 0;
+  let skipped = 0;
+
+  const ensureNodes = async (
+    nodes: TemplateCategoryNode[],
+    parentId: number | null,
+  ): Promise<void> => {
+    for (const n of nodes) {
+      const key = n.key.trim().toLowerCase();
+      const nameKey = `${parentId ?? "root"}::${n.name.trim().toLowerCase()}`;
+      const match = existing.find(
+        (c) =>
+          readCategoryKey(c.config) === key ||
+          (c.name.trim().toLowerCase() === n.name.trim().toLowerCase() &&
+            (c.parentId ?? null) === parentId),
+      );
+
+      if (existsByKey.has(key) || existsByNameParent.has(nameKey) || match) {
+        skipped += 1;
+        if (match && Array.isArray(n.children) && n.children.length > 0) {
+          await ensureNodes(n.children, match.id);
+        }
+        continue;
+      }
+
+      const row = await params.prisma.category.create({
+        data: {
+          businessId: params.businessId,
+          name: n.name,
+          parentId,
+          config: { ...(n.config ?? {}), key: n.key },
+        } as any,
+        select: { id: true, name: true, parentId: true, config: true },
+      });
+      created += 1;
+      existsByKey.add(key);
+      existsByNameParent.add(nameKey);
+      existing.push(row);
+
+      if (Array.isArray(n.children) && n.children.length > 0) {
+        await ensureNodes(n.children, row.id);
+      }
+    }
+  };
+
+  await ensureNodes(tpl.defaultCategories as TemplateCategoryNode[], null);
+  return { created, skipped };
 }
 
