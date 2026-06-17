@@ -149,6 +149,14 @@
   max-height: none;
 }
 
+.sf-root .sf-cine-hero[data-sf-hero-store="bars"] .sf-cine-hero__content {
+  display: none !important;
+}
+
+.sf-root .sf-cine-hero[data-sf-hero-store="bars"] .sf-cine-hero__shade {
+  opacity: 0.22;
+}
+
 .sf-root .sf-cine-hero__title {
   font-size: var(--sf-ux-h2) !important;
   line-height: 1.2 !important;
