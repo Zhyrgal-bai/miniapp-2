@@ -18,6 +18,7 @@ import {
 import {
   categoryPathLabel,
   categorySelectGroups,
+  categorySelectOptions,
 } from "../../frontend/src/utils/categoryTree.js";
 
 describe("catalog P1 — product status", () => {
@@ -142,7 +143,7 @@ describe("catalog P1 — category tree", () => {
     expect(sql.includes("Category_businessId_parentId_name_key")).toBe(true);
   });
 
-  it("categorySelectGroups keeps subcategories under their parent", () => {
+  it("categorySelectOptions labels subcategories with parent prefix", () => {
     const tree = [
       {
         id: 1,
@@ -157,12 +158,19 @@ describe("catalog P1 — category tree", () => {
         name: "Женское",
         children: [{ id: 20, name: "Зип Худи", parentId: 2 }],
       },
+      { id: 3, name: "Обувь", children: [] },
     ];
-    const groups = categorySelectGroups(tree);
-    expect(groups).toHaveLength(2);
-    expect(groups[0]?.rootName).toBe("Мужское");
-    expect(groups[1]?.options.map((o) => o.label)).toContain("Зип Худи");
+    const options = categorySelectOptions(tree);
+    expect(options.map((o) => o.label)).toEqual([
+      "Мужское — все",
+      "Мужское → Зип Худи",
+      "Мужское → Футболки",
+      "Женское — все",
+      "Женское → Зип Худи",
+      "Обувь",
+    ]);
     expect(categoryPathLabel(20, tree)).toBe("Женское / Зип Худи");
+    expect(categorySelectGroups(tree)).toHaveLength(3);
   });
 });
 

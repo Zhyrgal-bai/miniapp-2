@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { Category } from "../../types";
-import { categorySelectGroups } from "../../utils/categoryTree";
+import { categorySelectOptions } from "../../utils/categoryTree";
 
 type Props = {
   categories: Category[];
@@ -15,7 +15,7 @@ type Props = {
 };
 
 export function AdminCategorySelect(props: Props): React.ReactElement {
-  const groups = useMemo(() => categorySelectGroups(props.categories), [props.categories]);
+  const options = useMemo(() => categorySelectOptions(props.categories), [props.categories]);
   const placeholderValue = props.placeholderValue ?? "";
   const showPlaceholder = props.placeholder != null && props.placeholder !== "";
 
@@ -39,14 +39,10 @@ export function AdminCategorySelect(props: Props): React.ReactElement {
       {showPlaceholder ? (
         <option value={placeholderValue}>{props.placeholder}</option>
       ) : null}
-      {groups.map((group) => (
-        <optgroup key={group.rootId} label={group.rootName}>
-          {group.options.map((opt) => (
-            <option key={opt.id} value={opt.id}>
-              {opt.label}
-            </option>
-          ))}
-        </optgroup>
+      {options.map((opt) => (
+        <option key={opt.id} value={opt.id}>
+          {opt.label}
+        </option>
       ))}
     </select>
   );

@@ -53,6 +53,26 @@ export function categorySelectGroups(tree: Category[]): CategorySelectGroup[] {
   });
 }
 
+/** Flat select options with parent prefix (no optgroup — broken in Telegram WebView). */
+export function categorySelectOptions(tree: Category[]): Array<{ id: number; label: string }> {
+  const out: Array<{ id: number; label: string }> = [];
+  for (const group of categorySelectGroups(tree)) {
+    const hasChildren = group.options.length > 1;
+    for (const opt of group.options) {
+      if (!hasChildren) {
+        out.push({ id: opt.id, label: group.rootName });
+        continue;
+      }
+      if (opt.id === group.rootId) {
+        out.push({ id: opt.id, label: `${group.rootName} — все` });
+        continue;
+      }
+      out.push({ id: opt.id, label: `${group.rootName} → ${opt.label}` });
+    }
+  }
+  return out;
+}
+
 export function categoryPathLabel(
   categoryId: number | null | undefined,
   tree: Category[],
