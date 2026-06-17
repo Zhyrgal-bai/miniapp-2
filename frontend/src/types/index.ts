@@ -21,6 +21,7 @@ export interface Category {
   children?: Category[];
   productsCount?: number;
   sortOrder?: number;
+  config?: Record<string, unknown> | null;
 }
 
 export type ProductStatus = "ACTIVE" | "DRAFT" | "ARCHIVED";

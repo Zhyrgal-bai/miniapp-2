@@ -1,4 +1,5 @@
 import type { Variant } from "../../types";
+import { ACCESSORY_ONE_SIZE } from "@repo-shared/businessCommerce";
 import {
   expandShortHex,
   isValidHexColor,
@@ -34,14 +35,17 @@ export function createEmptyColorVariant(): ClothingColorDraft {
   };
 }
 
-export function productToColorDrafts(product: Product): ClothingColorDraft[] {
+export function productToColorDrafts(
+  product: Product,
+  opts?: { noSizes?: boolean },
+): ClothingColorDraft[] {
   const vv = getNormalizedVariants(product);
   if (vv.length === 0) return [createEmptyColorVariant()];
 
   return vv.map((v) => {
     const sizes: ClothingSizeRow[] = (v.sizes ?? []).map((s) => ({
       id: newVariantRowId(),
-      label: String(s.size ?? "").trim(),
+      label: opts?.noSizes ? "" : String(s.size ?? "").trim(),
       stock: Math.max(0, Number(s.stock ?? 0)),
     }));
     return {
@@ -53,7 +57,10 @@ export function productToColorDrafts(product: Product): ClothingColorDraft[] {
   });
 }
 
-export function buildClothingVariantsForApi(drafts: ClothingColorDraft[]): Variant[] {
+export function buildClothingVariantsForApi(
+  drafts: ClothingColorDraft[],
+  opts?: { noSizes?: boolean },
+): Variant[] {
   return drafts
     .map((d) => {
       const name = d.colorName.trim();
@@ -64,13 +71,22 @@ export function buildClothingVariantsForApi(drafts: ClothingColorDraft[]): Varia
       } else {
         hex = expandShortHex(hex);
       }
-      const sizes = d.sizes
-        .filter((s) => s.label.trim() !== "")
-        .map((s) => {
-          const st = s.stock;
-          const stock = typeof st === "number" && !Number.isNaN(st) ? st : 0;
-          return { size: s.label.trim(), stock };
-        });
+      const sizes = opts?.noSizes
+        ? (() => {
+            const stockRaw = d.sizes[0]?.stock;
+            const stock =
+              typeof stockRaw === "number" && !Number.isNaN(stockRaw)
+                ? Math.max(0, stockRaw)
+                : 0;
+            return stock > 0 ? [{ size: ACCESSORY_ONE_SIZE, stock }] : [];
+          })()
+        : d.sizes
+            .filter((s) => s.label.trim() !== "")
+            .map((s) => {
+              const st = s.stock;
+              const stock = typeof st === "number" && !Number.isNaN(st) ? st : 0;
+              return { size: s.label.trim(), stock };
+            });
       if (sizes.length === 0) return null;
       return {
         color: { name, hex },
@@ -80,12 +96,23 @@ export function buildClothingVariantsForApi(drafts: ClothingColorDraft[]): Varia
     .filter((v): v is Variant => v != null);
 }
 
-export function validateClothingColorDrafts(drafts: ClothingColorDraft[]): string | null {
+export function validateClothingColorDrafts(
+  drafts: ClothingColorDraft[],
+  opts?: { noSizes?: boolean },
+): string | null {
   for (let i = 0; i < drafts.length; i++) {
     const d = drafts[i];
     if (!d) continue;
     if (!d.colorName.trim()) {
       return `Вариант ${i + 1}: укажите название цвета.`;
+    }
+    if (opts?.noSizes) {
+      const stockRaw = d.sizes[0]?.stock;
+      const stock = typeof stockRaw === "number" ? stockRaw : Number(stockRaw);
+      if (!Number.isFinite(stock) || stock <= 0) {
+        return `Вариант ${i + 1}: укажите остаток больше нуля.`;
+      }
+      continue;
     }
     const active = d.sizes.filter((s) => s.label.trim() !== "");
     if (active.length === 0) {

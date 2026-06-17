@@ -23,6 +23,7 @@ import { verticalProfileFor } from "@repo-shared/businessCommerce";
 import { useResolvedBusinessType } from "./useResolvedBusinessType";
 import { AdminCategoryFields } from "./AdminCategoryFields";
 import { resolveProductCategoryId } from "../../utils/resolveProductCategoryId";
+import { categorySkipsClothingSizesById } from "../../utils/categoryVariantPolicy";
 import { formatAdminApiError } from "../../utils/adminApiError";
 import {
   schemaKeysFromProductSchema,
@@ -63,6 +64,16 @@ const ProductForm = () => {
   const [formError, setFormError] = useState<string | null>(null);
 
   const rootCategories = useMemo(() => categoryRoots(categories), [categories]);
+
+  const resolvedCategoryId = useMemo(
+    () => resolveProductCategoryId(mainCategoryId, subCategoryId, rootCategories),
+    [mainCategoryId, subCategoryId, rootCategories],
+  );
+
+  const noClothingSizes = useMemo(
+    () => categorySkipsClothingSizesById(resolvedCategoryId, rootCategories),
+    [resolvedCategoryId, rootCategories],
+  );
 
   useEffect(() => {
     void (async () => {
@@ -141,7 +152,9 @@ const ProductForm = () => {
     }
 
     if (showClothingVariants) {
-      const clothingErr = validateClothingColorDrafts(colorDrafts);
+      const clothingErr = validateClothingColorDrafts(colorDrafts, {
+        noSizes: noClothingSizes,
+      });
       if (clothingErr) {
         setFormError(clothingErr);
         return;
@@ -158,16 +171,12 @@ const ProductForm = () => {
     }
 
     const variants = showClothingVariants
-      ? buildClothingVariantsForApi(colorDrafts)
+      ? buildClothingVariantsForApi(colorDrafts, { noSizes: noClothingSizes })
       : showTierStock
         ? (optionRowsToVariants(optionRows) as unknown as Variant[])
         : ([] as Variant[]);
 
-    const categoryId = resolveProductCategoryId(
-      mainCategoryId,
-      subCategoryId,
-      rootCategories,
-    );
+    const categoryId = resolvedCategoryId;
     if (categoryId == null) {
       setFormError(
         rootCategories.length === 0
@@ -373,7 +382,11 @@ const ProductForm = () => {
       {showClothingVariants && businessTypeReady ? (
         <>
           <div className="admin-form-divider" />
-          <ClothingVariantEditor drafts={colorDrafts} onChange={setColorDrafts} />
+          <ClothingVariantEditor
+            drafts={colorDrafts}
+            onChange={setColorDrafts}
+            noSizes={noClothingSizes}
+          />
         </>
       ) : null}
 

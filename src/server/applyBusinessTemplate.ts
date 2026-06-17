@@ -20,7 +20,7 @@ async function createCategoryTree(
         businessId,
         name: n.name,
         parentId,
-        config: n.config ?? {},
+        config: { ...(n.config ?? {}), key: n.key },
       } as any,
       select: { id: true },
     });

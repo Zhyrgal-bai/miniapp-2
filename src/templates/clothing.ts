@@ -22,7 +22,7 @@ export const clothingTemplate: BusinessTemplateConfig = {
     { key: "mens", name: "Мужское" },
     { key: "womens", name: "Женское" },
     { key: "shoes", name: "Обувь" },
-    { key: "accessories", name: "Аксессуары" },
+    { key: "accessories", name: "Аксессуары", config: { key: "accessories", noSizes: true } },
   ],
   productSchema: {
     brand: { type: "text", label: "Бренд", required: false, maxLen: 60 },

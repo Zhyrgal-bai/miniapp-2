@@ -22,9 +22,10 @@ type Props = {
   drafts: ClothingColorDraft[];
   onChange: (drafts: ClothingColorDraft[]) => void;
   disabled?: boolean;
+  noSizes?: boolean;
 };
 
-export function ClothingVariantEditor({ drafts, onChange, disabled }: Props) {
+export function ClothingVariantEditor({ drafts, onChange, disabled, noSizes }: Props) {
   const updateDraft = (id: string, patch: Partial<ClothingColorDraft>) => {
     onChange(drafts.map((d) => (d.id === id ? { ...d, ...patch } : d)));
   };
@@ -66,7 +67,11 @@ export function ClothingVariantEditor({ drafts, onChange, disabled }: Props) {
 
   return (
     <div className="admin-variant-editor admin-variant-editor--matrix">
-      <p className="admin-form-hint">Цвета и размеры — любые названия, остаток по каждому SKU</p>
+      <p className="admin-form-hint">
+        {noSizes
+          ? "Аксессуары — укажите цвет и остаток, размеры не нужны"
+          : "Цвета и размеры — любые названия, остаток по каждому SKU"}
+      </p>
 
       {drafts.map((draft, index) => (
         <details key={draft.id} className="admin-variant" open={index === 0}>
@@ -138,7 +143,30 @@ export function ClothingVariantEditor({ drafts, onChange, disabled }: Props) {
           </div>
 
           <div className="admin-stock-block">
-            <span className="admin-field-label">Размеры</span>
+            <span className="admin-field-label">{noSizes ? "Остаток" : "Размеры"}</span>
+            {noSizes ? (
+              <div className="admin-variant-editor__list">
+                <div className="admin-variant-option-row">
+                  <input
+                    type="number"
+                    min={0}
+                    className="admin-input admin-variant-option-row__stock"
+                    disabled={disabled}
+                    placeholder="Остаток"
+                    value={draft.sizes[0]?.stock ?? ""}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      const first = draft.sizes[0] ?? createEmptyOptionRow();
+                      updateSize(draft.id, first.id, {
+                        stock: v === "" ? "" : Math.max(0, Number(v) || 0),
+                      });
+                    }}
+                    aria-label="Остаток"
+                  />
+                </div>
+              </div>
+            ) : (
+              <>
             <div className="admin-variant-editor__list">
               {draft.sizes.map((sizeRow, si) => (
                 <div key={sizeRow.id} className="admin-variant-option-row">
@@ -188,6 +216,8 @@ export function ClothingVariantEditor({ drafts, onChange, disabled }: Props) {
             >
               + Добавить размер
             </button>
+              </>
+            )}
           </div>
         </details>
       ))}

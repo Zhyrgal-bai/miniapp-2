@@ -1,19 +1,19 @@
 import type { Product } from "../types";
 import { getNormalizedVariants, isOutOfStock } from "../utils/product";
-import { verticalUsesColorAxis } from "@repo-shared/businessCommerce";
+import { isAccessoryOneSize, verticalUsesColorAxis } from "@repo-shared/businessCommerce";
 
 function uniqueSizes(product: Product): string[] {
   const set = new Set<string>();
   if (product.sizes?.length) {
     for (const s of product.sizes) {
       const name = String(s.size ?? "").trim();
-      if (name) set.add(name);
+      if (name && !isAccessoryOneSize(name)) set.add(name);
     }
   }
   for (const v of getNormalizedVariants(product)) {
     for (const s of v.sizes ?? []) {
       const name = String(s.size ?? "").trim();
-      if (name) set.add(name);
+      if (name && !isAccessoryOneSize(name)) set.add(name);
     }
   }
   return [...set];

@@ -31,6 +31,7 @@ import { DynamicFieldRenderer } from "./DynamicFieldRenderer";
 import { useResolvedBusinessType } from "./useResolvedBusinessType";
 import { AdminCategoryFields } from "./AdminCategoryFields";
 import { resolveProductCategoryId } from "../../utils/resolveProductCategoryId";
+import { categorySkipsClothingSizesById } from "../../utils/categoryVariantPolicy";
 import { formatAdminApiError } from "../../utils/adminApiError";
 
 function normalizeProductAttributesForSchema(
@@ -95,6 +96,16 @@ export default function ProductEditModal({
 
   const rootCategories = useMemo(() => categoryRoots(categories), [categories]);
 
+  const resolvedCategoryId = useMemo(
+    () => resolveProductCategoryId(mainCategoryId, subCategoryId, rootCategories),
+    [mainCategoryId, subCategoryId, rootCategories],
+  );
+
+  const noClothingSizes = useMemo(
+    () => categorySkipsClothingSizesById(resolvedCategoryId, rootCategories),
+    [resolvedCategoryId, rootCategories],
+  );
+
   const resetFromProduct = useCallback((p: Product) => {
     setName(p.name);
     setPrice(p.price);
@@ -116,11 +127,20 @@ export default function ProductEditModal({
     setImages([...imgs]);
     setImagesMeta(Array.isArray(p.imagesMeta) ? [...p.imagesMeta] : []);
     setMainIdx(0);
-    setColorDrafts(productToColorDrafts(p));
+    setColorDrafts(
+      productToColorDrafts(p, {
+        noSizes: categorySkipsClothingSizesById(
+          typeof (p.categoryId ?? p.category?.id) === "number"
+            ? Number(p.categoryId ?? p.category?.id)
+            : null,
+          rootCategories,
+        ),
+      }),
+    );
     const bt = String(p.businessType ?? merchantBusinessType ?? "clothing");
     setOptionRows(variantsToOptionRows(bt, getNormalizedVariants(p)));
     setAttributes(normalizeProductAttributesForSchema(p.attributes, productSchema));
-  }, [merchantBusinessType, productSchema]);
+  }, [merchantBusinessType, productSchema, rootCategories]);
 
   useEffect(() => {
     if (!open) return;
@@ -251,11 +271,7 @@ export default function ProductEditModal({
       setSaveError("Нужно хотя бы одно фото.");
       return;
     }
-    const categoryId = resolveProductCategoryId(
-      mainCategoryId,
-      subCategoryId,
-      rootCategories,
-    );
+    const categoryId = resolvedCategoryId;
     if (categoryId == null) {
       setSaveError(
         rootCategories.length === 0
@@ -266,7 +282,9 @@ export default function ProductEditModal({
     }
 
     if (showClothingVariants) {
-      const clothingErr = validateClothingColorDrafts(colorDrafts);
+      const clothingErr = validateClothingColorDrafts(colorDrafts, {
+        noSizes: noClothingSizes,
+      });
       if (clothingErr) {
         setSaveError(clothingErr);
         return;
@@ -315,7 +333,9 @@ export default function ProductEditModal({
       if (showClothingVariants) {
         await adminService.updateProduct(productId, {
           ...basePatch,
-          variants: buildClothingVariantsForApi(colorDrafts) as Product["variants"],
+          variants: buildClothingVariantsForApi(colorDrafts, {
+            noSizes: noClothingSizes,
+          }) as Product["variants"],
         });
       } else if (showTierStock) {
         await adminService.updateProduct(productId, {
@@ -558,7 +578,11 @@ export default function ProductEditModal({
               ) : null}
 
               {showClothingVariants && businessTypeReady ? (
-                <ClothingVariantEditor drafts={colorDrafts} onChange={setColorDrafts} />
+                <ClothingVariantEditor
+                  drafts={colorDrafts}
+                  onChange={setColorDrafts}
+                  noSizes={noClothingSizes}
+                />
               ) : null}
             </>
           )}

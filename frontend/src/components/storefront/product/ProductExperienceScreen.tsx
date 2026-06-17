@@ -8,6 +8,7 @@ import {
 } from "../../../storefront/verticalExperience";
 import type { SchemaObject } from "../../admin/DynamicFieldRenderer";
 import { formatSizeLabel } from "../../../commerce/useVerticalProductSelection";
+import { isAccessoryOneSize } from "@repo-shared/businessCommerce";
 import { isStorefrontCommerceEnabled } from "../../../hooks/useStorefrontCommerceMode";
 import { openOpenInTelegramModal } from "../../../storefront/openInTelegramModal";
 import { getPrimaryImage, getEffectivePrice } from "../../../utils/product";
@@ -147,12 +148,14 @@ export function ProductExperienceScreen({
 
   const clearHint = () => px.clearSelectionHint();
 
+  const displaySizes = px.sizes.filter((s) => !isAccessoryOneSize(s.size));
+
   const sizeBlock =
-    px.sizes.length > 0 ? (
+    displaySizes.length > 0 ? (
       <section className="px-block px-block--size">
         <h2 className="px-block__label">{px.primaryLabel}</h2>
         <div className="px-chips">
-          {px.sizes.map((s) => (
+          {displaySizes.map((s) => (
             <button
               key={s.size}
               type="button"

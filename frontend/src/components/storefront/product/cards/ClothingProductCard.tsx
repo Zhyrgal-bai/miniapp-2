@@ -4,6 +4,7 @@ import ProductCard from "../../../product/ProductCard";
 import { useVerticalProductSelection } from "../../../../commerce/useVerticalProductSelection";
 import { formatSizeLabel } from "../../../../commerce/useVerticalProductSelection";
 import { productRequiresVariantPicker } from "../../../../commerce/productVariantPolicy";
+import { isAccessoryOneSize } from "@repo-shared/businessCommerce";
 import { getVariantCssBackground } from "../../../../utils/variantColor";
 import { useStorefrontPayload } from "../../runtime/StorefrontPayloadContext";
 import { useStorefrontRetailCard } from "./shared/useStorefrontRetailCard";
@@ -58,8 +59,13 @@ export function ClothingProductCard(props: Props): React.ReactElement {
     needsVariantPickerOverride: needsVariantPicker,
   });
 
-  const visibleSizes = selection.sizes.slice(0, MAX_VISIBLE_SIZES);
-  const hiddenSizeCount = Math.max(0, selection.sizes.length - MAX_VISIBLE_SIZES);
+  const visibleSizes = selection.sizes
+    .filter((s) => !isAccessoryOneSize(s.size))
+    .slice(0, MAX_VISIBLE_SIZES);
+  const hiddenSizeCount = Math.max(
+    0,
+    selection.sizes.filter((s) => !isAccessoryOneSize(s.size)).length - MAX_VISIBLE_SIZES,
+  );
 
   const stockBadge = useMemo(() => {
     if (retail.outOfStock) {

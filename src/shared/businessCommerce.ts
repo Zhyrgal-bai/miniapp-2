@@ -10,6 +10,13 @@ export type VerticalInventoryMode =
   | "single_axis"
   | "metadata_only";
 
+/** Internal one-size SKU for accessories (hidden on storefront). */
+export const ACCESSORY_ONE_SIZE = "ONE";
+
+export function isAccessoryOneSize(size: string | null | undefined): boolean {
+  return String(size ?? "").trim().toUpperCase() === ACCESSORY_ONE_SIZE;
+}
+
 export type VerticalCommerceProfile = {
   businessType: BusinessTypeId;
   inventoryMode: VerticalInventoryMode;
@@ -207,6 +214,7 @@ export function labelPrimaryOption(
 ): string {
   const v = String(value ?? "").trim();
   if (v === "") return "";
+  if (isAccessoryOneSize(v)) return "";
   if (!isKnownBusinessType(businessType)) return v;
 
   switch (businessType) {
