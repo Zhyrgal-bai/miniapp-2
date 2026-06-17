@@ -448,13 +448,29 @@
 }
 
 .sf-root[data-sf-vertical="clothing"] .product-card--retail-v1 .retail-card__cta {
-  border: 0;
-  background: transparent;
-  min-height: 36px;
-  font-size: 0.6875rem;
-  letter-spacing: 0.06em;
+  min-height: var(--retail-action-min);
+  font-size: clamp(0.6875rem, 3cqi, 0.75rem);
+  font-weight: 700;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--sf-color-text) 68%, transparent);
+  border-radius: 12px;
+}
+
+.sf-root[data-sf-vertical="clothing"] .product-card--retail-v1 .retail-card__cta--primary {
+  border: 0;
+  background: var(--sf-color-primary);
+  color: var(--sf-on-primary, #fff);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--sf-color-primary) 38%, transparent);
+}
+
+.sf-root[data-sf-vertical="clothing"] .product-card--retail-v1 .retail-card__cta--primary:active:not(:disabled) {
+  filter: brightness(0.94);
+  transform: scale(0.98);
+  background: var(--sf-color-primary);
+}
+
+.sf-root[data-sf-vertical="clothing"] .product-card--retail-v1 .retail-card__qty {
+  border-color: color-mix(in srgb, var(--sf-color-primary) 28%, transparent);
 }
 
 .sf-root[data-sf-vertical="flowers"] .product-card.product-card--retail-v1 {

@@ -150,6 +150,7 @@ export function ClothingProductCard(props: Props): React.ReactElement {
       discountPct={retail.discountPct}
       onOpenDetail={retail.openDetail}
       extraMeta={variantMeta}
+      ctaPrimary
       media={
         <RetailCardMediaSlider
           images={retail.images}
@@ -179,6 +180,7 @@ export function ClothingProductCard(props: Props): React.ReactElement {
           outOfStock={retail.outOfStock}
           canAdjustQty={retail.canAdjustQty}
           atMaxQty={retail.atMaxQty}
+          ctaPrimary
           telegramOpenUrl={retail.payload?.telegramOpenUrl ?? null}
           onAdd={retail.handleAddToCart}
           onIncrement={retail.handleIncrement}
