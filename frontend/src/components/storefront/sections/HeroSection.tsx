@@ -1,6 +1,7 @@
 import { useCallback, useMemo, type ReactElement } from "react";
 import { useTheme } from "../../../context/ThemeContext";
 import { useShop } from "../../../context/ShopContext";
+import barsHeroBannerUrl from "../../../assets/bars-hero-banner.png";
 import {
   formatFeaturedPromoLine,
   type FeaturedPromo,
@@ -45,6 +46,13 @@ function slideHasContent(s: Record<string, unknown>): boolean {
 }
 
 const BARS_STORE_SLUG = "bars";
+const BARS_DEFAULT_BANNER_URL = barsHeroBannerUrl;
+
+function barsSlideImageUrl(imageUrl: string, isBarsStore: boolean): string {
+  const url = imageUrl.trim();
+  if (url !== "") return url;
+  return isBarsStore ? BARS_DEFAULT_BANNER_URL : "";
+}
 
 function normalizeStoreBrand(name: string): string {
   return name
@@ -98,6 +106,7 @@ export function HeroSection(props: {
     if (slidesRaw.length) {
       return slidesRaw.map((slide) => ({
         ...slide,
+        imageUrl: barsSlideImageUrl(readString(slide, "imageUrl"), isBarsStore),
         title:
           readString(slide, "title").trim() !== ""
             ? readString(slide, "title")
@@ -115,17 +124,18 @@ export function HeroSection(props: {
 
     if (bannerCopyEnabled && (t !== "" || st !== "")) {
       const logo = typeof theme.logoUrl === "string" ? theme.logoUrl : "";
+      const imageUrl = isBarsStore ? BARS_DEFAULT_BANNER_URL : logo;
       return [
         {
           title: b.title ?? "",
           subtitle: st,
           ctaText: "",
-          imageUrl: logo,
+          imageUrl,
         } as Record<string, unknown>,
       ];
     }
     return [];
-  }, [slidesRaw, theme.banner, theme.logoUrl, promoSubtitle]);
+  }, [slidesRaw, theme.banner, theme.logoUrl, promoSubtitle, isBarsStore]);
 
   const hasMeaningfulSlide = useMemo(
     () => effectiveSlides.some(slideHasContent),
@@ -180,7 +190,7 @@ export function HeroSection(props: {
         subtitle,
         kicker,
         ctaText,
-        imageUrl: readString(slide, "imageUrl"),
+        imageUrl: barsSlideImageUrl(readString(slide, "imageUrl"), isBarsStore),
         overlayGradient: readString(slide, "overlayGradient").trim(),
       };
     });
@@ -192,6 +202,7 @@ export function HeroSection(props: {
     defaultKicker,
     promoSubtitle,
     textConfig,
+    isBarsStore,
   ]);
 
   const activateCta = useCallback(

@@ -205,7 +205,7 @@
 
 .sf-root .sf-cine-hero[data-sf-hero-store="bars"] .sf-cine-hero__slide.is-active .sf-cine-hero__img {
   animation: none;
-  transform: none;
+  transform: scale(1.08);
 }
 
 .sf-root .sf-cine-hero__title {
