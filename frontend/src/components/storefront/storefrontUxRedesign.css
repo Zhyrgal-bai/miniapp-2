@@ -61,6 +61,11 @@
   padding-bottom: var(--sf-ux-space-1);
 }
 
+.sf-root .sf-feed__chunk--section[data-sf-section-type="hero"] + .sf-feed__chunk--search,
+.sf-root .sf-feed__chunk--section[data-sf-section-type="promo"] + .sf-feed__chunk--search {
+  padding-top: var(--sf-ux-space-2);
+}
+
 .sf-root .sf-feed__chunk--categories {
   padding-top: 0;
   padding-bottom: var(--sf-ux-space-1);
@@ -77,7 +82,7 @@
   padding-top: var(--sf-ux-space-1);
 }
 
-/* ── Search — primary element ── */
+/* ── Search + categories — sticky catalog tools below marketing ── */
 .sf-root .sf-catalog-search__label {
   min-height: 44px;
   border-radius: var(--sf-ux-radius-card);

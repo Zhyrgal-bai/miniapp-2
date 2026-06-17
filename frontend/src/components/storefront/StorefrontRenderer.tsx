@@ -55,14 +55,15 @@ import type { PublicStoreAvailability } from "@repo-shared/storeAvailabilitySett
 type StorefrontKitId = "minimal" | "luxury" | "fashion" | "neon" | "default";
 
 const FEED_SECTION_PRIORITY: Partial<Record<StorefrontSectionType, number>> = {
-  categories: 10,
+  hero: 10,
   promo: 20,
-  hero: 30,
   featuredProducts: 40,
   reviews: 50,
   faq: 60,
   footer: 70,
 };
+
+const MARKETING_SECTION_TYPES = new Set<StorefrontSectionType>(["hero", "promo"]);
 
 function openStoreProfile(): void {
   window.dispatchEvent(new CustomEvent("sf:openStoreProfile"));
@@ -466,6 +467,16 @@ export function StorefrontRenderer(props: {
     [sections],
   );
 
+  const marketingSections = useMemo(
+    () => feedSections.filter((sec) => MARKETING_SECTION_TYPES.has(sec.type)),
+    [feedSections],
+  );
+
+  const catalogFeedSections = useMemo(
+    () => feedSections.filter((sec) => !MARKETING_SECTION_TYPES.has(sec.type)),
+    [feedSections],
+  );
+
   const firstFeaturedSectionId = useMemo(
     () => sections.find((sec) => sec.type === "featuredProducts")?.id ?? null,
     [sections],
@@ -500,6 +511,140 @@ export function StorefrontRenderer(props: {
       : "Поиск товаров…";
   const catalogLoading = catalog === null;
 
+  const renderFeedSection = (s: (typeof sections)[number]): React.ReactNode => {
+    const chunk = (() => {
+      switch (s.type) {
+        case "hero":
+          return (
+            <HeroSection
+              key={s.id}
+              config={s.config}
+              textConfig={props.payload.storefrontTextConfig ?? undefined}
+              featuredPromo={props.payload.featuredPromo ?? null}
+              kit={kit}
+              storefrontSlug={props.payload.storefrontSlug}
+              storeName={props.payload.storeName}
+              heroStyle={(props.payload.storefrontStyleConfig as Record<string, unknown> | undefined)?.hero as
+                | Record<string, unknown>
+                | undefined}
+              onHeroCta={(ev) => {
+                if (ev.kind === "scrollToSection") {
+                  document.getElementById(ev.target)?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  });
+                  return;
+                }
+                if (ev.kind === "openCategory") {
+                  const id = Number(ev.target);
+                  if (Number.isInteger(id) && id > 0) setActiveCategoryId(id);
+                  return;
+                }
+                if (ev.kind === "openProduct") {
+                  const id = Number(ev.target);
+                  const pool = [...(catalog ?? []), ...featuredAll];
+                  const p = pool.find((x) => x.id === id);
+                  if (p) openProduct(p);
+                }
+              }}
+            />
+          );
+        case "promo":
+          return (
+            <PromoSection
+              key={s.id}
+              config={s.config}
+              textConfig={props.payload.storefrontTextConfig ?? undefined}
+            />
+          );
+        case "categories":
+          return null;
+        case "featuredProducts": {
+          const pairDiscovery = s.id === firstFeaturedSectionId;
+          const cfgTitle =
+            typeof s.config.title === "string" && String(s.config.title).trim() !== ""
+              ? String(s.config.title)
+              : typeof props.payload.storefrontTextConfig?.titleHits === "string" &&
+                  String(props.payload.storefrontTextConfig.titleHits).trim() !== ""
+                ? String(props.payload.storefrontTextConfig.titleHits)
+                : "Хиты";
+          if (!pairDiscovery) {
+            return (
+              <FeaturedProductsSection
+                config={s.config}
+                products={featuredFiltered}
+                catalogProductCount={featuredAll.length}
+                cardConfig={mergedCardConfig}
+                textConfig={props.payload.storefrontTextConfig ?? undefined}
+                storefrontStyleConfig={styleCfg}
+                kit={kit}
+                businessId={props.payload.businessId}
+                businessType={props.payload.businessType}
+                templateDescriptor={props.payload.templateDescriptor ?? null}
+                onOpenProduct={openProduct}
+              />
+            );
+          }
+          return (
+            <CommerceDiscoveryFeed
+              variant="embedded"
+              kit={kit}
+              businessType={props.payload.businessType}
+              templateDescriptor={props.payload.templateDescriptor ?? null}
+              businessId={props.payload.businessId}
+              featuredProducts={featuredAll}
+              primaryProducts={featuredFiltered}
+              primaryTitle={cfgTitle}
+              catalogProductCount={featuredAll.length}
+              cardConfig={mergedCardConfig}
+              textConfig={props.payload.storefrontTextConfig ?? undefined}
+              catalogProducts={catalogForRails}
+              onOpenProduct={openProduct}
+              catalogBold={catalogBold}
+              searchQuery={searchQuery}
+              catalogLoading={catalogLoading}
+              onClearFilters={() => {
+                setSearchQuery("");
+                setActiveCategoryId(null);
+              }}
+            />
+          );
+        }
+        case "footer":
+          return <FooterSection key={s.id} config={s.config} />;
+        case "reviews":
+          return (
+            <ReviewsSection
+              key={s.id}
+              config={s.config}
+              textConfig={props.payload.storefrontTextConfig ?? undefined}
+            />
+          );
+        case "faq":
+          return (
+            <FaqSection
+              key={s.id}
+              config={s.config}
+              textConfig={props.payload.storefrontTextConfig ?? undefined}
+            />
+          );
+        default:
+          return null;
+      }
+    })();
+    if (chunk == null) return null;
+    return (
+      <div
+        key={s.id}
+        id={`sf-sec-${s.id}`}
+        className="sf-feed__chunk sf-feed__chunk--section sf-feed__chunk--stack"
+        data-sf-section-type={s.type}
+      >
+        {chunk}
+      </div>
+    );
+  };
+
   return (
     <ThemeVarsProvider theme={theme}>
       <div
@@ -521,6 +666,7 @@ export function StorefrontRenderer(props: {
               onOpenProfile={openStoreProfile}
             />
           </div>
+          {marketingSections.map((s) => renderFeedSection(s))}
           <div className="sf-feed__chunk sf-feed__chunk--search sf-feed__chunk--stack sf-feed__chunk--sticky-search">
             <CatalogSearchBar
               value={searchQuery}
@@ -582,139 +728,7 @@ export function StorefrontRenderer(props: {
               <TableBookingCta onPress={openTableBooking} />
             </div>
           ) : null}
-          {feedSections.map((s) => {
-            const chunk = (() => {
-              switch (s.type) {
-                case "hero":
-                  return (
-                    <HeroSection
-                      key={s.id}
-                      config={s.config}
-                      textConfig={props.payload.storefrontTextConfig ?? undefined}
-                      featuredPromo={props.payload.featuredPromo ?? null}
-                      kit={kit}
-                      storefrontSlug={props.payload.storefrontSlug}
-                      storeName={props.payload.storeName}
-                      heroStyle={(props.payload.storefrontStyleConfig as Record<string, unknown> | undefined)?.hero as
-                        | Record<string, unknown>
-                        | undefined}
-                      onHeroCta={(ev) => {
-                        if (ev.kind === "scrollToSection") {
-                          document.getElementById(ev.target)?.scrollIntoView({
-                            behavior: "smooth",
-                            block: "start",
-                          });
-                          return;
-                        }
-                        if (ev.kind === "openCategory") {
-                          const id = Number(ev.target);
-                          if (Number.isInteger(id) && id > 0) setActiveCategoryId(id);
-                          return;
-                        }
-                        if (ev.kind === "openProduct") {
-                          const id = Number(ev.target);
-                          const pool = [...(catalog ?? []), ...featuredAll];
-                          const p = pool.find((x) => x.id === id);
-                          if (p) openProduct(p);
-                        }
-                      }}
-                    />
-                  );
-                case "promo":
-                  return (
-                    <PromoSection
-                      key={s.id}
-                      config={s.config}
-                      textConfig={props.payload.storefrontTextConfig ?? undefined}
-                    />
-                  );
-                case "categories":
-                  return null;
-                case "featuredProducts": {
-                  const pairDiscovery = s.id === firstFeaturedSectionId;
-                  const cfgTitle =
-                    typeof s.config.title === "string" && String(s.config.title).trim() !== ""
-                      ? String(s.config.title)
-                      : typeof props.payload.storefrontTextConfig?.titleHits === "string" &&
-                          String(props.payload.storefrontTextConfig.titleHits).trim() !== ""
-                        ? String(props.payload.storefrontTextConfig.titleHits)
-                        : "Хиты";
-                  if (!pairDiscovery) {
-                    return (
-                      <FeaturedProductsSection
-                        config={s.config}
-                        products={featuredFiltered}
-                        catalogProductCount={featuredAll.length}
-                        cardConfig={mergedCardConfig}
-                        textConfig={props.payload.storefrontTextConfig ?? undefined}
-                        storefrontStyleConfig={styleCfg}
-                        kit={kit}
-                        businessId={props.payload.businessId}
-                        businessType={props.payload.businessType}
-                        templateDescriptor={props.payload.templateDescriptor ?? null}
-                        onOpenProduct={openProduct}
-                      />
-                    );
-                  }
-                  return (
-                    <CommerceDiscoveryFeed
-                      variant="embedded"
-                      kit={kit}
-                      businessType={props.payload.businessType}
-                      templateDescriptor={props.payload.templateDescriptor ?? null}
-                      businessId={props.payload.businessId}
-                      featuredProducts={featuredAll}
-                      primaryProducts={featuredFiltered}
-                      primaryTitle={cfgTitle}
-                      catalogProductCount={featuredAll.length}
-                      cardConfig={mergedCardConfig}
-                      textConfig={props.payload.storefrontTextConfig ?? undefined}
-                      catalogProducts={catalogForRails}
-                      onOpenProduct={openProduct}
-                      catalogBold={catalogBold}
-                      searchQuery={searchQuery}
-                      catalogLoading={catalogLoading}
-                      onClearFilters={() => {
-                        setSearchQuery("");
-                        setActiveCategoryId(null);
-                      }}
-                    />
-                  );
-                }
-                case "footer":
-                  return <FooterSection key={s.id} config={s.config} />;
-                case "reviews":
-                  return (
-                    <ReviewsSection
-                      key={s.id}
-                      config={s.config}
-                      textConfig={props.payload.storefrontTextConfig ?? undefined}
-                    />
-                  );
-                case "faq":
-                  return (
-                    <FaqSection
-                      key={s.id}
-                      config={s.config}
-                      textConfig={props.payload.storefrontTextConfig ?? undefined}
-                    />
-                  );
-                default:
-                  return null;
-              }
-            })();
-            if (chunk == null) return null;
-            return (
-              <div
-                key={s.id}
-                id={`sf-sec-${s.id}`}
-                className="sf-feed__chunk sf-feed__chunk--section sf-feed__chunk--stack"
-                data-sf-section-type={s.type}
-              >
-                {chunk}
-              </div>
-            );
-          })}
+          {catalogFeedSections.map((s) => renderFeedSection(s))}
 
           {(!hasFeaturedSection && (catalog !== null || catalogLoading)) ? (
             <div className="sf-feed__chunk sf-feed__chunk--commerce sf-feed__chunk--stack">
