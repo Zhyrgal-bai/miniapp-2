@@ -811,6 +811,21 @@ export const StorefrontTextBrandingPatchSchema = z
 
 export type StorefrontTextBrandingPatch = z.infer<typeof StorefrontTextBrandingPatchSchema>;
 
+export const StorefrontHeroSlidesPatchSchema = z
+  .object({
+    slides: z
+      .array(
+        z.object({
+          imageUrl: HttpsImageUrl,
+          imagePublicId: z.string().trim().max(256).optional(),
+        }),
+      )
+      .max(LIMITS.maxHeroSlides),
+  })
+  .strict();
+
+export type StorefrontHeroSlidesPatch = z.infer<typeof StorefrontHeroSlidesPatchSchema>;
+
 export function applyStorefrontTextBrandingPatch(
   currentText: unknown,
   patch: StorefrontTextBrandingPatch,
@@ -820,6 +835,51 @@ export function applyStorefrontTextBrandingPatch(
     ...base,
     ...(patch.brandTagline !== undefined ? { brandTagline: patch.brandTagline } : {}),
     ...(patch.drawerTagline !== undefined ? { drawerTagline: patch.drawerTagline } : {}),
+  });
+}
+
+export function applyStorefrontHeroSlidesPatch(
+  cfg: z.infer<typeof StorefrontConfigSchema>,
+  patch: StorefrontHeroSlidesPatch,
+): z.infer<typeof StorefrontConfigSchema> {
+  const heroSlides = patch.slides.map((s) =>
+    HeroSlideSchema.parse({
+      title: "",
+      subtitle: "",
+      imageUrl: s.imageUrl,
+      imagePublicId: s.imagePublicId,
+      ctaText: "",
+      ctaUrl: "",
+    }),
+  );
+
+  let hasHero = false;
+  const sections = cfg.sections.map((section) => {
+    if (section.type !== "hero") return section;
+    hasHero = true;
+    const heroCfg = HeroConfigSchema.parse(section.config ?? {});
+    return {
+      ...section,
+      config: {
+        ...heroCfg,
+        slides: heroSlides,
+      },
+    };
+  });
+
+  if (!hasHero) {
+    sections.push({
+      id: "hero",
+      type: "hero",
+      enabled: true,
+      order: 10,
+      config: { slides: heroSlides },
+    });
+  }
+
+  return StorefrontConfigSchema.parse({
+    ...cfg,
+    sections,
   });
 }
 

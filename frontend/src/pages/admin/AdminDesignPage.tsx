@@ -10,6 +10,7 @@ import { useTheme } from "../../context/ThemeContext";
 import { useStorefrontPayload } from "../../components/storefront/runtime/StorefrontPayloadContext";
 import { saveBusinessThemePut } from "../../services/businessThemeApi";
 import { putStorefrontStyleCatalogPatch } from "../../services/storefrontStyleCatalogApi";
+import { putStorefrontHeroSlidesPatch } from "../../services/storefrontHeroSlidesApi";
 import { putStorefrontTextBrandingPatch } from "../../services/storefrontTextBrandingApi";
 import { adminService } from "../../services/admin.service";
 import { buildCloudinaryResponsiveUrl } from "../../utils/cloudinaryTransforms";
@@ -44,6 +45,35 @@ function normTemplateId(raw: string | null | undefined): StoreTemplateId | null 
     : null;
 }
 
+const MAX_HERO_BANNER_SLIDES = 5;
+
+type BannerSlideDraft = {
+  imageUrl: string;
+  imagePublicId: string | null;
+};
+
+function readHeroSlidesFromPayload(
+  payload: { sections?: Array<{ type: string; config?: Record<string, unknown> }> } | null | undefined,
+): BannerSlideDraft[] {
+  const hero = payload?.sections?.find((s) => s.type === "hero");
+  const slides = hero?.config?.slides;
+  if (!Array.isArray(slides)) return [];
+  return slides
+    .map((raw) => {
+      if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
+      const imageUrl = typeof (raw as { imageUrl?: unknown }).imageUrl === "string"
+        ? String((raw as { imageUrl: string }).imageUrl).trim()
+        : "";
+      if (imageUrl === "") return null;
+      const pid = (raw as { imagePublicId?: unknown }).imagePublicId;
+      return {
+        imageUrl,
+        imagePublicId: typeof pid === "string" && pid.trim() !== "" ? pid.trim() : null,
+      };
+    })
+    .filter((x): x is BannerSlideDraft => x != null);
+}
+
 export default function AdminDesignPage(): ReactElement {
   const { businessId } = useShop();
   const { theme, templateId: serverTemplateId, refresh, loading: themeLoading } =
@@ -59,6 +89,8 @@ export default function AdminDesignPage(): ReactElement {
   const [bannerEnabled, setBannerEnabled] = useState(true);
   const [bannerTitle, setBannerTitle] = useState("");
   const [bannerSubtitle, setBannerSubtitle] = useState("");
+  const [bannerSlides, setBannerSlides] = useState<BannerSlideDraft[]>([]);
+  const [bannerSlideUploadBusy, setBannerSlideUploadBusy] = useState(false);
   const [logoUrl, setLogoUrl] = useState("");
   const [logoPublicId, setLogoPublicId] = useState<string | null>(null);
   const [brandTagline, setBrandTagline] = useState("");
@@ -133,10 +165,15 @@ export default function AdminDesignPage(): ReactElement {
     setRailSpeed(sc.speed);
   }, [storefrontPayload?.storefrontStyleConfig]);
 
+  const syncHeroSlidesFromPayload = useCallback(() => {
+    setBannerSlides(readHeroSlidesFromPayload(storefrontPayload));
+  }, [storefrontPayload]);
+
   useEffect(() => {
     syncCatalogStyleFromPayload();
     syncBrandingFromPayload();
-  }, [syncCatalogStyleFromPayload, syncBrandingFromPayload]);
+    syncHeroSlidesFromPayload();
+  }, [syncCatalogStyleFromPayload, syncBrandingFromPayload, syncHeroSlidesFromPayload]);
 
   useEffect(() => {
     if (businessId == null) return;
@@ -206,6 +243,28 @@ export default function AdminDesignPage(): ReactElement {
     }
   };
 
+  const onBannerSlideFile = async (file: File | null) => {
+    if (!file || businessId == null) return;
+    if (bannerSlides.length >= MAX_HERO_BANNER_SLIDES) {
+      setError(`Можно добавить не больше ${MAX_HERO_BANNER_SLIDES} фото баннера.`);
+      return;
+    }
+    setBannerSlideUploadBusy(true);
+    setError(null);
+    try {
+      const asset = await adminService.uploadImage(file);
+      setBannerSlides((prev) => [
+        ...prev,
+        { imageUrl: asset.url, imagePublicId: asset.publicId },
+      ]);
+      setOk("Фото баннера добавлено. Нажмите «Сохранить».");
+    } catch (e) {
+      setError(formatAdminApiError(e));
+    } finally {
+      setBannerSlideUploadBusy(false);
+    }
+  };
+
   const onSave = async () => {
     if (businessId == null) return;
     setSaving(true);
@@ -235,6 +294,12 @@ export default function AdminDesignPage(): ReactElement {
       await putStorefrontTextBrandingPatch(businessId, {
         brandTagline: brandTagline.trim(),
         drawerTagline: brandTagline.trim(),
+      });
+      await putStorefrontHeroSlidesPatch(businessId, {
+        slides: bannerSlides.map((s) => ({
+          imageUrl: s.imageUrl,
+          ...(s.imagePublicId ? { imagePublicId: s.imagePublicId } : {}),
+        })),
       });
       await putStorefrontStyleCatalogPatch(businessId, {
         catalog: { gridBoost: catalogGridBoost },
@@ -404,6 +469,86 @@ export default function AdminDesignPage(): ReactElement {
               maxLength={280}
             />
           </label>
+          <p className="admin-theme-subtitle admin-theme-hint--tight" style={{ marginTop: 14 }}>
+            Фото баннера
+          </p>
+          <p className="admin-dash-page__muted" style={{ margin: "0 0 10px", fontSize: 13 }}>
+            До {MAX_HERO_BANNER_SLIDES} фото — на витрине листаются свайпом. Заголовок и подзаголовок
+            выше накладываются на каждое фото. Логотип ниже — только в шапке, не в баннере.
+          </p>
+          {bannerSlides.length > 0 ? (
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+                marginBottom: 10,
+              }}
+            >
+              {bannerSlides.map((slide, idx) => (
+                <div
+                  key={`${slide.imageUrl}-${idx}`}
+                  style={{
+                    position: "relative",
+                    width: 88,
+                    height: 110,
+                    borderRadius: 10,
+                    overflow: "hidden",
+                    border: "1px solid color-mix(in srgb, currentColor 18%, transparent)",
+                  }}
+                >
+                  <img
+                    src={buildCloudinaryResponsiveUrl(slide.imageUrl, "thumbnail")}
+                    alt=""
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  />
+                  <button
+                    type="button"
+                    className="admin-theme-reset"
+                    style={{
+                      position: "absolute",
+                      left: 4,
+                      right: 4,
+                      bottom: 4,
+                      fontSize: 11,
+                      padding: "4px 6px",
+                    }}
+                    disabled={saving || bannerSlideUploadBusy}
+                    onClick={() =>
+                      setBannerSlides((prev) => prev.filter((_, i) => i !== idx))
+                    }
+                  >
+                    Удалить
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="admin-dash-page__muted" style={{ margin: "0 0 10px", fontSize: 13 }}>
+              Пока нет фото — добавьте одно или несколько.
+            </p>
+          )}
+          <label className="admin-theme-upload">
+            Добавить фото баннера
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              disabled={
+                logoUploadBusy ||
+                bannerSlideUploadBusy ||
+                saving ||
+                bannerSlides.length >= MAX_HERO_BANNER_SLIDES
+              }
+              onChange={(e) => {
+                const f = e.target.files?.[0] ?? null;
+                void onBannerSlideFile(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          {bannerSlideUploadBusy ? (
+            <p className="admin-dash-page__muted">Загрузка фото баннера…</p>
+          ) : null}
         </div>
 
         <p className="admin-theme-subtitle">Бренд в шапке витрины</p>

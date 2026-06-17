@@ -124,8 +124,10 @@ import {
   StorefrontConfigSchema,
   StorefrontStyleCatalogPatchSchema,
   StorefrontTextBrandingPatchSchema,
+  StorefrontHeroSlidesPatchSchema,
   applyStorefrontStyleCatalogPatch,
   applyStorefrontTextBrandingPatch,
+  applyStorefrontHeroSlidesPatch,
   defaultStorefrontConfig,
   resolveStorefrontConfig,
   type ResolvedStorefrontPayload,
@@ -2068,6 +2070,103 @@ app.put("/api/merchant/storefront-text-branding-patch", async (req: Request, res
     res.json({ ok: true });
   } catch (e) {
     console.error("PUT /api/merchant/storefront-text-branding-patch:", e);
+    res.status(500).json({ error: API_ERR_SERVER });
+  }
+});
+
+app.put("/api/merchant/storefront-hero-slides-patch", async (req: Request, res: Response) => {
+  try {
+    const merchant = await requireMerchantStaff(req, res, MERCHANT_PERM.designEdit);
+    if (!merchant) return;
+
+    const parsedPatch = StorefrontHeroSlidesPatchSchema.safeParse(req.body);
+    if (!parsedPatch.success) {
+      res.status(400).json({ error: formatZodApiError(parsedPatch.error) });
+      return;
+    }
+
+    const bid = merchant.businessId;
+    const b = await prisma.business.findUnique({
+      where: { id: bid },
+      select: {
+        storefrontConfig: true,
+        storefrontPublishedConfig: true,
+      } as any,
+    });
+    if (!b) {
+      res.status(404).json({ error: API_ERR_BUSINESS_NOT_FOUND });
+      return;
+    }
+
+    const sf = await prisma.storefront.findFirst({
+      where: { businessId: bid },
+      orderBy: { id: "asc" },
+      select: { id: true, publishedConfig: true, draftConfig: true } as any,
+    });
+
+    const publishedRaw =
+      sf &&
+      (sf as any).publishedConfig != null &&
+      typeof (sf as any).publishedConfig === "object" &&
+      JSON.stringify((sf as any).publishedConfig) !== "{}"
+        ? (sf as any).publishedConfig
+        : (b as any).storefrontPublishedConfig != null &&
+            typeof (b as any).storefrontPublishedConfig === "object" &&
+            JSON.stringify((b as any).storefrontPublishedConfig) !== "{}"
+          ? (b as any).storefrontPublishedConfig
+          : {};
+    const legacyRaw =
+      (b as any).storefrontConfig != null && typeof (b as any).storefrontConfig === "object"
+        ? (b as any).storefrontConfig
+        : {};
+    const rawConfig =
+      publishedRaw && JSON.stringify(publishedRaw) !== "{}" ? publishedRaw : legacyRaw;
+
+    const cfgParsed = StorefrontConfigSchema.safeParse(rawConfig ?? {});
+    const cfg = cfgParsed.success ? cfgParsed.data : defaultStorefrontConfig();
+
+    const nextCfg = applyStorefrontHeroSlidesPatch(cfg, parsedPatch.data);
+
+    const mergeDraftHeroWithPublished = (draftRaw: unknown) => {
+      const d = StorefrontConfigSchema.safeParse(draftRaw ?? {});
+      const draftBase = d.success ? d.data : defaultStorefrontConfig();
+      return StorefrontConfigSchema.parse({
+        ...draftBase,
+        sections: nextCfg.sections,
+      });
+    };
+
+    if (sf) {
+      const draftMerged = mergeDraftHeroWithPublished((sf as any).draftConfig);
+      await prisma.storefront.update({
+        where: { id: (sf as any).id },
+        data: {
+          publishedConfig: nextCfg as any,
+          draftConfig: draftMerged as any,
+        } as any,
+      });
+    } else {
+      const pubNonempty =
+        (b as any).storefrontPublishedConfig != null &&
+        typeof (b as any).storefrontPublishedConfig === "object" &&
+        JSON.stringify((b as any).storefrontPublishedConfig) !== "{}";
+      if (pubNonempty) {
+        await prisma.business.update({
+          where: { id: bid },
+          data: { storefrontPublishedConfig: nextCfg as any } as any,
+        });
+      } else {
+        await prisma.business.update({
+          where: { id: bid },
+          data: { storefrontConfig: nextCfg as any } as any,
+        });
+      }
+    }
+
+    invalidateStorefrontCache(bid);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("PUT /api/merchant/storefront-hero-slides-patch:", e);
     res.status(500).json({ error: API_ERR_SERVER });
   }
 });
