@@ -15,6 +15,10 @@ import {
   sortCategoriesForTree,
   wouldCreateCategoryCycleFromRows,
 } from "../../src/server/catalog/categoryCatalogService.js";
+import {
+  categoryPathLabel,
+  categorySelectGroups,
+} from "../../frontend/src/utils/categoryTree.js";
 
 describe("catalog P1 — product status", () => {
   it("parses product status values", () => {
@@ -136,6 +140,29 @@ describe("catalog P1 — category tree", () => {
     );
     expect(sql.includes('DROP INDEX IF EXISTS "Category_businessId_name_key"')).toBe(true);
     expect(sql.includes("Category_businessId_parentId_name_key")).toBe(true);
+  });
+
+  it("categorySelectGroups keeps subcategories under their parent", () => {
+    const tree = [
+      {
+        id: 1,
+        name: "Мужское",
+        children: [
+          { id: 10, name: "Зип Худи", parentId: 1 },
+          { id: 11, name: "Футболки", parentId: 1 },
+        ],
+      },
+      {
+        id: 2,
+        name: "Женское",
+        children: [{ id: 20, name: "Зип Худи", parentId: 2 }],
+      },
+    ];
+    const groups = categorySelectGroups(tree);
+    expect(groups).toHaveLength(2);
+    expect(groups[0]?.rootName).toBe("Мужское");
+    expect(groups[1]?.options.map((o) => o.label)).toContain("Зип Худи");
+    expect(categoryPathLabel(20, tree)).toBe("Женское / Зип Худи");
   });
 });
 

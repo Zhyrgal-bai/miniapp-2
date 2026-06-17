@@ -24,3 +24,47 @@ export function flattenCategories(tree: Category[]): Category[] {
   walk(tree);
   return out;
 }
+
+export type CategorySelectGroup = {
+  rootId: number;
+  rootName: string;
+  options: Array<{ id: number; label: string }>;
+};
+
+/** Optgroup-ready options: root category + its subcategories grouped together. */
+export function categorySelectGroups(tree: Category[]): CategorySelectGroup[] {
+  return categoryRoots(tree).map((root) => {
+    const children = root.children ?? [];
+    if (children.length === 0) {
+      return {
+        rootId: root.id,
+        rootName: root.name,
+        options: [{ id: root.id, label: root.name }],
+      };
+    }
+    return {
+      rootId: root.id,
+      rootName: root.name,
+      options: [
+        { id: root.id, label: `Все: ${root.name}` },
+        ...children.map((ch) => ({ id: ch.id, label: ch.name })),
+      ],
+    };
+  });
+}
+
+export function categoryPathLabel(
+  categoryId: number | null | undefined,
+  tree: Category[],
+): string {
+  if (categoryId == null || !Number.isFinite(categoryId)) return "—";
+  for (const root of categoryRoots(tree)) {
+    if (root.id === categoryId) return root.name;
+    for (const child of root.children ?? []) {
+      if (child.id === categoryId) return `${root.name} / ${child.name}`;
+    }
+  }
+  const flat = flattenCategories(tree);
+  const hit = flat.find((c) => c.id === categoryId);
+  return hit?.name ?? "—";
+}

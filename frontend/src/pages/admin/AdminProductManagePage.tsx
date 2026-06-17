@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { showErrorToast } from "../../store/toast.store";
 import { formatAdminApiError } from "../../utils/adminApiError";
 import { adminService } from "../../services/admin.service";
 import type { Category, Product, ProductStatus } from "../../types";
 import { getPrimaryImage, getNormalizedVariants, getTotalStockSum } from "../../utils/product";
-import { flattenCategories } from "../../utils/categoryTree";
+import { categoryPathLabel } from "../../utils/categoryTree";
 import ProductEditModal from "../../components/admin/ProductEditModal";
+import { AdminCategorySelect } from "../../components/admin/AdminCategorySelect";
 
 type SortMode = "default" | "price-asc" | "price-desc";
 
@@ -43,13 +44,12 @@ export default function AdminProductManagePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [quickSaving, setQuickSaving] = useState<number | null>(null);
+  const [bulkCategoryPick, setBulkCategoryPick] = useState("");
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedQuery(query), 300);
     return () => window.clearTimeout(t);
   }, [query]);
-
-  const flatCategories = useMemo(() => flattenCategories(categories), [categories]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -236,19 +236,14 @@ export default function AdminProductManagePage() {
           onChange={(e) => setQuery(e.target.value)}
           aria-label="Поиск"
         />
-        <select
+        <AdminCategorySelect
           className="admin-select admin-pm-select"
+          categories={categories}
           value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
+          placeholder="Все категории"
           aria-label="Категория"
-        >
-          <option value="">Все категории</option>
-          {flatCategories.map((c) => (
-            <option key={c.id} value={String(c.id)}>
-              {c.parentId != null ? `— ${c.name}` : c.name}
-            </option>
-          ))}
-        </select>
+          onChange={(id) => setCategoryFilter(id == null ? "" : String(id))}
+        />
         <select
           className="admin-select admin-pm-select"
           value={statusFilter}
@@ -288,23 +283,17 @@ export default function AdminProductManagePage() {
           <button type="button" className="admin-pm-card__btn" onClick={() => void bulkAction("active")}>
             Активировать
           </button>
-          <select
+          <AdminCategorySelect
             className="admin-select admin-pm-select"
-            defaultValue=""
+            categories={categories}
+            value={bulkCategoryPick}
+            placeholder="Перенести в категорию…"
             aria-label="Перенести в категорию"
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              if (Number.isFinite(v)) void bulkMoveCategory(v);
-              e.target.value = "";
+            onChange={(id) => {
+              if (id != null) void bulkMoveCategory(id);
+              setBulkCategoryPick("");
             }}
-          >
-            <option value="">Перенести в категорию…</option>
-            {flatCategories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          />
         </div>
       )}
 
@@ -333,8 +322,7 @@ export default function AdminProductManagePage() {
               const id = p.id;
               if (id == null) return null;
               const qty = getTotalStockSum(p);
-              const cat = p.category?.name ?? "—";
-              const parentCat = p.category?.parent?.name;
+              const cat = categoryPathLabel(p.categoryId ?? p.category?.id, categories);
               const st = p.status ?? "ACTIVE";
               const isArchived = st === "ARCHIVED";
               return (
@@ -407,21 +395,16 @@ export default function AdminProductManagePage() {
                       </label>
                       <label className="admin-pm-quick__field">
                         <span>Категория</span>
-                        <select
+                        <AdminCategorySelect
                           className="admin-select"
+                          categories={categories}
                           value={p.categoryId ?? p.category?.id ?? ""}
                           disabled={quickSaving === id}
-                          onChange={(e) => {
-                            const v = Number(e.target.value);
-                            if (Number.isFinite(v)) void quickSave(p, { categoryId: v });
+                          aria-label="Категория товара"
+                          onChange={(categoryId) => {
+                            if (categoryId != null) void quickSave(p, { categoryId });
                           }}
-                        >
-                          {flatCategories.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                            </option>
-                          ))}
-                        </select>
+                        />
                       </label>
                     </div>
                     <p className="admin-pm-card__meta">
@@ -432,7 +415,7 @@ export default function AdminProductManagePage() {
                     <dl className="admin-pm-card__dl">
                       <div>
                         <dt>Категория</dt>
-                        <dd>{parentCat ? `${parentCat} / ${cat}` : cat}</dd>
+                        <dd>{cat}</dd>
                       </div>
                     </dl>
                     <div className="admin-pm-card__actions">
