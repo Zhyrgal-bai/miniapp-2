@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   parseProductBulkPatch,
   parseProductListQuery,
@@ -122,6 +124,18 @@ describe("catalog P1 — category tree", () => {
     expect(wouldCreateCategoryCycleFromRows(rows, 1, 3)).toBe(true);
     expect(wouldCreateCategoryCycleFromRows(rows, 2, 2)).toBe(true);
     expect(wouldCreateCategoryCycleFromRows(rows, 3, 1)).toBe(false);
+  });
+
+  it("migration drops global category name unique index", () => {
+    const sql = readFileSync(
+      resolve(
+        process.cwd(),
+        "prisma/migrations/20260702130000_category_name_unique_per_parent_fix/migration.sql",
+      ),
+      "utf8",
+    );
+    expect(sql.includes('DROP INDEX IF EXISTS "Category_businessId_name_key"')).toBe(true);
+    expect(sql.includes("Category_businessId_parentId_name_key")).toBe(true);
   });
 });
 

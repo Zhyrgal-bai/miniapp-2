@@ -4323,6 +4323,18 @@ app.post("/categories", async (req: Request, res: Response) => {
     });
     res.json(category);
   } catch (e) {
+    const code = (e as { code?: string }).code;
+    if (code === "P2002") {
+      const parentIdRaw = (req.body as { parentId?: unknown }).parentId;
+      const parentId =
+        parentIdRaw == null || parentIdRaw === "" ? null : Number(parentIdRaw);
+      return res.status(400).json({
+        error:
+          parentId != null
+            ? "В этой категории уже есть подкатегория с таким названием"
+            : "Корневая категория с таким названием уже существует",
+      });
+    }
     console.error("CREATE CATEGORY ERROR:", e);
     res.status(500).json({ error: "Failed to create category" });
   }

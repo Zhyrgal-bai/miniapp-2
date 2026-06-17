@@ -137,10 +137,15 @@ export async function updateCategory(
   } catch (e) {
     const code = (e as { code?: string }).code;
     if (code === "P2002") {
+      const parentId =
+        input.parentId !== undefined ? input.parentId : existing.parentId;
       return {
         ok: false,
         status: 400,
-        error: "Категория с таким названием уже существует",
+        error:
+          parentId != null
+            ? "В этой категории уже есть подкатегория с таким названием"
+            : "Корневая категория с таким названием уже существует",
       };
     }
     throw e;
