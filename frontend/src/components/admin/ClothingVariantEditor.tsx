@@ -146,20 +146,31 @@ export function ClothingVariantEditor({ drafts, onChange, disabled, noSizes }: P
             <span className="admin-field-label">{noSizes ? "Остаток" : "Размеры"}</span>
             {noSizes ? (
               <div className="admin-variant-editor__list">
-                <div className="admin-variant-option-row">
+                <div className="admin-variant-option-row admin-variant-option-row--stock-only">
                   <input
-                    type="number"
-                    min={0}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     className="admin-input admin-variant-option-row__stock"
                     disabled={disabled}
-                    placeholder="Остаток"
+                    placeholder="Сколько штук в наличии"
                     value={draft.sizes[0]?.stock ?? ""}
                     onChange={(e) => {
-                      const v = e.target.value;
-                      const first = draft.sizes[0] ?? createEmptyOptionRow();
-                      updateSize(draft.id, first.id, {
-                        stock: v === "" ? "" : Math.max(0, Number(v) || 0),
-                      });
+                      const raw = e.target.value.replace(/[^\d]/g, "");
+                      const stock = raw === "" ? "" : Math.max(0, Number(raw) || 0);
+                      onChange(
+                        drafts.map((d) => {
+                          if (d.id !== draft.id) return d;
+                          const rows = d.sizes.length > 0 ? d.sizes : [createEmptyOptionRow()];
+                          const first = rows[0]!;
+                          return {
+                            ...d,
+                            sizes: rows.map((s) =>
+                              s.id === first.id ? { ...s, stock } : s,
+                            ),
+                          };
+                        }),
+                      );
                     }}
                     aria-label="Остаток"
                   />

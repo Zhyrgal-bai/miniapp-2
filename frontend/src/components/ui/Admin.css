@@ -348,6 +348,15 @@
   gap: 8px;
 }
 
+.admin-variant-option-row--stock-only {
+  grid-template-columns: 1fr;
+}
+
+.admin-variant-option-row--stock-only .admin-variant-option-row__stock {
+  min-height: 44px;
+  font-size: 16px;
+}
+
 .admin-variant-option-row__index {
   font-size: 12px;
   font-weight: 700;
