@@ -147,17 +147,23 @@ export function HeroSection(props: {
 
   const cinematicSlides = useMemo((): CinematicHeroSlide[] => {
     return effectiveSlides.filter(slideHasContent).map((slide, idx) => {
-      const title =
-        readString(slide, "title").trim() !== "" ? readString(slide, "title") : defaultTitle;
-      const subtitle =
-        promoSubtitle && idx === 0
+      const title = isBarsStore
+        ? ""
+        : readString(slide, "title").trim() !== ""
+          ? readString(slide, "title")
+          : defaultTitle;
+      const subtitle = isBarsStore
+        ? ""
+        : promoSubtitle && idx === 0
           ? promoSubtitle
           : readString(slide, "subtitle").trim() !== ""
             ? readString(slide, "subtitle")
             : defaultSubtitle;
       const ctaText =
         readString(slide, "ctaText").trim() !== "" ? readString(slide, "ctaText") : defaultCta;
-      const kicker = readKicker(slide, textConfig) || (idx === 0 ? defaultKicker : "");
+      const kicker = isBarsStore
+        ? ""
+        : readKicker(slide, textConfig) || (idx === 0 ? defaultKicker : "");
       return {
         raw: slide,
         title,

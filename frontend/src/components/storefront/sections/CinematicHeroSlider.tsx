@@ -234,7 +234,10 @@ export function CinematicHeroSlider(props: {
               const isActive = i === slideIndex;
               const isLeaving = i === leavingIndex;
               const imgSrc = s.imageUrl
-                ? buildCloudinaryResponsiveUrl(s.imageUrl, "preview")
+                ? buildCloudinaryResponsiveUrl(
+                    s.imageUrl,
+                    storeSlug === "bars" ? "hero" : "preview",
+                  )
                 : "";
               const slideClass = [
                 "sf-cine-hero__slide",
@@ -301,7 +304,19 @@ export function CinematicHeroSlider(props: {
             onPick={onPickProgress}
           />
 
-          {current ? (
+          {storeSlug === "bars" ? (
+            <div className="sf-cine-hero__bars-brand" aria-hidden>
+              <span className="sf-cine-hero__bars-fw">FW25</span>
+              <div className="sf-cine-hero__bars-stack" aria-hidden>
+                <span className="sf-cine-hero__bars-word is-faded">BARŚ</span>
+                <span className="sf-cine-hero__bars-word is-solid">BARŚ</span>
+                <span className="sf-cine-hero__bars-word is-faded">BARŚ</span>
+              </div>
+              <span className="sf-cine-hero__bars-by">by Aslan Toktogulov</span>
+            </div>
+          ) : null}
+
+          {current && storeSlug !== "bars" ? (
             <div className="sf-cine-hero__content" aria-live="polite">
               <div className="sf-cine-hero__content-inner" key={`copy-${slideIndex}-${progressKey}`}>
                 {current.kicker ? (

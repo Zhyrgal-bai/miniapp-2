@@ -149,12 +149,12 @@
   max-height: none;
 }
 
-.sf-root .sf-cine-hero[data-sf-hero-store="bars"] .sf-cine-hero__content {
-  display: none !important;
+.sf-root .sf-cine-hero[data-sf-hero-store="bars"] .sf-cine-hero__img {
+  object-position: 18% center;
 }
 
 .sf-root .sf-cine-hero[data-sf-hero-store="bars"] .sf-cine-hero__shade {
-  opacity: 0.22;
+  opacity: 0.12;
 }
 
 .sf-root .sf-cine-hero__title {
