@@ -210,28 +210,38 @@ export function CatalogFooterSlider(props: {
     const track = trackRef.current;
     if (!track) return;
 
+    const movingRight = rail.direction === "right";
     let rafId = 0;
     let lastTs = 0;
-    const dir = rail.direction === "right" ? 1 : -1;
+    let loopReady = false;
     const speed = RAIL_SCROLL_PX_PER_SEC[rail.speed];
+
+    const applyTransform = (el: HTMLDivElement) => {
+      el.style.transform = `translate3d(${offsetRef.current}px, 0, 0)`;
+    };
 
     const step = (ts: number) => {
       const el = trackRef.current;
       if (!el) return;
 
-      if (!paused) {
+      const loopW = el.scrollWidth / 2;
+      if (loopW > 0 && !loopReady) {
+        offsetRef.current = movingRight ? -loopW : 0;
+        loopReady = true;
+        applyTransform(el);
+      }
+
+      if (!paused && loopReady && loopW > 0) {
         const dt = lastTs > 0 ? Math.min((ts - lastTs) / 1000, 0.05) : 0;
         if (dt > 0) {
-          const loopW = el.scrollWidth / 2;
-          if (loopW > 0) {
-            offsetRef.current += dir * speed * dt;
-            if (dir < 0 && offsetRef.current <= -loopW) {
-              offsetRef.current += loopW;
-            } else if (dir > 0 && offsetRef.current >= loopW) {
-              offsetRef.current -= loopW;
-            }
-            el.style.transform = `translate3d(${offsetRef.current}px, 0, 0)`;
+          if (movingRight) {
+            offsetRef.current += speed * dt;
+            if (offsetRef.current >= 0) offsetRef.current -= loopW;
+          } else {
+            offsetRef.current -= speed * dt;
+            if (offsetRef.current <= -loopW) offsetRef.current += loopW;
           }
+          applyTransform(el);
         }
       }
       lastTs = ts;
