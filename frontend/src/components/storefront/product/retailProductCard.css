@@ -454,12 +454,12 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  border-radius: var(--retail-radius);
+  border: 0;
+  background: transparent;
+  border-radius: 0;
 }
 
 .sf-root[data-sf-vertical="clothing"] .product-card--retail-v1 .retail-card__cta--primary {
-  border: 1px solid color-mix(in srgb, var(--sf-color-primary) 36%, transparent);
-  background: transparent;
   color: var(--sf-color-primary);
   box-shadow: none;
 }
@@ -467,14 +467,13 @@
 .sf-root[data-sf-vertical="clothing"] .product-card--retail-v1 .retail-card__cta--primary:active:not(:disabled) {
   filter: none;
   transform: scale(0.98);
-  background: color-mix(in srgb, var(--sf-color-primary) 10%, transparent);
-  border-color: color-mix(in srgb, var(--sf-color-primary) 48%, transparent);
+  background: color-mix(in srgb, var(--sf-color-primary) 8%, transparent);
 }
 
 .sf-root[data-sf-vertical="clothing"] .product-card--retail-v1 .retail-card__qty {
   min-height: var(--retail-action-min);
   border-radius: var(--retail-radius);
-  border-color: color-mix(in srgb, var(--sf-color-primary) 22%, transparent);
+  border-color: color-mix(in srgb, var(--sf-color-text) 14%, transparent);
 }
 
 .sf-root[data-sf-vertical="flowers"] .product-card.product-card--retail-v1 {
