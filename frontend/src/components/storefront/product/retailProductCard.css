@@ -464,10 +464,28 @@
   box-shadow: none;
 }
 
+.sf-root[data-sf-vertical="clothing"] .product-card--retail-v1 .retail-card__cta--primary .retail-card__cta-label {
+  position: relative;
+  padding-bottom: 5px;
+}
+
+.sf-root[data-sf-vertical="clothing"] .product-card--retail-v1 .retail-card__cta--primary .retail-card__cta-label::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 100%;
+  min-width: 2.75rem;
+  height: 1.5px;
+  background: var(--sf-color-primary);
+  border-radius: 1px;
+}
+
 .sf-root[data-sf-vertical="clothing"] .product-card--retail-v1 .retail-card__cta--primary:active:not(:disabled) {
   filter: none;
   transform: scale(0.98);
-  background: color-mix(in srgb, var(--sf-color-primary) 8%, transparent);
+  background: transparent;
 }
 
 .sf-root[data-sf-vertical="clothing"] .product-card--retail-v1 .retail-card__qty {
