@@ -304,7 +304,7 @@ export function CinematicHeroSlider(props: {
             onPick={onPickProgress}
           />
 
-          {current && storeSlug !== "bars" ? (
+          {current ? (
             <div className="sf-cine-hero__content" aria-live="polite">
               <div className="sf-cine-hero__content-inner" key={`copy-${slideIndex}-${progressKey}`}>
                 {current.kicker ? (
