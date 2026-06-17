@@ -75,6 +75,34 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+.sf-product-rail__viewport--marquee {
+  overflow: hidden;
+  touch-action: pan-y;
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
+.sf-product-rail__viewport--marquee::before,
+.sf-product-rail__viewport--marquee::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.sf-product-rail__viewport--marquee::before {
+  left: 0;
+  background: linear-gradient(90deg, var(--sf-color-bg, #0f172a) 0%, transparent 100%);
+}
+
+.sf-product-rail__viewport--marquee::after {
+  right: 0;
+  background: linear-gradient(270deg, var(--sf-color-bg, #0f172a) 0%, transparent 100%);
+}
+
 .sf-product-rail__viewport--scroll {
   overflow-x: auto;
   overflow-y: hidden;
@@ -115,47 +143,10 @@
   width: 100%;
 }
 
-.sf-product-rail__track--marquee,
-.sf-product-rail__track--animate {
+.sf-product-rail__track--marquee {
   width: max-content;
   justify-content: flex-start;
-}
-
-.sf-product-rail__track--animate {
-  animation: sf-product-rail-marquee var(--sf-rail-dur) linear infinite;
-  -webkit-animation: sf-product-rail-marquee var(--sf-rail-dur) linear infinite;
-}
-
-.sf-product-rail__track--animate.sf-product-rail__track--reverse {
-  animation-direction: reverse;
-}
-
-.sf-product-rail__track--once {
-  animation-iteration-count: 1;
-}
-
-.sf-product-rail__track--paused {
-  animation-play-state: paused !important;
-}
-
-@keyframes sf-product-rail-marquee {
-  from {
-    transform: translate3d(0, 0, 0);
-  }
-  to {
-    transform: translate3d(-50%, 0, 0);
-  }
-}
-
-@-webkit-keyframes sf-product-rail-marquee {
-  from {
-    -webkit-transform: translate3d(0, 0, 0);
-    transform: translate3d(0, 0, 0);
-  }
-  to {
-    -webkit-transform: translate3d(-50%, 0, 0);
-    transform: translate3d(-50%, 0, 0);
-  }
+  transform: translate3d(0, 0, 0);
 }
 
 .sf-product-rail__card {
@@ -279,18 +270,5 @@
       0 14px 32px color-mix(in srgb, #000 28%, transparent),
       0 0 0 1px color-mix(in srgb, var(--sf-rail-accent) 32%, transparent),
       0 0 24px var(--sf-rail-glow);
-  }
-}
-
-.sf-root[data-sf-motion="none"] .sf-product-rail__track--animate,
-[data-sf-motion="reduced"] .sf-product-rail__track--animate {
-  animation: none !important;
-  -webkit-animation: none !important;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sf-product-rail__track--animate {
-    animation: none !important;
-    -webkit-animation: none !important;
   }
 }

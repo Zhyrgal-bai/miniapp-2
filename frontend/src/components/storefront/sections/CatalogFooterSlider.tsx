@@ -1,19 +1,28 @@
 import {
   useCallback,
+  useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
-  type CSSProperties,
   type ReactElement,
 } from "react";
 import type { Product } from "../../../types";
 import {
-  CATALOG_FOOTER_RAIL_SPEED_SECONDS,
   parseCatalogFooterRailSettings,
+  type CatalogFooterRailSpeed,
 } from "../../../storefront/catalogFooterRailSettings";
-import { storefrontMotionLevelFromStyleConfig } from "../../../storefront/buildStorefrontLayoutCssVars";
 import { buildCloudinaryResponsiveUrl } from "../../../utils/cloudinaryTransforms";
 import { getDiscountPercent, getEffectivePrice, getPrimaryImage } from "../../../utils/product";
 import "./CatalogFooterSlider.css";
+
+const TICK_MS = 32;
+
+const RAIL_SCROLL_PX_PER_SEC: Record<CatalogFooterRailSpeed, number> = {
+  slow: 28,
+  medium: 44,
+  fast: 68,
+};
 
 export type ResolvedSlide = {
   imageUrl: string;
@@ -111,22 +120,34 @@ function supportsFineHoverPause(): boolean {
   return window.matchMedia?.("(hover: hover) and (pointer: fine)")?.matches ?? false;
 }
 
+function measureRailLoopWidth(track: HTMLDivElement, slideCount: number): number {
+  if (slideCount <= 0) return 0;
+  const children = track.children;
+  if (children.length < slideCount) return 0;
+  const gap = parseFloat(getComputedStyle(track).columnGap || getComputedStyle(track).gap || "10") || 10;
+  let width = 0;
+  for (let i = 0; i < slideCount; i += 1) {
+    const el = children[i] as HTMLElement | undefined;
+    if (!el) return 0;
+    width += el.getBoundingClientRect().width;
+    if (i > 0) width += gap;
+  }
+  return width;
+}
+
 function ProductRailCard(props: {
   slide: ResolvedSlide;
-  staticImage: boolean;
   eagerImage?: boolean;
   onOpen: (slide: ResolvedSlide) => void;
 }): ReactElement {
-  const { slide, staticImage, eagerImage, onOpen } = props;
+  const { slide, eagerImage, onOpen } = props;
   const title = displayTitle(slide);
   const imgSrc = buildCloudinaryResponsiveUrl(slide.imageUrl, "thumbnail");
 
   return (
     <button
       type="button"
-      className={["sf-product-rail__card", staticImage ? "sf-product-rail__card--static" : ""]
-        .filter(Boolean)
-        .join(" ")}
+      className="sf-product-rail__card"
       onClick={() => onOpen(slide)}
       aria-label={title || "Товар"}
     >
@@ -170,38 +191,95 @@ export function CatalogFooterSlider(props: {
   }, [cfg?.enabled, props.catalogProducts]);
 
   const count = resolved.length;
+  const trackRef = useRef<HTMLDivElement>(null);
+  const offsetRef = useRef(0);
+  const loopWidthRef = useRef(0);
+  const [layoutTick, setLayoutTick] = useState(0);
   const [hoverPaused, setHoverPaused] = useState(false);
 
-  const reducedMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-
-  const motionLevel = storefrontMotionLevelFromStyleConfig(
-    props.storefrontStyleConfig ?? undefined,
-  );
-  const motionDisabled = motionLevel === "none";
-
-  const canAnimate =
-    count > 1 && rail.autoMove && !reducedMotion && !motionDisabled;
+  const canAnimate = count > 1 && rail.autoMove;
 
   const loopSlides = useMemo(() => {
     if (count <= 1) return resolved;
-    if (rail.autoMove && !reducedMotion && rail.infiniteLoop) {
+    if (rail.autoMove && rail.infiniteLoop) {
       return [...resolved, ...resolved];
     }
     return resolved;
-  }, [resolved, count, rail.autoMove, rail.infiniteLoop, reducedMotion]);
+  }, [resolved, count, rail.autoMove, rail.infiniteLoop]);
 
-  const durationSec = CATALOG_FOOTER_RAIL_SPEED_SECONDS[rail.speed];
-  const trackStyle = useMemo(
-    () =>
-      ({
-        ["--sf-rail-dur" as string]: `${durationSec}s`,
-      }) as CSSProperties,
-    [durationSec],
-  );
+  useLayoutEffect(() => {
+    const track = trackRef.current;
+    if (!track || !canAnimate) {
+      loopWidthRef.current = 0;
+      return;
+    }
+    const measure = () => {
+      const loopW = measureRailLoopWidth(track, count);
+      if (loopW > 0 && loopWidthRef.current !== loopW) {
+        loopWidthRef.current = loopW;
+        const movingRight = rail.direction === "right";
+        offsetRef.current = movingRight ? -loopW : 0;
+        track.style.transform = `translate3d(${offsetRef.current}px, 0, 0)`;
+        setLayoutTick((n) => n + 1);
+      }
+    };
+    measure();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    ro?.observe(track);
+    for (const child of track.children) {
+      ro?.observe(child);
+    }
+    const imgs = track.querySelectorAll("img");
+    for (const img of imgs) {
+      if (!(img instanceof HTMLImageElement)) continue;
+      if (!img.complete) img.addEventListener("load", measure, { once: true });
+    }
+    return () => ro?.disconnect();
+  }, [canAnimate, count, rail.direction, loopSlides.length]);
 
-  const animationPaused = hoverPaused && canAnimate && supportsFineHoverPause();
+  useEffect(() => {
+    if (!canAnimate) {
+      const track = trackRef.current;
+      if (track) track.style.transform = "";
+      offsetRef.current = 0;
+      loopWidthRef.current = 0;
+      return;
+    }
+
+    const track = trackRef.current;
+    if (!track) return;
+
+    const movingRight = rail.direction === "right";
+    const speed = RAIL_SCROLL_PX_PER_SEC[rail.speed];
+    const paused = hoverPaused && supportsFineHoverPause();
+
+    const tick = () => {
+      if (document.visibilityState !== "visible") return;
+      const el = trackRef.current;
+      if (!el || paused) return;
+
+      let loopW = loopWidthRef.current;
+      if (loopW <= 0) {
+        loopW = measureRailLoopWidth(el, count);
+        if (loopW <= 0) return;
+        loopWidthRef.current = loopW;
+        offsetRef.current = movingRight ? -loopW : 0;
+      }
+
+      const step = (speed * TICK_MS) / 1000;
+      if (movingRight) {
+        offsetRef.current += step;
+        if (offsetRef.current >= 0) offsetRef.current -= loopW;
+      } else {
+        offsetRef.current -= step;
+        if (offsetRef.current <= -loopW) offsetRef.current += loopW;
+      }
+      el.style.transform = `translate3d(${offsetRef.current}px, 0, 0)`;
+    };
+
+    const id = window.setInterval(tick, TICK_MS);
+    return () => window.clearInterval(id);
+  }, [canAnimate, count, hoverPaused, rail.direction, rail.speed, layoutTick]);
 
   const openSlide = useCallback(
     (slide: ResolvedSlide) => {
@@ -223,11 +301,15 @@ export function CatalogFooterSlider(props: {
 
   const trackClass = [
     "sf-product-rail__track",
-    count > 1 ? "sf-product-rail__track--scroll" : "",
-    canAnimate ? "sf-product-rail__track--animate sf-product-rail__track--marquee" : "",
-    rail.direction === "right" ? "sf-product-rail__track--reverse" : "",
-    !rail.infiniteLoop ? "sf-product-rail__track--once" : "",
-    animationPaused ? "sf-product-rail__track--paused" : "",
+    "sf-product-rail__track--scroll",
+    canAnimate ? "sf-product-rail__track--marquee" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const viewportClass = [
+    "sf-product-rail__viewport",
+    canAnimate ? "sf-product-rail__viewport--marquee" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -241,7 +323,7 @@ export function CatalogFooterSlider(props: {
       <div className="sf-product-rail__wrap">
         <div className="sf-product-rail">
           <div
-            className="sf-product-rail__viewport"
+            className={viewportClass}
             onMouseEnter={() => {
               if (canAnimate && supportsFineHoverPause()) setHoverPaused(true);
             }}
@@ -249,7 +331,7 @@ export function CatalogFooterSlider(props: {
               if (supportsFineHoverPause()) setHoverPaused(false);
             }}
           >
-            <div className={trackClass} style={trackStyle}>
+            <div ref={trackRef} className={trackClass}>
               {loopSlides.map((slide, i) => (
                 <ProductRailCard
                   key={
@@ -258,8 +340,7 @@ export function CatalogFooterSlider(props: {
                       : `${i}-${slide.imageUrl.slice(0, 20)}`
                   }
                   slide={slide}
-                  staticImage={!canAnimate || reducedMotion}
-                  eagerImage={canAnimate || i < Math.min(count, 3)}
+                  eagerImage
                   onOpen={openSlide}
                 />
               ))}
