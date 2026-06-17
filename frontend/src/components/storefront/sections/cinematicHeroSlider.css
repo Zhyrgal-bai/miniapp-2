@@ -356,69 +356,6 @@
   pointer-events: none;
 }
 
-.sf-cine-hero__bars-brand {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  padding: 0 1rem;
-  text-align: center;
-  pointer-events: none;
-}
-
-.sf-cine-hero__bars-fw {
-  font-size: clamp(0.62rem, 2.4vw, 0.82rem);
-  font-weight: 600;
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
-  color: #fff;
-  text-shadow:
-    0 1px 2px rgb(0 0 0 / 55%),
-    0 0 18px rgb(0 0 0 / 35%);
-}
-
-.sf-cine-hero__bars-stack {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.08rem;
-  line-height: 0.92;
-}
-
-.sf-cine-hero__bars-word {
-  font-size: clamp(1.55rem, 7.2vw, 2.65rem);
-  font-weight: 900;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #fff;
-  text-shadow:
-    0 2px 8px rgb(0 0 0 / 50%),
-    0 0 24px rgb(0 0 0 / 28%);
-}
-
-.sf-cine-hero__bars-word.is-faded {
-  opacity: 0.34;
-}
-
-.sf-cine-hero__bars-word.is-solid {
-  opacity: 1;
-}
-
-.sf-cine-hero__bars-by {
-  margin-top: 0.15rem;
-  font-size: clamp(0.72rem, 2.8vw, 0.95rem);
-  font-weight: 500;
-  font-family: "Segoe Script", "Brush Script MT", "Snell Roundhand", cursive;
-  color: #fff;
-  text-shadow:
-    0 1px 3px rgb(0 0 0 / 55%),
-    0 0 16px rgb(0 0 0 / 32%);
-}
-
 .sf-root[data-sf-motion="reduced"] .sf-cine-hero__slide.is-active .sf-cine-hero__img {
   animation: none;
 }

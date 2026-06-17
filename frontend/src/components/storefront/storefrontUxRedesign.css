@@ -150,11 +150,21 @@
 }
 
 .sf-root .sf-cine-hero[data-sf-hero-store="bars"] .sf-cine-hero__img {
-  object-position: 18% center;
+  object-fit: contain;
+  object-position: center center;
+}
+
+.sf-root .sf-cine-hero[data-sf-hero-store="bars"] .sf-cine-hero__media {
+  background: #0f172a;
 }
 
 .sf-root .sf-cine-hero[data-sf-hero-store="bars"] .sf-cine-hero__shade {
-  opacity: 0.12;
+  opacity: 0;
+}
+
+.sf-root .sf-cine-hero[data-sf-hero-store="bars"] .sf-cine-hero__slide.is-active .sf-cine-hero__img {
+  animation: none;
+  transform: none;
 }
 
 .sf-root .sf-cine-hero__title {
