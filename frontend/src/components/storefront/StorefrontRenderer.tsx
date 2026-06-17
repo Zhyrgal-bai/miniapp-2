@@ -449,8 +449,8 @@ export function StorefrontRenderer(props: {
     });
   }, [props.payload.sections]);
 
-  const categoriesSection = useMemo(
-    () => sections.find((sec) => sec.type === "categories") ?? null,
+  const categoriesSectionConfig = useMemo(
+    () => sections.find((sec) => sec.type === "categories")?.config ?? {},
     [sections],
   );
 
@@ -529,11 +529,11 @@ export function StorefrontRenderer(props: {
               onClear={() => setActiveCategoryId(null)}
             />
           </div>
-          {categoriesSection && (props.payload.categories?.length ?? 0) > 0 ? (
+          {(props.payload.categories?.length ?? 0) > 0 ? (
             <div className="sf-feed__chunk sf-feed__chunk--categories sf-feed__chunk--stack">
               <CategoriesSection
                 compact
-                config={categoriesSection.config}
+                config={categoriesSectionConfig}
                 categories={props.payload.categories ?? []}
                 textConfig={props.payload.storefrontTextConfig ?? undefined}
                 activeCategoryId={activeCategoryId}

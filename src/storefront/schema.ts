@@ -1236,7 +1236,7 @@ export function resolveStorefrontConfig(input: {
   const sourceSections: RawStorefrontSection[] =
     enabledRaw.length > 0 ? enabledRaw : defaultSections();
 
-  const sectionsResolved: ResolvedStorefrontSection[] = sourceSections
+  let sectionsResolved: ResolvedStorefrontSection[] = sourceSections
     .map((s) => ({
       id: String((s as any).id),
       type: (s as any).type as SectionType,
@@ -1244,6 +1244,21 @@ export function resolveStorefrontConfig(input: {
       config: resolveSectionConfig((s as any).type as SectionType, (s as any).config),
     }))
     .sort((a, b) => a.order - b.order);
+
+  if (!sectionsResolved.some((s) => s.type === "categories")) {
+    const def = defaultSections().find((s) => s.type === "categories");
+    if (def) {
+      sectionsResolved = [
+        ...sectionsResolved,
+        {
+          id: String(def.id),
+          type: def.type as SectionType,
+          order: def.order,
+          config: resolveSectionConfig(def.type as SectionType, def.config),
+        },
+      ].sort((a, b) => a.order - b.order);
+    }
+  }
 
   const headerCfg =
     StorefrontHeaderConfigSchema.safeParse((migrated as any).storefrontHeaderConfig ?? undefined)

@@ -191,11 +191,12 @@ export async function sendStorefrontPublicPayload(
     }
 
     const enabledTypes = new Set(payload.sections.map((s) => s.type));
-    if (enabledTypes.has("categories")) {
-      const categories = await prisma.category.findMany({
-        where: { businessId },
-        orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
-      });
+
+    const categories = await prisma.category.findMany({
+      where: { businessId },
+      orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+    });
+    if (categories.length > 0) {
       const rows = categories.map((c) => ({
         id: c.id,
         name: c.name,
