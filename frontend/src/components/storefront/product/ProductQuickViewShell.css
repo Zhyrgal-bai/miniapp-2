@@ -1,3 +1,24 @@
+.sf-product-quick-view--fullscreen {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2147482000 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-height: var(--archa-viewport-h, 100dvh) !important;
+  max-height: var(--archa-viewport-h, 100dvh) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+  background: var(--sf-color-background, #141414) !important;
+  pointer-events: auto;
+  box-sizing: border-box;
+}
+
 .sf-product-quick-view__backdrop {
   position: fixed;
   inset: 0;
@@ -11,12 +32,6 @@
   -webkit-backdrop-filter: blur(8px);
 }
 
-.sf-product-quick-view__backdrop--fullscreen {
-  background: var(--sf-color-background, #141414);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
 .sf-product-quick-view__positioner {
   position: fixed;
   inset: 0;
@@ -26,12 +41,6 @@
   display: grid;
   place-items: center;
   pointer-events: none;
-}
-
-.sf-product-quick-view__positioner--fullscreen {
-  --sf-modal-gutter: 0;
-  padding: 0;
-  display: block;
 }
 
 .sf-product-quick-view {
@@ -46,19 +55,6 @@
   border: 1px solid color-mix(in srgb, var(--sf-color-border, #333) 42%, transparent);
   box-shadow: 0 20px 80px color-mix(in srgb, #000 48%, transparent);
   pointer-events: auto;
-}
-
-.sf-product-quick-view--fullscreen {
-  position: absolute;
-  inset: 0;
-  width: auto;
-  max-width: none;
-  height: auto;
-  min-height: var(--archa-viewport-h, 100dvh);
-  max-height: var(--archa-viewport-h, 100dvh);
-  border-radius: 0;
-  border: 0;
-  box-shadow: none;
 }
 
 .sf-product-quick-view__close {
@@ -122,9 +118,9 @@
 }
 
 .sf-product-quick-view--fullscreen .px-screen--quick-view .px-gallery {
+  flex-shrink: 0;
   min-height: min(46dvh, 400px);
   max-height: 50dvh;
-  flex-shrink: 0;
 }
 
 .sf-product-quick-view--fullscreen .px-screen--quick-view .px-gallery__track {
@@ -150,7 +146,7 @@
 }
 
 @media (max-width: 767px) {
-  .sf-product-quick-view__positioner:not(.sf-product-quick-view__positioner--fullscreen) {
+  .sf-product-quick-view__positioner {
     --sf-modal-gutter: clamp(12px, 4vw, 16px);
   }
 

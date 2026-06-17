@@ -957,6 +957,7 @@ export default function App() {
   );
   return (
     <ThemeVarsProvider theme={theme}>
+      <div id="sf-theme-portal-root" data-sf-portal-host />
       <div
         ref={sfAppRef}
         data-sf-kit={sfKit}
@@ -966,7 +967,6 @@ export default function App() {
         data-sf-product-experience={productExperienceOpen ? "open" : undefined}
         style={sfVars as unknown as React.CSSProperties}
       >
-        <div id="sf-theme-portal-root" data-sf-portal-host />
         {content}
       </div>
     </ThemeVarsProvider>

@@ -20,27 +20,42 @@ function portalRoot(): HTMLElement | null {
 }
 
 const MODAL_EASE = [0.22, 1, 0.36, 1] as const;
-const MOBILE_MODAL_MQ = "(max-width: 767px)";
+const DESKTOP_MODAL_MQ = "(min-width: 1024px) and (pointer: fine)";
 const MODAL_MAX_WIDTH: Record<NonNullable<ProductQuickViewShellProps["maxWidth"]>, string> = {
   sm: "640px",
   md: "780px",
   lg: "960px",
 };
 
-function subscribeMobileModal(onStoreChange: () => void): () => void {
+function subscribeFullscreenModal(onStoreChange: () => void): () => void {
   if (typeof window === "undefined") return () => {};
-  const mq = window.matchMedia(MOBILE_MODAL_MQ);
-  mq.addEventListener("change", onStoreChange);
-  return () => mq.removeEventListener("change", onStoreChange);
+  const desktopMq = window.matchMedia(DESKTOP_MODAL_MQ);
+  const coarseMq = window.matchMedia("(pointer: coarse)");
+  const narrowMq = window.matchMedia("(max-width: 1023px)");
+  desktopMq.addEventListener("change", onStoreChange);
+  coarseMq.addEventListener("change", onStoreChange);
+  narrowMq.addEventListener("change", onStoreChange);
+  return () => {
+    desktopMq.removeEventListener("change", onStoreChange);
+    coarseMq.removeEventListener("change", onStoreChange);
+    narrowMq.removeEventListener("change", onStoreChange);
+  };
 }
 
-function getMobileModalSnapshot(): boolean {
+function shouldUseFullscreenProductModal(): boolean {
   if (typeof window === "undefined") return false;
-  return window.matchMedia(MOBILE_MODAL_MQ).matches;
+  if (isTelegramMiniAppEnv()) return true;
+  if (window.matchMedia("(pointer: coarse)").matches) return true;
+  if (window.matchMedia("(max-width: 1023px)").matches) return true;
+  return !window.matchMedia(DESKTOP_MODAL_MQ).matches;
 }
 
-function useMobileQuickView(): boolean {
-  return useSyncExternalStore(subscribeMobileModal, getMobileModalSnapshot, () => false);
+function useFullscreenProductModal(): boolean {
+  return useSyncExternalStore(
+    subscribeFullscreenModal,
+    shouldUseFullscreenProductModal,
+    () => true,
+  );
 }
 
 export function ProductQuickViewShell({
@@ -50,8 +65,7 @@ export function ProductQuickViewShell({
   children,
 }: ProductQuickViewShellProps): React.ReactElement | null {
   useBodyScrollLock(open);
-  const mobileViewport = useMobileQuickView();
-  const fullscreen = isTelegramMiniAppEnv() || mobileViewport;
+  const fullscreen = useFullscreenProductModal();
 
   useEffect(() => {
     if (!open) return;
@@ -65,6 +79,37 @@ export function ProductQuickViewShell({
   const root = portalRoot();
   if (root == null) return null;
 
+  if (fullscreen) {
+    return createPortal(
+      <AnimatePresence>
+        {open ? (
+          <motion.div
+            key="px-qv-fullscreen"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Товар"
+            className="sf-product-quick-view sf-product-quick-view--fullscreen"
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ duration: 0.32, ease: MODAL_EASE }}
+          >
+            <button
+              type="button"
+              className="sf-product-quick-view__close"
+              aria-label="Закрыть"
+              onClick={onClose}
+            >
+              ×
+            </button>
+            <div className="sf-product-quick-view__scroll">{children}</div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>,
+      root,
+    );
+  }
+
   return createPortal(
     <AnimatePresence>
       {open ? (
@@ -72,7 +117,7 @@ export function ProductQuickViewShell({
           <motion.button
             key="px-qv-backdrop"
             type="button"
-            className={`sf-product-quick-view__backdrop${fullscreen ? " sf-product-quick-view__backdrop--fullscreen" : ""}`}
+            className="sf-product-quick-view__backdrop"
             aria-label="Закрыть"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -82,7 +127,7 @@ export function ProductQuickViewShell({
           />
           <motion.div
             key="px-qv-positioner"
-            className={`sf-product-quick-view__positioner${fullscreen ? " sf-product-quick-view__positioner--fullscreen" : ""}`}
+            className="sf-product-quick-view__positioner"
             style={
               {
                 ["--sf-modal-max-width" as string]: MODAL_MAX_WIDTH[maxWidth],
@@ -93,19 +138,11 @@ export function ProductQuickViewShell({
               role="dialog"
               aria-modal="true"
               aria-label="Товар"
-              className={`sf-product-quick-view${fullscreen ? " sf-product-quick-view--fullscreen" : ""}`}
-              initial={
-                fullscreen
-                  ? { opacity: 1, y: "100%" }
-                  : { opacity: 0, y: 20, scale: 0.97 }
-              }
+              className="sf-product-quick-view"
+              initial={{ opacity: 0, y: 20, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={
-                fullscreen
-                  ? { opacity: 1, y: "100%" }
-                  : { opacity: 0, y: 14, scale: 0.97 }
-              }
-              transition={{ duration: fullscreen ? 0.32 : 0.28, ease: MODAL_EASE }}
+              exit={{ opacity: 0, y: 14, scale: 0.97 }}
+              transition={{ duration: 0.28, ease: MODAL_EASE }}
             >
               <button
                 type="button"
