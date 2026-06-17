@@ -594,6 +594,7 @@ export function StorefrontRenderer(props: {
                       featuredPromo={props.payload.featuredPromo ?? null}
                       kit={kit}
                       storefrontSlug={props.payload.storefrontSlug}
+                      storeName={props.payload.storeName}
                       heroStyle={(props.payload.storefrontStyleConfig as Record<string, unknown> | undefined)?.hero as
                         | Record<string, unknown>
                         | undefined}

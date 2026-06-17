@@ -1,5 +1,7 @@
 import { useCallback, useMemo, type ReactElement } from "react";
 import { useTheme } from "../../../context/ThemeContext";
+import { useShop } from "../../../context/ShopContext";
+import barsHeroBannerUrl from "../../../assets/bars-hero-banner.png";
 import {
   formatFeaturedPromoLine,
   type FeaturedPromo,
@@ -44,10 +46,19 @@ function slideHasContent(s: Record<string, unknown>): boolean {
 }
 
 const BARS_STORE_SLUG = "bars";
-const BARS_DEFAULT_BANNER_PATH = "/bars-hero-banner.png";
+const BARS_DEFAULT_BANNER_URL = barsHeroBannerUrl;
 
-function isBarsStorefrontSlug(slug?: string | null): boolean {
-  return String(slug ?? "").trim().toLowerCase() === BARS_STORE_SLUG;
+function normalizeStoreBrand(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toUpperCase();
+}
+
+function isBarsStorefrontContext(slug?: string | null, storeName?: string | null): boolean {
+  if (String(slug ?? "").trim().toLowerCase() === BARS_STORE_SLUG) return true;
+  return normalizeStoreBrand(String(storeName ?? "")) === "BARS";
 }
 
 function readKicker(slide: Record<string, unknown>, textConfig?: Record<string, unknown>): string {
@@ -66,10 +77,13 @@ export function HeroSection(props: {
   kit?: "minimal" | "luxury" | "fashion" | "neon" | "default";
   heroStyle?: Record<string, unknown>;
   storefrontSlug?: string | null;
+  storeName?: string | null;
   onHeroCta?: (ev: HeroCtaPayload) => void;
 }): ReactElement | null {
-  const { config, textConfig, featuredPromo, heroStyle, storefrontSlug, onHeroCta } = props;
-  const isBarsStore = isBarsStorefrontSlug(storefrontSlug);
+  const { config, textConfig, featuredPromo, heroStyle, storefrontSlug, storeName, onHeroCta } =
+    props;
+  const { storefrontSlug: pathSlug } = useShop();
+  const isBarsStore = isBarsStorefrontContext(storefrontSlug ?? pathSlug, storeName);
   const promoSubtitle = useMemo(
     () => (featuredPromo ? formatFeaturedPromoLine(featuredPromo) : ""),
     [featuredPromo],
@@ -84,7 +98,7 @@ export function HeroSection(props: {
     const st = promoSubtitle || String(b?.subtitle ?? "").trim();
     if (b?.enabled && (t !== "" || st !== "")) {
       const logo = typeof theme.logoUrl === "string" ? theme.logoUrl : "";
-      const imageUrl = isBarsStore ? BARS_DEFAULT_BANNER_PATH : logo;
+      const imageUrl = isBarsStore ? BARS_DEFAULT_BANNER_URL : logo;
       return [
         {
           title: b.title ?? "",
@@ -150,7 +164,7 @@ export function HeroSection(props: {
         subtitle,
         kicker,
         ctaText,
-        imageUrl: isBarsStore ? BARS_DEFAULT_BANNER_PATH : readString(slide, "imageUrl"),
+        imageUrl: isBarsStore ? BARS_DEFAULT_BANNER_URL : readString(slide, "imageUrl"),
         overlayGradient: readString(slide, "overlayGradient").trim(),
       };
     });

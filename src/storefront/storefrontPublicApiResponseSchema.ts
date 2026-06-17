@@ -182,6 +182,7 @@ export const StorefrontPublicApiResponseSchema = z
     storefrontTextConfig: z.record(z.string(), z.unknown()),
     storefrontStyleConfig: z.record(z.string(), z.unknown()),
     storeName: z.string().max(200).optional(),
+    storefrontSlug: z.string().max(80).optional(),
     categories: z.array(CategoryTreeNodeSchema).optional(),
     featuredProducts: z.array(FeaturedProductWireSchema).optional(),
     featuredPromo: FeaturedPromoWireSchema.optional(),
