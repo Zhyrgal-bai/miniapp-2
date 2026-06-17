@@ -43,6 +43,13 @@ function slideHasContent(s: Record<string, unknown>): boolean {
   );
 }
 
+const BARS_STORE_SLUG = "bars";
+const BARS_DEFAULT_BANNER_PATH = "/bars-hero-banner.png";
+
+function isBarsStorefrontSlug(slug?: string | null): boolean {
+  return String(slug ?? "").trim().toLowerCase() === BARS_STORE_SLUG;
+}
+
 function readKicker(slide: Record<string, unknown>, textConfig?: Record<string, unknown>): string {
   const fromSlide =
     readString(slide, "kicker").trim() ||
@@ -58,9 +65,11 @@ export function HeroSection(props: {
   featuredPromo?: FeaturedPromo | null;
   kit?: "minimal" | "luxury" | "fashion" | "neon" | "default";
   heroStyle?: Record<string, unknown>;
+  storefrontSlug?: string | null;
   onHeroCta?: (ev: HeroCtaPayload) => void;
 }): ReactElement | null {
-  const { config, textConfig, featuredPromo, heroStyle, onHeroCta } = props;
+  const { config, textConfig, featuredPromo, heroStyle, storefrontSlug, onHeroCta } = props;
+  const isBarsStore = isBarsStorefrontSlug(storefrontSlug);
   const promoSubtitle = useMemo(
     () => (featuredPromo ? formatFeaturedPromoLine(featuredPromo) : ""),
     [featuredPromo],
@@ -75,17 +84,18 @@ export function HeroSection(props: {
     const st = promoSubtitle || String(b?.subtitle ?? "").trim();
     if (b?.enabled && (t !== "" || st !== "")) {
       const logo = typeof theme.logoUrl === "string" ? theme.logoUrl : "";
+      const imageUrl = isBarsStore ? BARS_DEFAULT_BANNER_PATH : logo;
       return [
         {
           title: b.title ?? "",
           subtitle: st,
           ctaText: "",
-          imageUrl: logo,
+          imageUrl,
         } as Record<string, unknown>,
       ];
     }
     return [];
-  }, [slidesRaw, theme.banner, theme.logoUrl, promoSubtitle]);
+  }, [slidesRaw, theme.banner, theme.logoUrl, promoSubtitle, isBarsStore]);
 
   const hasMeaningfulSlide = useMemo(
     () => effectiveSlides.some(slideHasContent),
@@ -113,8 +123,9 @@ export function HeroSection(props: {
   const heroPreset =
     readString(config, "heroPreset").trim() || readString(hs, "heroPreset").trim();
   const heightModeRaw = readString(hs, "heightMode").trim().toLowerCase();
-  const heightMode: "tall" | "compact" | "" =
-    heightModeRaw === "tall"
+  const heightMode: "tall" | "compact" | "" = isBarsStore
+    ? "tall"
+    : heightModeRaw === "tall"
       ? "tall"
       : heightModeRaw === "compact" || heightModeRaw === ""
         ? "compact"
@@ -139,7 +150,7 @@ export function HeroSection(props: {
         subtitle,
         kicker,
         ctaText,
-        imageUrl: readString(slide, "imageUrl"),
+        imageUrl: isBarsStore ? BARS_DEFAULT_BANNER_PATH : readString(slide, "imageUrl"),
         overlayGradient: readString(slide, "overlayGradient").trim(),
       };
     });
@@ -151,6 +162,7 @@ export function HeroSection(props: {
     defaultKicker,
     promoSubtitle,
     textConfig,
+    isBarsStore,
   ]);
 
   const activateCta = useCallback(
@@ -200,6 +212,7 @@ export function HeroSection(props: {
       autoplayMs={autoplayMs}
       heightMode={heightMode}
       heroPreset={heroPreset}
+      storeSlug={isBarsStore ? BARS_STORE_SLUG : undefined}
       ctaPosition={ctaPosition}
       onActivateCta={activateCta}
     />

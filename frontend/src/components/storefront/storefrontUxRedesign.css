@@ -138,6 +138,13 @@
   border-radius: var(--sf-ux-radius-card) !important;
 }
 
+.sf-root .sf-cine-hero[data-sf-hero-store="bars"],
+.sf-root .sf-cine-hero[data-sf-hero-store="bars"][data-sf-hero-height="tall"] {
+  --sf-cine-height: clamp(280px, 52vw, 420px);
+  height: var(--sf-cine-height);
+  max-height: none;
+}
+
 .sf-root .sf-cine-hero__title {
   font-size: var(--sf-ux-h2) !important;
   line-height: 1.2 !important;

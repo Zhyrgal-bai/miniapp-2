@@ -93,10 +93,11 @@ export function CinematicHeroSlider(props: {
   autoplayMs: number;
   heightMode?: "tall" | "compact" | "";
   heroPreset?: string;
+  storeSlug?: string;
   ctaPosition: "below" | "overlay" | "hidden";
   onActivateCta: (slide: Record<string, unknown>) => void;
 }): ReactElement {
-  const { slides, autoplayMs, heightMode, heroPreset, ctaPosition, onActivateCta } = props;
+  const { slides, autoplayMs, heightMode, heroPreset, storeSlug, ctaPosition, onActivateCta } = props;
   const count = slides.length;
 
   const [slideIndex, setSlideIndex] = useState(0);
@@ -219,6 +220,7 @@ export function CinematicHeroSlider(props: {
         className="sf-cine-hero"
         data-sf-hero-preset={heroPreset || undefined}
         data-sf-hero-height={heightMode || undefined}
+        data-sf-hero-store={storeSlug || undefined}
         style={rootStyle}
       >
         <div
