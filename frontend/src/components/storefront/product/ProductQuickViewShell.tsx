@@ -1,4 +1,4 @@
-import { useEffect, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useBodyScrollLock } from "../../../utils/bodyScrollLock";
@@ -19,11 +19,28 @@ function portalRoot(): HTMLElement | null {
 }
 
 const MODAL_EASE = [0.22, 1, 0.36, 1] as const;
+const MOBILE_MODAL_MQ = "(max-width: 767px)";
 const MODAL_MAX_WIDTH: Record<NonNullable<ProductQuickViewShellProps["maxWidth"]>, string> = {
   sm: "640px",
   md: "780px",
   lg: "960px",
 };
+
+function subscribeMobileModal(onStoreChange: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  const mq = window.matchMedia(MOBILE_MODAL_MQ);
+  mq.addEventListener("change", onStoreChange);
+  return () => mq.removeEventListener("change", onStoreChange);
+}
+
+function getMobileModalSnapshot(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia(MOBILE_MODAL_MQ).matches;
+}
+
+function useMobileQuickView(): boolean {
+  return useSyncExternalStore(subscribeMobileModal, getMobileModalSnapshot, () => false);
+}
 
 export function ProductQuickViewShell({
   open,
@@ -32,6 +49,7 @@ export function ProductQuickViewShell({
   children,
 }: ProductQuickViewShellProps): React.ReactElement | null {
   useBodyScrollLock(open);
+  const mobileFullscreen = useMobileQuickView();
 
   useEffect(() => {
     if (!open) return;
@@ -62,7 +80,7 @@ export function ProductQuickViewShell({
           />
           <motion.div
             key="px-qv-positioner"
-            className="sf-product-quick-view__positioner"
+            className={`sf-product-quick-view__positioner${mobileFullscreen ? " sf-product-quick-view__positioner--mobile" : ""}`}
             style={
               {
                 ["--sf-modal-max-width" as string]: MODAL_MAX_WIDTH[maxWidth],
@@ -73,11 +91,19 @@ export function ProductQuickViewShell({
               role="dialog"
               aria-modal="true"
               aria-label="Товар"
-              className="sf-product-quick-view"
-              initial={{ opacity: 0, y: 20, scale: 0.97 }}
+              className={`sf-product-quick-view${mobileFullscreen ? " sf-product-quick-view--mobile" : ""}`}
+              initial={
+                mobileFullscreen
+                  ? { opacity: 1, y: "100%" }
+                  : { opacity: 0, y: 20, scale: 0.97 }
+              }
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 14, scale: 0.97 }}
-              transition={{ duration: 0.28, ease: MODAL_EASE }}
+              exit={
+                mobileFullscreen
+                  ? { opacity: 1, y: "100%" }
+                  : { opacity: 0, y: 14, scale: 0.97 }
+              }
+              transition={{ duration: mobileFullscreen ? 0.32 : 0.28, ease: MODAL_EASE }}
             >
               <button
                 type="button"
