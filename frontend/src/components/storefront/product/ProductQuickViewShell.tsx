@@ -2,6 +2,7 @@ import { useEffect, useSyncExternalStore, type CSSProperties, type ReactNode } f
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useBodyScrollLock } from "../../../utils/bodyScrollLock";
+import { isTelegramMiniAppEnv } from "../../../utils/telegramSession";
 import "./ProductQuickViewShell.css";
 
 export type ProductQuickViewShellProps = {
@@ -49,7 +50,8 @@ export function ProductQuickViewShell({
   children,
 }: ProductQuickViewShellProps): React.ReactElement | null {
   useBodyScrollLock(open);
-  const mobileFullscreen = useMobileQuickView();
+  const mobileViewport = useMobileQuickView();
+  const fullscreen = isTelegramMiniAppEnv() || mobileViewport;
 
   useEffect(() => {
     if (!open) return;
@@ -70,7 +72,7 @@ export function ProductQuickViewShell({
           <motion.button
             key="px-qv-backdrop"
             type="button"
-            className="sf-product-quick-view__backdrop"
+            className={`sf-product-quick-view__backdrop${fullscreen ? " sf-product-quick-view__backdrop--fullscreen" : ""}`}
             aria-label="Закрыть"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -80,7 +82,7 @@ export function ProductQuickViewShell({
           />
           <motion.div
             key="px-qv-positioner"
-            className={`sf-product-quick-view__positioner${mobileFullscreen ? " sf-product-quick-view__positioner--mobile" : ""}`}
+            className={`sf-product-quick-view__positioner${fullscreen ? " sf-product-quick-view__positioner--fullscreen" : ""}`}
             style={
               {
                 ["--sf-modal-max-width" as string]: MODAL_MAX_WIDTH[maxWidth],
@@ -91,19 +93,19 @@ export function ProductQuickViewShell({
               role="dialog"
               aria-modal="true"
               aria-label="Товар"
-              className={`sf-product-quick-view${mobileFullscreen ? " sf-product-quick-view--mobile" : ""}`}
+              className={`sf-product-quick-view${fullscreen ? " sf-product-quick-view--fullscreen" : ""}`}
               initial={
-                mobileFullscreen
+                fullscreen
                   ? { opacity: 1, y: "100%" }
                   : { opacity: 0, y: 20, scale: 0.97 }
               }
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={
-                mobileFullscreen
+                fullscreen
                   ? { opacity: 1, y: "100%" }
                   : { opacity: 0, y: 14, scale: 0.97 }
               }
-              transition={{ duration: mobileFullscreen ? 0.32 : 0.28, ease: MODAL_EASE }}
+              transition={{ duration: fullscreen ? 0.32 : 0.28, ease: MODAL_EASE }}
             >
               <button
                 type="button"
