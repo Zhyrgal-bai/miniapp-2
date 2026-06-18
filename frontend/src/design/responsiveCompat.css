@@ -189,7 +189,7 @@
     padding-block: 6px;
   }
 
-  .px-gallery {
+  .px-screen--quick-view .px-gallery {
     min-height: min(40dvh, 280px);
     max-height: 45dvh;
   }

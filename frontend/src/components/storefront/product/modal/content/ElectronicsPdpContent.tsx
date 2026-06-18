@@ -7,6 +7,7 @@ import { isStorefrontCommerceEnabled } from "../../../../../hooks/useStorefrontC
 import { useProductExperience } from "../../useProductExperience";
 import { PdpGallery } from "../../pdp/PdpGallery";
 import { PdpStickyBar } from "../../pdp/PdpStickyBar";
+import { pxScreenClasses } from "../../pdp/pxScreenClasses";
 import { pickString, productAttrs } from "../../shared/productAttrs";
 import "../../ProductExperienceScreen.css";
 import "./ElectronicsPdpContent.css";
@@ -18,6 +19,7 @@ type Props = {
   catalogProducts: Product[];
   onClose: () => void;
   onSelectProduct: (p: Product) => void;
+  pageLayout?: boolean;
 };
 
 const SPEC_FIELDS = [
@@ -37,6 +39,7 @@ export function ElectronicsPdpContent({
   product,
   businessId,
   businessType,
+  pageLayout = false,
 }: Props): React.ReactElement {
   const { payload } = useStorefrontPayload();
   const commerceEnabled = isStorefrontCommerceEnabled();
@@ -107,7 +110,11 @@ export function ElectronicsPdpContent({
 
   return (
     <div
-      className="px-screen px-screen--telegram px-screen--quick-view px-screen--layout-electronics electronics-pdp"
+      className={pxScreenClasses({
+        pageLayout,
+        layoutId: "electronics",
+        pdpClass: "electronics-pdp",
+      })}
       data-px-commerce={commerceEnabled ? "telegram" : "web"}
       data-sf-vertical="electronics"
     >

@@ -15,12 +15,11 @@ import { FurniturePdpContent } from "./FurniturePdpContent";
 type BaseProps = Omit<
   ProductExperienceScreenProps,
   "quickView" | "heroFacts" | "noticeText" | "addLabelOverride" | "layoutId"
-> & { product: Product };
+> & { product: Product; pageLayout?: boolean };
 
 type VerticalProductModalContentProps = BaseProps & {
   rendererId: "product-experience-v2" | "generic-v2";
   forceGeneric?: boolean;
-  pageLayout?: boolean;
 };
 
 function withQuickView(
@@ -38,7 +37,8 @@ function withQuickView(
   return (
     <ProductExperienceScreen
       {...props}
-      quickView
+      quickView={!props.pageLayout}
+      pageLayout={props.pageLayout}
       heroFacts={heroFacts}
       noticeText={options.noticeText ?? null}
       addLabelOverride={options.addLabelOverride ?? null}
@@ -64,7 +64,7 @@ export function VerticalProductModalContent(
     return <GenericProductModalContent {...props} />;
   }
   const vertical = normalizeBusinessType(props);
-  if (vertical === "clothing") return <ClothingPdpContent {...props} pageLayout={props.pageLayout} />;
+  if (vertical === "clothing") return <ClothingPdpContent {...props} />;
   if (vertical === "flowers") return <FlowersPdpContent {...props} />;
   if (vertical === "coffee") return <CoffeePdpContent {...props} />;
   if (vertical === "fastfood") return <FastfoodPdpContent {...props} />;

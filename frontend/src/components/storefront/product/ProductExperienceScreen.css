@@ -90,6 +90,36 @@
   background: color-mix(in srgb, var(--sf-color-surface, #242424) 72%, transparent);
 }
 
+.px-screen--product-page[data-sf-vertical="flowers"] .px-gallery {
+  aspect-ratio: 4 / 5;
+}
+
+.px-screen--product-page[data-sf-vertical="coffee"] .px-gallery,
+.px-screen--product-page[data-sf-vertical="fastfood"] .px-gallery,
+.px-screen--product-page[data-sf-vertical="electronics"] .px-gallery,
+.px-screen--product-page[data-sf-vertical="autoparts"] .px-gallery {
+  aspect-ratio: 1 / 1;
+}
+
+.px-screen--product-page[data-sf-vertical="cosmetics"] .px-gallery {
+  aspect-ratio: 4 / 5;
+}
+
+.px-screen--product-page[data-sf-vertical="furniture"] .px-gallery {
+  aspect-ratio: 16 / 10;
+}
+
+.px-screen--product-page[data-sf-vertical="electronics"] .px-gallery__slide img,
+.px-screen--product-page[data-sf-vertical="autoparts"] .px-gallery__slide img {
+  object-fit: contain;
+  padding: 6px;
+  background: color-mix(in srgb, var(--sf-color-surface, #242424) 88%, transparent);
+}
+
+.px-screen--product-page.px-screen--layout-generic .px-gallery {
+  aspect-ratio: 4 / 5;
+}
+
 .px-screen--quick-view .px-gallery {
   min-height: min(34dvh, 320px);
   max-height: 42dvh;

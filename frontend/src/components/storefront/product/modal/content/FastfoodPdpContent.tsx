@@ -9,6 +9,7 @@ import type { SchemaObject } from "../../../../admin/DynamicFieldRenderer";
 import { useProductExperience } from "../../useProductExperience";
 import { PdpGallery } from "../../pdp/PdpGallery";
 import { PdpStickyBar } from "../../pdp/PdpStickyBar";
+import { pxScreenClasses } from "../../pdp/pxScreenClasses";
 import { pickNumber, pickString, productAttrs } from "../../shared/productAttrs";
 import "../../ProductExperienceScreen.css";
 import "./FastfoodPdpContent.css";
@@ -20,6 +21,7 @@ type Props = {
   catalogProducts: Product[];
   onClose: () => void;
   onSelectProduct: (p: Product) => void;
+  pageLayout?: boolean;
 };
 
 function formatSom(v: number): string {
@@ -36,6 +38,7 @@ export function FastfoodPdpContent({
   product,
   businessId,
   businessType,
+  pageLayout = false,
 }: Props): React.ReactElement {
   const { payload } = useStorefrontPayload();
   const commerceEnabled = isStorefrontCommerceEnabled();
@@ -74,7 +77,11 @@ export function FastfoodPdpContent({
 
   return (
     <div
-      className="px-screen px-screen--telegram px-screen--quick-view px-screen--layout-fastfood fastfood-pdp"
+      className={pxScreenClasses({
+        pageLayout,
+        layoutId: "fastfood",
+        pdpClass: "fastfood-pdp",
+      })}
       data-px-commerce={commerceEnabled ? "telegram" : "web"}
       data-sf-vertical="fastfood"
     >

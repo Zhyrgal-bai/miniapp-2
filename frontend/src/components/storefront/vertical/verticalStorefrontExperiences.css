@@ -168,7 +168,7 @@
   font-weight: 500 !important;
 }
 
-.px-screen[data-sf-vertical="flowers"] .px-gallery {
+.px-screen[data-sf-vertical="flowers"]:not(.px-screen--product-page) .px-gallery {
   min-height: min(50dvh, 400px);
   border-radius: 0 0 20px 20px;
 }
@@ -271,11 +271,11 @@
   display: none;
 }
 
-.px-screen[data-sf-vertical="coffee"] .px-gallery {
+.px-screen[data-sf-vertical="coffee"]:not(.px-screen--product-page) .px-gallery {
   min-height: min(36dvh, 280px);
 }
 
-.px-screen[data-sf-vertical="coffee"] .px-gallery__track {
+.px-screen[data-sf-vertical="coffee"]:not(.px-screen--product-page) .px-gallery__track {
   min-height: min(32dvh, 240px);
   max-height: 38dvh;
 }
@@ -389,11 +389,11 @@
   color: var(--sf-on-primary, #fff);
 }
 
-.px-screen[data-sf-vertical="fastfood"] .px-gallery {
+.px-screen[data-sf-vertical="fastfood"]:not(.px-screen--product-page) .px-gallery {
   min-height: min(40dvh, 320px);
 }
 
-.px-screen[data-sf-vertical="fastfood"] .px-gallery__track {
+.px-screen[data-sf-vertical="fastfood"]:not(.px-screen--product-page) .px-gallery__track {
   min-height: min(36dvh, 280px);
   max-height: 42dvh;
 }

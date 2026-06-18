@@ -6,6 +6,7 @@ import { isStorefrontCommerceEnabled } from "../../../../../hooks/useStorefrontC
 import { useProductExperience } from "../../useProductExperience";
 import { PdpGallery } from "../../pdp/PdpGallery";
 import { PdpStickyBar } from "../../pdp/PdpStickyBar";
+import { pxScreenClasses } from "../../pdp/pxScreenClasses";
 import "../../ProductExperienceScreen.css";
 import "./ClothingPdpContent.css";
 
@@ -102,13 +103,11 @@ export function ClothingPdpContent({
 
   return (
     <div
-      className={[
-        "px-screen",
-        "px-screen--telegram",
-        pageLayout ? "px-screen--product-page" : "px-screen--quick-view",
-        "px-screen--layout-clothing",
-        "clothing-pdp",
-      ].join(" ")}
+      className={pxScreenClasses({
+        pageLayout,
+        layoutId: "clothing",
+        pdpClass: "clothing-pdp",
+      })}
       data-px-commerce={commerceEnabled ? "telegram" : "web"}
       data-sf-vertical="clothing"
     >

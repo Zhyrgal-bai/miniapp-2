@@ -7,6 +7,7 @@ import type { SchemaObject } from "../../../../admin/DynamicFieldRenderer";
 import { useProductExperience } from "../../useProductExperience";
 import { PdpGallery } from "../../pdp/PdpGallery";
 import { PdpStickyBar } from "../../pdp/PdpStickyBar";
+import { pxScreenClasses } from "../../pdp/pxScreenClasses";
 import "../../ProductExperienceScreen.css";
 import "./FlowersPdpContent.css";
 
@@ -17,6 +18,7 @@ type Props = {
   catalogProducts: Product[];
   onClose: () => void;
   onSelectProduct: (p: Product) => void;
+  pageLayout?: boolean;
 };
 
 function formatSom(v: number): string {
@@ -48,6 +50,7 @@ export function FlowersPdpContent({
   product,
   businessId,
   businessType,
+  pageLayout = false,
 }: Props): React.ReactElement {
   const { payload } = useStorefrontPayload();
   const commerceEnabled = isStorefrontCommerceEnabled();
@@ -91,7 +94,11 @@ export function FlowersPdpContent({
 
   return (
     <div
-      className="px-screen px-screen--telegram px-screen--quick-view px-screen--layout-flowers flowers-pdp"
+      className={pxScreenClasses({
+        pageLayout,
+        layoutId: "flowers",
+        pdpClass: "flowers-pdp",
+      })}
       data-px-commerce={commerceEnabled ? "telegram" : "web"}
       data-sf-vertical="flowers"
     >

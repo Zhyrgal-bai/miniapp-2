@@ -8,6 +8,7 @@ import type { SchemaObject } from "../../../../admin/DynamicFieldRenderer";
 import { useProductExperience } from "../../useProductExperience";
 import { PdpGallery } from "../../pdp/PdpGallery";
 import { PdpStickyBar } from "../../pdp/PdpStickyBar";
+import { pxScreenClasses } from "../../pdp/pxScreenClasses";
 import { pickString, productAttrs } from "../../shared/productAttrs";
 import "../../ProductExperienceScreen.css";
 import "./AutopartsPdpContent.css";
@@ -19,6 +20,7 @@ type Props = {
   catalogProducts: Product[];
   onClose: () => void;
   onSelectProduct: (p: Product) => void;
+  pageLayout?: boolean;
 };
 
 const FITMENT_FIELDS = [
@@ -36,6 +38,7 @@ export function AutopartsPdpContent({
   product,
   businessId,
   businessType,
+  pageLayout = false,
 }: Props): React.ReactElement {
   const { payload } = useStorefrontPayload();
   const commerceEnabled = isStorefrontCommerceEnabled();
@@ -117,7 +120,11 @@ export function AutopartsPdpContent({
 
   return (
     <div
-      className="px-screen px-screen--telegram px-screen--quick-view px-screen--layout-autoparts autoparts-pdp"
+      className={pxScreenClasses({
+        pageLayout,
+        layoutId: "autoparts",
+        pdpClass: "autoparts-pdp",
+      })}
       data-px-commerce={commerceEnabled ? "telegram" : "web"}
       data-sf-vertical="autoparts"
     >

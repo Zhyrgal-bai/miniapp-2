@@ -6,6 +6,7 @@ import { isStorefrontCommerceEnabled } from "../../../../../hooks/useStorefrontC
 import { useProductExperience } from "../../useProductExperience";
 import { PdpGallery } from "../../pdp/PdpGallery";
 import { PdpStickyBar } from "../../pdp/PdpStickyBar";
+import { pxScreenClasses } from "../../pdp/pxScreenClasses";
 import { pickString, productAttrs } from "../../shared/productAttrs";
 import "../../ProductExperienceScreen.css";
 import "./FurniturePdpContent.css";
@@ -17,6 +18,7 @@ type Props = {
   catalogProducts: Product[];
   onClose: () => void;
   onSelectProduct: (p: Product) => void;
+  pageLayout?: boolean;
 };
 
 const SPEC_FIELDS = [
@@ -38,6 +40,7 @@ export function FurniturePdpContent({
   product,
   businessId,
   businessType,
+  pageLayout = false,
 }: Props): React.ReactElement {
   const { payload } = useStorefrontPayload();
   const commerceEnabled = isStorefrontCommerceEnabled();
@@ -117,7 +120,11 @@ export function FurniturePdpContent({
 
   return (
     <div
-      className="px-screen px-screen--telegram px-screen--quick-view px-screen--layout-furniture furniture-pdp"
+      className={pxScreenClasses({
+        pageLayout,
+        layoutId: "furniture",
+        pdpClass: "furniture-pdp",
+      })}
       data-px-commerce={commerceEnabled ? "telegram" : "web"}
       data-sf-vertical="furniture"
     >

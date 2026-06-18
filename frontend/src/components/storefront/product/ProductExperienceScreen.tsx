@@ -26,6 +26,8 @@ export type ProductExperienceScreenProps = {
   onSelectProduct: (p: Product) => void;
   /** Quick View shell — compact layout inside centered modal. */
   quickView?: boolean;
+  /** Full-page product shell (mobile catalog swap). */
+  pageLayout?: boolean;
   heroFacts?: string[];
   noticeText?: string | null;
   addLabelOverride?: string | null;
@@ -53,6 +55,7 @@ export function ProductExperienceScreen({
   onClose,
   onSelectProduct,
   quickView = false,
+  pageLayout = false,
   heroFacts = [],
   noticeText = null,
   addLabelOverride = null,
@@ -200,12 +203,14 @@ export function ProductExperienceScreen({
       </section>
     ) : null;
 
+  const compactProduct = quickView || pageLayout;
+
   return (
     <div
       className={[
         "px-screen",
         isWeb ? "px-screen--web" : "px-screen--telegram",
-        quickView ? "px-screen--quick-view" : "",
+        pageLayout ? "px-screen--product-page" : quickView ? "px-screen--quick-view" : "",
         `px-screen--layout-${layoutId}`,
       ]
         .filter(Boolean)
@@ -213,7 +218,7 @@ export function ProductExperienceScreen({
       data-px-commerce={commerceEnabled ? "telegram" : "web"}
       data-sf-vertical={verticalExperience !== "default" ? verticalExperience : undefined}
     >
-      {isWeb && !quickView ? (
+      {isWeb && !compactProduct ? (
         <header className="px-topbar">
           <button type="button" className="px-topbar__back" onClick={onClose}>
             ← Назад
@@ -228,7 +233,7 @@ export function ProductExperienceScreen({
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
-          {!quickView ? (
+          {!compactProduct ? (
             <AmbientImageGlow
               src={px.images[galleryIndex] ?? px.images[0]}
               className="sf-ambient-glow--px-gallery"
@@ -370,7 +375,7 @@ export function ProductExperienceScreen({
             </p>
           ) : null}
 
-          {!quickView && related.length > 0 ? (
+          {!compactProduct && related.length > 0 ? (
             <section className="px-block px-block--related">
               <h2 className="px-block__label">
                 {ru.discovery.titleRelated}
