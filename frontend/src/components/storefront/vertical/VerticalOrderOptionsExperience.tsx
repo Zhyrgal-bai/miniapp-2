@@ -16,7 +16,7 @@ type Props = {
 };
 
 const FIELD_ORDER: Record<string, string[]> = {
-  flowers: ["deliveryDate", "packaging"],
+  flowers: ["deliveryDate", "packaging", "occasion", "postcardText"],
   coffee: ["hotOrCold", "milk", "sugar", "syrups"],
   fastfood: ["combo", "spicy", "addons", "orderNote"],
   electronics: ["serialNumber"],
@@ -93,7 +93,12 @@ function sectionTitle(
   return fieldLabel;
 }
 
-type OrderField = FieldSchema & { maxLen?: number; default?: unknown };
+type OrderField = FieldSchema & { maxLen?: number; default?: unknown; required?: boolean };
+
+function fieldLabelText(label: string, field: OrderField): string {
+  if (field.required === true) return label;
+  return `${label} (необязательно)`;
+}
 
 function renderSelectPills(
   key: string,
@@ -237,7 +242,7 @@ function renderText(
   onChange: (next: Record<string, unknown>) => void,
   value: Record<string, unknown>,
 ): React.ReactElement {
-  const label = sectionTitle(vertical, key, field.label ?? key);
+  const label = fieldLabelText(sectionTitle(vertical, key, field.label ?? key), field);
   const isPostcard = key === "postcardText";
   const isOrderNote = key === "orderNote";
 

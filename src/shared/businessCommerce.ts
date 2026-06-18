@@ -457,7 +457,7 @@ export function orderOptionKeysExcludedFromStorefront(
     case "coffee":
       return new Set(["volume"]);
     case "flowers":
-      return new Set(["bouquetCount", "occasion", "postcardText"]);
+      return new Set(["bouquetCount"]);
     case "fastfood":
       return new Set(["size"]);
     case "electronics":
