@@ -21,6 +21,75 @@
   background: var(--sf-color-background, #141414);
 }
 
+/* Full-page product (replaces catalog on mobile) — no modal/quick-view height clamps */
+.px-screen--product-page {
+  min-height: 0;
+  height: auto;
+  flex: 1;
+  background: var(--sf-color-background, #141414);
+}
+
+.px-screen--product-page .px-gallery {
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: 0;
+  max-height: none;
+  margin: 0;
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.px-screen--product-page .px-gallery__track {
+  flex: 1 1 auto;
+  align-self: stretch;
+  width: 100%;
+  min-height: 0;
+  max-height: none;
+  height: 100%;
+}
+
+.px-screen--product-page .px-gallery__slide {
+  height: 100%;
+  min-height: 0;
+}
+
+.px-screen--product-page .px-gallery__slide img {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: cover;
+  object-position: center center;
+}
+
+.px-screen--product-page .px-main {
+  max-width: none;
+  margin: 0;
+  padding: 12px var(--px-pad) 0;
+}
+
+.px-screen--product-page .px-sticky {
+  position: sticky;
+  bottom: 0;
+  max-width: none;
+  margin-inline: 0;
+  width: 100%;
+  padding-inline: var(--px-pad);
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  background: var(--sf-color-background, #141414);
+  border-top: 1px solid color-mix(in srgb, var(--sf-color-border) 45%, transparent);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.px-screen--product-page .px-sticky-spacer {
+  height: calc(104px + env(safe-area-inset-bottom, 0px));
+}
+
+.px-screen--product-page[data-sf-vertical="clothing"] .px-gallery {
+  aspect-ratio: 3 / 4;
+  background: color-mix(in srgb, var(--sf-color-surface, #242424) 72%, transparent);
+}
+
 .px-screen--quick-view .px-gallery {
   min-height: min(34dvh, 320px);
   max-height: 42dvh;

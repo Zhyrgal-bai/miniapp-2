@@ -56,12 +56,12 @@
   opacity: 0.92;
 }
 
-.px-screen[data-sf-vertical="clothing"] .px-gallery {
+.px-screen[data-sf-vertical="clothing"]:not(.px-screen--product-page) .px-gallery {
   min-height: min(52dvh, 420px);
   background: color-mix(in srgb, var(--sf-color-background) 96%, #000);
 }
 
-.px-screen[data-sf-vertical="clothing"] .px-gallery__track {
+.px-screen[data-sf-vertical="clothing"]:not(.px-screen--product-page) .px-gallery__track {
   min-height: min(48dvh, 380px);
   max-height: 56dvh;
 }

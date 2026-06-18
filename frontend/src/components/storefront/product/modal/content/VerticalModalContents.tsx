@@ -20,6 +20,7 @@ type BaseProps = Omit<
 type VerticalProductModalContentProps = BaseProps & {
   rendererId: "product-experience-v2" | "generic-v2";
   forceGeneric?: boolean;
+  pageLayout?: boolean;
 };
 
 function withQuickView(
@@ -63,7 +64,7 @@ export function VerticalProductModalContent(
     return <GenericProductModalContent {...props} />;
   }
   const vertical = normalizeBusinessType(props);
-  if (vertical === "clothing") return <ClothingPdpContent {...props} />;
+  if (vertical === "clothing") return <ClothingPdpContent {...props} pageLayout={props.pageLayout} />;
   if (vertical === "flowers") return <FlowersPdpContent {...props} />;
   if (vertical === "coffee") return <CoffeePdpContent {...props} />;
   if (vertical === "fastfood") return <FastfoodPdpContent {...props} />;

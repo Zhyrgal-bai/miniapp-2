@@ -22,6 +22,35 @@ function applyTelegramViewportCssVars(): void {
   if (h != null) {
     document.documentElement.style.setProperty("--archa-viewport-h", `${h}px`);
   }
+
+  const tgInsets = tg as TelegramWebApp & {
+    contentSafeAreaInset?: { top?: number; bottom?: number; left?: number; right?: number };
+    safeAreaInset?: { top?: number; bottom?: number; left?: number; right?: number };
+  };
+
+  const contentInset = tgInsets.contentSafeAreaInset;
+  const safeInset = tgInsets.safeAreaInset;
+  const insetTop =
+    typeof contentInset?.top === "number" && contentInset.top > 0
+      ? contentInset.top
+      : typeof safeInset?.top === "number" && safeInset.top > 0
+        ? safeInset.top
+        : 0;
+  const insetBottom =
+    typeof contentInset?.bottom === "number" && contentInset.bottom > 0
+      ? contentInset.bottom
+      : typeof safeInset?.bottom === "number" && safeInset.bottom > 0
+        ? safeInset.bottom
+        : 0;
+
+  document.documentElement.style.setProperty(
+    "--tg-content-safe-area-top",
+    `${insetTop}px`,
+  );
+  document.documentElement.style.setProperty(
+    "--tg-content-safe-area-bottom",
+    `${insetBottom}px`,
+  );
 }
 
 /**

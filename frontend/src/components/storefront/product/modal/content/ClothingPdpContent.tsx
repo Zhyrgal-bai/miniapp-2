@@ -16,6 +16,7 @@ type Props = {
   catalogProducts: Product[];
   onClose: () => void;
   onSelectProduct: (p: Product) => void;
+  pageLayout?: boolean;
 };
 
 function formatSom(v: number): string {
@@ -51,6 +52,7 @@ export function ClothingPdpContent({
   product,
   businessId,
   businessType,
+  pageLayout = false,
 }: Props): React.ReactElement {
   const { payload } = useStorefrontPayload();
   const commerceEnabled = isStorefrontCommerceEnabled();
@@ -100,7 +102,13 @@ export function ClothingPdpContent({
 
   return (
     <div
-      className="px-screen px-screen--telegram px-screen--quick-view px-screen--layout-clothing clothing-pdp"
+      className={[
+        "px-screen",
+        "px-screen--telegram",
+        pageLayout ? "px-screen--product-page" : "px-screen--quick-view",
+        "px-screen--layout-clothing",
+        "clothing-pdp",
+      ].join(" ")}
       data-px-commerce={commerceEnabled ? "telegram" : "web"}
       data-sf-vertical="clothing"
     >

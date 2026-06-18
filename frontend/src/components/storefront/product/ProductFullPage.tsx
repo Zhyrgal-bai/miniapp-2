@@ -1,8 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import type { Product } from "../../../types";
+import { useTheme } from "../../../context/ThemeContext";
 import { resolveModalRendererId } from "../../../storefront/templates/templateRegistry";
 import { ensureTelegramMobileUx } from "../../../utils/telegramWebAppBootstrap";
 import { useBodyScrollLock } from "../../../utils/bodyScrollLock";
+import { applyThemeVars } from "../theme/applyThemeVars";
 import { VerticalProductModalContent } from "./modal/content/VerticalModalContents";
 import "./ProductFullPage.css";
 
@@ -27,8 +30,11 @@ export function ProductFullPage({
   catalogProducts,
   onClose,
   onSelectProduct,
-}: Props): React.ReactElement {
+}: Props): React.ReactElement | null {
   useBodyScrollLock(true);
+  const { theme } = useTheme();
+  const themeStyle = useMemo(() => applyThemeVars(theme), [theme]);
+
   useEffect(() => {
     ensureTelegramMobileUx();
   }, [product.id]);
@@ -40,13 +46,16 @@ export function ProductFullPage({
   };
   const rendererId = resolveModalRendererId(descriptorContext);
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <div
       className="sf-product-page"
       role="dialog"
       aria-modal="true"
       aria-label="Товар"
       data-sf-product-page="1"
+      style={themeStyle as CSSProperties}
     >
       <button
         type="button"
@@ -66,8 +75,10 @@ export function ProductFullPage({
           onSelectProduct={onSelectProduct}
           rendererId={rendererId}
           forceGeneric={!modalV3Enabled}
+          pageLayout
         />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
