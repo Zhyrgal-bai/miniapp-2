@@ -21,6 +21,7 @@ const SCROLLABLE_OVERLAY_SELECTOR = [
   ".sf-profile-sheet__scroll",
   ".sf-tg-modal",
   ".sf-product-quick-view__scroll",
+  ".sf-product-page__body",
   ".px-related-rail",
   ".table-booking-sheet__body",
 ].join(", ");

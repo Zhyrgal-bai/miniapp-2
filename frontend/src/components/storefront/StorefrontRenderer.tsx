@@ -17,7 +17,7 @@ import "./storefrontFeed.css";
 import "../../storefront/commerceCards.css";
 import "../../storefront/motionTokens.css";
 import "../../storefront/mobileChrome.css";
-import { ProductModalHost } from "./product/host/ProductModalHost";
+import { ProductFullPage } from "./product/ProductFullPage";
 import "./storefrontKits.css";
 import {
   buildStorefrontLayoutCssVars,
@@ -647,13 +647,25 @@ export function StorefrontRenderer(props: {
 
   return (
     <ThemeVarsProvider theme={theme}>
+      {activeProduct ? (
+        <ProductFullPage
+          product={activeProduct}
+          businessId={props.payload.businessId}
+          businessType={props.payload.businessType ?? undefined}
+          templateDescriptor={props.payload.templateDescriptor ?? null}
+          modalV3Enabled={props.payload.featureFlags?.enableProductModalV3 !== false}
+          catalogProducts={catalog ?? []}
+          onClose={closeProduct}
+          onSelectProduct={openProduct}
+        />
+      ) : (
       <div
         data-sf-kit={kit}
         data-sf-layout={layoutPreset}
         data-sf-motion={motionLevel}
         data-sf-brand-tone={brandTone || "default"}
         data-sf-vertical={verticalExperience !== "default" ? verticalExperience : undefined}
-        className={`sf-root${catalogBold ? " sf-root--catalog-bold" : ""}${activeProduct ? " sf-root--quick-view-open" : ""}`}
+        className={`sf-root${catalogBold ? " sf-root--catalog-bold" : ""}`}
         style={cssVars as unknown as React.CSSProperties}
       >
         <StorefrontFeed>
@@ -778,19 +790,8 @@ export function StorefrontRenderer(props: {
             </div>
           ) : null}
         </StorefrontFeed>
-
-        <ProductModalHost
-          open={activeProduct != null}
-          product={activeProduct}
-          businessId={props.payload.businessId}
-          businessType={props.payload.businessType ?? undefined}
-          templateDescriptor={props.payload.templateDescriptor ?? null}
-          modalV3Enabled={props.payload.featureFlags?.enableProductModalV3 !== false}
-          catalogProducts={catalog ?? []}
-          onClose={closeProduct}
-          onSelectProduct={openProduct}
-        />
       </div>
+      )}
     </ThemeVarsProvider>
   );
 }

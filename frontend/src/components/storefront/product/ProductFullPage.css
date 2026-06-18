@@ -1,0 +1,102 @@
+.sf-product-page {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+  min-height: var(--archa-viewport-h, 100dvh);
+  max-height: var(--archa-viewport-h, 100dvh);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--sf-color-background, #141414);
+  color: var(--sf-color-text, #fff);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.sf-product-page__close {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top, 0px));
+  right: 12px;
+  z-index: 12;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  line-height: 1;
+  font-weight: 300;
+  color: var(--sf-color-text, #fff);
+  background: color-mix(in srgb, var(--sf-color-surface, #242424) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sf-color-border, #444) 40%, transparent);
+  cursor: pointer;
+}
+
+.sf-product-page__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sf-product-page .px-screen--quick-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--sf-color-background, #141414);
+}
+
+.sf-product-page .px-screen--quick-view .px-layout {
+  flex: 1;
+  min-height: 0;
+}
+
+.sf-product-page .px-screen--quick-view .px-gallery {
+  flex-shrink: 0;
+  min-height: min(44dvh, 420px);
+  max-height: 50dvh;
+  border-radius: 0;
+}
+
+.sf-product-page .px-screen--quick-view .px-gallery__track {
+  min-height: min(44dvh, 380px);
+  max-height: 48dvh;
+}
+
+.sf-product-page .px-screen--quick-view .px-main {
+  max-width: none;
+  margin: 0;
+  padding: 12px 16px 0;
+}
+
+.sf-product-page .px-screen--quick-view .px-sticky {
+  position: sticky;
+  bottom: 0;
+  max-width: none;
+  margin-inline: 0;
+  width: 100%;
+  padding-inline: 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  background: var(--sf-color-background, #141414);
+}
+
+.sf-product-page .px-screen--quick-view .px-sticky-spacer {
+  height: calc(104px + env(safe-area-inset-bottom, 0px));
+}
+
+.sf-product-page .px-head__title {
+  padding-right: 44px;
+}
