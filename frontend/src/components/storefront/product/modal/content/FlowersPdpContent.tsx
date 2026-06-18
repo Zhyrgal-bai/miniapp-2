@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { Product } from "../../../../../types";
+import { formatSizeLabel } from "../../../../../commerce/useVerticalProductSelection";
 import { useStorefrontPayload } from "../../../runtime/StorefrontPayloadContext";
 import { VerticalOrderOptionsExperience } from "../../../vertical/VerticalOrderOptionsExperience";
 import { isStorefrontCommerceEnabled } from "../../../../../hooks/useStorefrontCommerceMode";
@@ -92,6 +93,8 @@ export function FlowersPdpContent({
     return "В наличии";
   }, [px.outOfStock, px.selectedStock]);
 
+  const clearHint = () => px.clearSelectionHint();
+
   return (
     <div
       className={pxScreenClasses({
@@ -132,13 +135,33 @@ export function FlowersPdpContent({
             {px.display.description?.trim() ? (
               <p className="px-head__desc">{px.display.description.trim()}</p>
             ) : null}
-            <p className="flowers-pdp__notice">
-              Добавьте открытку и пожелание в блоке опций заказа перед добавлением в корзину.
-            </p>
           </header>
 
           {!px.outOfStock ? (
             <>
+              {px.sizes.length > 0 ? (
+                <section className="px-block px-block--size">
+                  <h2 className="px-block__label">{px.primaryLabel}</h2>
+                  <div className="px-chips">
+                    {px.sizes.map((s) => (
+                      <button
+                        key={s.size}
+                        type="button"
+                        disabled={s.stock === 0}
+                        className={`px-chip${px.selectedSize === s.size ? " is-active" : ""}`}
+                        aria-pressed={px.selectedSize === s.size}
+                        onClick={() => {
+                          px.setSelectedSize(s.size);
+                          clearHint();
+                        }}
+                      >
+                        {formatSizeLabel(resolvedBusinessType, s.size)}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
               <div className="flowers-pdp__options">
                 <VerticalOrderOptionsExperience
                   businessType={resolvedBusinessType}

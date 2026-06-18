@@ -16,7 +16,7 @@ type Props = {
 };
 
 const FIELD_ORDER: Record<string, string[]> = {
-  flowers: ["deliveryDate", "packaging", "occasion", "postcardText"],
+  flowers: ["deliveryDate", "packaging"],
   coffee: ["hotOrCold", "milk", "sugar", "syrups"],
   fastfood: ["combo", "spicy", "addons", "orderNote"],
   electronics: ["serialNumber"],
