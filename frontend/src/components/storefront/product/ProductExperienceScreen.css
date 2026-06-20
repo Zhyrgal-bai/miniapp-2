@@ -70,9 +70,14 @@
 .px-screen--product-page .px-sticky {
   position: sticky;
   bottom: 0;
+  left: auto;
+  right: auto;
+  flex-shrink: 0;
   max-width: none;
   margin-inline: 0;
+  margin-top: auto;
   width: 100%;
+  z-index: 8;
   padding-inline: var(--px-pad);
   padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
   background: var(--sf-color-background, #141414);
