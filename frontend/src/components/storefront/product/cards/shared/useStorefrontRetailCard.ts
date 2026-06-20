@@ -9,7 +9,7 @@ import {
 } from "../../../../../utils/product";
 import { getMaxOrderQty } from "../../../../../commerce/quantityPolicy";
 import {
-  cartLineIdentityKey,
+  findCartLineForSelection,
   storageColorForCart,
 } from "../../../../../commerce/cartLineIdentity";
 import {
@@ -122,30 +122,18 @@ export function useStorefrontRetailCard(opts: UseStorefrontRetailCardOptions) {
   const cartItem = useMemo(() => {
     if (product.id == null) return null;
 
-    if (externalSize) {
-      const key = cartLineIdentityKey({
-        productId: product.id,
-        size: externalSize,
-        color: storageColor,
-      });
-      const exact = items.find((i) => cartLineIdentityKey(i) === key);
-      if (exact) return exact;
-    }
+    const instant = !needsVariantPicker
+      ? resolveInstantAddLine(product, resolvedBusinessType, merchantConfig)
+      : null;
 
-    if (!needsVariantPicker) {
-      const instant = resolveInstantAddLine(product, resolvedBusinessType, merchantConfig);
-      if (instant) {
-        const key = cartLineIdentityKey({
-          productId: product.id,
-          size: instant.size,
-          color: storageColorForCart(resolvedBusinessType, instant.color),
-        });
-        const line = items.find((i) => cartLineIdentityKey(i) === key);
-        if (line) return line;
-      }
-    }
-
-    return items.find((i) => i.productId === product.id) ?? null;
+    return findCartLineForSelection(items, {
+      productId: product.id,
+      size: externalSize,
+      storageColor,
+      needsVariantPicker,
+      businessType: resolvedBusinessType,
+      instantLine: instant,
+    });
   }, [
     items,
     product,
@@ -298,7 +286,8 @@ export function useStorefrontRetailCard(opts: UseStorefrontRetailCardOptions) {
   }, [quantity, upsertQuantity]);
 
   const atMaxQty = quantity >= activeLineStock && activeLineStock > 0;
-  const canAdjustQty = quantity > 0 && !outOfStock;
+  const canAdjustQty =
+    quantity > 0 && !outOfStock && (externalSize != null || !needsVariantPicker);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;

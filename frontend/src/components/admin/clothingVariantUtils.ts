@@ -89,9 +89,10 @@ export function buildClothingVariantsForApi(
             });
       if (sizes.length === 0) return null;
       return {
-        color: { name, hex },
+        color: name,
+        colorHex: hex,
         sizes,
-      } as unknown as Variant;
+      } as Variant;
     })
     .filter((v): v is Variant => v != null);
 }

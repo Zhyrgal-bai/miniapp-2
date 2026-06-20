@@ -42,3 +42,40 @@ export function storageColorForCart(
   if (businessType === "clothing") return c;
   return "";
 }
+
+/** Cart qty for the currently selected variant only (no product-wide fallback). */
+export function findCartLineForSelection<T extends CartLineStorage>(
+  items: T[],
+  params: {
+    productId: number;
+    size: string | null;
+    storageColor: string;
+    needsVariantPicker: boolean;
+    businessType?: string | null;
+    instantLine?: { size: string; color: string } | null;
+  },
+): T | null {
+  const { productId, size, storageColor, needsVariantPicker, businessType, instantLine } =
+    params;
+
+  if (size) {
+    const key = cartLineIdentityKey({
+      productId,
+      size,
+      color: storageColor,
+    });
+    const exact = items.find((i) => cartLineIdentityKey(i) === key);
+    if (exact) return exact;
+  }
+
+  if (!needsVariantPicker && instantLine) {
+    const key = cartLineIdentityKey({
+      productId,
+      size: instantLine.size,
+      color: storageColorForCart(businessType, instantLine.color),
+    });
+    return items.find((i) => cartLineIdentityKey(i) === key) ?? null;
+  }
+
+  return null;
+}

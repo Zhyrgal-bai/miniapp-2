@@ -232,7 +232,10 @@ export function RetailCardAction({
       <button
         type="button"
         className="retail-card__qty-btn"
-        onClick={onDecrement}
+        onClick={(e) => {
+          e.stopPropagation();
+          onDecrement();
+        }}
         disabled={!canAdjustQty}
         aria-label="Уменьшить"
       >
@@ -244,7 +247,10 @@ export function RetailCardAction({
       <button
         type="button"
         className="retail-card__qty-btn"
-        onClick={onIncrement}
+        onClick={(e) => {
+          e.stopPropagation();
+          onIncrement();
+        }}
         disabled={!canAdjustQty || atMaxQty}
         aria-label="Увеличить"
       >

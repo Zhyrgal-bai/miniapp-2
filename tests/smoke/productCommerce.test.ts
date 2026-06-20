@@ -4,7 +4,7 @@ import {
   resolvePublicVariants,
   sumPublicVariantStock,
 } from "../../src/shared/stockResolver.js";
-import { toPublicProduct } from "../../src/shared/productDto.js";
+import { toPublicProduct, normalizeVariantsForSave } from "../../src/shared/productDto.js";
 import { isOutOfStock } from "../../frontend/src/utils/product.ts";
 
 describe("product DTO and stock (ProductStock source of truth)", () => {
@@ -79,5 +79,35 @@ describe("product DTO and stock (ProductStock source of truth)", () => {
       ],
     });
     expect(sumPublicVariantStock(variants)).toBe(4);
+  });
+
+  it("normalizeVariantsForSave keeps custom color hex from picker", () => {
+    const saved = normalizeVariantsForSave([
+      {
+        color: { name: "бардовый", hex: "#bd0000" },
+        sizes: [{ size: "s", stock: 10 }],
+      },
+    ]);
+    expect(saved).toEqual([
+      {
+        color: { name: "бардовый", hex: "#bd0000" },
+        sizes: [{ size: "s", stock: 10 }],
+      },
+    ]);
+
+    const dto = toPublicProduct(
+      {
+        id: 3,
+        name: "Shades",
+        price: 1000,
+        image: "z.jpg",
+        attributes: { variants: saved },
+      },
+      {
+        businessType: "clothing",
+        stockRows: [{ size: "s", color: "бардовый", available: 10 }],
+      },
+    );
+    expect(dto.variants[0]?.colorHex).toBe("#bd0000");
   });
 });

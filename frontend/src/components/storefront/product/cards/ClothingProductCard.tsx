@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import type { Product } from "../../../../types";
 import ProductCard from "../../../product/ProductCard";
 import { useVerticalProductSelection } from "../../../../commerce/useVerticalProductSelection";
@@ -7,6 +7,7 @@ import { productRequiresVariantPicker } from "../../../../commerce/productVarian
 import { isAccessoryOneSize } from "@repo-shared/businessCommerce";
 import { getVariantCssBackground } from "../../../../utils/variantColor";
 import { useStorefrontPayload } from "../../runtime/StorefrontPayloadContext";
+import { useCartStore } from "../../../../store/useCartStore";
 import { useStorefrontRetailCard } from "./shared/useStorefrontRetailCard";
 import {
   RetailCardAction,
@@ -38,6 +39,27 @@ export function ClothingProductCard(props: Props): React.ReactElement {
     autoSelectDefaults: false,
     merchantConfig,
   });
+
+  const cartItems = useCartStore((s) => s.items);
+
+  /** If item already in cart, pre-select its size/color so qty stepper matches the line. */
+  useEffect(() => {
+    if (product.id == null || selection.selectedSize != null) return;
+    const lines = cartItems.filter((i) => i.productId === product.id);
+    if (lines.length === 0) return;
+    const line = lines[0]!;
+    selection.setSelectedSize(line.size);
+    if (selection.hasCustomColors) {
+      selection.setSelectedColor(line.color?.trim() ? line.color : "default");
+    }
+  }, [
+    product.id,
+    cartItems,
+    selection.selectedSize,
+    selection.hasCustomColors,
+    selection.setSelectedSize,
+    selection.setSelectedColor,
+  ]);
 
   const needsVariantPicker = productRequiresVariantPicker(
     product,

@@ -16,7 +16,7 @@ import { computeBadges } from "../storefront/commerce/badgeEngine";
 import { profileForBusinessType } from "../storefront/commerce/businessBehaviorProfiles";
 import { verticalUsesColorAxis, labelPrimaryOption } from "@repo-shared/businessCommerce";
 import {
-  cartLineIdentityKey,
+  findCartLineForSelection,
   storageColorForCart,
 } from "../../commerce/cartLineIdentity";
 import { computeCtaModel } from "../storefront/commerce/ctaEngine";
@@ -288,30 +288,18 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   const cartItem = useMemo(() => {
     if (product.id == null) return null;
 
-    if (selectedSize) {
-      const key = cartLineIdentityKey({
-        productId: product.id,
-        size: selectedSize,
-        color: storageColor,
-      });
-      const exact = items.find((i) => cartLineIdentityKey(i) === key);
-      if (exact) return exact;
-    }
+    const instant = !needsVariantPicker
+      ? resolveInstantAddLine(product, resolvedBusinessType, merchantConfig)
+      : null;
 
-    if (!needsVariantPicker) {
-      const instant = resolveInstantAddLine(product, resolvedBusinessType, merchantConfig);
-      if (instant) {
-        const key = cartLineIdentityKey({
-          productId: product.id,
-          size: instant.size,
-          color: storageColorForCart(resolvedBusinessType, instant.color),
-        });
-        const line = items.find((i) => cartLineIdentityKey(i) === key);
-        if (line) return line;
-      }
-    }
-
-    return items.find((i) => i.productId === product.id) ?? null;
+    return findCartLineForSelection(items, {
+      productId: product.id,
+      size: selectedSize,
+      storageColor,
+      needsVariantPicker,
+      businessType: resolvedBusinessType,
+      instantLine: instant,
+    });
   }, [
     items,
     product,
@@ -445,7 +433,10 @@ export default function ProductCard({ product, showToast, onOpenDetail, cardConf
   };
 
   const atMaxQty = quantity >= activeLineStock && activeLineStock > 0;
-  const canAdjustQty = quantity > 0 && !outOfStock;
+  const canAdjustQty =
+    quantity > 0 &&
+    !outOfStock &&
+    (selectedSize != null || !needsVariantPicker);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;

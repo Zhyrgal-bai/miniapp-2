@@ -7,6 +7,14 @@ import {
   sumPublicVariantStock,
   type ProductStockRow,
 } from "./stockResolver.js";
+import { expandShortHex, isValidHexColor } from "./variantColorPresets.js";
+
+export type SavedProductVariantColor =
+  | string
+  | {
+      name: string;
+      hex: string;
+    };
 
 export type PublicProductSize = {
   size: string;
@@ -126,25 +134,44 @@ export function toPublicProduct(
   };
 }
 
+function extractVariantColorForSave(row: Record<string, unknown>): {
+  name: string;
+  hex: string | null;
+} {
+  let name = "";
+  let hex: string | null = null;
+  const c = row.color;
+  if (typeof c === "string") {
+    name = c.trim();
+  } else if (c != null && typeof c === "object" && !Array.isArray(c)) {
+    const co = c as Record<string, unknown>;
+    name = typeof co.name === "string" ? co.name.trim() : "";
+    hex = typeof co.hex === "string" ? co.hex : null;
+  }
+  if (typeof row.colorHex === "string" && row.colorHex.trim() !== "") {
+    hex = row.colorHex.trim();
+  }
+  if (hex != null && isValidHexColor(hex)) {
+    hex = expandShortHex(hex);
+  } else {
+    hex = null;
+  }
+  return { name, hex };
+}
+
 export function normalizeVariantsForSave(raw: unknown): Array<{
-  color: string;
+  color: SavedProductVariantColor;
   sizes: Array<{ size: string; stock: number }>;
 }> {
   if (!Array.isArray(raw)) return [];
   const out: Array<{
-    color: string;
+    color: SavedProductVariantColor;
     sizes: Array<{ size: string; stock: number }>;
   }> = [];
   for (const row of raw) {
     if (row == null || typeof row !== "object") continue;
     const r = row as Record<string, unknown>;
-    let color = "";
-    const c = r.color;
-    if (typeof c === "string") color = c.trim();
-    else if (c != null && typeof c === "object" && !Array.isArray(c)) {
-      const co = c as Record<string, unknown>;
-      color = typeof co.name === "string" ? co.name.trim() : "";
-    }
+    const { name, hex } = extractVariantColorForSave(r);
     const sizesRaw = Array.isArray(r.sizes) ? r.sizes : [];
     const sizes = sizesRaw
       .map((s) => {
@@ -159,7 +186,10 @@ export function normalizeVariantsForSave(raw: unknown): Array<{
       })
       .filter((x): x is { size: string; stock: number } => x != null);
     if (sizes.length === 0) continue;
-    out.push({ color: color === "default" ? "" : color, sizes });
+    const colorName = name === "default" ? "" : name;
+    const color: SavedProductVariantColor =
+      hex && colorName !== "" ? { name: colorName, hex } : colorName;
+    out.push({ color, sizes });
   }
   return out;
 }
