@@ -10,7 +10,8 @@ import MapPicker from "../components/checkout/MapPicker";
 import "../components/ui/CheckoutPage.css";
 import { buildCatalogRequestParams } from "../utils/storeParams";
 import { isCheckoutSubmitBlocked } from "../commerce/checkoutSubmitGuard";
-import { setPendingFinikOrder, shouldReleaseCheckoutSubmitOnResume, hasPendingFinikCheckout } from "../utils/pendingFinikOrder";
+import { setPendingFinikOrder, shouldReleaseCheckoutSubmitOnResume, hasPendingFinikCheckout, readPendingFinikOrder, releasePendingFinikCheckout, isPendingFinikCheckoutExpired } from "../utils/pendingFinikOrder";
+import { FINIK_PAYMENT_POLL_MS, FINIK_PAYMENT_RELEASED_EVENT, FINIK_PAYMENT_TIMEOUT_MS } from "../utils/finikPaymentEvents";
 import { openTelegramExternalLink } from "../utils/telegramWebAppBootstrap";
 import { t } from "../i18n";
 import { trackCheckoutStart } from "../services/storefrontAnalytics";
@@ -160,13 +161,71 @@ export default function CheckoutPage({ onBack }: Props) {
   /** Sync guard — blocks double-tap before React `submitting` state updates (C2). */
   const submitLockRef = useRef(false);
 
-  /** M5: remount after Finik redirect must stay locked until payment resolves. */
+  const unlockFinikWait = useCallback(() => {
+    submitLockRef.current = false;
+    setSubmitting(false);
+    setFinikRedirectMessage(null);
+  }, []);
+
+  /** M5: remount after Finik redirect — poll until paid, cancelled, timeout, or user starts over. */
   useEffect(() => {
+    const unlockIfIdle = () => {
+      if (!hasPendingFinikCheckout()) unlockFinikWait();
+    };
+
     if (!hasPendingFinikCheckout()) return;
+
+    if (isPendingFinikCheckoutExpired()) {
+      releasePendingFinikCheckout();
+      return;
+    }
+
     submitLockRef.current = true;
     setSubmitting(true);
     setFinikRedirectMessage(t("checkout.paymentAwaiting"));
-  }, []);
+
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) return;
+      const pend = readPendingFinikOrder();
+      if (pend == null) {
+        unlockFinikWait();
+        return;
+      }
+      if (Date.now() - pend.startedAt > FINIK_PAYMENT_TIMEOUT_MS) {
+        releasePendingFinikCheckout();
+        return;
+      }
+      if (businessId == null || pend.businessId !== businessId) return;
+
+      const uid = getTelegramWebAppUserId();
+      if (!Number.isFinite(uid) || uid <= 0) return;
+
+      try {
+        const rows = await fetchMyOrders(uid, buildCatalogRequestParams().shop);
+        const order = rows.find((o) => o.id === pend.orderId);
+        if (!order) return;
+        const st = String(order.status ?? "").toUpperCase();
+        if (st === "CANCELLED") {
+          releasePendingFinikCheckout();
+        }
+      } catch {
+        /* keep waiting — user can start a new order manually */
+      }
+    };
+
+    void tick();
+    const pollId = window.setInterval(() => void tick(), FINIK_PAYMENT_POLL_MS);
+    const onReleased = () => unlockFinikWait();
+    window.addEventListener(FINIK_PAYMENT_RELEASED_EVENT, onReleased);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(pollId);
+      window.removeEventListener(FINIK_PAYMENT_RELEASED_EVENT, onReleased);
+      unlockIfIdle();
+    };
+  }, [businessId, unlockFinikWait]);
 
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [catalogById, setCatalogById] = useState<Map<number, Product>>(
@@ -838,19 +897,21 @@ export default function CheckoutPage({ onBack }: Props) {
   useEffect(() => {
     const onVis = () => {
       if (document.visibilityState !== "visible") return;
+      if (isPendingFinikCheckoutExpired()) {
+        releasePendingFinikCheckout();
+        return;
+      }
       if (!shouldReleaseCheckoutSubmitOnResume()) {
         submitLockRef.current = true;
         setSubmitting(true);
         setFinikRedirectMessage((msg) => msg ?? t("checkout.paymentAwaiting"));
         return;
       }
-      setFinikRedirectMessage(null);
-      setSubmitting(false);
-      submitLockRef.current = false;
+      unlockFinikWait();
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
-  }, []);
+  }, [unlockFinikWait]);
 
   if (items.length === 0) {
     return (
@@ -875,6 +936,27 @@ export default function CheckoutPage({ onBack }: Props) {
         <div className="checkout-finik-overlay" role="status" aria-live="polite">
           <div className="checkout-finik-overlay__spinner" aria-hidden />
           <p className="checkout-finik-overlay__text">{finikRedirectMessage}</p>
+          <div className="checkout-finik-overlay__actions">
+            {readPendingFinikOrder()?.paymentUrl ? (
+              <button
+                type="button"
+                className="checkout-finik-overlay__btn checkout-finik-overlay__btn--primary"
+                onClick={() => {
+                  const url = readPendingFinikOrder()?.paymentUrl;
+                  if (url) openTelegramExternalLink(url);
+                }}
+              >
+                {t("checkout.paymentRetry")}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="checkout-finik-overlay__btn checkout-finik-overlay__btn--ghost"
+              onClick={() => releasePendingFinikCheckout()}
+            >
+              {t("checkout.paymentNewOrder")}
+            </button>
+          </div>
         </div>
       )}
       {onBack && (

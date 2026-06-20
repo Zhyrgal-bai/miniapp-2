@@ -118,6 +118,7 @@ export const ru = {
     paymentSuccess: "Оплата прошла успешно!",
     paymentFailed: "Оплата не завершена или время истекло",
     paymentRetry: "Повторить оплату",
+    paymentNewOrder: "Оформить новый заказ",
     paymentViewOrders: "Мои заказы",
     paymentAwaiting: "Ожидаем оплату",
     paymentPaid: "Оплачено",

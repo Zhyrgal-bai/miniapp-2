@@ -42,6 +42,35 @@
   animation: checkout-spin 0.75s linear infinite;
 }
 
+.checkout-finik-overlay__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(100%, 280px);
+  margin-top: 20px;
+}
+
+.checkout-finik-overlay__btn {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 12px;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.checkout-finik-overlay__btn--primary {
+  border: 0;
+  background: var(--sf-color-primary);
+  color: var(--sf-on-primary, #fff);
+}
+
+.checkout-finik-overlay__btn--ghost {
+  border: 1px solid color-mix(in srgb, var(--sf-color-border) 55%, transparent);
+  background: color-mix(in srgb, var(--sf-color-surface) 88%, transparent);
+  color: var(--sf-color-text);
+}
+
 @keyframes checkout-spin {
   to {
     transform: rotate(360deg);

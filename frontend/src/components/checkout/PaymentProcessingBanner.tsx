@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   clearPendingFinikOrder,
   readPendingFinikOrder,
+  releasePendingFinikCheckout,
 } from "../../utils/pendingFinikOrder";
 import {
   dispatchFinikPaymentPaid,
@@ -54,6 +55,7 @@ export default function PaymentProcessingBanner({
       }
 
       if (Date.now() - pend.startedAt > FINIK_PAYMENT_TIMEOUT_MS) {
+        releasePendingFinikCheckout();
         setState("failed");
         stopPoll();
         return;
@@ -79,6 +81,7 @@ export default function PaymentProcessingBanner({
             businessId: pend.businessId,
           });
         } else if (st === "CANCELLED") {
+          releasePendingFinikCheckout();
           setState("failed");
           stopPoll();
         }
@@ -123,7 +126,7 @@ export default function PaymentProcessingBanner({
   };
 
   const handleDismissFailed = () => {
-    clearPendingFinikOrder();
+    releasePendingFinikCheckout();
     setState("hidden");
   };
 

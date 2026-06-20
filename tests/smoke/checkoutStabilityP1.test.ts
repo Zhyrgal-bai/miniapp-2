@@ -10,7 +10,10 @@ import {
   setPendingFinikOrder,
   clearPendingFinikOrder,
   shouldReleaseCheckoutSubmitOnResume,
+  releasePendingFinikCheckout,
+  isPendingFinikCheckoutExpired,
 } from "../../frontend/src/utils/pendingFinikOrder.js";
+import { FINIK_PAYMENT_RELEASED_EVENT } from "../../frontend/src/utils/finikPaymentEvents.js";
 
 function installLocalStorageMock(): void {
   const store = new Map<string, string>();
@@ -128,5 +131,28 @@ describe("M5 Finik resume state", () => {
   it("no pending checkout after payment cleared", () => {
     expect(hasPendingFinikCheckout()).toBe(false);
     expect(shouldReleaseCheckoutSubmitOnResume()).toBe(true);
+  });
+
+  it("releasePendingFinikCheckout clears storage and emits event", () => {
+    const events: string[] = [];
+    vi.stubGlobal("window", {
+      dispatchEvent: (ev: Event) => {
+        events.push(ev.type);
+        return true;
+      },
+    });
+    setPendingFinikOrder({ orderId: 9, businessId: 3, startedAt: Date.now() - 1000 });
+    releasePendingFinikCheckout();
+    expect(hasPendingFinikCheckout()).toBe(false);
+    expect(events).toContain(FINIK_PAYMENT_RELEASED_EVENT);
+  });
+
+  it("isPendingFinikCheckoutExpired after timeout window", () => {
+    setPendingFinikOrder({
+      orderId: 9,
+      businessId: 3,
+      startedAt: Date.now() - 16 * 60 * 1000,
+    });
+    expect(isPendingFinikCheckoutExpired()).toBe(true);
   });
 });

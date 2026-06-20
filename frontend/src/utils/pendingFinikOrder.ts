@@ -60,6 +60,27 @@ export function clearPendingFinikOrder(): void {
   }
 }
 
+export function isPendingFinikCheckoutExpired(
+  now = Date.now(),
+  timeoutMs?: number,
+): boolean {
+  const pending = readPendingFinikOrder();
+  if (pending == null) return false;
+  const limit =
+    typeof timeoutMs === "number" && Number.isFinite(timeoutMs) && timeoutMs > 0
+      ? timeoutMs
+      : 15 * 60 * 1000;
+  return now - pending.startedAt > limit;
+}
+
+/** Drop stale Finik wait state so checkout can accept a new order. */
+export function releasePendingFinikCheckout(): void {
+  clearPendingFinikOrder();
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("sf:finikPaymentReleased"));
+  }
+}
+
 /** Keep checkout submit locked while Finik payment is in flight (C3). */
 export function shouldReleaseCheckoutSubmitOnResume(): boolean {
   return readPendingFinikOrder() == null;
