@@ -48,6 +48,8 @@ export function routeRequiresVerifiedTelegram(req: Request): boolean {
 
   if (path.startsWith("/api/platform")) return true;
 
+  if (path.startsWith("/api/operator")) return true;
+
   if (
     method === "GET" &&
     (path === "/my-businesses" || path === "/api/my-businesses")
@@ -66,6 +68,12 @@ export function routeRequiresVerifiedTelegram(req: Request): boolean {
   if (path.startsWith("/api/") && !path.startsWith("/api/storefront/")) {
     if (path.startsWith("/api/business/") && method === "GET") return false;
     if (path.startsWith("/api/telemetry/")) return false;
+    if (method === "POST" && path === "/api/delivery/providers/yandex/webhook") {
+      return false;
+    }
+    if (method === "GET" && path === "/api/delivery/health") {
+      return false;
+    }
     // All tenant /api routes (including GET /api/me) need verified initData.
     return true;
   }

@@ -87,6 +87,18 @@ export async function onOrderPaidConfirmed(
     "./merchantLoyaltyService.js"
   );
   await accrueLoyaltyForPaidOrder(orderId);
+  const { fulfillDeliveryForPaidOrder } = await import(
+    "./delivery/services/deliveryFulfillmentService.js"
+  );
+  const { logDeliveryFulfillmentError } = await import(
+    "./delivery/providers/yandex/utils/yandexClaimsLogging.js"
+  );
+  void fulfillDeliveryForPaidOrder(orderId).catch((err: unknown) => {
+    logDeliveryFulfillmentError({
+      orderId,
+      errorCode: err instanceof Error ? err.name : "unknown",
+    });
+  });
 }
 
 export async function onOrderCancelled(orderId: number, fromStatus: string): Promise<void> {

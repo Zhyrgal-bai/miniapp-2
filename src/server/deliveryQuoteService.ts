@@ -12,6 +12,9 @@ export function parseBusinessDeliverySettings(raw: unknown): MerchantDeliverySet
   return parsed.ok ? parsed.value : defaultMerchantDeliverySettings();
 }
 
+/**
+ * @deprecated Use `resolveHybridCheckoutDelivery` from the Delivery Engine.
+ */
 export function resolveCheckoutDeliveryQuote(input: {
   deliverySettingsRaw: unknown;
   storeLatitude: number | null;

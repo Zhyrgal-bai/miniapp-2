@@ -19,6 +19,8 @@
     "seed": "tsx prisma/seed.ts",
     "test:smoke": "vitest run tests/smoke",
     "test:integration": "vitest run tests/integration",
+    "test:delivery-e2e": "vitest run tests/integration/deliveryFlowE2e.test.ts",
+    "report:delivery-readiness": "node scripts/generate-delivery-production-readiness.mjs",
     "test": "vitest run",
     "predeploy": "node scripts/predeploy-check.mjs"
   },

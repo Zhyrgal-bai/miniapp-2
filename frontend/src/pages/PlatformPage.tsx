@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { getTelegramWebApp } from "../utils/telegram";
@@ -27,6 +27,10 @@ import {
 import { MerchantBotRecovery } from "../components/platform/MerchantBotRecovery";
 import { MerchantSubscriptionCompactCard } from "../components/platform/MerchantSubscriptionCompactCard";
 import { MERCHANT_SUBSCRIPTION_PATH } from "../constants/merchantRoutes";
+
+const OperatorDeliveryPanel = lazy(
+  () => import("./admin/OperatorDeliveryPanel"),
+);
 import {
   fetchPlatformAdminBusinesses,
   fetchPlatformAdminRequests,
@@ -1761,6 +1765,16 @@ export default function PlatformPage() {
                     ))}
                   </ul>
                 )}
+              </div>
+            ) : null}
+            {isPlatformAdmin && operatorSessionToken?.trim() ? (
+              <div className="mp-panel mb-4 dlv-operator-panel">
+                <p className="text-sm font-semibold text-white mb-3">
+                  Центр доставки платформы
+                </p>
+                <Suspense fallback={<p className="text-sm text-slate-400">Загрузка…</p>}>
+                  <OperatorDeliveryPanel operatorToken={operatorSessionToken} />
+                </Suspense>
               </div>
             ) : null}
             {businesses.length > 0 ? (

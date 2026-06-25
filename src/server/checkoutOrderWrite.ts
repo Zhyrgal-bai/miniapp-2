@@ -73,6 +73,16 @@ export function parseCheckoutDeliveryMode(body: {
   return DeliveryMode.DELIVERY;
 }
 
+/** Opaque delivery offer id from price calculation (max 128 chars). */
+export function parseCheckoutDeliveryOfferId(body: {
+  deliveryOfferId?: unknown;
+}): string | null {
+  if (body.deliveryOfferId == null) return null;
+  const raw = String(body.deliveryOfferId).trim();
+  if (raw === "" || raw.length > 128) return null;
+  return raw;
+}
+
 export type CheckoutOrderItemRow = {
   businessId: number;
   productId: number;

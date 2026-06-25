@@ -7,6 +7,11 @@ import {
   reloadFinikKeysFromEnv,
   validateFinikOfficialEnvKeys,
 } from "./finik/finikKeys.js";
+import {
+  getYandexDeliveryApiBaseUrl,
+  getYandexDeliveryOAuthToken,
+  isYandexDeliveryMockEnabled,
+} from "./delivery/providers/yandex/services/yandexDeliveryConfig.js";
 
 export type EnvValidationResult = {
   ok: boolean;
@@ -136,8 +141,38 @@ export function validateEnvironment(): EnvValidationResult {
 
   reloadFinikKeysFromEnv();
   warnings.push(...validateFinikOfficialEnvKeys());
+  const yandexEnv = validateYandexDeliveryEnv();
+  errors.push(...yandexEnv.errors);
+  warnings.push(...yandexEnv.warnings);
 
   return { ok: errors.length === 0, errors, warnings };
+}
+
+export function validateYandexDeliveryEnv(): {
+  errors: string[];
+  warnings: string[];
+} {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const mockEnabled = isYandexDeliveryMockEnabled();
+  const token = getYandexDeliveryOAuthToken();
+  const apiBase = getYandexDeliveryApiBaseUrl();
+
+  if (isProduction()) {
+    if (mockEnabled) {
+      errors.push("YANDEX_DELIVERY_USE_MOCK is forbidden in production");
+    }
+    if (!mockEnabled && token === "") {
+      errors.push(
+        "YANDEX_DELIVERY_OAUTH_TOKEN is required in production when mock is disabled",
+      );
+    }
+    if (apiBase !== "" && !apiBase.startsWith("https://")) {
+      warnings.push("YANDEX_DELIVERY_API_BASE should use https:// in production");
+    }
+  }
+
+  return { errors, warnings };
 }
 
 export function assertEnvironmentOrExit(): void {

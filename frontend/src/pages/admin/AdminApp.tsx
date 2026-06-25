@@ -17,6 +17,10 @@ import AdminReservationsPage from "./AdminReservationsPage";
 import AdminWaitlistPage from "./AdminWaitlistPage";
 import AdminFloorPage from "./AdminFloorPage";
 import AdminKitchenPage from "./AdminKitchenPage";
+import { lazy, Suspense } from "react";
+import { LoadingSkeleton } from "../../components/delivery/LoadingSkeleton";
+
+const DeliveryPageShell = lazy(() => import("./DeliveryPageShell"));
 import { useShop } from "../../context/ShopContext";
 import { businessTypeSupportsTableReservations } from "@repo-shared/tableReservation";
 import { adminService } from "../../services/admin.service";
@@ -46,6 +50,7 @@ const NAV_REQUIRES: Partial<Record<AdminNavKey, MerchantPermissionId>> = {
   marketing: MERCHANT_PERM.analyticsView,
   promos: MERCHANT_PERM.settingsManage,
   support: MERCHANT_PERM.supportManage,
+  delivery: MERCHANT_PERM.ordersManage,
   tables: MERCHANT_PERM.settingsManage,
   floor: MERCHANT_PERM.floorManage,
   kitchen: MERCHANT_PERM.kitchenView,
@@ -55,6 +60,7 @@ const NAV_REQUIRES: Partial<Record<AdminNavKey, MerchantPermissionId>> = {
 
 const ROUTE_ORDER: { key: AdminNavKey; hash: string }[] = [
   { key: "orders", hash: "#/admin/orders" },
+  { key: "delivery", hash: "#/admin/delivery" },
   { key: "support", hash: "#/admin/support" },
   { key: "design", hash: "#/admin/design" },
   { key: "products", hash: "#/admin/products" },
@@ -253,6 +259,13 @@ export default function AdminApp({ onExit }: AdminAppProps) {
     }
     if (path.includes("/admin/support")) {
       return <AdminSupportPage key="support" />;
+    }
+    if (path.includes("/admin/delivery")) {
+      return (
+        <Suspense fallback={<LoadingSkeleton variant="page" />} key="delivery">
+          <DeliveryPageShell mode="merchant" />
+        </Suspense>
+      );
     }
     return <AdminOrdersPage key="orders" />;
   }, [path, merchantRole, gateStatus, merchantPermissions]);

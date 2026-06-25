@@ -132,6 +132,13 @@ const navAll: NavItem[] = [
     permission: MERCHANT_PERM.settingsManage,
   },
   {
+    href: "#/admin/delivery",
+    match: "delivery",
+    label: "Доставка",
+    icon: "🚚",
+    permission: MERCHANT_PERM.ordersManage,
+  },
+  {
     href: "#/admin/support",
     match: "support",
     label: "Поддержка",

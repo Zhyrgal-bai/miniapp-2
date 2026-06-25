@@ -23,12 +23,7 @@ import { formatOrderLineSummary } from "@repo-shared/businessCommerce";
 import { cartLineIdentityKey } from "../commerce/cartLineIdentity";
 import { readTableSession } from "../utils/tableSessionStorage";
 import { readPreorderContext, clearPreorderContext } from "../utils/reservationPreorderStorage";
-import {
-  computeDeliveryQuote,
-  defaultMerchantDeliverySettings,
-  haversineDistanceKm,
-  type MerchantDeliverySettings,
-} from "@repo-shared/merchantDeliverySettings";
+import { useCheckoutDeliveryQuote } from "../hooks/useCheckoutDeliveryQuote";
 import {
   markCustomerLocationGranted,
   readCustomerLocationAddress,
@@ -298,86 +293,34 @@ export default function CheckoutPage({ onBack }: Props) {
     [items],
   );
 
-  const deliverySettings = useMemo((): MerchantDeliverySettings => {
-    const p = payload?.deliveryPolicy;
-    if (p == null) return defaultMerchantDeliverySettings();
-    return {
-      version: 1,
-      pricingMode: p.pricingMode,
-      minOrderAmountSom: p.minOrderAmountSom,
-      fixedPriceSom: p.fixedPriceSom,
-      distanceTiers: p.distanceTiers,
-    };
-  }, [payload?.deliveryPolicy]);
-
-  const distanceKm = useMemo(() => {
-    if (deliveryType === "pickup") return null;
-    const store = payload?.storeAddress;
-    if (store == null) return null;
+  const customerCoords = useMemo(() => {
+    if (deliveryType === "pickup") {
+      return { latitude: null as number | null, longitude: null as number | null };
+    }
     const saved = businessId != null ? readCustomerLocationAddress(businessId) : null;
-    const customerLat = lat ?? saved?.latitude ?? null;
-    const customerLng = lng ?? saved?.longitude ?? null;
-    if (customerLat == null || customerLng == null) return null;
-    return (
-      Math.round(
-        haversineDistanceKm(
-          { latitude: store.latitude, longitude: store.longitude },
-          { latitude: customerLat, longitude: customerLng },
-        ) * 100,
-      ) / 100
-    );
-  }, [deliveryType, payload?.storeAddress, lat, lng, businessId]);
+    return {
+      latitude: lat ?? saved?.latitude ?? null,
+      longitude: lng ?? saved?.longitude ?? null,
+    };
+  }, [deliveryType, lat, lng, businessId]);
 
-  const deliveryQuote = useMemo(() => {
-    const fulfillmentMode = deliveryType === "pickup" ? "PICKUP" : "DELIVERY";
-    return computeDeliveryQuote({
-      settings: deliverySettings,
-      fulfillmentMode,
-      subtotalSom: subtotal,
-      distanceKm,
-    });
-  }, [deliverySettings, deliveryType, subtotal, distanceKm]);
+  const checkoutDelivery = useCheckoutDeliveryQuote({
+    merchantId: businessId,
+    fulfillmentMode: deliveryType === "pickup" ? "PICKUP" : "DELIVERY",
+    subtotalSom: subtotal,
+    latitude: customerCoords.latitude,
+    longitude: customerCoords.longitude,
+  });
 
-  const deliveryFeeSom = deliveryQuote.ok ? deliveryQuote.deliveryFeeSom : 0;
-  const manualDeliveryNotice =
-    deliveryQuote.ok && deliveryQuote.manualConfirmation
-      ? deliveryQuote.message
-      : null;
+  const deliveryFeeSom = checkoutDelivery.deliveryFeeSom;
+  const manualDeliveryNotice = checkoutDelivery.manualMessage;
 
   const deliverySummaryLabel = useMemo(() => {
-    if (deliveryType === "pickup") {
-      return t("checkout.deliveryFree");
+    if (checkoutDelivery.loading && deliveryType === "delivery") {
+      return "Расчёт доставки…";
     }
-    if (!deliveryQuote.ok) {
-      return deliveryQuote.error;
-    }
-    if (manualDeliveryNotice != null) {
-      return "Уточняется";
-    }
-    const dist =
-      deliveryQuote.distanceKm != null
-        ? ` · ≈ ${deliveryQuote.distanceKm} км`
-        : "";
-    if (deliverySettings.pricingMode === "DISTANCE_BASED") {
-      if (deliveryQuote.distanceKm == null) {
-        return "Укажите местоположение на карте";
-      }
-      if (deliveryFeeSom === 0) {
-        return `${t("checkout.deliveryFree")}${dist}`;
-      }
-      return `${formatSom(deliveryFeeSom)}${dist}`;
-    }
-    if (deliveryFeeSom === 0) {
-      return t("checkout.deliveryFree");
-    }
-    return formatSom(deliveryFeeSom);
-  }, [
-    deliveryType,
-    deliveryQuote,
-    manualDeliveryNotice,
-    deliveryFeeSom,
-    deliverySettings.pricingMode,
-  ]);
+    return checkoutDelivery.displayLabel;
+  }, [checkoutDelivery.loading, checkoutDelivery.displayLabel, deliveryType]);
 
   const discountAmount = useMemo(() => {
     if (!promoPreview) return 0;
@@ -728,8 +671,8 @@ export default function CheckoutPage({ onBack }: Props) {
       return;
     }
     if (!validateForm()) return;
-    if (!deliveryQuote.ok) {
-      setCheckoutError(deliveryQuote.error);
+    if (!checkoutDelivery.ok) {
+      setCheckoutError(checkoutDelivery.errorMessage ?? "Доставка недоступна");
       return;
     }
 
@@ -808,6 +751,9 @@ export default function CheckoutPage({ onBack }: Props) {
         subtotal,
         total: payTotal,
         deliveryType,
+        ...(checkoutDelivery.providerOfferId
+          ? { deliveryOfferId: checkoutDelivery.providerOfferId }
+          : {}),
         address: addressClean,
         ...(lat != null && lng != null ? { lat, lng } : {}),
         promo: promoCode,
@@ -1323,7 +1269,8 @@ export default function CheckoutPage({ onBack }: Props) {
             submitting ||
             finikRedirectMessage != null ||
             Boolean(cartStockIssue) ||
-            !deliveryQuote.ok ||
+            !checkoutDelivery.ok ||
+            checkoutDelivery.loading ||
             payload?.finikCheckoutReady === false
           }
         >

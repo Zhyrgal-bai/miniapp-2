@@ -11,7 +11,10 @@ export type StorefrontFinikCheckoutSessionResult =
   | { ok: false; error: string };
 
 /**
- * Storefront checkout: create payment через router (mock / official / legacy).
+ * Storefront checkout: single payment to the merchant Finik account.
+ * `amount` is order.total (goods + merchant-owned delivery fee when applicable).
+ * Merchant-owned delivery is not split to ARCHA; provider deliveries may use
+ * separate marketplace flows in the future.
  */
 export async function createStorefrontFinikCheckoutSession(
   business: StorefrontFinikBusiness,

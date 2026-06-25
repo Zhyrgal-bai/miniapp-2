@@ -188,7 +188,11 @@ import {
   logInventoryMismatch,
 } from "./structuredLog.js";
 import { initializeOrderDelivery } from "./deliveryService.js";
-import { resolveCheckoutDeliveryQuote } from "./deliveryQuoteService.js";
+import { resolveHybridCheckoutDelivery } from "./delivery/engine/hybridCheckoutDeliveryResolver.js";
+import {
+  CHECKOUT_DELIVERY_QUOTE_HTTP_STATUS,
+  MERCHANT_OWNED_DELIVERY_PROVIDER,
+} from "../shared/hybridDeliveryCheckout.js";
 import {
   defaultStoreAvailabilitySettings,
   etaMidMinutes,
@@ -404,6 +408,17 @@ import { attachWaitlistRoutes } from "./waitlistRoutes.js";
 import { startTableReservationScheduler } from "./tableReservationScheduler.js";
 import { resolveCheckoutReservationId, markReservationPreorderPaymentPending } from "./tableReservationPreorder.js";
 import { attachVenueOperationsRoutes } from "./venueOperationsRoutes.js";
+import { attachDeliveryOffersRoutes } from "./delivery/deliveryOffersRoute.js";
+import { attachDeliveryCalculateRoutes } from "./delivery/deliveryCalculateRoute.js";
+import { attachDeliveryCheckoutQuoteRoutes } from "./delivery/deliveryCheckoutQuoteRoute.js";
+import { attachDeliveryYandexWebhookRoutes } from "./delivery/deliveryYandexWebhookRoute.js";
+import { attachDeliveryTrackingRoutes } from "./delivery/deliveryTrackingRoute.js";
+import { attachDeliveryHealthRoutes } from "./delivery/deliveryHealthRoute.js";
+import { attachDeliveryMerchantDashboardRoutes } from "./delivery/deliveryMerchantDashboardRoute.js";
+import { attachDeliveryOperationsRoutes } from "./delivery/operations/deliveryOperationsRoutes.js";
+import { attachDeliveryEngineRoutes } from "./delivery/engine/deliveryEngineRoutes.js";
+import "./delivery/engine/deliveryEngineBootstrap.js";
+import { startDeliveryRecoveryScheduler } from "./delivery/deliveryRecoveryScheduler.js";
 
 const __serverDir = path.dirname(fileURLToPath(import.meta.url));
 const FRONTEND_DIST = path.resolve(__serverDir, "../../frontend/dist");
@@ -566,6 +581,7 @@ app.use((req: Request, _res: Response, next: () => void) => {
 });
 app.use("/api/", apiLimiter);
 app.use("/api/platform/subscription-finik-webhook", webhooksLimiter);
+app.use("/api/delivery/providers/yandex/webhook", webhooksLimiter);
 app.use("/api/platform", requireTelegramAuth);
 mountFinikWebhookRoutes(app);
 mountFinikSettingsRoutes(app);
@@ -719,6 +735,22 @@ async function requireOperatorRecentReauth(
     return null;
   }
   return unlocked;
+}
+
+async function tryOperatorUnlockSilent(
+  req: Request,
+): Promise<{ telegramId: string } | null> {
+  const telegramId = platformTelegramIdFromWebApp(req);
+  if (!telegramId) return null;
+  if (!isPlatformOperatorTelegramId(telegramId)) return null;
+  const token = operatorSessionTokenFromReq(req);
+  if (!token) return null;
+  const valid = await validateOperatorSession({
+    operatorTelegramId: telegramId,
+    token,
+  });
+  if (!valid.ok) return null;
+  return { telegramId };
 }
 
 app.get("/api/platform/operator/capabilities", async (req: Request, res: Response) => {
@@ -5770,6 +5802,59 @@ attachSupportRoutes(app, {
   supportLimiter,
 });
 
+attachDeliveryOffersRoutes(app, {
+  tryOperatorUnlock: tryOperatorUnlockSilent,
+  requireMerchantStaff,
+  telegramIdFromRequest,
+});
+
+attachDeliveryCalculateRoutes(app, {
+  telegramIdFromRequest,
+});
+
+attachDeliveryCheckoutQuoteRoutes(app, {
+  telegramIdFromRequest,
+});
+
+attachDeliveryYandexWebhookRoutes(app);
+
+attachDeliveryTrackingRoutes(app, {
+  telegramIdFromRequest,
+  resolveCatalogBusinessId,
+  requireMerchantStaff,
+  ordersManagePermission: MERCHANT_PERM.ordersManage,
+});
+
+attachDeliveryHealthRoutes(app);
+
+attachDeliveryMerchantDashboardRoutes(app, {
+  requireMerchantStaff,
+  ordersManagePermission: MERCHANT_PERM.ordersManage,
+});
+
+attachDeliveryOperationsRoutes(app, {
+  operatorAuth: {
+    requireOperatorUnlock,
+    requireOperatorRecentReauth,
+  },
+  requireMerchantStaff,
+  ordersManagePermission: MERCHANT_PERM.ordersManage,
+  telegramIdFromRequest: verifiedTelegramIdFromRequest,
+  orderOwnedByTelegramUser: async (orderId, telegramId) => {
+    const order = await prisma.order.findFirst({
+      where: { id: orderId, buyerUser: { telegramId } },
+      select: { id: true },
+    });
+    return order != null;
+  },
+});
+
+attachDeliveryEngineRoutes(app, {
+  operatorAuth: { requireOperatorUnlock },
+  requireMerchantStaff,
+  settingsManagePermission: MERCHANT_PERM.settingsManage,
+});
+
 attachDiningTableRoutes(app, { requireMerchantStaff });
 
 attachTableReservationRoutes(app, {
@@ -6184,24 +6269,37 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
         "delivery_quote",
         tenantBusinessId,
         async () => {
-          const result = resolveCheckoutDeliveryQuote({
-            deliverySettingsRaw: biz!.deliverySettings,
-            storeLatitude: biz!.latitude,
-            storeLongitude: biz!.longitude,
-            customerLatitude: orderLat,
-            customerLongitude: orderLng,
-            fulfillmentMode: deliveryModeParsed,
+          const fulfillmentMode =
+            deliveryModeParsed === DeliveryMode.PICKUP ? "PICKUP" : "DELIVERY";
+          const result = await resolveHybridCheckoutDelivery({
+            merchantId: tenantBusinessId,
+            destination: {
+              latitude: orderLat ?? 0,
+              longitude: orderLng ?? 0,
+            },
             subtotalSom: priced.subtotal,
+            fulfillmentMode,
+            ...(checkoutCtx.correlationId
+              ? { correlationId: checkoutCtx.correlationId }
+              : {}),
           });
           if (!result.ok) {
-            throw new Error(`DELIVERY:${result.statusCode}:${result.error}`);
+            const statusCode =
+              CHECKOUT_DELIVERY_QUOTE_HTTP_STATUS[result.code] ?? 400;
+            throw new Error(`DELIVERY:${statusCode}:${result.message}`);
+          }
+          if (
+            result.provider === MERCHANT_OWNED_DELIVERY_PROVIDER &&
+            result.providerOfferId != null
+          ) {
+            throw new Error("DELIVERY:500:Некорректная конфигурация доставки магазина");
           }
           return result;
         },
         checkoutCtx,
       );
 
-      const deliveryFeeSom = deliveryQuoteResult.quote.deliveryFeeSom;
+      const deliveryFeeSom = deliveryQuoteResult.deliveryFeeSom;
       orderTotal = coerceCheckoutOrderTotal(orderTotal + deliveryFeeSom);
 
       const telegramId = verifiedTg;
@@ -6312,6 +6410,20 @@ app.post("/orders", ordersLimiter, async (req: Request, res: Response) => {
               preorderStatus:
                 reservationIdForOrder != null ? "PREORDER_DRAFT" : null,
               prepStatus: tableSessionIdParsed != null ? "PREPARING" : "NONE",
+              ...(deliveryModeParsed === DeliveryMode.DELIVERY &&
+              deliveryQuoteResult.providerOfferId
+                ? { deliveryOfferId: deliveryQuoteResult.providerOfferId }
+                : {}),
+              ...(deliveryModeParsed === DeliveryMode.DELIVERY &&
+              deliveryQuoteResult.provider
+                ? { deliveryProvider: deliveryQuoteResult.provider }
+                : {}),
+              ...(deliveryQuoteResult.calculationSource
+                ? { deliveryCalculationSource: deliveryQuoteResult.calculationSource }
+                : {}),
+              ...(deliveryQuoteResult.etaMinutes != null
+                ? { deliveryEtaMinutes: deliveryQuoteResult.etaMinutes }
+                : {}),
               ...(promoRaw
                 ? { tracking: promoTrackingValue(promoRaw) }
                 : {}),
@@ -7185,6 +7297,11 @@ void (async () => {
       startTableReservationScheduler();
     } catch (e) {
       console.error("startTableReservationScheduler:", e);
+    }
+    try {
+      startDeliveryRecoveryScheduler();
+    } catch (e) {
+      console.error("startDeliveryRecoveryScheduler:", e);
     }
   });
 })();
