@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api } from "../services/api";
+import { apiAbsoluteUrl } from "../services/api";
+import { privilegedFetch } from "../services/privilegedFetch";
 import type { CheckoutDeliveryQuote } from "@repo-shared/hybridDeliveryCheckout";
 
 export type CheckoutFulfillmentMode = "DELIVERY" | "PICKUP";
@@ -86,15 +87,25 @@ export function useCheckoutDeliveryQuote(
     const timer = window.setTimeout(() => {
       void (async () => {
         try {
-          const { data } = await api.post<CheckoutDeliveryQuote>(
-            "/delivery/checkout-quote",
-            {
+          const url = apiAbsoluteUrl("/api/delivery/checkout-quote");
+          const res = await privilegedFetch(url, {
+            method: "POST",
+            businessId: merchantId,
+            body: JSON.stringify({
               merchantId,
               destination: { latitude, longitude },
               subtotalSom,
               fulfillmentMode: "DELIVERY",
-            },
-          );
+            }),
+          });
+          const text = await res.text();
+          if (!text.trim()) {
+            throw new Error("empty checkout quote response");
+          }
+          const data = JSON.parse(text) as CheckoutDeliveryQuote;
+          if (typeof data !== "object" || data == null || !("ok" in data)) {
+            throw new Error("invalid checkout quote response");
+          }
           if (requestSeq.current !== seq) return;
           setQuote(data);
         } catch {
