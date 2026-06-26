@@ -1,4 +1,4 @@
-/** Phase 8.5 — unified checkout delivery quote (engine + merchant fallback). */
+/** Phase 8.5 / 9.2 — unified checkout delivery quote (region-based Yandex vs merchant routing). */
 
 /**
  * Merchant-configured delivery (zones/tiers). Not a marketplace provider delivery.

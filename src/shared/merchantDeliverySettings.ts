@@ -135,7 +135,7 @@ function parseRegion(raw: unknown): MerchantDeliveryRegion | null {
 }
 
 import type { DeliveryDestinationLocality } from "./merchantDeliveryLocality.js";
-import { resolveMerchantDeliveryRegionWithMeta } from "./merchantDeliveryLocality.js";
+import { resolveMerchantDeliveryRegionWithMeta, isBishkekCityName } from "./merchantDeliveryLocality.js";
 
 export type {
   DeliveryDestinationLocality,
@@ -388,6 +388,13 @@ export function computeDeliveryQuote(
         return {
           ok: false,
           error: "Доставка в этот регион недоступна",
+          code: "DELIVERY_UNAVAILABLE",
+        };
+      }
+      if (isBishkekCityName(region.name)) {
+        return {
+          ok: false,
+          error: "Доставка в Бишкеке выполняется через Yandex Delivery",
           code: "DELIVERY_UNAVAILABLE",
         };
       }

@@ -41,6 +41,13 @@ function matchRegionExact(
   return regions.find((r) => normalizeLocalityPart(r.name) === n) ?? null;
 }
 
+/** Normalized Bishkek city tokens (ru + en). */
+export function isBishkekCityName(value: string | null | undefined): boolean {
+  const n = normalizeLocalityPart(value);
+  if (!n) return false;
+  return n === "бишкек" || n === "bishkek";
+}
+
 /**
  * @deprecated Substring match on free-text address — Phase 9.1 fallback only.
  */
@@ -97,7 +104,16 @@ export function resolveMerchantDeliveryRegionWithMeta(
     destinationLabel?: string | null;
     distanceKm?: number | null;
   },
+  options?: {
+    /** Legacy migrated tier labels (`До N км`). Off for strict REGION_BASED routing. */
+    allowDistanceTierMatch?: boolean;
+    /** Use sole region when only one configured. Off for strict REGION_BASED routing. */
+    allowSingleRegionFallback?: boolean;
+  },
 ): MerchantRegionMatchResult {
+  const allowDistanceTierMatch = options?.allowDistanceTierMatch !== false;
+  const allowSingleRegionFallback = options?.allowSingleRegionFallback !== false;
+
   if (regions.length === 0) {
     return { region: null, source: null };
   }
@@ -119,11 +135,13 @@ export function resolveMerchantDeliveryRegionWithMeta(
   const labelMatch = matchRegionDeprecatedLabel(regions, input.destinationLabel);
   if (labelMatch) return { region: labelMatch, source: "destination_label_deprecated" };
 
-  // Priority 4 — distance / migrated tier labels
-  const distanceMatch = matchRegionDistanceTiers(regions, input.distanceKm);
-  if (distanceMatch) return { region: distanceMatch, source: "distance_tier" };
+  // Priority 4 — distance / migrated tier labels (legacy migration only)
+  if (allowDistanceTierMatch) {
+    const distanceMatch = matchRegionDistanceTiers(regions, input.distanceKm);
+    if (distanceMatch) return { region: distanceMatch, source: "distance_tier" };
+  }
 
-  if (regions.length === 1) {
+  if (allowSingleRegionFallback && regions.length === 1) {
     return { region: regions[0] ?? null, source: "single_region" };
   }
 

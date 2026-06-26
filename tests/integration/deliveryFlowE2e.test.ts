@@ -237,6 +237,7 @@ describe("delivery flow E2E verification", () => {
         destination: { latitude: CUSTOMER_LAT, longitude: CUSTOMER_LNG },
         subtotalSom: SUBTOTAL_SOM,
         fulfillmentMode: "DELIVERY",
+        destinationLocality: { city: "Токмок" },
       });
 
       expect(quote.ok).toBe(true);
@@ -245,7 +246,7 @@ describe("delivery flow E2E verification", () => {
       expect(quote.calculationSource).toBe("fixed");
       expect(quote.deliveryFeeSom).toBe(FIXED_DELIVERY_FEE);
       expect(quote.providerOfferId).toBeNull();
-      expect(quote.fallbackUsed).toBe(true);
+      expect(quote.fallbackUsed).toBe(false);
     });
 
     it("order.total includes goods subtotal + merchant delivery fee", async () => {
@@ -367,6 +368,7 @@ describe("delivery flow E2E verification", () => {
         destination: { latitude: CUSTOMER_LAT, longitude: CUSTOMER_LNG },
         subtotalSom: SUBTOTAL_SOM,
         fulfillmentMode: "DELIVERY",
+        destinationLocality: { city: "Бишкек" },
       });
 
       expect(quote.ok).toBe(true);
@@ -667,6 +669,7 @@ describe("delivery flow E2E verification", () => {
         destination: { latitude: CUSTOMER_LAT, longitude: CUSTOMER_LNG },
         subtotalSom: SUBTOTAL_SOM,
         fulfillmentMode: "DELIVERY",
+        destinationLocality: { city: "Токмок" },
       });
       const metrics = getDeliveryMetricsSnapshot();
       expect(metrics.checkout_delivery_merchant_fallback_total).toBe(1);

@@ -65,11 +65,8 @@ const customerLng = 74.58;
 function merchantSettings(overrides?: Partial<MerchantDeliverySettings>): MerchantDeliverySettings {
   return {
     ...defaultMerchantDeliverySettings(),
-    pricingMode: "DISTANCE_BASED",
-    distanceTiers: [
-      { maxKm: 5, priceSom: 100 },
-      { maxKm: 10, priceSom: 200 },
-    ],
+    pricingMode: "REGION_BASED",
+    merchantDeliveryEnabled: true,
     ...overrides,
   };
 }
@@ -89,7 +86,7 @@ import {
   requiresProviderDeliveryFulfillment,
 } from "../../src/shared/hybridDeliveryCheckout.js";
 
-describe("hybridCheckoutDelivery phase8.5", () => {
+describe("hybridCheckoutDelivery phase9.2", () => {
   beforeEach(() => {
     clearDeliveryEnginePluginsForTests();
     resetProviderHealthForTests();
@@ -109,21 +106,20 @@ describe("hybridCheckoutDelivery phase8.5", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns live yandex quote when provider succeeds", async () => {
-    registerDeliveryEnginePlugin(
-      mockPlugin("yandex", async () => ({
-        ok: true,
-        quote: {
-          provider: "yandex",
-          available: true,
-          price: 250,
-          currency: "KGS",
-          etaMinutes: 20,
-          providerOfferId: "yandex:offer-1",
-          expiresAt: null,
-        },
-      })),
-    );
+  it("returns live yandex quote for Bishkek", async () => {
+    const calculateSpy = vi.fn(async () => ({
+      ok: true as const,
+      quote: {
+        provider: "yandex",
+        available: true,
+        price: 250,
+        currency: "KGS",
+        etaMinutes: 20,
+        providerOfferId: "yandex:offer-1",
+        expiresAt: null,
+      },
+    }));
+    registerDeliveryEnginePlugin(mockPlugin("yandex", calculateSpy));
 
     const { resolveHybridCheckoutDelivery } = createHybridCheckoutDeliveryResolver();
     const result = await resolveHybridCheckoutDelivery({
@@ -131,6 +127,7 @@ describe("hybridCheckoutDelivery phase8.5", () => {
       destination: { latitude: customerLat, longitude: customerLng },
       subtotalSom: 1000,
       fulfillmentMode: "DELIVERY",
+      destinationLocality: { city: "Бишкек" },
     });
 
     expect(result.ok).toBe(true);
@@ -138,12 +135,12 @@ describe("hybridCheckoutDelivery phase8.5", () => {
     expect(result.provider).toBe("yandex");
     expect(result.calculationSource).toBe("live");
     expect(result.deliveryFeeSom).toBe(250);
-    expect(result.providerOfferId).toBe("yandex:offer-1");
     expect(result.fallbackUsed).toBe(false);
+    expect(calculateSpy).toHaveBeenCalledTimes(1);
     expect(getDeliveryMetricsSnapshot().checkout_delivery_live_total).toBe(1);
   });
 
-  it("falls back to merchant pricing when yandex tariff unavailable", async () => {
+  it("returns unavailable when yandex fails for Bishkek (no merchant fallback)", async () => {
     registerDeliveryEnginePlugin(
       mockPlugin("yandex", async () => ({
         ok: false,
@@ -158,25 +155,60 @@ describe("hybridCheckoutDelivery phase8.5", () => {
       destination: { latitude: customerLat, longitude: customerLng },
       subtotalSom: 1000,
       fulfillmentMode: "DELIVERY",
+      destinationLocality: { city: "Бишкек" },
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe("DELIVERY_UNAVAILABLE");
+    expect(getDeliveryMetricsSnapshot().checkout_delivery_merchant_fallback_total).toBe(0);
+    expect(getDeliveryMetricsSnapshot().checkout_delivery_unavailable_total).toBe(1);
+  });
+
+  it("uses merchant regional pricing for Tokmok without calling Yandex", async () => {
+    const calculateSpy = vi.fn();
+    registerDeliveryEnginePlugin(mockPlugin("yandex", calculateSpy));
+
+    const { resolveHybridCheckoutDelivery } = createHybridCheckoutDeliveryResolver();
+    const result = await resolveHybridCheckoutDelivery({
+      merchantId: 1,
+      destination: { latitude: customerLat, longitude: customerLng },
+      subtotalSom: 1000,
+      fulfillmentMode: "DELIVERY",
+      destinationLocality: { city: "Токмок" },
     });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.provider).toBe("merchant");
     expect(result.calculationSource).toBe("fixed");
-    expect(result.fallbackUsed).toBe(true);
+    expect(result.deliveryFeeSom).toBe(300);
+    expect(result.fallbackUsed).toBe(false);
+    expect(calculateSpy).not.toHaveBeenCalled();
     expect(getDeliveryMetricsSnapshot().checkout_delivery_merchant_fallback_total).toBe(1);
   });
 
-  it("returns unavailable when outside max radius", async () => {
-    registerDeliveryEnginePlugin(
-      mockPlugin("yandex", async () => ({
-        ok: false,
-        code: "tariff_unavailable",
-        message: "Нет тарифов",
-      })),
-    );
+  it("returns unavailable for unknown region without calling Yandex", async () => {
+    const calculateSpy = vi.fn();
+    registerDeliveryEnginePlugin(mockPlugin("yandex", calculateSpy));
 
+    const { resolveHybridCheckoutDelivery } = createHybridCheckoutDeliveryResolver();
+    const result = await resolveHybridCheckoutDelivery({
+      merchantId: 1,
+      destination: { latitude: customerLat, longitude: customerLng },
+      subtotalSom: 1000,
+      fulfillmentMode: "DELIVERY",
+      destinationLocality: { city: "Ош" },
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe("DELIVERY_UNAVAILABLE");
+    expect(calculateSpy).not.toHaveBeenCalled();
+    expect(getDeliveryMetricsSnapshot().checkout_delivery_unavailable_total).toBe(1);
+  });
+
+  it("returns unavailable when outside max radius on merchant route", async () => {
     vi.spyOn(prisma.business, "findUnique").mockResolvedValue({
       deliverySettings: merchantSettings({
         distanceTiers: [{ maxKm: 2, priceSom: 100 }],
@@ -194,15 +226,15 @@ describe("hybridCheckoutDelivery phase8.5", () => {
       destination: { latitude: 43.5, longitude: 75.5 },
       subtotalSom: 1000,
       fulfillmentMode: "DELIVERY",
+      destinationLocality: { city: "Токмок" },
     });
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.code).toBe("DELIVERY_UNAVAILABLE");
-    expect(getDeliveryMetricsSnapshot().checkout_delivery_unavailable_total).toBe(1);
   });
 
-  it("returns FIXED_PRICE merchant fee on fallback", async () => {
+  it("returns FIXED_PRICE merchant fee on regional resolver", async () => {
     const fixed = resolveMerchantDeliveryFallback({
       deliverySettingsRaw: merchantSettings({
         pricingMode: "FIXED_PRICE",
@@ -215,12 +247,14 @@ describe("hybridCheckoutDelivery phase8.5", () => {
       customerLatitude: customerLat,
       customerLongitude: customerLng,
       subtotalSom: 500,
+      destinationLocality: { city: "Токмок" },
     });
 
     expect(fixed.ok).toBe(true);
     if (!fixed.ok) return;
     expect(fixed.deliveryFeeSom).toBe(150);
     expect(fixed.provider).toBe("merchant");
+    expect(fixed.fallbackUsed).toBe(false);
   });
 
   it("pickup skips engine and returns zero fee", async () => {
@@ -241,7 +275,7 @@ describe("hybridCheckoutDelivery phase8.5", () => {
     expect(calculateSpy).not.toHaveBeenCalled();
   });
 
-  it("does not fallback on invalid_coordinates", async () => {
+  it("returns INVALID_COORDINATES for Bishkek without merchant fallback", async () => {
     registerDeliveryEnginePlugin(
       mockPlugin("yandex", async () => ({
         ok: false,
@@ -256,6 +290,7 @@ describe("hybridCheckoutDelivery phase8.5", () => {
       destination: { latitude: customerLat, longitude: customerLng },
       subtotalSom: 1000,
       fulfillmentMode: "DELIVERY",
+      destinationLocality: { city: "Бишкек" },
     });
 
     expect(result.ok).toBe(false);

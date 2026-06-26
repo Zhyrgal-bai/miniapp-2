@@ -173,6 +173,6 @@ export function resolveMerchantDeliveryFallback(
       quote.manualConfirmation,
     ),
     distanceKm,
-    fallbackUsed: true,
+    fallbackUsed: false,
   };
 }
