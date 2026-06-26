@@ -1,13 +1,19 @@
 /**
- * Настройки доставки мерчанта (Phase 4) — pricing mode, min order, тарифы.
+ * Настройки доставки мерчанта — hybrid providers (Yandex + merchant regions).
  */
+
+import {
+  DEFAULT_MERCHANT_REGIONS,
+  migrateMerchantDeliverySettings,
+} from "./merchantDeliveryMigration.js";
 
 export type MerchantDeliveryPricingMode =
   | "SELF_PICKUP"
   | "FIXED_PRICE"
   | "DISTANCE_BASED"
   | "FREE_DELIVERY"
-  | "MANUAL_CONFIRMATION";
+  | "MANUAL_CONFIRMATION"
+  | "REGION_BASED";
 
 export type MerchantDistanceTier = {
   /** Верхняя граница сегмента в км (не включительно для следующего). null = всё дальше. */
@@ -15,15 +21,26 @@ export type MerchantDistanceTier = {
   priceSom: number;
 };
 
+export type MerchantDeliveryRegion = {
+  id: string;
+  name: string;
+  priceSom: number;
+  notes?: string | null;
+};
+
 export type MerchantDeliverySettings = {
   version: 1;
   pricingMode: MerchantDeliveryPricingMode;
   /** Минимальная сумма товаров (сом) для оформления заказа. */
   minOrderAmountSom: number;
-  /** FIXED_PRICE */
+  /** @deprecated Legacy FIXED_PRICE */
   fixedPriceSom: number;
-  /** DISTANCE_BASED — отсортированные сегменты. */
+  /** @deprecated Legacy DISTANCE_BASED */
   distanceTiers: MerchantDistanceTier[];
+  /** Merchant-owned regional fixed prices (REGION_BASED). */
+  regions: MerchantDeliveryRegion[];
+  /** Merchant fallback delivery enabled (REGION_BASED). */
+  merchantDeliveryEnabled: boolean;
 };
 
 export type DeliveryQuoteInput = {
@@ -31,8 +48,12 @@ export type DeliveryQuoteInput = {
   /** DELIVERY | PICKUP (Prisma DeliveryMode) */
   fulfillmentMode: "DELIVERY" | "PICKUP";
   subtotalSom: number;
-  /** Расстояние магазин → клиент в км; нужно для DISTANCE_BASED. */
+  /** Расстояние магазин → клиент в км; legacy distance tiers / radius cap. */
   distanceKm: number | null;
+  /** Адрес или населённый пункт — deprecated fallback (Phase 9.1). */
+  destinationLabel?: string | null;
+  /** Structured locality from checkout (Phase 9.1). */
+  destinationLocality?: DeliveryDestinationLocality | null;
 };
 
 export type DeliveryQuote = {
@@ -56,6 +77,7 @@ export type DeliveryQuoteError = {
     | "PICKUP_ONLY"
     | "DELIVERY_DISABLED"
     | "DISTANCE_UNKNOWN"
+    | "DELIVERY_UNAVAILABLE"
     | "INVALID_SETTINGS";
 };
 
@@ -70,10 +92,12 @@ export const DEFAULT_DISTANCE_TIERS: MerchantDistanceTier[] = [
 export function defaultMerchantDeliverySettings(): MerchantDeliverySettings {
   return {
     version: 1,
-    pricingMode: "FREE_DELIVERY",
+    pricingMode: "REGION_BASED",
     minOrderAmountSom: 0,
     fixedPriceSom: 0,
     distanceTiers: DEFAULT_DISTANCE_TIERS.map((t) => ({ ...t })),
+    regions: DEFAULT_MERCHANT_REGIONS.map((r) => ({ ...r })),
+    merchantDeliveryEnabled: true,
   };
 }
 
@@ -83,7 +107,46 @@ const PRICING_MODES: MerchantDeliveryPricingMode[] = [
   "DISTANCE_BASED",
   "FREE_DELIVERY",
   "MANUAL_CONFIRMATION",
+  "REGION_BASED",
 ];
+
+function parseRegion(raw: unknown): MerchantDeliveryRegion | null {
+  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const name = String(o.name ?? "").trim();
+  if (name.length < 2) return null;
+  const idRaw = String(o.id ?? "").trim();
+  const id =
+    idRaw !== ""
+      ? idRaw
+      : name
+          .toLowerCase()
+          .replace(/\s+/g, "-")
+          .replace(/[^a-z0-9-]/g, "");
+  const notesRaw = o.notes;
+  const notes =
+    typeof notesRaw === "string" && notesRaw.trim() !== "" ? notesRaw.trim() : null;
+  return {
+    id: id || `region-${name}`,
+    name,
+    priceSom: clampSom(Number(o.priceSom)),
+    notes,
+  };
+}
+
+import type { DeliveryDestinationLocality } from "./merchantDeliveryLocality.js";
+import { resolveMerchantDeliveryRegionWithMeta } from "./merchantDeliveryLocality.js";
+
+export type {
+  DeliveryDestinationLocality,
+  MerchantRegionMatchSource,
+  MerchantRegionMatchResult,
+} from "./merchantDeliveryLocality.js";
+export {
+  normalizeLocalityPart,
+  localityFromNominatimAddress,
+  parseCityFromDisplayAddress,
+} from "./merchantDeliveryLocality.js";
 
 function clampSom(n: number): number {
   if (!Number.isFinite(n)) return 0;
@@ -142,16 +205,34 @@ export function parseMerchantDeliverySettings(
     });
     distanceTiers = sorted;
   }
-  return {
-    ok: true,
-    value: {
-      version: 1,
-      pricingMode,
-      minOrderAmountSom,
-      fixedPriceSom,
-      distanceTiers,
-    },
-  };
+
+  let regions = base.regions;
+  if (Array.isArray(o.regions) && o.regions.length > 0) {
+    const parsed = o.regions.map(parseRegion).filter((r): r is MerchantDeliveryRegion => r != null);
+    if (parsed.length === 0) {
+      return { ok: false, error: "Некорректные регионы доставки" };
+    }
+    regions = parsed;
+  }
+
+  const merchantDeliveryEnabled =
+    o.merchantDeliveryEnabled === false ? false : o.merchantDeliveryEnabled === true ? true : base.merchantDeliveryEnabled;
+
+  const value = migrateMerchantDeliverySettings({
+    version: 1,
+    pricingMode,
+    minOrderAmountSom,
+    fixedPriceSom,
+    distanceTiers,
+    regions,
+    merchantDeliveryEnabled,
+  });
+
+  if (value.pricingMode === "REGION_BASED" && value.merchantDeliveryEnabled && value.regions.length === 0) {
+    return { ok: false, error: "Добавьте хотя бы один регион доставки" };
+  }
+
+  return { ok: true, value };
 }
 
 export function haversineDistanceKm(
@@ -290,6 +371,41 @@ export function computeDeliveryQuote(
         message: null,
       };
     }
+    case "REGION_BASED": {
+      if (!settings.merchantDeliveryEnabled) {
+        return {
+          ok: false,
+          error: "Доставка магазином отключена",
+          code: "DELIVERY_DISABLED",
+        };
+      }
+      const { region } = resolveMerchantDeliveryRegionWithMeta(settings.regions, {
+        locality: input.destinationLocality ?? null,
+        destinationLabel: input.destinationLabel ?? null,
+        distanceKm: input.distanceKm,
+      });
+      if (!region) {
+        return {
+          ok: false,
+          error: "Доставка в этот регион недоступна",
+          code: "DELIVERY_UNAVAILABLE",
+        };
+      }
+      const manual = Boolean(region.notes?.toLowerCase().includes("уточн"));
+      return {
+        ok: true,
+        deliveryFeeSom: region.priceSom,
+        goodsPlusDeliverySom: subtotalSom + region.priceSom,
+        manualConfirmation: manual,
+        minOrderMet: true,
+        minOrderAmountSom: settings.minOrderAmountSom,
+        pricingMode: settings.pricingMode,
+        distanceKm: input.distanceKm,
+        message: manual
+          ? "Стоимость доставки будет сообщена после подтверждения заказа."
+          : region.notes ?? null,
+      };
+    }
     default:
       return { ok: false, error: "Некорректные настройки доставки", code: "INVALID_SETTINGS" };
   }
@@ -307,6 +423,8 @@ export function deliveryPricingModeLabelRu(mode: MerchantDeliveryPricingMode): s
       return "Бесплатная доставка";
     case "MANUAL_CONFIRMATION":
       return "Рассчитывает менеджер";
+    case "REGION_BASED":
+      return "Региональная доставка";
     default:
       return mode;
   }
@@ -314,15 +432,41 @@ export function deliveryPricingModeLabelRu(mode: MerchantDeliveryPricingMode): s
 
 /** Публичное представление для витрины / checkout (без секретов). */
 export function merchantDeliverySettingsToPublic(settings: MerchantDeliverySettings) {
+  const migrated = migrateMerchantDeliverySettings(settings);
   return {
-    pricingMode: settings.pricingMode,
-    minOrderAmountSom: settings.minOrderAmountSom,
-    fixedPriceSom: settings.fixedPriceSom,
-    distanceTiers: settings.distanceTiers,
+    pricingMode: migrated.pricingMode,
+    minOrderAmountSom: migrated.minOrderAmountSom,
+    fixedPriceSom: migrated.fixedPriceSom,
+    distanceTiers: migrated.distanceTiers,
+    regions: migrated.regions.map((r) => ({
+      id: r.id,
+      name: r.name,
+      priceSom: r.priceSom,
+      notes: r.notes ?? null,
+    })),
+    merchantDeliveryEnabled: migrated.merchantDeliveryEnabled,
     manualConfirmationNotice:
-      settings.pricingMode === "MANUAL_CONFIRMATION"
+      migrated.regions.some((r) => r.notes?.toLowerCase().includes("уточн"))
         ? "Стоимость доставки будет сообщена после подтверждения заказа."
         : null,
-    pickupOnly: settings.pricingMode === "SELF_PICKUP",
+    pickupOnly:
+      !migrated.merchantDeliveryEnabled &&
+      (migrated.pricingMode === "REGION_BASED" || migrated.pricingMode === "SELF_PICKUP"),
   };
 }
+
+export { migrateMerchantDeliverySettings, DEFAULT_MERCHANT_REGIONS } from "./merchantDeliveryMigration.js";
+
+/** @returns matched region or null (see `resolveMerchantDeliveryRegionWithMeta` for match source). */
+export function resolveMerchantDeliveryRegion(
+  regions: MerchantDeliveryRegion[],
+  input: {
+    locality?: DeliveryDestinationLocality | null;
+    destinationLabel?: string | null;
+    distanceKm?: number | null;
+  },
+): MerchantDeliveryRegion | null {
+  return resolveMerchantDeliveryRegionWithMeta(regions, input).region;
+}
+
+export { resolveMerchantDeliveryRegionWithMeta } from "./merchantDeliveryLocality.js";

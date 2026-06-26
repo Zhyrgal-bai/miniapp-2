@@ -76,6 +76,10 @@ import { ru } from "../i18n/ru";
 import { shareMiniAppLink } from "../utils/miniAppShare";
 import { defaultMerchantDeliverySettings } from "@repo-shared/merchantDeliverySettings";
 import type { MerchantDeliverySettings } from "@repo-shared/merchantDeliverySettings";
+import {
+  defaultMerchantDeliveryProviderPolicy,
+  type MerchantDeliveryProviderPolicy,
+} from "../types/deliveryAdmin.types";
 import { defaultStoreAvailabilitySettings } from "@repo-shared/storeAvailabilitySettings";
 import type { StoreAvailabilitySettings } from "@repo-shared/storeAvailabilitySettings";
 import type { BusinessStoreAddressDTO } from "../services/platformApi";
@@ -168,6 +172,8 @@ export default function PlatformPage() {
     useState<MerchantStoreAddressDraft>(emptyMerchantStoreAddressDraft());
   const [deliverySettingsDraft, setDeliverySettingsDraft] =
     useState<MerchantDeliverySettings>(defaultMerchantDeliverySettings());
+  const [deliveryProviderPolicyDraft, setDeliveryProviderPolicyDraft] =
+    useState<MerchantDeliveryProviderPolicy>(defaultMerchantDeliveryProviderPolicy());
   const [storeAvailabilityDraft, setStoreAvailabilityDraft] =
     useState<StoreAvailabilitySettings>(defaultStoreAvailabilitySettings());
   const [finikKeyDraft, setFinikKeyDraft] = useState("");
@@ -452,6 +458,7 @@ export default function PlatformPage() {
       setSettingsName("");
       setStoreAddressDraft(emptyMerchantStoreAddressDraft());
       setDeliverySettingsDraft(defaultMerchantDeliverySettings());
+      setDeliveryProviderPolicyDraft(defaultMerchantDeliveryProviderPolicy());
       setFinikKeyDraft("");
       setFinikSecretDraft("");
       setFinikSaving(false);
@@ -487,6 +494,9 @@ export default function PlatformPage() {
         }
         setMerchantConfigDraft(s.merchantConfig ?? {});
         setDeliverySettingsDraft(s.deliverySettings ?? defaultMerchantDeliverySettings());
+        setDeliveryProviderPolicyDraft(
+          s.deliveryProviderPolicy ?? defaultMerchantDeliveryProviderPolicy(),
+        );
         setStoreAvailabilityDraft(
           s.storeAvailabilitySettings ?? defaultStoreAvailabilitySettings(),
         );
@@ -1125,7 +1135,11 @@ export default function PlatformPage() {
     );
     const deliveryChanged =
       JSON.stringify(deliverySettingsDraft) !==
-      JSON.stringify(settingsSnap.deliverySettings ?? defaultMerchantDeliverySettings());
+        JSON.stringify(settingsSnap.deliverySettings ?? defaultMerchantDeliverySettings()) ||
+      JSON.stringify(deliveryProviderPolicyDraft) !==
+        JSON.stringify(
+          settingsSnap.deliveryProviderPolicy ?? defaultMerchantDeliveryProviderPolicy(),
+        );
     const availabilityChanged =
       JSON.stringify(storeAvailabilityDraft) !==
       JSON.stringify(
@@ -1148,7 +1162,9 @@ export default function PlatformPage() {
       city?: string;
       latitude?: number;
       longitude?: number;
-      deliverySettings?: MerchantDeliverySettings;
+      deliverySettings?: MerchantDeliverySettings & {
+        providerPolicy?: MerchantDeliveryProviderPolicy;
+      };
       storeAvailabilitySettings?: StoreAvailabilitySettings;
     } = {
       telegramId: merchantTelegramId,
@@ -1162,7 +1178,12 @@ export default function PlatformPage() {
         return;
       }
     }
-    if (deliveryChanged) payload.deliverySettings = deliverySettingsDraft;
+    if (deliveryChanged) {
+      payload.deliverySettings = {
+        ...deliverySettingsDraft,
+        providerPolicy: deliveryProviderPolicyDraft,
+      };
+    }
     if (availabilityChanged) payload.storeAvailabilitySettings = storeAvailabilityDraft;
     if (newTok !== "" && isPlatformAdmin) payload.newBotToken = newTok;
     if (merchantConfigChanged) payload.merchantConfig = merchantConfigDraft;
@@ -1215,6 +1236,9 @@ export default function PlatformPage() {
         deliverySettings: deliveryChanged
           ? deliverySettingsDraft
           : settingsSnap.deliverySettings,
+        deliveryProviderPolicy: deliveryChanged
+          ? deliveryProviderPolicyDraft
+          : settingsSnap.deliveryProviderPolicy,
         storeAvailabilitySettings: availabilityChanged
           ? storeAvailabilityDraft
           : settingsSnap.storeAvailabilitySettings,
@@ -2250,6 +2274,8 @@ export default function PlatformPage() {
         onStoreAddressDraftChange={setStoreAddressDraft}
         deliverySettingsDraft={deliverySettingsDraft}
         onDeliverySettingsDraftChange={setDeliverySettingsDraft}
+        deliveryProviderPolicyDraft={deliveryProviderPolicyDraft}
+        onDeliveryProviderPolicyDraftChange={setDeliveryProviderPolicyDraft}
         storeAvailabilityDraft={storeAvailabilityDraft}
         onStoreAvailabilityDraftChange={setStoreAvailabilityDraft}
         merchantConfigDraft={merchantConfigDraft}

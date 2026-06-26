@@ -10,6 +10,27 @@ import {
   CHECKOUT_DELIVERY_QUOTE_HTTP_STATUS,
   type CheckoutDeliveryQuote,
 } from "../../shared/hybridDeliveryCheckout.js";
+import type { DeliveryDestinationLocality } from "../../shared/merchantDeliveryLocality.js";
+
+const destinationLocalitySchema = z
+  .object({
+    city: z.string().trim().min(1).max(200).optional(),
+    district: z.string().trim().min(1).max(200).optional(),
+    region: z.string().trim().min(1).max(200).optional(),
+    country: z.string().trim().min(1).max(200).optional(),
+  })
+  .strict();
+
+function normalizeDestinationLocality(
+  locality: z.infer<typeof destinationLocalitySchema>,
+): DeliveryDestinationLocality {
+  return {
+    city: locality.city ?? null,
+    district: locality.district ?? null,
+    region: locality.region ?? null,
+    country: locality.country ?? null,
+  };
+}
 
 const checkoutQuoteBodySchema = z
   .object({
@@ -20,6 +41,8 @@ const checkoutQuoteBodySchema = z
     }),
     subtotalSom: z.number().min(0),
     fulfillmentMode: z.enum(["DELIVERY", "PICKUP"]),
+    destinationLabel: z.string().trim().min(1).max(2000).optional(),
+    destinationLocality: destinationLocalitySchema.optional(),
   })
   .strict();
 
@@ -71,6 +94,12 @@ export function attachDeliveryCheckoutQuoteRoutes(
         subtotalSom: parsed.data.subtotalSom,
         fulfillmentMode: parsed.data.fulfillmentMode,
         requestId,
+        ...(parsed.data.destinationLabel
+          ? { destinationLabel: parsed.data.destinationLabel }
+          : {}),
+        ...(parsed.data.destinationLocality
+          ? { destinationLocality: normalizeDestinationLocality(parsed.data.destinationLocality) }
+          : {}),
         ...(correlationId ? { correlationId } : {}),
       });
 

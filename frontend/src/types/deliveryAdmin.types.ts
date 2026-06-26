@@ -212,6 +212,21 @@ export type DeliverySearchFilters = {
   dateTo?: string;
 };
 
+export function defaultMerchantDeliveryProviderPolicy(): MerchantDeliveryProviderPolicy {
+  return {
+    version: 1,
+    enabled: true,
+    strategy: "MERCHANT_PRIORITY",
+    preferredProviders: ["yandex"],
+    preferredProvider: "yandex",
+    maxPriceSom: null,
+    maxEtaMinutes: null,
+    allowFallback: true,
+    allowAutoSwitch: true,
+    autoSelection: true,
+  };
+}
+
 export type MerchantDeliveryProviderPolicy = {
   version: 1;
   enabled: boolean;

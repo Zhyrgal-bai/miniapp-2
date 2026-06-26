@@ -37,17 +37,27 @@ import {
 } from "../storefront/customerAutofillStorage";
 import { reverseGeocodeKg } from "../utils/nominatimGeocode";
 import { checkoutLocationLabel } from "../utils/checkoutLocationLabel";
+import {
+  localityFromNominatimAddress,
+  parseCityFromDisplayAddress,
+  type DeliveryDestinationLocality,
+} from "@repo-shared/merchantDeliveryLocality";
 
 type Props = {
   onBack?: () => void;
 };
 
-type NominatimSearchItem = {
+export type NominatimAddressFields = Record<string, string | undefined>;
+
+export type NominatimSearchItem = {
   place_id: number;
   display_name: string;
   lat: string;
   lon: string;
+  address?: NominatimAddressFields;
 };
+
+const EMPTY_LOCALITY: DeliveryDestinationLocality = {};
 
 type FieldErrors = {
   name?: string;
@@ -118,6 +128,8 @@ export default function CheckoutPage({ onBack }: Props) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [addressLocality, setAddressLocality] =
+    useState<DeliveryDestinationLocality>(EMPTY_LOCALITY);
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
   const [loadingLocation, setLoadingLocation] = useState(false);
@@ -282,6 +294,13 @@ export default function CheckoutPage({ onBack }: Props) {
     if (address.trim() === "" && saved.formattedAddress) {
       setAddress(saved.formattedAddress);
     }
+    if (saved.city || saved.country) {
+      setAddressLocality((prev) => ({
+        ...prev,
+        ...(saved.city ? { city: saved.city } : {}),
+        ...(saved.country ? { country: saved.country } : {}),
+      }));
+    }
   }, [businessId, deliveryType, pickupOnly, lat, lng, address]);
 
   useEffect(() => {
@@ -304,12 +323,29 @@ export default function CheckoutPage({ onBack }: Props) {
     };
   }, [deliveryType, lat, lng, businessId]);
 
+  const checkoutDestinationLocality = useMemo((): DeliveryDestinationLocality => {
+    const saved =
+      businessId != null ? readCustomerLocationAddress(businessId) : null;
+    const merged: DeliveryDestinationLocality = {
+      ...(saved?.city ? { city: saved.city } : {}),
+      ...(saved?.country ? { country: saved.country } : {}),
+      ...addressLocality,
+    };
+    if (!merged.city && address.trim()) {
+      const parsedCity = parseCityFromDisplayAddress(address);
+      if (parsedCity) merged.city = parsedCity;
+    }
+    return merged;
+  }, [businessId, addressLocality, address]);
+
   const checkoutDelivery = useCheckoutDeliveryQuote({
     merchantId: businessId,
     fulfillmentMode: deliveryType === "pickup" ? "PICKUP" : "DELIVERY",
     subtotalSom: subtotal,
     latitude: customerCoords.latitude,
     longitude: customerCoords.longitude,
+    destinationLabel: address.trim() || undefined,
+    destinationLocality: checkoutDestinationLocality,
   });
 
   const deliveryFeeSom = checkoutDelivery.deliveryFeeSom;
@@ -544,6 +580,12 @@ export default function CheckoutPage({ onBack }: Props) {
     setAddress(item.display_name.trim().slice(0, 2000));
     setLat(Number(item.lat));
     setLng(Number(item.lon));
+    if (item.address) {
+      setAddressLocality(localityFromNominatimAddress(item.address));
+    } else {
+      const parsedCity = parseCityFromDisplayAddress(item.display_name);
+      setAddressLocality(parsedCity ? { city: parsedCity } : EMPTY_LOCALITY);
+    }
     setAddressSuggestions([]);
   }, []);
 
@@ -600,6 +642,7 @@ export default function CheckoutPage({ onBack }: Props) {
             if (geo.ok) {
               addressTouchedRef.current = true;
               setAddress(geo.value.displayAddress.slice(0, 2000));
+              setAddressLocality({ city: geo.value.city, country: "Кыргызстан" });
               markCustomerLocationGranted(businessId, {
                 latitude: nextLat,
                 longitude: nextLng,
@@ -1168,6 +1211,12 @@ export default function CheckoutPage({ onBack }: Props) {
                       addressSearchSeqRef.current += 1;
                       setAddressSuggestions([]);
                       setAddressSearchLoading(false);
+                    }}
+                    onResolved={(resolved) => {
+                      setAddressLocality({
+                        city: resolved.city,
+                        country: "Кыргызстан",
+                      });
                     }}
                   />
                   <p className="checkout-map-hint">{t("checkout.mapHint")}</p>

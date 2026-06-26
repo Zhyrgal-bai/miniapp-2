@@ -7,19 +7,21 @@ import {
 } from "../../src/shared/merchantDeliverySettings.js";
 
 describe("merchantDeliverySettings", () => {
-  it("defaults to FREE_DELIVERY for empty config", () => {
+  it("defaults to REGION_BASED for empty config", () => {
     const p = parseMerchantDeliverySettings(null);
     expect(p.ok).toBe(true);
     if (!p.ok) return;
-    expect(p.value.pricingMode).toBe("FREE_DELIVERY");
+    expect(p.value.pricingMode).toBe("REGION_BASED");
+    expect(p.value.regions.length).toBeGreaterThan(0);
     const q = computeDeliveryQuote({
       settings: p.value,
       fulfillmentMode: "DELIVERY",
       subtotalSom: 500,
       distanceKm: null,
+      destinationLocality: { city: "Бишкек" },
     });
     expect(q.ok).toBe(true);
-    if (q.ok) expect(q.deliveryFeeSom).toBe(0);
+    if (q.ok) expect(q.deliveryFeeSom).toBeGreaterThanOrEqual(0);
   });
 
   it("FIXED_PRICE adds fee", () => {

@@ -13,6 +13,7 @@ import {
   resolveDeliveryEtaForKm,
   type StoreAvailabilitySettings,
 } from "../../../shared/storeAvailabilitySettings.js";
+import type { DeliveryDestinationLocality } from "../../../shared/merchantDeliveryLocality.js";
 import type {
   CheckoutDeliveryQuote,
   CheckoutDeliveryQuoteFailure,
@@ -26,6 +27,9 @@ export type MerchantFallbackInput = {
   customerLatitude: number;
   customerLongitude: number;
   subtotalSom: number;
+  /** @deprecated Phase 9.1 substring fallback */
+  destinationLabel?: string | null;
+  destinationLocality?: DeliveryDestinationLocality | null;
 };
 
 function parseSettings(
@@ -89,6 +93,9 @@ function mapMerchantQuoteError(
   if (code === "DELIVERY_DISABLED") {
     return { ok: false, code: "DELIVERY_DISABLED", message: error };
   }
+  if (code === "DELIVERY_UNAVAILABLE") {
+    return { ok: false, code: "DELIVERY_UNAVAILABLE", message: error };
+  }
   return { ok: false, code: "DELIVERY_UNAVAILABLE", message: error };
 }
 
@@ -138,6 +145,8 @@ export function resolveMerchantDeliveryFallback(
     fulfillmentMode: "DELIVERY",
     subtotalSom: input.subtotalSom,
     distanceKm,
+    destinationLabel: input.destinationLabel ?? null,
+    destinationLocality: input.destinationLocality ?? null,
   });
 
   if (!quote.ok) {

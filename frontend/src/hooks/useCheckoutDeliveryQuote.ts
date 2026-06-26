@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { apiAbsoluteUrl } from "../services/api";
 import { privilegedFetch } from "../services/privilegedFetch";
 import type { CheckoutDeliveryQuote } from "@repo-shared/hybridDeliveryCheckout";
+import type { DeliveryDestinationLocality } from "@repo-shared/merchantDeliveryLocality";
 
 export type CheckoutFulfillmentMode = "DELIVERY" | "PICKUP";
 
@@ -11,6 +12,9 @@ export type UseCheckoutDeliveryQuoteParams = {
   subtotalSom: number;
   latitude: number | null;
   longitude: number | null;
+  /** @deprecated Phase 9.1 substring fallback */
+  destinationLabel?: string | null;
+  destinationLocality?: DeliveryDestinationLocality | null;
   debounceMs?: number;
 };
 
@@ -38,6 +42,8 @@ export function useCheckoutDeliveryQuote(
     subtotalSom,
     latitude,
     longitude,
+    destinationLabel,
+    destinationLocality,
     debounceMs = 300,
   } = params;
 
@@ -87,6 +93,16 @@ export function useCheckoutDeliveryQuote(
     const timer = window.setTimeout(() => {
       void (async () => {
         try {
+          const localityPayload = (() => {
+            const loc = destinationLocality ?? {};
+            const out: Record<string, string> = {};
+            if (loc.city?.trim()) out.city = loc.city.trim().slice(0, 200);
+            if (loc.district?.trim()) out.district = loc.district.trim().slice(0, 200);
+            if (loc.region?.trim()) out.region = loc.region.trim().slice(0, 200);
+            if (loc.country?.trim()) out.country = loc.country.trim().slice(0, 200);
+            return Object.keys(out).length > 0 ? out : undefined;
+          })();
+
           const url = apiAbsoluteUrl("/api/delivery/checkout-quote");
           const res = await privilegedFetch(url, {
             method: "POST",
@@ -96,6 +112,10 @@ export function useCheckoutDeliveryQuote(
               destination: { latitude, longitude },
               subtotalSom,
               fulfillmentMode: "DELIVERY",
+              ...(destinationLabel?.trim()
+                ? { destinationLabel: destinationLabel.trim().slice(0, 2000) }
+                : {}),
+              ...(localityPayload ? { destinationLocality: localityPayload } : {}),
             }),
           });
           const text = await res.text();
@@ -132,6 +152,8 @@ export function useCheckoutDeliveryQuote(
     subtotalSom,
     latitude,
     longitude,
+    destinationLabel,
+    destinationLocality,
     hasCoords,
     debounceMs,
   ]);

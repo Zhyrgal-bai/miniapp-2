@@ -83,6 +83,13 @@ const DeliveryDistanceTierWireSchema = z.object({
   priceSom: z.number(),
 });
 
+const DeliveryRegionWireSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  priceSom: z.number(),
+  notes: z.string().nullable().optional(),
+});
+
 const DeliveryPolicyWireSchema = z.object({
   pricingMode: z.enum([
     "SELF_PICKUP",
@@ -90,10 +97,13 @@ const DeliveryPolicyWireSchema = z.object({
     "DISTANCE_BASED",
     "FREE_DELIVERY",
     "MANUAL_CONFIRMATION",
+    "REGION_BASED",
   ]),
   minOrderAmountSom: z.number(),
   fixedPriceSom: z.number(),
   distanceTiers: z.array(DeliveryDistanceTierWireSchema),
+  regions: z.array(DeliveryRegionWireSchema).optional(),
+  merchantDeliveryEnabled: z.boolean().optional(),
   manualConfirmationNotice: z.string().nullable(),
   pickupOnly: z.boolean(),
 });

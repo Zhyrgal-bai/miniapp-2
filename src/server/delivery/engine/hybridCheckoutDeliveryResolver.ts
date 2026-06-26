@@ -195,6 +195,8 @@ export function createHybridCheckoutDeliveryResolver(deps: HybridCheckoutResolve
       customerLatitude: input.destination.latitude,
       customerLongitude: input.destination.longitude,
       subtotalSom: input.subtotalSom,
+      destinationLabel: input.destinationLabel ?? null,
+      destinationLocality: input.destinationLocality ?? null,
     });
 
     if (merchantResult.ok) {

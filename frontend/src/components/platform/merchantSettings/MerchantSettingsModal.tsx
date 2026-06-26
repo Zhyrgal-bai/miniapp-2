@@ -3,6 +3,7 @@ import { archa } from "../../archa/archaUi";
 import { ArchaOverlay } from "../../ui/ArchaOverlay";
 import type { PlatformStoreSettingsDTO } from "../../../services/platformApi";
 import type { MerchantDeliverySettings } from "@repo-shared/merchantDeliverySettings";
+import type { MerchantDeliveryProviderPolicy } from "../../../types/deliveryAdmin.types";
 import type { StoreAvailabilitySettings } from "@repo-shared/storeAvailabilitySettings";
 import type { MerchantStoreAddressDraft } from "../../../utils/nominatimGeocode";
 import {
@@ -52,6 +53,8 @@ export type MerchantSettingsModalProps = {
   onStoreAddressDraftChange: (v: MerchantStoreAddressDraft) => void;
   deliverySettingsDraft: MerchantDeliverySettings;
   onDeliverySettingsDraftChange: (v: MerchantDeliverySettings) => void;
+  deliveryProviderPolicyDraft: MerchantDeliveryProviderPolicy;
+  onDeliveryProviderPolicyDraftChange: (v: MerchantDeliveryProviderPolicy) => void;
   storeAvailabilityDraft: StoreAvailabilitySettings;
   onStoreAvailabilityDraftChange: (v: StoreAvailabilitySettings) => void;
   merchantConfigDraft: Record<string, unknown>;
@@ -271,6 +274,8 @@ export function MerchantSettingsModal(props: MerchantSettingsModalProps): ReactE
                   <MerchantSettingsDeliveryPanel
                     deliverySettings={props.deliverySettingsDraft}
                     onDeliverySettingsChange={props.onDeliverySettingsDraftChange}
+                    providerPolicy={props.deliveryProviderPolicyDraft}
+                    onProviderPolicyChange={props.onDeliveryProviderPolicyDraftChange}
                     availability={props.storeAvailabilityDraft}
                     onAvailabilityChange={props.onStoreAvailabilityDraftChange}
                     disabled={props.snap == null}

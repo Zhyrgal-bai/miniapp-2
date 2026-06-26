@@ -41,6 +41,11 @@ import {
   type MerchantDeliverySettings,
 } from "../shared/merchantDeliverySettings.js";
 import {
+  extractProviderPolicyFromDeliverySettings,
+  parseMerchantDeliveryProviderPolicy,
+  type MerchantDeliveryProviderPolicy,
+} from "../shared/merchantDeliveryProviderPolicy.js";
+import {
   defaultStoreAvailabilitySettings,
   parseStoreAvailabilitySettings,
   type StoreAvailabilitySettings,
@@ -70,6 +75,7 @@ export type PlatformStoreSettingsDTO = {
   trialEndsAt: string | null;
   storeAddress: BusinessAddressPublic | null;
   deliverySettings: MerchantDeliverySettings;
+  deliveryProviderPolicy: MerchantDeliveryProviderPolicy;
   storeAvailabilitySettings: StoreAvailabilitySettings;
 };
 
@@ -176,6 +182,9 @@ export async function getPlatformStoreSettingsForMerchant(input: {
         const p = parseMerchantDeliverySettings((b as any).deliverySettings);
         return p.ok ? p.value : defaultMerchantDeliverySettings();
       })(),
+      deliveryProviderPolicy: extractProviderPolicyFromDeliverySettings(
+        (b as any).deliverySettings,
+      ),
       storeAvailabilitySettings: (() => {
         const p = parseStoreAvailabilitySettings(
           (b as any).storeAvailabilitySettings,
@@ -287,9 +296,27 @@ export async function updatePlatformStoreSettingsForMerchant(input: {
     if (!parsed.ok) {
       return { ok: false, statusCode: 400, error: parsed.error };
     }
+    const existingRow = await prisma.business.findUnique({
+      where: { id: input.businessId },
+      select: { deliverySettings: true },
+    });
+    const existingPolicy = extractProviderPolicyFromDeliverySettings(
+      existingRow?.deliverySettings,
+    );
+    const incomingRaw =
+      input.body.deliverySettings != null && typeof input.body.deliverySettings === "object"
+        ? (input.body.deliverySettings as Record<string, unknown>)
+        : {};
+    const policyParsed = parseMerchantDeliveryProviderPolicy(
+      incomingRaw.providerPolicy ?? existingPolicy,
+    );
+    const nextBlob = {
+      ...parsed.value,
+      providerPolicy: policyParsed.ok ? policyParsed.value : existingPolicy,
+    };
     await prisma.business.update({
       where: { id: input.businessId },
-      data: { deliverySettings: parsed.value as any },
+      data: { deliverySettings: nextBlob as any },
     });
     invalidateStorefrontCache(input.businessId);
   }

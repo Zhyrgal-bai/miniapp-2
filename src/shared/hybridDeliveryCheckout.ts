@@ -65,11 +65,18 @@ export type CheckoutDeliveryQuoteFailure = {
 
 export type CheckoutDeliveryQuote = CheckoutDeliveryQuoteSuccess | CheckoutDeliveryQuoteFailure;
 
+import type { DeliveryDestinationLocality } from "./merchantDeliveryLocality.js";
+
+export type { DeliveryDestinationLocality } from "./merchantDeliveryLocality.js";
+
 export type HybridCheckoutDeliveryInput = {
   merchantId: number;
   destination: { latitude: number; longitude: number };
   subtotalSom: number;
   fulfillmentMode: CheckoutFulfillmentMode;
+  /** @deprecated Phase 9.1 — substring fallback only; prefer destinationLocality. */
+  destinationLabel?: string | null;
+  destinationLocality?: DeliveryDestinationLocality | null;
   correlationId?: string;
   requestId?: string;
 };

@@ -382,20 +382,26 @@ export type MerchantDeliverySettingsDTO = {
     | "FIXED_PRICE"
     | "DISTANCE_BASED"
     | "FREE_DELIVERY"
-    | "MANUAL_CONFIRMATION";
+    | "MANUAL_CONFIRMATION"
+    | "REGION_BASED";
   minOrderAmountSom: number;
   fixedPriceSom: number;
   distanceTiers: Array<{ maxKm: number | null; priceSom: number }>;
+  regions: Array<{ id: string; name: string; priceSom: number; notes?: string | null }>;
+  merchantDeliveryEnabled: boolean;
 };
 
-export type {
-  StoreAvailabilitySettings,
-  PublicStoreAvailability,
-} from "@repo-shared/storeAvailabilitySettings";
+import type { MerchantDeliveryProviderPolicy } from "../types/deliveryAdmin.types";
+import { defaultMerchantDeliveryProviderPolicy } from "../types/deliveryAdmin.types";
 import type { StoreAvailabilitySettings } from "@repo-shared/storeAvailabilitySettings";
 import {
   defaultStoreAvailabilitySettings,
   parseStoreAvailabilitySettings,
+} from "@repo-shared/storeAvailabilitySettings";
+
+export type {
+  StoreAvailabilitySettings,
+  PublicStoreAvailability,
 } from "@repo-shared/storeAvailabilitySettings";
 
 export type PlatformStoreSettingsDTO = {
@@ -403,6 +409,7 @@ export type PlatformStoreSettingsDTO = {
   name: string;
   storeAddress: BusinessStoreAddressDTO | null;
   deliverySettings: MerchantDeliverySettingsDTO;
+  deliveryProviderPolicy: MerchantDeliveryProviderPolicy;
   storeAvailabilitySettings: StoreAvailabilitySettings;
   finikConfigured: boolean;
   finikReady: boolean;
@@ -492,10 +499,12 @@ export async function fetchPlatformStoreSettings(params: {
   }
   const defaultDelivery: MerchantDeliverySettingsDTO = {
     version: 1,
-    pricingMode: "FREE_DELIVERY",
+    pricingMode: "REGION_BASED",
     minOrderAmountSom: 0,
     fixedPriceSom: 0,
     distanceTiers: [],
+    regions: [],
+    merchantDeliveryEnabled: true,
   };
   const ds = j.deliverySettings;
   const deliverySettings: MerchantDeliverySettingsDTO =
@@ -526,8 +535,51 @@ export async function fetchPlatformStoreSettings(params: {
                 })
                 .filter((x): x is { maxKm: number | null; priceSom: number } => x != null)
             : [],
+          regions: Array.isArray((ds as { regions?: unknown }).regions)
+            ? (ds as { regions: unknown[] }).regions
+                .map((r) => {
+                  if (r == null || typeof r !== "object") return null;
+                  const row = r as {
+                    id?: string;
+                    name?: string;
+                    priceSom?: number;
+                    notes?: string | null;
+                  };
+                  const name = String(row.name ?? "").trim();
+                  if (name.length < 2) return null;
+                  const priceSom = Number(row.priceSom);
+                  if (!Number.isFinite(priceSom)) return null;
+                  return {
+                    id: String(row.id ?? name).trim() || name,
+                    name,
+                    priceSom: Math.max(0, Math.round(priceSom)),
+                    notes:
+                      typeof row.notes === "string" && row.notes.trim() !== ""
+                        ? row.notes.trim()
+                        : null,
+                  };
+                })
+                .filter(
+                  (x): x is {
+                    id: string;
+                    name: string;
+                    priceSom: number;
+                    notes: string | null;
+                  } => x != null,
+                )
+            : [],
+          merchantDeliveryEnabled:
+            (ds as { merchantDeliveryEnabled?: boolean }).merchantDeliveryEnabled !== false,
         }
       : defaultDelivery;
+  const policyRaw = (j as { deliveryProviderPolicy?: unknown }).deliveryProviderPolicy;
+  const deliveryProviderPolicy: MerchantDeliveryProviderPolicy =
+    policyRaw != null && typeof policyRaw === "object"
+      ? {
+          ...defaultMerchantDeliveryProviderPolicy(),
+          ...(policyRaw as MerchantDeliveryProviderPolicy),
+        }
+      : defaultMerchantDeliveryProviderPolicy();
   const availParsed = parseStoreAvailabilitySettings(
     j.storeAvailabilitySettings,
     typeof j.businessType === "string" ? j.businessType : "",
@@ -540,6 +592,7 @@ export async function fetchPlatformStoreSettings(params: {
     name: String(j.name ?? ""),
     storeAddress,
     deliverySettings,
+    deliveryProviderPolicy,
     storeAvailabilitySettings,
     finikConfigured: finikReady,
     finikReady,
